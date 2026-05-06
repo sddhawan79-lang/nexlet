@@ -20,7 +20,8 @@
 9. [Key Business Logic](#9-key-business-logic)
 10. [Known Issues & Technical Debt](#10-known-issues--technical-debt)
 11. [Pricing & Plans](#11-pricing--plans)
-12. [Feature Change Log](#12-feature-change-log)
+12. [Code Standards & Maintainability](#12-code-standards--maintainability)
+13. [Feature Change Log](#13-feature-change-log)
 
 ---
 
@@ -496,7 +497,237 @@ Annual billing: 2 months free (pay 10 months, get 12)
 
 ---
 
-## 12. Feature Change Log
+## 12. Code Standards & Maintainability
+
+> These rules apply to **all new and modified code** in this project.
+> Every AI agent and developer working on this codebase must follow them without exception.
+
+---
+
+### 12.1 JavaScript File Structure
+
+**Rule: Every HTML file must have a corresponding JS file in the `js/` folder.**
+
+| HTML file | JS file |
+|---|---|
+| `index.html` | `js/index.js` |
+| `login.html` | `js/login.js` |
+| `signup.html` | `js/signup.js` |
+| `landlord.html` | `js/landlord.js` |
+| `tenant.html` | `js/tenant.js` |
+| `mtd.html` | `js/mtd.js` |
+
+**Rule: Shared utilities go in `js/lib/` — never duplicated across files.**
+
+| File | Purpose |
+|---|---|
+| `js/lib/supabase-client.js` | Single Supabase client initialisation (`sb`) — import everywhere |
+| `js/lib/auth.js` | Session check, redirect helpers, `onAuthStateChange` wrappers |
+| `js/lib/ui.js` | Shared DOM helpers: `showError()`, `showSuccess()`, spinner toggle |
+| `js/lib/validation.js` | Input validators: email, password strength, required fields |
+| `js/lib/cookies.js` | Cookie banner accept/decline logic |
+
+**Folder layout:**
+```
+rentsafeai/
+├── js/
+│   ├── lib/
+│   │   ├── supabase-client.js   Supabase client singleton
+│   │   ├── auth.js              Auth session helpers
+│   │   ├── ui.js                Shared UI utilities
+│   │   ├── validation.js        Input validation helpers
+│   │   └── cookies.js           Cookie consent banner
+│   ├── index.js                 Landing page scripts
+│   ├── login.js                 Login / reset password logic
+│   ├── signup.js                Sign-up + password strength
+│   ├── landlord.js              Full landlord dashboard logic
+│   ├── tenant.js                Tenant portal logic
+│   └── mtd.js                   MTD tax module logic
+```
+
+---
+
+### 12.2 How to Link JS Files in HTML
+
+Load shared libraries first, then the page-specific file. All as `defer` scripts at the bottom of `<body>`:
+
+```html
+<!-- Supabase CDN must load before any lib that uses it -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
+
+<!-- Shared libs -->
+<script src="js/lib/supabase-client.js" defer></script>
+<script src="js/lib/auth.js" defer></script>
+<script src="js/lib/ui.js" defer></script>
+<script src="js/lib/validation.js" defer></script>
+<script src="js/lib/cookies.js" defer></script>
+
+<!-- Page-specific -->
+<script src="js/signup.js" defer></script>
+```
+
+> **Note:** Because the project has no bundler, shared state is passed via the `window` global or
+> by loading files in dependency order. Lib files must attach their exports to `window` (e.g.
+> `window.RSA = window.RSA || {}; window.RSA.showError = showError;`) so page scripts can call them.
+
+---
+
+### 12.3 Module Pattern (IIFE)
+
+Wrap all page-level JS in an IIFE to avoid polluting the global scope. Expose only what HTML
+`onclick` attributes need:
+
+```javascript
+// js/signup.js
+(function () {
+  'use strict';
+
+  // ── private state ──
+  let _passwordStrength = 0;
+
+  // ── private helpers ──
+  function _getStrength(pw) { /* ... */ }
+
+  // ── public API (called from HTML onclick / event listeners) ──
+  function signup() { /* ... */ }
+  function onPasswordInput() { /* ... */ }
+  function onConfirmInput() { /* ... */ }
+
+  // ── init ──
+  document.addEventListener('DOMContentLoaded', function () {
+    document.getElementById('password').addEventListener('input', onPasswordInput);
+    document.getElementById('confirm-password').addEventListener('input', onConfirmInput);
+    document.getElementById('signup-btn').addEventListener('click', signup);
+    // Remove all inline onclick="" from HTML — wire events here instead
+  });
+
+  // Expose only what is strictly needed by HTML markup (prefer none)
+  window.signup = signup;
+})();
+```
+
+---
+
+### 12.4 Naming Conventions
+
+| Thing | Convention | Example |
+|---|---|---|
+| JS files | `kebab-case.js` | `supabase-client.js` |
+| Functions | `camelCase` | `loadProperties()` |
+| Private helpers (within IIFE) | `_camelCase` | `_calcRAG()` |
+| Constants | `UPPER_SNAKE_CASE` | `SUPABASE_URL` |
+| DOM element IDs | `kebab-case` | `error-msg`, `signup-btn` |
+| CSS classes | `kebab-case` | `pw-strength`, `btn-login` |
+| Database column refs in JS | match DB column exactly | `prop_id`, `cert_type` |
+
+---
+
+### 12.5 Error Handling Rules
+
+1. **Every `async` function must have a `try/catch` or check the Supabase `{ data, error }` return.**
+2. **Never swallow errors silently** — at minimum `console.error()` with context.
+3. **User-facing error messages** must be shown via the shared `showError(el, msg)` helper in `js/lib/ui.js`.
+4. **Loading states** — disable the triggering button and show a spinner before any async call; re-enable in `finally` or after both success and error paths.
+
+```javascript
+async function signup() {
+  const btn = document.getElementById('signup-btn');
+  RSA.UI.setLoading(btn, true, 'Creating account…');
+  try {
+    const { data, error } = await sb.auth.signUp({ email, password });
+    if (error) { RSA.UI.showError(errEl, error.message); return; }
+    RSA.UI.showSuccess(okEl, 'Account created! Check your email.');
+  } catch (err) {
+    console.error('[signup]', err);
+    RSA.UI.showError(errEl, 'Unexpected error. Please try again.');
+  } finally {
+    RSA.UI.setLoading(btn, false, 'Create account');
+  }
+}
+```
+
+---
+
+### 12.6 No Inline Scripts in HTML
+
+- **Do not** place `<script>` blocks inside HTML files (except the Supabase CDN `<script src>` tag and the Crisp chat snippet, which must remain inline per vendor requirements).
+- **Do not** use `onclick="..."` attributes in HTML markup. Wire all events in the page JS file inside `DOMContentLoaded`.
+- **Exception:** The countdown timer and cookie banner initialiser in `login.html` / `signup.html` may remain inline until those pages are migrated to the `js/` pattern.
+
+---
+
+### 12.7 CSS Rules
+
+- All CSS stays in `<style>` blocks within each HTML file — **no separate `.css` files** (GitHub Pages, no bundler, keep it simple).
+- CSS variables are defined in `:root` at the top of each `<style>` block.
+- **Shared design tokens** (colours, fonts, breakpoints) must use the same variable names across all pages — do not invent new names for existing colours.
+- Canonical design token names:
+
+```css
+:root {
+  --navy:      #0B1E3D;
+  --navy-mid:  #132847;
+  --green:     #00C896;
+  --green-dark:#009970;
+  --white:     #fff;
+  --off:       #F6F8FB;
+  --border:    #E4EAF1;
+  --txt:       #1A2B45;
+  --muted:     #7A8FA6;
+  --red:       #E53E3E;
+  --amber:     #D97706;
+  --font:      'DM Sans', system-ui, sans-serif;
+  --disp:      'DM Serif Display', Georgia, serif;
+}
+```
+
+---
+
+### 12.8 Code Comment Standards
+
+Every function must have a one-line comment describing its purpose. Group related functions with a section header comment:
+
+```javascript
+// ── AUTH ─────────────────────────────────────────────────────────────────────
+
+/** Redirects to login.html if no active Supabase session exists. */
+async function requireAuth() { /* ... */ }
+
+// ── DATA LOADING ──────────────────────────────────────────────────────────────
+
+/** Fires 10 parallel Supabase queries and populates module-level state arrays. */
+async function loadData() { /* ... */ }
+```
+
+---
+
+### 12.9 Debugging Guidelines
+
+- Use `console.group('[ModuleName]')` / `console.groupEnd()` to group related log output.
+- Prefix all `console.log` / `console.error` calls with `[filename:functionName]`:
+  ```javascript
+  console.error('[signup:signup]', error);
+  ```
+- Never commit `console.log` debug statements — use `console.debug` for dev-only output (can be filtered in DevTools).
+- All Supabase query errors must log the full error object: `console.error('[loadData]', error)`.
+
+---
+
+### 12.10 Migration Path for Existing Files
+
+The existing monolithic HTML files (`landlord.html`, `tenant.html`, `mtd.html`) have all JS inline.
+When **touching any of these files for a new feature or bug fix**, follow this process:
+
+1. Extract only the functions you are modifying into the appropriate `js/` file.
+2. Replace the inline code with a `<script src="js/...">` reference.
+3. Do **not** attempt a full extraction in one go — extract incrementally as features are worked on.
+4. Update this document's file structure table when a file is fully migrated.
+
+> **Priority order for migration:** `login.js` → `signup.js` → `index.js` → `tenant.js` → `mtd.js` → `landlord.js`
+
+---
+
+## 13. Feature Change Log
 
 > Add an entry here whenever a new feature, modification, or architectural decision is made.
 > Format: `## Sprint N — [Date] — Brief Title` followed by bullet points.
@@ -517,7 +748,22 @@ Annual billing: 2 months free (pay 10 months, get 12)
   - RRA PDF attachment
   - Section 8 → Form 3A UX handoff
 
-### Sprint 11 — Tenant Portal (Planned)
+### Sprint 11 — signup.html + Code Standards
+**Date:** May 2026
+- Created `signup.html` — matches `login.html` styling, two-panel layout, mobile responsive
+- Sign-up flow: email + password + confirm password, 5-rule strong password meter, real-time match indicator
+- Duplicate email detection via Supabase `signUp()` — guards both error response and empty `identities[]`
+- On success: confirmation message + auto-redirect to `login.html` after 3.5 s
+- Updated `index.html` — all "Start Free" / "Start free trial" CTAs now point to `signup.html`; footer "Sign in" corrected to `login.html`
+- Added Section 12 (Code Standards & Maintainability) to `PROJECT_KNOWLEDGE.md`:
+  - `js/` folder convention — one JS file per HTML page
+  - `js/lib/` for shared utilities (Supabase client, auth, UI, validation, cookies)
+  - IIFE module pattern, naming conventions, error handling rules
+  - No inline scripts policy (except Crisp and Supabase CDN)
+  - CSS token canonicalisation
+  - Incremental migration path for legacy monolithic HTML files
+
+### Sprint 12 — Tenant Portal Enhancement (Planned)
 **Goal:** Unique token-based URL per tenancy (no login required).
 - Tenants can: view tenancy details, report maintenance issue (with photo upload), view open jobs, download latest certificates
 - Uses existing `maintenance_jobs` and `certificates` tables

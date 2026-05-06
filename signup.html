@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign Up — RentSafeAI</title>
+<meta name="description" content="Create your RentSafeAI account — AI-powered compliance protection for UK landlords.">
+<meta name="robots" content="noindex, follow">
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="RentSafeAI">
+<meta property="og:title" content="RentSafeAI — AI-Powered Compliance Protection for UK Landlords">
+<meta property="og:description" content="AI-powered Section 8 notices, maintenance tracking and compliance alerts — built for the Renters Rights Act 2025. Join free today.">
+<meta property="og:url" content="https://rentsafeai.co.uk">
+<meta property="og:image" content="https://rentsafeai.co.uk/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<!-- Twitter/X -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="RentSafeAI — AI-Powered Compliance Protection for UK Landlords">
+<meta name="twitter:description" content="AI-powered Section 8 notices, maintenance tracking and compliance alerts — built for the Renters Rights Act 2025. Join free today.">
+<meta name="twitter:image" content="https://rentsafeai.co.uk/og-image.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#0B1E3D;--navy-mid:#132847;
+  --green:#00C896;--green-dark:#009970;
+  --white:#fff;--off:#F6F8FB;--border:#E4EAF1;
+  --txt:#1A2B45;--muted:#7A8FA6;--red:#E53E3E;
+  --amber:#D97706;
+  --font:'DM Sans',system-ui,sans-serif;
+  --disp:'DM Serif Display',Georgia,serif;
+}
+html,body{height:100%;font-family:var(--font);color:var(--txt);-webkit-font-smoothing:antialiased}
+body{display:flex;flex-direction:column;min-height:100vh}
+.panels{display:flex;flex:1}
+.trust-bar{background:#F6F8FB;text-align:center;padding:11px 20px;font-size:12px;color:var(--muted);letter-spacing:.01em;flex-shrink:0}
+.left{width:45%;background:var(--navy);display:flex;flex-direction:column;padding:48px;position:relative;overflow:hidden}
+.left::before{content:'';position:absolute;top:-100px;right:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(0,200,150,0.08) 0%,transparent 70%);pointer-events:none}
+.left::after{content:'';position:absolute;bottom:-100px;left:-50px;width:300px;height:300px;background:radial-gradient(circle,rgba(30,58,95,0.8) 0%,transparent 70%);pointer-events:none}
+.left-logo{font-family:var(--disp);font-size:22px;color:#fff;text-decoration:none;display:block;margin-bottom:auto}
+.left-logo span{color:var(--green)}
+.left-content{position:relative;z-index:1;margin-bottom:auto}
+.left-title{font-family:var(--disp);font-size:clamp(28px,3vw,40px);color:#fff;line-height:1.15;margin-bottom:16px}
+.left-title em{font-style:italic;color:var(--green)}
+.left-sub{font-size:15px;color:rgba(255,255,255,0.5);line-height:1.7;font-weight:300;margin-bottom:32px}
+.left-features{display:flex;flex-direction:column;gap:12px}
+.left-feat{display:flex;align-items:center;gap:10px;font-size:13.5px;color:rgba(255,255,255,0.65)}
+.left-feat-dot{width:20px;height:20px;border-radius:50%;background:rgba(0,200,150,0.15);border:1px solid rgba(0,200,150,0.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;color:var(--green)}
+.left-bottom{font-size:12px;color:rgba(255,255,255,0.25);margin-top:48px}
+.right{flex:1;background:var(--off);display:flex;align-items:center;justify-content:center;padding:40px 20px}
+.login-box{background:var(--white);border:1px solid var(--border);border-radius:16px;padding:40px;width:100%;max-width:420px}
+.login-title{font-family:var(--disp);font-size:26px;color:var(--txt);margin-bottom:6px}
+.login-sub{font-size:14px;color:var(--muted);margin-bottom:28px}
+.fg{margin-bottom:16px}
+.fg label{font-size:11px;font-weight:600;color:var(--txt);margin-bottom:6px;display:block;letter-spacing:.3px;text-transform:uppercase}
+.fg input{width:100%;padding:11px 14px;border-radius:9px;border:1.5px solid var(--border);font-family:var(--font);font-size:14px;color:var(--txt);outline:none;transition:border .2s;background:var(--white)}
+.fg input:focus{border-color:var(--navy)}
+.fg input.error{border-color:var(--red)}
+.fg input.success{border-color:var(--green)}
+.btn-login{width:100%;padding:13px;border-radius:9px;background:var(--navy);color:#fff;font-family:var(--font);font-size:15px;font-weight:600;border:none;cursor:pointer;transition:background .15s;margin-top:4px}
+.btn-login:hover{background:var(--navy-mid)}
+.btn-login:disabled{opacity:.6;cursor:not-allowed}
+.error-msg{background:rgba(229,62,62,0.06);border:1px solid rgba(229,62,62,0.2);border-radius:8px;padding:10px 14px;font-size:13px;color:var(--red);margin-bottom:16px;display:none}
+.success-msg{background:rgba(0,200,150,0.06);border:1px solid rgba(0,200,150,0.3);border-radius:8px;padding:10px 14px;font-size:13px;color:var(--green-dark);margin-bottom:16px;display:none}
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;margin-right:8px;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+.login-footer{text-align:center;margin-top:24px;font-size:13px;color:var(--muted)}
+.login-footer a{color:var(--navy);font-weight:500;text-decoration:none}
+.login-footer a:hover{text-decoration:underline}
+
+/* ── PASSWORD STRENGTH ── */
+.pw-strength{margin-top:8px}
+.pw-strength-bars{display:flex;gap:4px;margin-bottom:6px}
+.pw-bar{flex:1;height:3px;border-radius:2px;background:var(--border);transition:background .25s}
+.pw-bar.weak{background:var(--red)}
+.pw-bar.fair{background:var(--amber)}
+.pw-bar.strong{background:var(--green)}
+.pw-label{font-size:11px;font-weight:500;color:var(--muted);transition:color .25s}
+.pw-label.weak{color:var(--red)}
+.pw-label.fair{color:var(--amber)}
+.pw-label.strong{color:var(--green-dark)}
+.pw-rules{margin-top:8px;display:flex;flex-direction:column;gap:4px}
+.pw-rule{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);transition:color .2s}
+.pw-rule.met{color:var(--green-dark)}
+.pw-rule-dot{width:14px;height:14px;border-radius:50%;border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:8px;transition:all .2s;background:transparent}
+.pw-rule.met .pw-rule-dot{background:var(--green);border-color:var(--green);color:#fff}
+
+/* ── MATCH INDICATOR ── */
+.match-hint{font-size:12px;margin-top:6px;display:none}
+.match-hint.ok{color:var(--green-dark)}
+.match-hint.fail{color:var(--red)}
+
+@media(max-width:768px){
+  .left{display:none}
+  .right{background:var(--white);padding:24px 16px;align-items:flex-start;padding-top:40px}
+  .login-box{border:none;padding:20px 0;box-shadow:none}
+  .mobile-logo{display:block;font-family:var(--disp);font-size:22px;color:var(--navy);text-decoration:none;margin-bottom:32px}
+  .mobile-logo span{color:var(--green)}
+}
+@media(min-width:769px){.mobile-logo{display:none}}
+</style>
+<!-- CRISP LIVE CHAT — must remain inline per vendor requirements -->
+<script type="text/javascript">window.$crisp=[];window.CRISP_WEBSITE_ID="6a5c5215-3c14-4afa-94a4-f1f8b05e2f62";(function(){d=document;s=d.createElement("script");s.src="https://client.crisp.chat/l.js";s.async=1;d.getElementsByTagName("head")[0].appendChild(s);})();</script>
+</head>
+<body>
+
+<!-- PANELS -->
+<div class="panels">
+
+  <!-- LEFT PANEL -->
+  <div class="left">
+    <a href="index.html" class="left-logo"><span>Rent</span>Safe AI</a>
+    <div class="left-content">
+      <h1 class="left-title">Be <em>RRA-compliant</em> before 31 May — in under 10 minutes</h1>
+      <p class="left-sub">RentSafeAI auto-generates your mandatory Starter Kit documents, tracks your compliance, and keeps you protected under the Renters' Rights Act 2025.</p>
+      <div class="left-features">
+        <div class="left-feat"><div class="left-feat-dot">✓</div>Certificate tracking & expiry alerts</div>
+        <div class="left-feat"><div class="left-feat-dot">✓</div>Section 8 & 13 notice generator</div>
+        <div class="left-feat"><div class="left-feat-dot">✓</div>Tenant portal — no app needed</div>
+        <div class="left-feat"><div class="left-feat-dot">✓</div>AI compliance advisor</div>
+        <div class="left-feat"><div class="left-feat-dot">✓</div>Awaab's Law maintenance log</div>
+      </div>
+    </div>
+    <div class="left-bottom">Built for UK landlords · Renters Rights Act compliant · 2026</div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right">
+    <div class="login-box">
+      <a href="index.html" class="mobile-logo"><span>Rent</span>Safe AI</a>
+
+      <!-- SIGN-UP FORM -->
+      <div id="signup-view">
+        <div class="login-title">Create your account</div>
+        <div class="login-sub">Free for 30 days · No card required</div>
+
+        <!-- Message banners -->
+        <div class="error-msg"   id="error-msg"></div>
+        <div class="success-msg" id="success-msg"></div>
+
+        <!-- Email -->
+        <div class="fg">
+          <label for="email">Email address</label>
+          <input type="email" id="email" placeholder="you@email.com" autocomplete="email">
+        </div>
+
+        <!-- Password + strength meter -->
+        <div class="fg">
+          <label for="password">Password</label>
+          <input type="password" id="password" placeholder="••••••••" autocomplete="new-password">
+
+          <div class="pw-strength" id="pw-strength" style="display:none">
+            <div class="pw-strength-bars">
+              <div class="pw-bar" id="bar1"></div>
+              <div class="pw-bar" id="bar2"></div>
+              <div class="pw-bar" id="bar3"></div>
+              <div class="pw-bar" id="bar4"></div>
+            </div>
+            <div class="pw-label" id="pw-label">Too weak</div>
+            <div class="pw-rules" id="pw-rules">
+              <div class="pw-rule" id="rule-len">
+                <div class="pw-rule-dot">✓</div>At least 8 characters
+              </div>
+              <div class="pw-rule" id="rule-upper">
+                <div class="pw-rule-dot">✓</div>One uppercase letter
+              </div>
+              <div class="pw-rule" id="rule-lower">
+                <div class="pw-rule-dot">✓</div>One lowercase letter
+              </div>
+              <div class="pw-rule" id="rule-num">
+                <div class="pw-rule-dot">✓</div>One number
+              </div>
+              <div class="pw-rule" id="rule-sym">
+                <div class="pw-rule-dot">✓</div>One special character (!@#$%^&amp;*…)
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Confirm password -->
+        <div class="fg">
+          <label for="confirm-password">Confirm password</label>
+          <input type="password" id="confirm-password" placeholder="••••••••" autocomplete="new-password">
+          <div class="match-hint" id="match-hint"></div>
+        </div>
+
+        <button class="btn-login" id="signup-btn">Create account</button>
+
+        <div class="login-footer">
+          Already have an account? <a href="login.html">Log in</a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- /panels -->
+
+<!-- TRUST BAR -->
+<div class="trust-bar">Built for UK landlords &nbsp;·&nbsp; GDPR-compliant &nbsp;·&nbsp; RRA 2025 ready</div>
+
+<!-- COOKIE BANNER -->
+<div id="cookie-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;background:var(--navy);border-top:1px solid rgba(255,255,255,0.1);padding:16px 28px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+  <div style="display:flex;align-items:center;gap:12px;flex:1;min-width:260px">
+    <span style="font-size:20px">🍪</span>
+    <p style="font-size:13px;color:rgba(255,255,255,0.7);margin:0;line-height:1.5">
+      We use essential cookies to keep you logged in and the platform running.
+      No tracking or advertising cookies.
+      <a href="privacy.html" style="color:var(--green);text-decoration:none">Privacy Policy</a>
+    </p>
+  </div>
+  <div style="display:flex;gap:10px;flex-shrink:0">
+    <button id="cookie-decline" style="padding:8px 16px;border-radius:7px;border:1px solid rgba(255,255,255,0.2);background:none;color:rgba(255,255,255,0.6);font-family:var(--font,sans-serif);font-size:13px;cursor:pointer">
+      Essential only
+    </button>
+    <button id="cookie-accept" style="padding:8px 16px;border-radius:7px;border:none;background:#00C896;color:#0B1E3D;font-family:var(--font,sans-serif);font-size:13px;font-weight:600;cursor:pointer">
+      Accept &amp; continue
+    </button>
+  </div>
+</div>
+
+<!--
+  ── SCRIPTS ────────────────────────────────────────────────────────────────────
+  Load order:
+    1. Supabase CDN  (synchronous — must be available before lib files run)
+    2. Shared libs   (defer — initialise RSA namespace, depend on Supabase CDN)
+    3. Page script   (defer — depends on all libs above)
+  ─────────────────────────────────────────────────────────────────────────────
+-->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
+<script src="js/lib/supabase-client.js" defer></script>
+<script src="js/lib/ui.js"              defer></script>
+<script src="js/lib/validation.js"      defer></script>
+<script src="js/lib/auth.js"            defer></script>
+<script src="js/lib/cookies.js"         defer></script>
+<script src="js/signup.js"              defer></script>
+
+</body>
+</html>
