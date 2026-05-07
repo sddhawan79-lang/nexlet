@@ -823,3 +823,141 @@ When **touching any of these files for a new feature or bug fix**, follow this p
 - Tenants can: view tenancy details, report maintenance issue (with photo upload), view open jobs, download latest certificates
 - Uses existing `maintenance_jobs` and `certificates` tables
 - All submissions create a row in `maintenance_jobs` and trigger landlord email alerts (Sprint 10 system)
+
+### Sprint 13 — User Profile Page & Stripe Subscription Billing
+**Date:** May 2026
+- Created `profile.html` — Account & Billing settings page (sticky top bar, no sidebar)
+  - Section 1: Account — immutable email display
+  - Section 2: Personal Details — full_name, phone, company_name, address, utr_number (upsert to `user_profiles`)
+  - Section 3: Subscription & Billing — 3 plan cards (Starter/Landlord/Portfolio) with Stripe Checkout
+- Created `js/profile.js` — IIFE module, code-standards compliant
+- Created `sprint13_db.sql` — `user_profiles` and `stripe_subscriptions` tables with RLS
+- Created `stripe-checkout-index.ts` — Edge Function: creates Stripe Checkout Session
+  - Verifies Supabase JWT, reuses/creates Stripe Customer, creates Checkout Session
+  - Returns `{ url }` for frontend redirect to Stripe-hosted payment page
+- Created `stripe-webhook-index.ts` — Edge Function: receives Stripe events, updates `stripe_subscriptions`
+  - Deploy with `--no-verify-jwt` (Stripe calls it directly, not user JWT)
+  - Handles: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`
+- Updated `landlord.html` — sidebar footer user avatar/username now links to `profile.html`
+- Added Stripe to tech stack table
+- **Pending Stripe setup steps (required before checkout works):**
+  - Add `STRIPE_SECRET_KEY` secret in Supabase Dashboard
+  - Add `STRIPE_WEBHOOK_SECRET` secret in Supabase Dashboard
+  - Add `STRIPE_PRICE_STARTER`, `STRIPE_PRICE_LANDLORD`, `STRIPE_PRICE_PORTFOLIO` secrets
+  - Run `sprint13_db.sql` in Supabase SQL Editor
+  - Deploy `stripe-checkout` and `stripe-webhook` edge functions
+  - Register webhook endpoint in Stripe Dashboard
+  - See Section 14 for full step-by-step
+
+---
+
+## 14. Stripe Integration Guide
+
+> **Architecture:** Stripe Checkout (hosted). No Stripe.js SDK needed on the frontend.
+> The browser is redirected to Stripe's own payment page, then back to `profile.html`.
+
+### How the Payment Flow Works
+
+```
+User clicks "Subscribe" on profile.html
+  ↓
+js/profile.js calls supabase.functions.invoke('stripe-checkout', { body: { plan } })
+  ↓
+stripe-checkout Edge Function:
+  1. Verifies user's Supabase JWT
+  2. Retrieves or creates a Stripe Customer (cus_...)
+  3. Creates a Stripe Checkout Session (cs_...)
+  4. Returns { url: 'https://checkout.stripe.com/pay/cs_...' }
+  ↓
+profile.js redirects browser to that URL
+  ↓
+User pays on Stripe's hosted page (card 4242 4242 4242 4242 for test)
+  ↓
+Stripe redirects to: profile.html?success=true  (or ?canceled=true)
+  ↓
+In the background, Stripe POSTs 'checkout.session.completed' to:
+  https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/stripe-webhook
+  ↓
+stripe-webhook Edge Function upserts stripe_subscriptions table
+```
+
+### Setup Checklist (one-time)
+
+#### Step 1 — Stripe Dashboard: Get API Keys
+1. Log in to https://dashboard.stripe.com
+2. Go to **Developers → API Keys**
+3. Make sure you're in **Test mode** (toggle in top-left)
+4. Copy the **Publishable key** (`pk_test_...`) — not needed in code yet, save for later
+5. Reveal and copy the **Secret key** (`sk_test_...`) — needed as Supabase secret
+
+#### Step 2 — Stripe Dashboard: Create Products & Prices
+1. Go to **Products → Add product**
+2. Create three products with **Recurring** pricing:
+
+| Product name | Price | Billing period |
+|---|---|---|
+| RentSafeAI Starter | £9.99 | Monthly |
+| RentSafeAI Landlord | £19.99 | Monthly |
+| RentSafeAI Portfolio | £39.99 | Monthly |
+
+3. After creating each, click on the price row and copy the **Price ID** (`price_...`)
+
+#### Step 3 — Supabase Dashboard: Add Edge Function Secrets
+Go to: Supabase Dashboard → Project Settings → Edge Functions → Secrets
+
+| Secret name | Value |
+|---|---|
+| `STRIPE_SECRET_KEY` | `sk_test_...` from Step 1 |
+| `STRIPE_PRICE_STARTER` | `price_...` for £9.99 product |
+| `STRIPE_PRICE_LANDLORD` | `price_...` for £19.99 product |
+| `STRIPE_PRICE_PORTFOLIO` | `price_...` for £39.99 product |
+| `STRIPE_WEBHOOK_SECRET` | Set in Step 5 below |
+
+#### Step 4 — Run Database Migration
+Run `sprint13_db.sql` in **Supabase → SQL Editor**.
+
+#### Step 5 — Deploy Edge Functions
+```powershell
+# Checkout function (standard JWT verification)
+Copy-Item stripe-checkout-index.ts supabase\functions\stripe-checkout\index.ts -Force
+npx supabase functions deploy stripe-checkout --project-ref mahtcfukgzbonwibtsxz
+
+# Webhook function (no JWT — Stripe calls it directly)
+Copy-Item stripe-webhook-index.ts supabase\functions\stripe-webhook\index.ts -Force
+npx supabase functions deploy stripe-webhook --project-ref mahtcfukgzbonwibtsxz --no-verify-jwt
+```
+
+#### Step 6 — Register Webhook in Stripe Dashboard
+1. Go to **Developers → Webhooks → Add endpoint**
+2. Endpoint URL: `https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/stripe-webhook`
+3. Select events to listen for:
+   - `checkout.session.completed`
+   - `customer.subscription.updated`
+   - `customer.subscription.deleted`
+4. Click **Add endpoint**
+5. On the webhook detail page, reveal the **Signing secret** (`whsec_...`)
+6. Add this as the `STRIPE_WEBHOOK_SECRET` secret in Supabase (Step 3)
+
+#### Step 7 — Test the Flow
+1. Open `profile.html` as a logged-in user
+2. Click **Subscribe** on any plan
+3. On the Stripe checkout page, use test card: `4242 4242 4242 4242`, any future date, any CVC
+4. After payment, you should be redirected to `profile.html?success=true`
+5. The plan card should show "Current Plan" after the webhook fires (may take a few seconds)
+6. Check Supabase: `SELECT * FROM stripe_subscriptions;` to confirm the row was written
+
+### Test Card Numbers (Stripe Test Mode)
+| Card number | Scenario |
+|---|---|
+| `4242 4242 4242 4242` | Successful payment |
+| `4000 0025 0000 3155` | Requires 3D Secure authentication |
+| `4000 0000 0000 9995` | Card declined |
+
+### Going Live
+When ready to accept real payments:
+1. In Stripe Dashboard, switch from **Test mode** to **Live mode**
+2. Get the **live** Secret key (`sk_live_...`) and Publishable key
+3. Create the same 3 Products/Prices in Live mode and copy their Price IDs
+4. Replace all Supabase secrets with the live values
+5. Register a new webhook endpoint in Live mode (same URL)
+6. No code changes needed — the same edge functions work for both modes
