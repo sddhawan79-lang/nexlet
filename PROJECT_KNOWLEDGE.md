@@ -540,11 +540,13 @@ All migrations run manually in **Supabase → SQL Editor** (no automated migrati
 
 ## 11. Pricing & Plans
 
-| Plan | Monthly Price | Annual saving | Properties | Target user |
-|---|---|---|---|---|
-| Starter | £9.99/mo | 2 months free | Up to 3 | Accidental landlords |
-| Landlord | £19.99/mo | 2 months free | Up to 5 | ★ Most popular |
-| Portfolio | £39.99/mo | 2 months free | Unlimited | Portfolio landlords |
+Pricing uses a **founding / standard** two-tier model displayed via a billing toggle on `index.html`. The JS `prices` object (in the inline `<script>` at the bottom of `index.html`) drives all displayed values.
+
+| Plan | Founding price (monthly) | Founding price (annual) | Standard price (monthly) | Standard price (annual) | Properties | Target user |
+|---|---|---|---|---|---|---|
+| Starter | £4.99/mo | £3.99/mo | £7.99/mo | £6.66/mo | Up to 3 | Accidental landlords |
+| Landlord | £9.99/mo | £8.33/mo | £14.99/mo | £12.49/mo | Up to 10 | ★ Most popular |
+| Portfolio | £23.99/mo | £19.99/mo | £39.99/mo | £33.32/mo | Unlimited | Portfolio landlords |
 
 Annual billing: 2 months free (pay 10 months, get 12)
 
@@ -823,6 +825,15 @@ When **touching any of these files for a new feature or bug fix**, follow this p
 - Tenants can: view tenancy details, report maintenance issue (with photo upload), view open jobs, download latest certificates
 - Uses existing `maintenance_jobs` and `certificates` tables
 - All submissions create a row in `maintenance_jobs` and trigger landlord email alerts (Sprint 10 system)
+
+### Pricing Update — May 2026 — index.html Pricing Corrections
+**Date:** May 2026
+- **Portfolio founding price:** updated from £11.99/mo → £23.99/mo
+- **Portfolio standard price:** updated from £23.99/mo → £39.99/mo
+- **Landlord standard price:** updated from £15.99/mo → £14.99/mo
+- Annual equivalents recalculated consistently (10 months ÷ 12): Portfolio founding £19.99/mo, Portfolio standard £33.32/mo, Landlord standard £12.49/mo
+- Changes applied in: HTML display (`id="portfolio-price"`, `id="portfolio-standard"`, `id="landlord-standard"`) and the `prices` JS object in `index.html`
+- Section 11 of `PROJECT_KNOWLEDGE.md` updated to reflect the full founding/standard price matrix
 
 ### Sprint 13 — User Profile Page & Stripe Subscription Billing
 **Date:** May 2026
