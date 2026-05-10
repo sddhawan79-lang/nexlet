@@ -9615,7 +9615,7 @@ function moEsign(pid, tid) {
           <div style="font-size:12px;font-weight:600;color:var(--txt)">Generated document preview</div>
           <button onclick="document.getElementById('esign-preview-a').style.display='none';document.getElementById('esign-generate-row').style.display='block';document.getElementById('esign-send-row-a').style.display='none';document.getElementById('esign-gen-btn').disabled=false;document.getElementById('esign-gen-btn').innerHTML='✦ Generate Document'" style="font-size:11px;color:var(--muted);background:none;border:none;cursor:pointer">✎ Regenerate</button>
         </div>
-        <div id="esign-doc-preview" style="border:1px solid var(--border);border-radius:8px;max-height:260px;overflow-y:auto;padding:14px 16px;font-size:12px;line-height:1.6;background:var(--white)"></div>
+        <div id="esign-doc-preview" style="border:1px solid var(--border);border-radius:8px;max-height:260px;overflow:auto;padding:14px 16px;font-size:12px;line-height:1.6;background:var(--white);contain:strict;width:100%"></div>
       </div>
       <div id="esign-generate-row" style="margin-top:14px">
         <button class="btn btn-navy" style="width:100%" id="esign-gen-btn" onclick="esignGenerateDoc('${pid}','${tid}')">✦ Generate Document</button>
@@ -9713,7 +9713,8 @@ async function esignGenerateDoc(pid, tid) {
     if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error?.message || `API error ${res.status}`); }
     const data = await res.json();
     _esignDocHtml = data.content?.[0]?.text || '';
-    document.getElementById('esign-doc-preview').innerHTML = _esignDocHtml;
+    document.getElementById('esign-doc-preview').innerHTML = '<div style="all:initial;font-family:inherit;font-size:inherit;line-height:inherit;color:inherit">' + _esignDocHtml + '</div>';
+    document.getElementById('esign-doc-preview').scrollTop = 0;
     document.getElementById('esign-preview-a').style.display = 'block';
     document.getElementById('esign-generate-row').style.display = 'none';
     document.getElementById('esign-send-row-a').style.display = 'block';
