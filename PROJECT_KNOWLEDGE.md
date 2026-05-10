@@ -1095,7 +1095,16 @@ When **touching any of these files for a new feature or bug fix**, follow this p
 - **`pgTenantDetail` (`landlord.html:4897`):** Complete UI overhaul. Each slot header now shows a doc count. All documents listed as sub-cards with individual View/Delete/Verify controls. "+ Add another" button always visible. AI Extracted block now shows Type and Issued by fields.
 - **`scanRTRDoc` (`landlord.html:1922`):** Prompt updated to extract `issuing_authority`. Result display includes issuing authority.
 - **`scanAndFill` (`landlord.html:919`):** Reusable cert scanner prompt updated to extract `issuing_authority` (company/organisation that issued the certificate). Applied across all cert scanning: `scanDoc`, `uploadScanCert`, `scanSetupCert`, `scanPropLicence`, `scanPropEPC`, `scanPropDeposit`, `runBulkScan`.
-- **KYC slots unchanged** (7 slots: passport, right_to_rent, address_1, address_2, reference, guarantor, other). Wizard flow unchanged.
+- **KYC slots unchanged** (7 slots: passport, right_to_rent, address_1, address_2, reference, guarantor, other).
+
+#### Wizard Restructure: 6 Steps → 7 Steps
+- **Old flow:** Details → RTR → Deposit → Rent → Insurance → Review
+- **New flow:** Details → **IDs** → RTR → Deposit → Rent → Insurance → Review
+- **Step 2 — IDs (new):** 2 ID document slots with AI scan. Acceptable types: Passport (any nationality), BRP, Photo Card Driving Licence (UK), National Identity Card (EU/EEA), Biometric Residence Card (BRC), HM Forces Identity Card, Firearms Certificate, UK Birth Certificate, Other. At least 1 required, 2 recommended.
+- **Step 3 — Right to Rent (was Step 2):** Updated doc types: UK Passport, Irish Passport/Passport Card, UK Birth Certificate + NI proof, Share Code (eVisa/EUSS), BRP, BRC, Home Office Immigration Document, Passport with valid visa. AI scan with issuing authority extraction.
+- **New function `scanIDDoc(num, input)` (`landlord.html:1922`):** AI scans ID documents in the wizard, auto-detects type (passport, driving licence, BRP, etc.), fills number, expiry, issuing authority. Maps to dropdown options.
+- **`moTenant`, `_renderTenantStep`, `_tenantStepHtml`, `tenantStepNext`, Review step** all updated for 7-step flow with ID fields in state and display.
+- **`_saveTenantSetupToDB`** unchanged — ID details captured in wizard for visual review; actual documents uploaded via `uploadTenantDoc` on tenant detail page after creation.
 
 ---
 

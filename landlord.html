@@ -1918,6 +1918,57 @@ function scanSetupCert(certType, input) {
   });
 }
 
+// ── ID DOCUMENT SCAN ──
+function scanIDDoc(num, input) {
+  if (!input.files[0]) return;
+  const file = input.files[0];
+  const box = document.getElementById(`ts-id${num}-scan-box`);
+  if (box) box.innerHTML = `<div style="font-size:13px;color:var(--muted)">⏳ Scanning document…</div><div class="scan-badge" style="margin-top:6px">✦ AI reading</div>`;
+
+  const reader = new FileReader();
+  reader.onload = async () => {
+    const b64 = reader.result.split(',')[1];
+    const isImg = file.type.startsWith('image/');
+    const msgContent = isImg
+      ? [{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:'This is an identity document. Extract: document type (e.g. Passport, Driving Licence, BRP, National ID Card), document/reference number, expiry date (YYYY-MM-DD if present, null if none), issuing authority (e.g. HMPO, DVLA, UKVI, or issuing country), nationality if visible. Return JSON only, keys: doc_type, ref, expiry, issuing_authority, nationality.'}]
+      : [{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},{type:'text',text:'This is an identity document. Extract: document type, reference number, expiry date (YYYY-MM-DD if present, null if none), issuing authority (e.g. HMPO, DVLA, UKVI, or issuing country), nationality if visible. Return JSON only, keys: doc_type, ref, expiry, issuing_authority, nationality.'}];
+    try {
+      const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({model:'claude-sonnet-4-5',max_tokens:300,messages:[{role:'user',content:msgContent}]})
+      });
+      const data = await res.json();
+      const parsed = JSON.parse((data.content?.[0]?.text||'{}').replace(/```json|```/g,'').trim());
+
+      const dt = (parsed.doc_type||'').toLowerCase();
+      const sel = document.getElementById(`ts-id${num}-type`);
+      if (sel) {
+        if (dt.includes('passport')) sel.value = 'Passport (any nationality)';
+        else if (dt.includes('brp')||dt.includes('biometric residence permit')) sel.value = 'Biometric Residence Permit (BRP)';
+        else if (dt.includes('driving')||dt.includes('licence')||dt.includes('license')) sel.value = 'Photo Card Driving Licence (UK)';
+        else if (dt.includes('national id')||dt.includes('identity card')) sel.value = 'National Identity Card (EU/EEA)';
+        else if (dt.includes('forces')||dt.includes('military')) sel.value = 'HM Forces Identity Card';
+        else if (dt.includes('firearm')||dt.includes('shotgun')) sel.value = 'Firearms Certificate / Shotgun Licence';
+        else if (dt.includes('birth')) sel.value = 'UK Birth Certificate';
+      }
+      if (parsed.ref) { const el=document.getElementById(`ts-id${num}-ref`); if(el) el.value=parsed.ref; }
+      if (parsed.expiry) { const el=document.getElementById(`ts-id${num}-expiry`); if(el) el.value=parsed.expiry; }
+      if (parsed.issuing_authority) { const el=document.getElementById(`ts-id${num}-issuer`); if(el) el.value=parsed.issuing_authority; }
+
+      const result = document.getElementById(`ts-id${num}-ai-result`);
+      if (result) {
+        result.style.display = 'block';
+        result.innerHTML = `✦ Detected: <strong>${parsed.doc_type||'Unknown'}</strong>${parsed.issuing_authority?` · Issued by ${parsed.issuing_authority}`:''}${parsed.expiry?` · Expires ${parsed.expiry}`:''}${parsed.nationality?' · '+parsed.nationality:''} — confirm below`;
+      }
+      if (box) box.innerHTML = `<div style="font-size:13px;color:var(--green-dark);font-weight:600">✓ Document scanned — fields filled below</div><div style="font-size:11px;color:var(--muted);margin-top:3px">${file.name}</div>`;
+      toast('✓ ID document scanned');
+    } catch(e) {
+      if (box) box.innerHTML = `<div style="font-size:13px;color:var(--amber)">⚠ Could not scan — fill in manually</div>`;
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
 // ── RTR DOCUMENT SCAN ──
 function scanRTRDoc(input) {
   if (!input.files[0]) return;
@@ -2176,24 +2227,27 @@ function moTenant(pid) {
     // Step 1 — basics
     name:'', email:'', phone:'', tenancyType:'APT', startDate:'', endDate:'',
     isLead: !D.tenants.filter(t=>t.status==='Active'&&String(t.prop_id)===String(pid)).length, // auto-lead if first
-    // Step 2 — Right to Rent
+    // Step 2 — IDs (2 documents)
+    id1Type:'', id1Ref:'', id1Expiry:'', id1Issuer:'',
+    id2Type:'', id2Ref:'', id2Expiry:'', id2Issuer:'',
+    // Step 3 — Right to Rent
     rtrDocType:'Passport', rtrRef:'', rtrCheckedBy:'', rtrCheckDate:'', rtrExpiry:'', rtrSkipped:false,
-    // Step 3 — Address proof + deposit
+    // Step 4 — Address proof + deposit
     addr1Type:'', addr1File:null, addr2Type:'', addr2File:null,
     deposit:'', depositScheme:'', depositRef:'',
-    // Step 4 — Rent
+    // Step 5 — Rent
     rent:'', rentDay:'1', firstPayDate:'', payMethod:'Standing order',
-    // Step 5 — Insurance (optional, tied to tenancy start)
+    // Step 6 — Insurance (optional, tied to tenancy start)
     ins_buildings:{ provider:'',policy:'',expiry:'',premium:'' },
     ins_contents:{ provider:'',policy:'',expiry:'',premium:'' },
     ins_liability:{ provider:'',policy:'',expiry:'',premium:'' },
     ins_rentguarantee:{ provider:'',policy:'',expiry:'',premium:'' },
-    // Step 6 — Review
+    // Step 7 — Review
     sendInvite: true, sendWelcomeKit: false,
   };
 
   document.getElementById('mo-t').textContent = 'Add tenant';
-  document.getElementById('mo-s').textContent = 'Step 1 of 5 — tenant details';
+  document.getElementById('mo-s').textContent = 'Step 1 of 7 — tenant details';
   document.querySelector('.mo-box').classList.add('mo-wide');
   _renderTenantStep(1);
   document.getElementById('mo').classList.add('open');
@@ -2201,22 +2255,22 @@ function moTenant(pid) {
 
 function _renderTenantStep(n) {
   const s = window._tsetup;
-  const stepLabels = ['','Details','Right to Rent','Deposit','Rent','Insurance','Review'];
-  const segBar = [1,2,3,4,5,6].map(i =>
+  const stepLabels = ['','Details','IDs','Right to Rent','Deposit','Rent','Insurance','Review'];
+  const segBar = [1,2,3,4,5,6,7].map(i =>
     `<div style="flex:1;height:3px;border-radius:100px;background:${i<n?'var(--green)':i===n?'var(--blue)':'var(--border)'};transition:background .3s"></div>`
   ).join('');
 
   document.getElementById('mo-b').innerHTML = `
     <div style="display:flex;gap:4px;margin-bottom:6px">${segBar}</div>
     <div style="display:flex;justify-content:space-between;margin-bottom:20px">
-      ${[1,2,3,4,5,6].map(i=>`<div style="font-size:9px;font-weight:${i===n?'700':'400'};color:${i<n?'var(--green-dark)':i===n?'var(--blue)':'var(--muted)'};text-align:center;flex:1">${stepLabels[i]}</div>`).join('')}
+      ${[1,2,3,4,5,6,7].map(i=>`<div style="font-size:9px;font-weight:${i===n?'700':'400'};color:${i<n?'var(--green-dark)':i===n?'var(--blue)':'var(--muted)'};text-align:center;flex:1">${stepLabels[i]}</div>`).join('')}
     </div>
     ${_tenantStepHtml(n)}`;
 
   document.getElementById('mo-f').innerHTML = `
     <button onclick="tenantStepBack()" style="display:inline-flex;align-items:center;gap:6px;background:none;border:none;font-family:var(--font);font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;padding:7px 0;visibility:${n===1?'hidden':'visible'}">← Back</button>
-    <span style="font-size:12px;color:var(--muted)">Step ${n} of 6</span>
-    <button class="btn btn-navy" id="tsetup-next" onclick="tenantStepNext()">${n===6?'Add tenant ✓':'Next →'}</button>`;
+    <span style="font-size:12px;color:var(--muted)">Step ${n} of 7</span>
+    <button class="btn btn-navy" id="tsetup-next" onclick="tenantStepNext()">${n===7?'Add tenant ✓':'Next →'}</button>`;
 }
 
 function _tenantStepHtml(n) {
@@ -2260,26 +2314,87 @@ function _tenantStepHtml(n) {
       </label>
     </div>`;
 
-  // ── STEP 2: RIGHT TO RENT ──
-  if (n === 2) return `
+  // ── STEP 2: ID DOCUMENTS ──
+  if (n === 2) {
+    const idTypes = ['Passport (any nationality)','Biometric Residence Permit (BRP)','Photo Card Driving Licence (UK)','National Identity Card (EU/EEA)','Biometric Residence Card (BRC)','HM Forces Identity Card','Firearms Certificate / Shotgun Licence','UK Birth Certificate','Other'];
+    const idTypeOpts1 = idTypes.map(d=>`<option${d===s.id1Type?' selected':''}>${d}</option>`).join('');
+    const idTypeOpts2 = idTypes.map(d=>`<option${d===s.id2Type?' selected':''}>${d}</option>`).join('');
+    return `
+    <div style="font-size:15px;font-weight:600;margin-bottom:2px">Identity documents</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:12px">At least 1 valid photo ID required — upload 2 for stronger verification</div>
+    <div style="background:var(--blue-bg);border:1px solid rgba(59,111,232,0.2);border-radius:8px;padding:9px 12px;font-size:11px;color:var(--blue);margin-bottom:14px">
+      🪪 Accepted: passport, BRP, driving licence, national ID card, HM Forces ID. AI will auto-extract type, number, expiry and issuing authority.
+    </div>
+
+    <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:700;color:var(--txt);margin-bottom:10px">ID Document 1 <span style="color:var(--red)">*</span></div>
+      <div class="scan-box" id="ts-id1-scan-box" style="margin-bottom:10px">
+        <input type="file" accept="image/*,.pdf" onchange="scanIDDoc(1,this)">
+        <div class="scan-ic">🔍</div>
+        <div class="scan-t">Upload ID — AI will detect type, number & expiry</div>
+        <div class="scan-s">Passport, driving licence, BRP, national ID card</div>
+        <div class="scan-badge">✦ AI auto-extraction</div>
+      </div>
+      <div id="ts-id1-ai-result" style="display:none;background:var(--off);border:1px solid rgba(0,200,150,0.25);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--green-dark);font-weight:600;margin-bottom:10px">✦ AI detected — confirm the fields below</div>
+      <div class="fg-row" style="margin-bottom:6px">
+        <div class="fg"><label>Document type <span class="req">*</span></label><select id="ts-id1-type">${idTypeOpts1}</select></div>
+        <div class="fg"><label>Document number</label><input type="text" id="ts-id1-ref" value="${s.id1Ref}" placeholder="e.g. Passport or licence number"></div>
+      </div>
+      <div class="fg-row" style="margin-bottom:0">
+        <div class="fg"><label>Expiry date</label><input type="date" id="ts-id1-expiry" value="${s.id1Expiry}"></div>
+        <div class="fg"><label>Issuing authority</label><input type="text" id="ts-id1-issuer" value="${s.id1Issuer}" placeholder="e.g. HMPO, DVLA, UKVI"></div>
+      </div>
+    </div>
+
+    <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:700;color:var(--txt);margin-bottom:10px">ID Document 2 <span style="font-weight:400;color:var(--muted);font-size:11px">(optional)</span></div>
+      <div class="scan-box" id="ts-id2-scan-box" style="margin-bottom:10px">
+        <input type="file" accept="image/*,.pdf" onchange="scanIDDoc(2,this)">
+        <div class="scan-ic">🔍</div>
+        <div class="scan-t">Upload second ID — AI will detect type, number & expiry</div>
+        <div class="scan-s">Passport, driving licence, BRP, national ID card</div>
+        <div class="scan-badge">✦ AI auto-extraction</div>
+      </div>
+      <div id="ts-id2-ai-result" style="display:none;background:var(--off);border:1px solid rgba(0,200,150,0.25);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--green-dark);font-weight:600;margin-bottom:10px">✦ AI detected — confirm the fields below</div>
+      <div class="fg-row" style="margin-bottom:6px">
+        <div class="fg"><label>Document type</label><select id="ts-id2-type"><option value="">Select type…</option>${idTypeOpts2}</select></div>
+        <div class="fg"><label>Document number</label><input type="text" id="ts-id2-ref" value="${s.id2Ref}" placeholder="e.g. Passport or licence number"></div>
+      </div>
+      <div class="fg-row" style="margin-bottom:0">
+        <div class="fg"><label>Expiry date</label><input type="date" id="ts-id2-expiry" value="${s.id2Expiry}"></div>
+        <div class="fg"><label>Issuing authority</label><input type="text" id="ts-id2-issuer" value="${s.id2Issuer}" placeholder="e.g. HMPO, DVLA, UKVI"></div>
+      </div>
+    </div>
+
+    <div style="background:rgba(229,62,62,0.07);border:1px solid rgba(229,62,62,0.2);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--red);display:flex;align-items:flex-start;gap:8px">
+      <span style="font-size:16px;flex-shrink:0">⚠️</span>
+      <div><strong>Legal requirement:</strong> You must verify the tenant's identity before the tenancy begins. Keep copies of all ID documents on file. Failure to conduct proper checks can result in an unlimited fine.</div>
+    </div>`;
+  }
+
+  // ── STEP 3: RIGHT TO RENT ──
+  if (n === 3) return `
     <div style="font-size:15px;font-weight:600;margin-bottom:2px">Right to Rent check</div>
     <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Must be completed <strong>before</strong> the tenancy begins</div>
     <div style="background:rgba(229,62,62,0.07);border:1px solid rgba(229,62,62,0.2);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--red);margin-bottom:16px;display:flex;align-items:flex-start;gap:8px">
       <span style="font-size:16px;flex-shrink:0">⚠️</span>
       <div><strong>Criminal offence</strong> to rent to someone without the right to rent in the UK. Landlords face an unlimited fine or up to 5 years imprisonment.</div>
     </div>
+    <div style="background:var(--blue-bg);border:1px solid rgba(59,111,232,0.2);border-radius:8px;padding:9px 12px;font-size:11px;color:var(--blue);margin-bottom:14px">
+      ✅ Acceptable documents: UK or Irish passport, UK birth certificate (with NI number proof), online share code (eVisa / EUSS), Biometric Residence Permit, Home Office immigration status document, passport with valid visa.
+    </div>
     <div class="scan-box" id="ts-rtr-scan-box" style="margin-bottom:14px">
       <input type="file" accept="image/*,.pdf" onchange="scanRTRDoc(this)">
       <div class="scan-ic">🔍</div>
       <div class="scan-t">Upload RTR document — AI will detect type & expiry</div>
-      <div class="scan-s">Passport, BRP, share code screenshot, birth certificate</div>
+      <div class="scan-s">Passport, BRP, share code screenshot, birth certificate, immigration document</div>
       <div class="scan-badge">✦ AI auto-extraction</div>
     </div>
     <div id="ts-rtr-ai-result" style="display:none;background:var(--off);border:1px solid rgba(0,200,150,0.25);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--green-dark);font-weight:600;margin-bottom:14px">✦ AI detected — confirm the fields below</div>
     <div class="fg-row">
       <div class="fg"><label>Document type <span class="req">*</span></label>
         <select id="ts-rtr-doctype">
-          ${['Passport (UK/EU)','Biometric Residence Permit','Share Code (eVisa)','UK Birth Certificate + NI','Other'].map(d=>`<option${d===s.rtrDocType?' selected':''}>${d}</option>`).join('')}
+          ${['UK Passport','Irish Passport/Passport Card','UK Birth Certificate + NI proof','Share Code (eVisa/EUSS)','Biometric Residence Permit (BRP)','Biometric Residence Card (BRC)','Home Office Immigration Document','Passport with valid visa','Other'].map(d=>`<option${d===s.rtrDocType?' selected':''}>${d}</option>`).join('')}
         </select>
       </div>
       <div class="fg"><label>Document ref / Share code</label><input type="text" id="ts-rtr-ref" value="${s.rtrRef}" placeholder="e.g. W7X-4F2-9ZA"></div>
@@ -2303,8 +2418,8 @@ function _tenantStepHtml(n) {
       </div>
     </div>`;
 
-  // ── STEP 3: ADDRESS PROOF + DEPOSIT ──
-  if (n === 3) return `
+  // ── STEP 4: ADDRESS PROOF + DEPOSIT ──
+  if (n === 4) return `
     <div style="font-size:15px;font-weight:600;margin-bottom:2px">Address proof & deposit</div>
     <div style="font-size:13px;color:var(--muted);margin-bottom:16px">Two address documents required · Deposit entered here flows everywhere in the app</div>
 
@@ -2366,8 +2481,8 @@ function _tenantStepHtml(n) {
       <div>Deposit must be protected in an approved scheme within <strong>30 days</strong> of receipt. Failure = 1–3× deposit penalty.</div>
     </div>`;
 
-  // ── STEP 4: RENT ──
-  if (n === 4) return `
+  // ── STEP 5: RENT ──
+  if (n === 5) return `
     <div style="font-size:15px;font-weight:600;margin-bottom:2px">Rent details</div>
     <div style="font-size:13px;color:var(--muted);margin-bottom:16px">Sets up automatic rent tracking and payment reminders</div>
     <div class="fg-row">
@@ -2389,8 +2504,8 @@ function _tenantStepHtml(n) {
       ℹ️ Under RRA 2025, rent can only be increased once per year using a Section 13 notice. RentSafe AI will generate this for you when the time comes.
     </div>`;
 
-  // ── STEP 5: INSURANCE ──
-  if (n === 5) {
+  // ── STEP 6: INSURANCE ──
+  if (n === 6) {
     const insTypes = [
       { key:'ins_buildings',    icon:'🏠', label:'Buildings insurance',       desc:'Structure, fixtures & fittings — annual' },
       { key:'ins_contents',     icon:'🛋', label:'Contents insurance',         desc:'Furnishings & landlord-owned items' },
@@ -2417,10 +2532,12 @@ function _tenantStepHtml(n) {
     </div>`).join('')}`;
   }
 
-  // ── STEP 6: REVIEW ──
-  if (n === 6) {
+  // ── STEP 7: REVIEW ──
+  if (n === 7) {
     const p = P(s.pid);
     const rtrStatus = s.rtrSkipped ? { col:'var(--amber)', label:'⚠ Skipped — flags in compliance' } : (s.rtrCheckDate ? { col:'var(--green-dark)', label:'✓ Completed' } : { col:'var(--red)', label:'✗ Not entered' });
+    const id1Status = s.id1Type ? { col:'var(--green-dark)', label:`✓ ${s.id1Type}` } : { col:'var(--red)', label:'✗ Not entered' };
+    const id2Status = s.id2Type ? { col:'var(--green-dark)', label:`✓ ${s.id2Type}` } : { col:'var(--muted)', label:'Not provided' };
     const depStatus = s.deposit ? { col:'var(--green-dark)', label:`✓ £${parseFloat(s.deposit).toLocaleString()} · ${s.depositScheme||'Scheme TBC'}` } : { col:'var(--red)', label:'✗ Not entered' };
     const addr1OK = !!s.addr1Type; const addr2OK = !!s.addr2Type;
     const addrStatus = addr1OK && addr2OK ? { col:'var(--green-dark)', label:'✓ 2 documents entered' } : addr1OK ? { col:'var(--amber)', label:'⚠ Only 1 document — 2 required' } : { col:'var(--red)', label:'✗ Not entered' };
@@ -2430,7 +2547,9 @@ function _tenantStepHtml(n) {
       { icon:'✉️', label:'Email',          val: s.email || 'Not set', col:'var(--txt)' },
       { icon:'🏠', label:'Property',       val: p?.address || '—',    col:'var(--txt)' },
       { icon:'📅', label:'Tenancy start',  val: s.startDate ? new Date(s.startDate).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—', col: s.startDate?'var(--txt)':'var(--red)' },
-      { icon:'🔍', label:'Right to Rent',  val: rtrStatus.label, col: rtrStatus.col },
+      { icon:'🪪', label:'ID Document 1',  val: id1Status.label, col: id1Status.col },
+      { icon:'🪪', label:'ID Document 2',  val: id2Status.label, col: id2Status.col },
+      { icon:'✅', label:'Right to Rent',  val: rtrStatus.label, col: rtrStatus.col },
       { icon:'📄', label:'Address proof',  val: addrStatus.label, col: addrStatus.col },
       { icon:'🔒', label:'Deposit',         val: depStatus.label,  col: depStatus.col },
       { icon:'💷', label:'Monthly rent',   val: rentStatus.label, col: rentStatus.col },
@@ -2504,6 +2623,17 @@ function tenantStepNext() {
     if (!s.pid)       { toast('Please select a property', true); return; }
 
   } else if (n === 2) {
+    s.id1Type    = document.getElementById('ts-id1-type')?.value || '';
+    s.id1Ref     = document.getElementById('ts-id1-ref')?.value.trim() || '';
+    s.id1Expiry  = document.getElementById('ts-id1-expiry')?.value || '';
+    s.id1Issuer  = document.getElementById('ts-id1-issuer')?.value.trim() || '';
+    s.id2Type    = document.getElementById('ts-id2-type')?.value || '';
+    s.id2Ref     = document.getElementById('ts-id2-ref')?.value.trim() || '';
+    s.id2Expiry  = document.getElementById('ts-id2-expiry')?.value || '';
+    s.id2Issuer  = document.getElementById('ts-id2-issuer')?.value.trim() || '';
+    if (!s.id1Type) { toast('Please select a document type for ID 1', true); return; }
+
+  } else if (n === 3) {
     s.rtrDocType   = document.getElementById('ts-rtr-doctype')?.value || '';
     s.rtrRef       = document.getElementById('ts-rtr-ref')?.value.trim() || '';
     s.rtrCheckDate = document.getElementById('ts-rtr-date')?.value || '';
@@ -2514,7 +2644,7 @@ function tenantStepNext() {
       toast('Please enter the check date, or tick "Skip for now"', true); return;
     }
 
-  } else if (n === 3) {
+  } else if (n === 4) {
     s.addr1Type   = document.getElementById('ts-addr1-type')?.value || '';
     s.addr2Type   = document.getElementById('ts-addr2-type')?.value || '';
     s.deposit     = document.getElementById('ts-deposit')?.value || '';
@@ -2524,15 +2654,15 @@ function tenantStepNext() {
     if (!s.addr2Type) { toast('Please select document type for Address proof 2 — 2 documents are required', true); return; }
     if (!s.deposit)   { toast('Deposit amount is required', true); return; }
 
-  } else if (n === 4) {
+  } else if (n === 5) {
     s.rent        = document.getElementById('ts-rent')?.value || '';
     s.rentDay     = document.getElementById('ts-rentday')?.value || '1';
     s.firstPayDate= document.getElementById('ts-firstpay')?.value || '';
     s.payMethod   = document.getElementById('ts-paymethod')?.value || 'Standing order';
     if (!s.rent) { toast('Monthly rent is required', true); return; }
 
-  } else if (n === 5) {
-    // Save insurance fields from step 5
+  } else if (n === 6) {
+    // Save insurance fields from step 6
     ['ins_buildings','ins_contents','ins_liability','ins_rentguarantee'].forEach(k => {
       s[k] = {
         provider: document.getElementById(`ts-${k}-prov`)?.value.trim() || '',
@@ -2542,7 +2672,7 @@ function tenantStepNext() {
       };
     });
 
-  } else if (n === 6) {
+  } else if (n === 7) {
     s.sendInvite     = document.getElementById('ts-send-invite')?.checked ?? true;
     s.sendWelcomeKit = document.getElementById('ts-send-kit')?.checked ?? false;
     _saveTenantSetupToDB();
@@ -2550,7 +2680,7 @@ function tenantStepNext() {
   }
 
   window._tsetup.step = n + 1;
-  document.getElementById('mo-s').textContent = `Step ${n+1} of 6`;
+  document.getElementById('mo-s').textContent = `Step ${n+1} of 7`;
   _renderTenantStep(n + 1);
   document.querySelector('.mo-box')?.scrollTo?.(0, 0);
 }
@@ -2559,7 +2689,7 @@ function tenantStepBack() {
   const n = window._tsetup.step;
   if (n <= 1) return;
   window._tsetup.step = n - 1;
-  document.getElementById('mo-s').textContent = `Step ${n-1} of 6`;
+  document.getElementById('mo-s').textContent = `Step ${n-1} of 7`;
   _renderTenantStep(n - 1);
   document.querySelector('.mo-box')?.scrollTo?.(0, 0);
 }
