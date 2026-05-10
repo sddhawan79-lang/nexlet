@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Document Signing — RentSafe AI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --font:'DM Sans', system-ui, sans-serif;
+  --disp:'DM Serif Display', Georgia, serif;
+  --navy:#0B1E3D;--navy-mid:#132847;
+  --green:#00C896;--green-dark:#009970;
+  --white:#fff;--off:#F6F8FB;
+  --border:#E4EAF1;--txt:#1A2B45;--muted:#7A8FA6;
+  --red:#E53E3E;--amber:#D97706;--blue:#3B6FE8;
+  --red-bg:rgba(229,62,62,0.08);--amber-bg:rgba(217,119,6,0.08);
+  --green-bg:rgba(0,200,150,0.08);--blue-bg:rgba(59,111,232,0.08);
+  --radius:10px;
+}
+body{font-family:var(--font);color:var(--txt);background:var(--off);min-height:100vh;-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:var(--disp)}
+.fg{display:flex;flex-direction:column;gap:6px}
+.fg label{font-size:12px;font-weight:600;color:var(--navy);text-transform:uppercase;letter-spacing:.3px}
+.fg input,.fg select,.fg textarea{
+  font-family:var(--font);font-size:13px;color:var(--txt);
+  padding:10px 14px;border:1px solid var(--border);border-radius:8px;
+  background:var(--white);width:100%;outline:none;transition:border-color .15s
+}
+.fg input:focus,.fg select:focus,.fg textarea:focus{border-color:var(--blue)}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  font-family:var(--font);font-size:13px;font-weight:600;
+  padding:10px 20px;border-radius:8px;cursor:pointer;transition:all .15s;
+  border:1.5px solid var(--border);background:var(--white);color:var(--txt);text-decoration:none
+}
+.btn:hover{opacity:.85}
+.btn-navy{background:var(--navy);color:var(--white);border-color:var(--navy)}
+.btn-green{background:var(--green-dark);color:var(--white);border-color:var(--green-dark)}
+
+/* Portal layout */
+.portal-wrap{max-width:860px;margin:0 auto;padding:0 16px 40px}
+.portal-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:18px 24px;background:var(--white);border-bottom:1px solid var(--border);
+  position:sticky;top:0;z-index:50;margin-bottom:20px
+}
+.portal-logo{font-family:var(--disp);font-size:20px;font-weight:700;color:var(--navy)}
+.portal-logo span{color:var(--green)}
+.portal-user{font-size:13px;font-weight:600;color:var(--txt)}
+.portal-body{padding:0 8px}
+.panel{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.panel-head{padding:16px 20px;border-bottom:1px solid var(--border)}
+.panel-head h2{font-size:15px;font-weight:600;color:var(--txt);margin-bottom:2px}
+.panel-head p{font-size:12px;color:var(--muted);font-family:var(--font)}
+.panel-body{padding:20px}
+
+/* E-SIGN */
+.esign-consent-overlay{
+  position:fixed;inset:0;z-index:1000;
+  background:rgba(11,30,61,0.96);
+  display:flex;align-items:center;justify-content:center;padding:20px
+}
+.esign-consent-card{
+  background:var(--white);border-radius:16px;
+  padding:36px 32px;max-width:480px;width:100%;text-align:center
+}
+.esign-doc-frame{
+  max-height:60vh;overflow-y:auto;
+  border-top:1px solid var(--border);font-size:13px;
+  line-height:1.7;color:var(--txt)
+}
+.sig-canvas-wrap{
+  border:1.5px solid var(--border);border-radius:8px;
+  overflow:hidden;background:var(--white);touch-action:none;position:relative
+}
+#signature-canvas{
+  display:block;width:100%;height:150px;cursor:crosshair;touch-action:none
+}
+
+/* Toast */
+.toast{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+  background:var(--navy);color:var(--white);
+  font-size:13px;padding:12px 24px;border-radius:100px;
+  z-index:9999;opacity:0;pointer-events:none;transition:opacity .3s
+}
+.toast.show{opacity:1}
+.toast.err{background:var(--red)}
+
+/* Spinner */
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{
+  display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.3);
+  border-top-color:var(--white);border-radius:50%;animation:spin .6s linear infinite
+}
+.spin-dark{border-color:rgba(11,30,61,.15);border-top-color:var(--navy)}
+
+/* Success */
+.success-card{text-align:center;padding:30px 20px}
+.success-anim{font-size:48px;margin-bottom:16px}
+.success-title{font-size:16px;font-weight:600;color:var(--txt);margin-bottom:8px}
+.success-sub{font-size:13px;color:var(--muted);line-height:1.6}
+
+@media(max-width:480px){
+  .esign-consent-card{padding:24px 18px}
+  .portal-header{padding:14px 16px}
+  .portal-logo{font-size:17px}
+  .panel-body{padding:14px}
+}
+</style>
+<!-- CRISP LIVE CHAT -->
+<script type="text/javascript">window.$crisp=[];window.CRISP_WEBSITE_ID="6a5c5215-3c14-4afa-94a4-f1f8b05e2f62";(function(){d=document;s=d.createElement("script");s.src="https://client.crisp.chat/l.js";s.async=1;d.getElementsByTagName("head")[0].appendChild(s);})();</script>
+</head>
+<body>
+
+<div id="toast" class="toast"></div>
+
+<!-- Consent overlay -->
+<div class="esign-consent-overlay" id="esign-consent">
+  <div class="esign-consent-card">
+    <div style="font-size:40px;margin-bottom:16px">⚖️</div>
+    <h2 style="font-size:18px;font-weight:600;color:var(--txt);margin-bottom:12px">Electronic Document Consent</h2>
+    <p style="font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:28px">By continuing, you confirm you consent to receiving and signing legal documents electronically. Electronic signatures are legally binding under the <strong style="color:var(--txt)">Electronic Communications Act 2000</strong>.</p>
+    <button class="btn btn-green" style="width:100%;padding:12px;font-size:14px" onclick="acceptEsignConsent()">I Agree — Continue</button>
+  </div>
+</div>
+
+<!-- Signing content (revealed after consent) -->
+<div id="esign-body" style="display:none">
+  <div class="portal-wrap">
+    <div class="portal-header">
+      <div class="portal-logo">Rent<span>Safe</span> AI</div>
+      <div class="portal-user"><span class="portal-name" id="esign-tenant-display"></span></div>
+    </div>
+    <div class="portal-body">
+
+      <!-- Status screens (already signed / expired) -->
+      <div id="esign-status" style="display:none">
+        <div class="panel"><div class="panel-body"><div id="esign-status-content" style="text-align:center;padding:20px 0"></div></div></div>
+      </div>
+
+      <!-- Signing flow -->
+      <div id="esign-sign-flow">
+        <!-- Document preview -->
+        <div class="panel" style="margin-bottom:16px">
+          <div class="panel-head">
+            <div>
+              <h2 id="esign-doc-title">Document for signing</h2>
+              <p id="esign-doc-meta">Please read the full document before signing</p>
+            </div>
+          </div>
+          <div id="esign-doc-content" class="esign-doc-frame"></div>
+        </div>
+
+        <!-- Signature section -->
+        <div class="panel" id="esign-sig-panel">
+          <div class="panel-head"><div><h2>Sign document</h2><p>Draw your signature in the box below</p></div></div>
+          <div class="panel-body">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+              <div>
+                <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:4px">Signed by</div>
+                <div style="font-size:14px;font-weight:600;color:var(--txt)" id="esign-sig-name">—</div>
+              </div>
+              <div>
+                <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:4px">Date</div>
+                <div style="font-size:14px;font-weight:600;color:var(--txt)" id="esign-sig-date">—</div>
+              </div>
+            </div>
+            <div style="font-size:12px;font-weight:600;color:var(--txt);margin-bottom:6px">Signature <span style="color:var(--red)">*</span></div>
+            <div class="sig-canvas-wrap"><canvas id="signature-canvas"></canvas></div>
+            <button onclick="clearSignature()" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;margin-top:6px;padding:0">Clear signature</button>
+            <div style="margin-top:20px">
+              <button class="btn-primary" id="esign-sign-btn" onclick="signDocument()" disabled style="width:100%;padding:12px;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:600;cursor:not-allowed;border:none;background:var(--navy);color:#fff;opacity:.45;display:inline-flex;align-items:center;justify-content:center;gap:8px">Sign Document</button>
+            </div>
+            <p style="font-size:11px;color:var(--muted);text-align:center;margin-top:10px;line-height:1.6">By clicking "Sign Document" you are electronically signing this document. Your signature is legally binding under the Electronic Communications Act 2000.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Success screen -->
+      <div id="esign-success" style="display:none">
+        <div class="panel">
+          <div class="panel-body">
+            <div class="success-card">
+              <div class="success-anim">✅</div>
+              <div class="success-title">Document signed successfully</div>
+              <div class="success-sub">A copy has been emailed to you and your landlord. You can also download your signed copy below.</div>
+              <a id="esign-download-link" href="#" target="_blank" class="btn btn-green" style="display:inline-flex;margin-top:16px;padding:10px 24px">⬇ Download signed document</a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /portal-body -->
+  </div><!-- /portal-wrap -->
+</div><!-- /esign-body -->
+
+<!-- Dependencies -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="js/lib/supabase-client.js"></script>
+<script src="js/esign-content.js"></script>
+</body>
+</html>
