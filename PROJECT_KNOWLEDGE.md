@@ -117,6 +117,7 @@ rentsafeai/
 ├── sprint13_db.sql                 SQL migration: Sprint 13 (user_profiles, stripe_subscriptions)
 ├── session7_tenant_documents.sql   SQL migration: Session 7 (tenant_documents table + RLS) — run in Supabase SQL Editor
 ├── session10_multi_doc.sql          SQL migration: Session 10 (multi-doc KYC — drop slot unique, add columns)
+├── session10_tenants_columns.sql    SQL migration: Session 10 (add missing tenants columns — rtr, rent_day, scheme_ref, etc.)
 ├── SPRINT10_DEPLOY.md              Sprint 10 deployment guide
 ├── PROJECT_KNOWLEDGE.md            THIS FILE — agent initialization reference
 ├── fix.b64                         Binary patch (base64 encoded)
@@ -172,11 +173,21 @@ rentsafeai/
 | `user_id` | uuid FK | Landlord's Supabase user |
 | `prop_id` | uuid FK | → properties |
 | `name`, `email`, `phone` | text | |
+| `type` | text | Tenancy type: APT / AST / Company let |
 | `start_date`, `end_date` | date | Tenancy period |
-| `rent`, `deposit` | numeric | |
+| `rent`, `rent_day` | numeric, int | Monthly rent + due day |
+| `deposit` | numeric | |
 | `deposit_scheme` | text | TDS / DPS / MyDeposits |
+| `scheme_ref` | text | Deposit scheme reference number |
+| `addr_proof_1`, `addr_proof_2` | text | Address proof document types |
+| `rtr_doc_type`, `rtr_ref` | text | Right to Rent document info |
+| `rtr_check_date`, `rtr_expiry` | date | RTR check + document expiry dates |
+| `rtr_checked_by` | text | Who performed RTR check |
+| `rtr_skipped` | boolean | RTR check deferred |
+| `is_lead` | boolean | Lead tenant for property |
 | `status` | text | `active`, `revoked` |
 | `invite_token` | text | **Unique token for tenant portal URL** |
+| `invite_used` | boolean | Whether invite link has been clicked |
 | `landlord_email` | text | For portal email display |
 
 #### `certificates`
@@ -474,6 +485,7 @@ All migrations run manually in **Supabase → SQL Editor** (no automated migrati
 | `mtd_tables.sql` | Creates MTD module tables | Independent |
 | `session7_tenant_documents.sql` | Creates `tenant_documents` table with RLS | Independent |
 | `session10_multi_doc.sql` | Drops `tenant_documents_slot_unique` index; adds `issuing_authority`, `doc_type_extracted` columns | Already run |
+| `session10_tenants_columns.sql` | Adds 13 missing columns to `tenants`: `type`, `rent_day`, `scheme_ref`, `rtr_*` (6), `addr_proof_*` (2), `is_lead`, `invite_used` | Run now |
 
 **Service role key location:** Supabase → Settings → API → `service_role` (secret key)
 
