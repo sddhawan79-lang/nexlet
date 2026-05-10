@@ -116,6 +116,7 @@ rentsafeai/
 ├── sprint10_step2_cron.sql         SQL: pg_cron scheduled jobs
 ├── sprint13_db.sql                 SQL migration: Sprint 13 (user_profiles, stripe_subscriptions)
 ├── session7_tenant_documents.sql   SQL migration: Session 7 (tenant_documents table + RLS) — run in Supabase SQL Editor
+├── session10_multi_doc.sql          SQL migration: Session 10 (multi-doc KYC — drop slot unique, add columns)
 ├── SPRINT10_DEPLOY.md              Sprint 10 deployment guide
 ├── PROJECT_KNOWLEDGE.md            THIS FILE — agent initialization reference
 ├── fix.b64                         Binary patch (base64 encoded)
@@ -283,7 +284,7 @@ Deduplication table for all outgoing alerts.
 | `checklist_progress` | Inspection checklist state per property |
 | `meter_readings` | Gas/electric meter readings |
 | `esign_requests` | E-signature requests with `token` for tenant portal |
-| `tenant_documents` | Tenant KYC documents — passport, RTR, address proofs, references, guarantor. One row per slot per tenant. AI-scanned via Claude. **Requires `session7_tenant_documents.sql` migration + `tenant-documents` Storage bucket.** |
+| `tenant_documents` | Tenant KYC documents — passport, RTR, address proofs, references, guarantor. **Multiple docs per slot** (unique index removed Session 10). AI-scanned via Claude with `issuing_authority` + `doc_type_extracted` fields. **Requires `session7_tenant_documents.sql` + `session10_multi_doc.sql` migrations + `tenant-documents` Storage bucket.** |
 
 ### MTD Tables (from `mtd_tables.sql`)
 | Table | Purpose |
@@ -471,6 +472,8 @@ All migrations run manually in **Supabase → SQL Editor** (no automated migrati
 | `sprint10_step1_fix.sql` | Patch/fix for Sprint 10 DB setup | Run after step1 |
 | `sprint10_step2_cron.sql` | Sets up 3 pg_cron jobs — **must replace `YOUR_SERVICE_ROLE_KEY`** (2 occurrences) with actual service role key before running | Run last |
 | `mtd_tables.sql` | Creates MTD module tables | Independent |
+| `session7_tenant_documents.sql` | Creates `tenant_documents` table with RLS | Independent |
+| `session10_multi_doc.sql` | Drops `tenant_documents_slot_unique` index; adds `issuing_authority`, `doc_type_extracted` columns | Already run |
 
 **Service role key location:** Supabase → Settings → API → `service_role` (secret key)
 
@@ -1078,6 +1081,21 @@ When **touching any of these files for a new feature or bug fix**, follow this p
   - IP address capture via ipify.org
 - **Landlord initiate flow** remains in `landlord.html` (`moEsign`, `esignGenerateDoc`, `_sendEsignRequest`) — only the tenant signing path was extracted
 - **`esign_requests` table** still has no SQL migration file (schema documented as comment in `landlord.html:9397`)
+
+### Session 10 — May 2026 — Multi-Document KYC & AI Field Extraction
+
+#### Feature: Multiple Documents Per Tenant KYC Slot
+- **Problem:** `tenant_documents` had a UNIQUE INDEX `(tenant_id, slot)` enforcing one doc per category. Uploading a second passport or RTR doc would overwrite the first. No support for multiple IDs (passport + driving licence), multiple RTR docs (BRP + share code), or multiple address proofs.
+- **Solution:** Removed the unique constraint. `uploadTenantDoc` now always INSERTs — no upsert. `pgTenantDetail` UI shows all documents under each category slot with "+ Add another" buttons everywhere.
+
+#### Changes
+- **New file:** `session10_multi_doc.sql` — DB migration: DROP INDEX `tenant_documents_slot_unique`, ADD `issuing_authority` and `doc_type_extracted` columns. Run in Supabase SQL Editor.
+- **`uploadTenantDoc` (`landlord.html:5169`):** Removed existing-doc check (was upsert). Now always INSERTs, allowing unlimited docs per slot.
+- **`scanTenantDoc` (`landlord.html:5215`):** AI prompts updated to extract `issuing_authority` (the authority/company that issued the document) and `doc_type_extracted` (the specific document type detected by AI). New fields mapped and saved.
+- **`pgTenantDetail` (`landlord.html:4897`):** Complete UI overhaul. Each slot header now shows a doc count. All documents listed as sub-cards with individual View/Delete/Verify controls. "+ Add another" button always visible. AI Extracted block now shows Type and Issued by fields.
+- **`scanRTRDoc` (`landlord.html:1922`):** Prompt updated to extract `issuing_authority`. Result display includes issuing authority.
+- **`scanAndFill` (`landlord.html:919`):** Reusable cert scanner prompt updated to extract `issuing_authority` (company/organisation that issued the certificate). Applied across all cert scanning: `scanDoc`, `uploadScanCert`, `scanSetupCert`, `scanPropLicence`, `scanPropEPC`, `scanPropDeposit`, `runBulkScan`.
+- **KYC slots unchanged** (7 slots: passport, right_to_rent, address_1, address_2, reference, guarantor, other). Wizard flow unchanged.
 
 ---
 

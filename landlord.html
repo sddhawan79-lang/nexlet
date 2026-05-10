@@ -921,8 +921,8 @@ async function scanAndFill(file, onResult){
   const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(file);});
   const isImg=file.type.startsWith('image/');
   const msgContent=isImg
-    ?[{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:'UK property compliance certificate. Extract: certificate type, issue date (YYYY-MM-DD), expiry date (YYYY-MM-DD), engineer or provider name, address. Return JSON only, keys: type, issued, expiry, engineer, address.'}]
-    :[{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},{type:'text',text:'UK property compliance certificate. Extract: certificate type, issue date (YYYY-MM-DD), expiry date (YYYY-MM-DD), engineer or provider name, address. Return JSON only, keys: type, issued, expiry, engineer, address.'}];
+    ?[{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:'UK property compliance certificate. Extract: certificate type, issue date (YYYY-MM-DD), expiry date (YYYY-MM-DD), engineer or provider name, issuing_authority (the company or organisation that issued the certificate), address. Return JSON only, keys: type, issued, expiry, engineer, issuing_authority, address.'}]
+    :[{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},{type:'text',text:'UK property compliance certificate. Extract: certificate type, issue date (YYYY-MM-DD), expiry date (YYYY-MM-DD), engineer or provider name, issuing_authority (the company or organisation that issued the certificate), address. Return JSON only, keys: type, issued, expiry, engineer, issuing_authority, address.'}];
   const res=await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:300,messages:[{role:'user',content:msgContent}]})});
   const data=await res.json();
   const txt=data.content?.[0]?.text||'{}';
@@ -1931,8 +1931,8 @@ function scanRTRDoc(input) {
     const b64 = reader.result.split(',')[1];
     const isImg = file.type.startsWith('image/');
     const msgContent = isImg
-      ? [{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:'This is a UK Right to Rent identity document. Extract: document type (e.g. Passport, Biometric Residence Permit, Share Code, Birth Certificate), document/reference number, expiry date (YYYY-MM-DD if present, null if none), nationality if visible. Return JSON only, keys: doc_type, ref, expiry, nationality.'}]
-      : [{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},{type:'text',text:'This is a UK Right to Rent identity document. Extract: document type, reference number, expiry date (YYYY-MM-DD if present, null if none), nationality if visible. Return JSON only, keys: doc_type, ref, expiry, nationality.'}];
+      ? [{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:'This is a UK Right to Rent identity document. Extract: document type (e.g. Passport, Biometric Residence Permit, Share Code, Birth Certificate), document/reference number, expiry date (YYYY-MM-DD if present, null if none), nationality if visible, issuing_authority (Home Office, UKVI, DVLA, or issuing country). Return JSON only, keys: doc_type, ref, expiry, nationality, issuing_authority.'}]
+      : [{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},{type:'text',text:'This is a UK Right to Rent identity document. Extract: document type, reference number, expiry date (YYYY-MM-DD if present, null if none), nationality if visible, issuing_authority (Home Office, UKVI, DVLA, or issuing country). Return JSON only, keys: doc_type, ref, expiry, nationality, issuing_authority.'}];
     try {
       const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
         method:'POST', headers:{'Content-Type':'application/json'},
@@ -1956,7 +1956,7 @@ function scanRTRDoc(input) {
       const result = document.getElementById('ts-rtr-ai-result');
       if (result) {
         result.style.display = 'block';
-        result.innerHTML = `✦ Detected: <strong>${parsed.doc_type||'Unknown'}</strong>${parsed.expiry?` · Expires ${parsed.expiry}`:''}${parsed.nationality?' · '+parsed.nationality:''} — confirm below`;
+        result.innerHTML = `✦ Detected: <strong>${parsed.doc_type||'Unknown'}</strong>${parsed.issuing_authority?` · Issued by ${parsed.issuing_authority}`:''}${parsed.expiry?` · Expires ${parsed.expiry}`:''}${parsed.nationality?' · '+parsed.nationality:''} — confirm below`;
       }
       if (box) box.innerHTML = `<div style="font-size:13px;color:var(--green-dark);font-weight:600">✓ Document scanned — fields filled below</div><div style="font-size:11px;color:var(--muted);margin-top:3px">${file.name}</div>`;
       toast('✓ RTR document scanned');
@@ -4918,6 +4918,7 @@ function pgTenantDetail(tid) {
   const total          = mandatorySlots.length;
   const missing        = mandatorySlots.filter(s => !docs.some(d => d.slot === s.slot));
   const allDone        = uploadedCount === total;
+  const totalDocs      = docs.length;
 
   // ── Sticky summary card ──
   const stickyCard = `
@@ -4961,47 +4962,63 @@ function pgTenantDetail(tid) {
       </div>
     </div>`;
 
-  // ── KYC document rows ──
-  const kycRows = KYC_SLOTS.map(s => {
-    const doc = docs.find(d => d.slot === s.slot);
-    const up  = !!doc;
-    const url = up ? getDocUrl(doc) : '#';
-    const uploadedDate = up && doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '';
-
-    // Build extracted info block
+  // ── KYC document rows (multi-doc per slot) ──
+  const renderDocCard = (doc, isLast) => {
+    const url = getDocUrl(doc);
+    const uploadedDate = doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '';
     let extractedHtml = '';
-    if (up && doc.extracted_name) {
+    if (doc.extracted_name) {
       const mismatch = doc.name_mismatch;
       const verified = doc.verified;
       const fields = [
-        doc.extracted_name    && ['Name',    doc.extracted_name],
-        doc.extracted_doc_number && ['Ref',  doc.extracted_doc_number],
-        doc.extracted_expiry  && ['Expiry',  doc.extracted_expiry],
-        doc.extracted_address && ['Address', doc.extracted_address],
-        doc.share_code        && ['Share code', doc.share_code],
+        doc.extracted_name       && ['Name',    doc.extracted_name],
+        doc.doc_type_extracted   && ['Type',    doc.doc_type_extracted],
+        doc.extracted_doc_number && ['Ref',     doc.extracted_doc_number],
+        doc.issuing_authority    && ['Issued by', doc.issuing_authority],
+        doc.extracted_expiry     && ['Expiry',  doc.extracted_expiry],
+        doc.extracted_address    && ['Address', doc.extracted_address],
+        doc.share_code           && ['Share code', doc.share_code],
       ].filter(Boolean);
-
       extractedHtml = `
-        <div style="margin-top:8px;padding:8px 10px;background:${mismatch?'rgba(229,62,62,0.05)':'var(--off)'};border:1px solid ${mismatch?'rgba(229,62,62,0.2)':'var(--border)'};border-radius:6px">
+        <div style="margin-top:6px;padding:8px 10px;background:${mismatch?'rgba(229,62,62,0.05)':'var(--off)'};border:1px solid ${mismatch?'rgba(229,62,62,0.2)':'var(--border)'};border-radius:6px">
           <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:5px">✦ AI Extracted</div>
-          <div style="display:flex;flex-wrap:wrap;gap:6px 16px">
+          <div style="display:flex;flex-wrap:wrap;gap:4px 16px">
             ${fields.map(([l,v])=>`<span style="font-size:11px"><span style="color:var(--muted)">${l}:</span> <strong>${v}</strong></span>`).join('')}
           </div>
           ${mismatch ? `<div style="margin-top:6px;font-size:11px;font-weight:600;color:var(--red)">⚠ Name mismatch — extracted "<em>${doc.extracted_name}</em>" vs tenant record "${t.name}"</div>` : ''}
-          <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
+          <div style="margin-top:6px;display:flex;align-items:center;gap:8px">
             ${verified
               ? `<span style="font-size:11px;font-weight:700;color:var(--green-dark);background:var(--green-bg);padding:2px 9px;border-radius:100px">✓ Verified</span>`
               : `<button class="btn btn-sm" style="font-size:11px;padding:3px 10px;background:var(--green-bg);color:var(--green-dark);border-color:rgba(0,200,150,0.3)" onclick="verifyTenantDoc('${doc.id}','${tid}')">✓ Mark as verified</button>
                  <span style="font-size:11px;color:var(--muted)">Not yet verified</span>`}
           </div>
         </div>`;
-    } else if (up && !doc.extracted_name) {
-      extractedHtml = `<div style="margin-top:6px;font-size:11px;color:var(--muted)">⏳ Scanning… refresh in a moment</div>`;
+    } else {
+      extractedHtml = `<div style="margin-top:4px;font-size:11px;color:var(--muted)">⏳ Scanning… refresh in a moment</div>`;
     }
-
     return `
-      <div style="padding:12px 14px;border:1px solid ${up?(doc.name_mismatch?'rgba(229,62,62,0.3)':doc.verified?'rgba(0,200,150,0.3)':'var(--border)'):'rgba(229,62,62,0.2)'};border-radius:8px;margin-bottom:8px;background:${up?'var(--white)':'rgba(229,62,62,0.02)'}">
-        <div style="display:flex;align-items:center;gap:12px">
+      <div style="padding:10px 12px;border:1px solid ${doc.name_mismatch?'rgba(229,62,62,0.3)':doc.verified?'rgba(0,200,150,0.3)':'var(--border)'};border-radius:6px;background:var(--white);${isLast?'':'margin-bottom:6px'}">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:13px">📎</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${doc.doc_label||doc.file_name||'File'}</div>
+            <div style="font-size:10px;color:var(--muted)">${uploadedDate}${doc.doc_type_extracted?' · '+doc.doc_type_extracted:''}</div>
+          </div>
+          <div style="display:flex;gap:4px;flex-shrink:0">
+            <a href="${url}" target="_blank" class="btn btn-sm" style="font-size:10px;padding:3px 8px">View</a>
+            <button class="btn btn-sm" style="font-size:10px;padding:3px 8px;color:var(--red);border-color:rgba(229,62,62,0.3)" onclick="deleteTenantDoc('${doc.id}','${tid}')">✕</button>
+          </div>
+        </div>
+        ${extractedHtml}
+      </div>`;
+  };
+
+  const kycRows = KYC_SLOTS.map(s => {
+    const slotDocs = docs.filter(d => d.slot === s.slot);
+    const hasDocs = slotDocs.length > 0;
+    return `
+      <div style="padding:12px 14px;border:1px solid ${hasDocs?'var(--border)':'rgba(229,62,62,0.2)'};border-radius:8px;margin-bottom:8px;background:${hasDocs?'var(--white)':'rgba(229,62,62,0.02)'}">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:${hasDocs?'10px':'0'}">
           <div style="font-size:20px;width:32px;text-align:center;flex-shrink:0">${s.icon}</div>
           <div style="flex:1;min-width:0">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -5009,24 +5026,18 @@ function pgTenantDetail(tid) {
               ${s.mandatory
                 ? `<span style="font-size:10px;font-weight:700;color:var(--red);background:var(--red-bg);padding:1px 6px;border-radius:100px">Required</span>`
                 : `<span style="font-size:10px;color:var(--muted);background:var(--off);padding:1px 6px;border-radius:100px">Optional</span>`}
-              ${up && doc.verified ? `<span style="font-size:10px;font-weight:700;color:var(--green-dark);background:var(--green-bg);padding:1px 6px;border-radius:100px">✓ Verified</span>` : ''}
-              ${up && doc.name_mismatch ? `<span style="font-size:10px;font-weight:700;color:var(--red);background:var(--red-bg);padding:1px 6px;border-radius:100px">⚠ Mismatch</span>` : ''}
+              ${hasDocs ? `<span style="font-size:11px;color:var(--muted)">${slotDocs.length} document${slotDocs.length!==1?'s':''}</span>` : ''}
             </div>
-            ${up
-              ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">📎 ${doc.doc_label||doc.file_name||'File'} · ${uploadedDate}</div>`
-              : `<div style="font-size:11px;color:var(--red);margin-top:2px">Not uploaded</div>`}
+            ${!hasDocs ? `<div style="font-size:11px;color:var(--red);margin-top:2px">Not uploaded</div>` : ''}
           </div>
-          <div style="display:flex;gap:6px;flex-shrink:0">
-            ${up
-              ? `<a href="${url}" target="_blank" class="btn btn-sm">View</a>
-                 <button class="btn btn-sm" style="color:var(--red);border-color:rgba(229,62,62,0.3)" onclick="deleteTenantDoc('${doc.id}','${tid}')">✕</button>`
-              : `<label class="btn btn-sm btn-navy" style="cursor:pointer;margin:0">
-                   Upload
-                   <input type="file" style="display:none" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onchange="uploadTenantDoc('${tid}','${s.slot}',this)">
-                 </label>`}
+          <div style="flex-shrink:0">
+            <label class="btn btn-sm btn-navy" style="cursor:pointer;margin:0;font-size:11px">
+              ${hasDocs ? '+ Add another' : 'Upload'}
+              <input type="file" style="display:none" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onchange="uploadTenantDoc('${tid}','${s.slot}',this)">
+            </label>
           </div>
         </div>
-        ${extractedHtml}
+        ${hasDocs ? slotDocs.map((d,i) => renderDocCard(d, i === slotDocs.length - 1)).join('') : ''}
       </div>`;
   }).join('');
 
@@ -5194,17 +5205,11 @@ async function uploadTenantDoc(tid, slot, input) {
     uploaded_at: new Date().toISOString(),
   };
 
-  const existing = D.tenantDocs.find(d => String(d.tenant_id) === String(tid) && d.slot === slot);
-  if (existing) {
-    const { data } = await sb.from('tenant_documents').update(record).eq('id', existing.id).select().single();
-    if (data) D.tenantDocs = D.tenantDocs.map(d => d.id === existing.id ? data : d);
-  } else {
-    const { data } = await sb.from('tenant_documents').insert(record).select().single();
-    if (data) D.tenantDocs.push(data);
-  }
+  const { data } = await sb.from('tenant_documents').insert(record).select().single();
+  if (data) D.tenantDocs.push(data);
 
   // Get saved doc ID for scan
-  const savedDoc = D.tenantDocs.find(d => String(d.tenant_id) === String(tid) && d.slot === slot);
+  const savedDoc = D.tenantDocs.find(d => String(d.tenant_id) === String(tid) && d.slot === slot && d.file_name === path);
   toast('✓ Uploaded — scanning document…');
   nav('tenant-detail', tid);
 
@@ -5217,12 +5222,12 @@ async function scanTenantDoc(docId, tid, slot, file, tenantName) {
 
   // Slot-specific extraction prompts
   const prompts = {
-    passport:      'This is a passport or photo ID document. Extract: full_name, doc_number (passport/ID number), expiry (YYYY-MM-DD or null), nationality, date_of_birth (YYYY-MM-DD or null). Return JSON only.',
-    right_to_rent: 'This is a UK Right to Rent document. Extract: full_name, doc_type (Passport/BRP/Share Code/eVisa), doc_number or share_code, expiry (YYYY-MM-DD or null), nationality. Return JSON only.',
-    address_1:     'This is an address proof document (utility bill, bank statement, etc). Extract: full_name, address (full address as string), doc_type (e.g. Utility Bill, Bank Statement), doc_date (YYYY-MM-DD or null). Return JSON only.',
-    address_2:     'This is an address proof document (utility bill, bank statement, etc). Extract: full_name, address (full address as string), doc_type (e.g. Utility Bill, Bank Statement), doc_date (YYYY-MM-DD or null). Return JSON only.',
-    reference:     'This is a tenant reference or credit check report. Extract: applicant_name, outcome (Pass/Fail/Conditional/Unknown), referee_name, referee_company, reference_date (YYYY-MM-DD or null). Return JSON only.',
-    guarantor:     'This is a guarantor document or ID. Extract: full_name, address (full address as string), doc_type, expiry (YYYY-MM-DD or null). Return JSON only.',
+    passport:      'This is a passport or photo ID document. Extract: full_name, doc_number (passport/ID number), expiry (YYYY-MM-DD or null), nationality, date_of_birth (YYYY-MM-DD or null), issuing_authority (the country or authority that issued it), doc_type_extracted (e.g. Passport, Driving Licence, National ID Card, Biometric Residence Permit). Return JSON only.',
+    right_to_rent: 'This is a UK Right to Rent document. Extract: full_name, doc_type (Passport/BRP/Share Code/eVisa), doc_number or share_code, expiry (YYYY-MM-DD or null), nationality, issuing_authority (Home Office, UKVI, or issuing country), doc_type_extracted (the specific document type). Return JSON only.',
+    address_1:     'This is an address proof document (utility bill, bank statement, etc). Extract: full_name, address (full address as string), doc_type (e.g. Utility Bill, Bank Statement), doc_date (YYYY-MM-DD or null), issuing_authority (the company or organisation that issued it). Return JSON only.',
+    address_2:     'This is an address proof document (utility bill, bank statement, etc). Extract: full_name, address (full address as string), doc_type (e.g. Utility Bill, Bank Statement), doc_date (YYYY-MM-DD or null), issuing_authority (the company or organisation that issued it). Return JSON only.',
+    reference:     'This is a tenant reference or credit check report. Extract: applicant_name, outcome (Pass/Fail/Conditional/Unknown), referee_name, referee_company, reference_date (YYYY-MM-DD or null), issuing_authority (the agency or company that produced the reference). Return JSON only.',
+    guarantor:     'This is a guarantor document or ID. Extract: full_name, address (full address as string), doc_type, expiry (YYYY-MM-DD or null), issuing_authority (the issuer of this document). Return JSON only.',
   };
 
   const prompt = prompts[slot] || 'Extract key information from this document. Return JSON only with relevant fields.';
@@ -5251,9 +5256,11 @@ async function scanTenantDoc(docId, tid, slot, file, tenantName) {
     const extracted_name    = ext.full_name || ext.applicant_name || null;
     const extracted_address = ext.address   || null;
     const extracted_expiry  = ext.expiry    || ext.reference_date || ext.doc_date || null;
-    const extracted_doc_num = ext.doc_number|| ext.doc_type || ext.referee_company || null;
+    const extracted_doc_num = ext.doc_number|| ext.ref || ext.share_code || ext.doc_type || ext.referee_company || null;
     const share_code        = ext.share_code|| null;
     const share_code_expiry = (slot === 'right_to_rent' && ext.expiry) ? ext.expiry : null;
+    const issuing_authority = ext.issuing_authority || ext.referee_company || null;
+    const doc_type_extracted = ext.doc_type_extracted || ext.doc_type || null;
 
     // Name mismatch check — normalise to lowercase, trim
     const nameMismatch = extracted_name
@@ -5267,6 +5274,8 @@ async function scanTenantDoc(docId, tid, slot, file, tenantName) {
       extracted_address,
       share_code,
       share_code_expiry,
+      issuing_authority,
+      doc_type_extracted,
       name_mismatch: nameMismatch,
       verified: false,
     };
