@@ -483,6 +483,7 @@ tr:hover td{background:rgba(246,248,251,.8)}
 <!-- Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
 <script>
 // ══════════════════════════════════════════════════════════════
 // RENTSAFE AI — CODE MAP (auto-generated, update each session)
@@ -9563,6 +9564,14 @@ async function sendPortalInvite(tenantId) {
 
 let _esignDocHtml = null;
 let _esignPdfUrl  = null;
+let _esignSigReady = false;
+let _esignLandlordPad = null;
+
+function _esignClearSig(suffix) {
+  if (_esignLandlordPad) { _esignLandlordPad.clear(); _esignSigReady = false; }
+  const btn = document.getElementById('esign-send-' + suffix + '-btn');
+  if (btn) { btn.textContent = '✍ Sign & Send'; btn.style.background = 'var(--green)'; }
+}
 
 function moEsign(pid, tid) {
   const p = P(pid);
@@ -9570,6 +9579,8 @@ function moEsign(pid, tid) {
   if (!p || !t) { toast('Property or tenant not found', true); return; }
   _esignDocHtml = null;
   _esignPdfUrl  = null;
+  _esignSigReady = false;
+  _esignLandlordPad = null;
 
   openMo('Send Document for Signing', `${t.name} · ${p.address}`, `
     <div id="esign-chooser">
@@ -9610,7 +9621,13 @@ function moEsign(pid, tid) {
         <button class="btn btn-navy" style="width:100%" id="esign-gen-btn" onclick="esignGenerateDoc('${pid}','${tid}')">✦ Generate Document</button>
       </div>
       <div id="esign-send-row-a" style="display:none;margin-top:10px">
-        <button class="btn" style="width:100%;background:var(--green);border-color:var(--green);color:#0B1E3D;font-weight:600" id="esign-send-a-btn" onclick="_sendEsignRequest('${pid}','${tid}','html')">✅ Looks good — Send to Tenant</button>
+        <div id="esign-sig-area-a" style="display:none;margin-bottom:10px;border:1px solid var(--border);border-radius:8px;padding:12px;background:var(--off)">
+          <div style="font-size:11px;font-weight:700;color:var(--txt);margin-bottom:4px">✍ Your signature (landlord)</div>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:8px">Draw your signature below — today's date will be added automatically</div>
+          <div style="border:1.5px solid var(--border);border-radius:6px;overflow:hidden;background:#fff;touch-action:none"><canvas id="esign-landlord-canvas-a" style="display:block;width:100%;height:120px;cursor:crosshair;touch-action:none"></canvas></div>
+          <button onclick="event.stopPropagation();_esignClearSig('a')" style="background:none;border:none;color:var(--muted);font-size:11px;cursor:pointer;margin-top:4px;padding:0">Clear signature</button>
+        </div>
+        <button class="btn" style="width:100%;background:var(--green);border-color:var(--green);color:#0B1E3D;font-weight:600" id="esign-send-a-btn" onclick="_sendEsignRequest('${pid}','${tid}','html')">✍ Sign & Send</button>
       </div>
     </div>
 
@@ -9625,7 +9642,13 @@ function moEsign(pid, tid) {
         </div>
       </div>
       <div id="esign-send-row-b" style="display:none;margin-top:10px">
-        <button class="btn" style="width:100%;background:var(--green);border-color:var(--green);color:#0B1E3D;font-weight:600" id="esign-send-b-btn" onclick="_sendEsignRequest('${pid}','${tid}','pdf')">Send to Tenant</button>
+        <div id="esign-sig-area-b" style="display:none;margin-bottom:10px;border:1px solid var(--border);border-radius:8px;padding:12px;background:var(--off)">
+          <div style="font-size:11px;font-weight:700;color:var(--txt);margin-bottom:4px">✍ Your signature (landlord)</div>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:8px">Draw your signature below — today's date will be added automatically</div>
+          <div style="border:1.5px solid var(--border);border-radius:6px;overflow:hidden;background:#fff;touch-action:none"><canvas id="esign-landlord-canvas-b" style="display:block;width:100%;height:120px;cursor:crosshair;touch-action:none"></canvas></div>
+          <button onclick="event.stopPropagation();_esignClearSig('b')" style="background:none;border:none;color:var(--muted);font-size:11px;cursor:pointer;margin-top:4px;padding:0">Clear signature</button>
+        </div>
+        <button class="btn" style="width:100%;background:var(--green);border-color:var(--green);color:#0B1E3D;font-weight:600" id="esign-send-b-btn" onclick="_sendEsignRequest('${pid}','${tid}','pdf')">✍ Sign & Send</button>
       </div>
     </div>
   `, '');
@@ -9709,9 +9732,39 @@ async function _sendEsignRequest(pid, tid, mode) {
   if (mode === 'html' && !_esignDocHtml) { toast('No document generated yet', true); return; }
   if (mode === 'pdf'  && !_esignPdfUrl)  { toast('No PDF uploaded yet', true); return; }
 
-  const btn = mode === 'html'
-    ? document.getElementById('esign-send-a-btn')
-    : document.getElementById('esign-send-b-btn');
+  const suffix = mode === 'html' ? 'a' : 'b';
+  const sigArea = document.getElementById('esign-sig-area-' + suffix);
+  const btn = document.getElementById('esign-send-' + suffix + '-btn');
+
+  // First click: show signature pad
+  if (!_esignSigReady && sigArea) {
+    sigArea.style.display = 'block';
+    if (btn) { btn.textContent = '✓ Confirm & Send'; btn.style.background = 'var(--navy)'; btn.style.color = '#fff'; btn.style.borderColor = 'var(--navy)'; }
+
+    const canvas = document.getElementById('esign-landlord-canvas-' + suffix);
+    if (canvas && window.SignaturePad && !_esignLandlordPad) {
+      const ratio = Math.max(window.devicePixelRatio || 1, 1);
+      canvas.width  = canvas.offsetWidth  * ratio;
+      canvas.height = canvas.offsetHeight * ratio;
+      canvas.getContext('2d').scale(ratio, ratio);
+      _esignLandlordPad = new SignaturePad(canvas, { backgroundColor: 'rgb(255,255,255)', penColor: 'rgb(26,43,69)' });
+      _esignLandlordPad.addEventListener('endStroke', function () {
+        _esignSigReady = !_esignLandlordPad.isEmpty();
+      });
+    }
+    sigArea.scrollIntoView({ behavior: 'smooth' });
+    return;
+  }
+
+  // Second click: validate signature and send
+  if (!_esignSigReady || !_esignLandlordPad || _esignLandlordPad.isEmpty()) {
+    toast('Please draw your signature first', true); return;
+  }
+
+  const landlordSigData = _esignLandlordPad.toDataURL('image/png');
+  const landlordName    = _profileName();
+  const landlordSignedAt = new Date().toISOString();
+
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin spin-dark"></span> Sending…'; }
 
   const token      = crypto.randomUUID();
@@ -9726,7 +9779,10 @@ async function _sendEsignRequest(pid, tid, mode) {
     document_pdf_url: mode === 'pdf'  ? _esignPdfUrl  : null,
     token,
     status:     'pending',
-    expires_at: expiresAt
+    expires_at: expiresAt,
+    landlord_name:      landlordName,
+    landlord_signed_at: landlordSignedAt,
+    landlord_sig_png:   landlordSigData,
   });
   if (insertErr) {
     if (btn) { btn.disabled = false; btn.textContent = 'Send to Tenant'; }
@@ -9760,11 +9816,13 @@ async function _sendEsignRequest(pid, tid, mode) {
     body: JSON.stringify({ type: 'send_email', to: t.email, subject: 'Action required — please sign your tenancy document', html })
   }).catch(() => {});
 
-  await logAudit('esign_request_sent', 'esign_requests', pid, `E-sign sent to ${t.email} for ${p.address}`);
+  await logAudit('esign_request_sent', 'esign_requests', pid, `E-sign sent to ${t.email} for ${p.address} — landlord signed by ${landlordName}`);
   closeMo();
   _esignDocHtml = null;
   _esignPdfUrl  = null;
-  toast(`✓ Signing request sent to ${t.email}`);
+  _esignSigReady = false;
+  _esignLandlordPad = null;
+  toast(`✓ Signed & sent to ${t.email}`);
 }
 
 // ── SECTION 13 RENT INCREASE NOTICE GENERATOR ──

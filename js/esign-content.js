@@ -113,7 +113,10 @@
     document.getElementById('esign-sig-name').textContent = tenantName;
     document.getElementById('esign-sig-date').textContent = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
     document.getElementById('esign-doc-title').textContent = req.document_type === 'written_statement' ? 'Written Statement of Tenancy Terms' : 'Tenancy Document';
-    document.getElementById('esign-doc-meta').textContent = propAddr + ' · Please read the full document before signing';
+    var signedByLabel = req.landlord_signed_at
+      ? ' · ✍ Signed by landlord on ' + new Date(req.landlord_signed_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+      : '';
+    document.getElementById('esign-doc-meta').textContent = propAddr + ' · Please read the full document before signing' + signedByLabel;
 
     if (req.status === 'signed') {
       document.getElementById('esign-sign-flow').style.display = 'none';
@@ -291,7 +294,27 @@
         doc.text('The landlord uploaded this document as a PDF. It is stored securely and available for download separately. This signature page confirms the tenant electronically signed the referenced document.', 20, 60, { maxWidth: 170 });
       }
 
-      // ── Signature confirmation page ──
+      // ── Landlord signature (pre-existing, from send time) ──
+      if (req.landlord_sig_png && req.landlord_signed_at) {
+        doc.addPage();
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
+        doc.setTextColor(11, 30, 61);
+        doc.text('Landlord Signature', 20, 20);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
+        var landlordDate = new Date(req.landlord_signed_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+        var lLines = [
+          'Signed by (landlord): ' + (req.landlord_name || 'Landlord'),
+          'Date: ' + landlordDate,
+          '',
+          'The landlord electronically signed this document before sending it to the tenant.',
+          'This signature was applied on ' + landlordDate + ' under the Electronic Communications Act 2000.'
+        ];
+        lLines.forEach(function (l, i) { doc.text(l, 20, 36 + i * 8); });
+        try { doc.addImage(req.landlord_sig_png, 'PNG', 20, 95, 80, 28); } catch (e) {}
+      }
+
+      // ── Tenant signature confirmation page ──
+      doc.addPage();
       doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
       doc.text('Electronic Signature Confirmation', 20, 20);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
