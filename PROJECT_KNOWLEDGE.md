@@ -548,10 +548,26 @@ All migrations run manually in **Supabase → SQL Editor** (no automated migrati
 - E-sign flow triggered via `?esign=xxx` URL parameter → looks up `esign_requests` table
 
 ### Data Loading Pattern (`landlord.html`)
-`loadData()` fires 12 parallel Supabase queries on startup:
-`properties`, `tenants`, `certificates`, `maintenance`, `rent_payments`, `insurance`, `email_log`, `custom_templates`, `contractors`, `job_assignments`, `tenant_documents`, `user_profiles` (added Session 8)
+`loadData()` fires 13 parallel Supabase queries on startup:
+`properties`, `tenants`, `certificates`, `maintenance`, `rent_payments`, `insurance`, `email_log`, `custom_templates`, `contractors`, `job_assignments`, `tenant_documents`, `user_profiles`, `stripe_subscriptions` (added Session 9)
 
 The `user_profiles` row is queried by `currentUser.id` via `.maybeSingle()` and stored in `D.userProfile`. Use the `_profileName()` helper (not raw `email.split('@')[0]`) for all landlord name references in AI prompts and legal documents — it resolves `full_name` from the profile, falling back to email username.
+
+### Subscription Plan Gating (Session 9)
+**Plan resolution:** `stripe_subscriptions.plan_name` queried on startup via `loadData()`. Falls back to `'portfolio'` if no row exists (grandfathers existing users). Plan stored in `window._userPlan`.
+
+| Plan | Property limit | Features gated |
+|---|---|---|
+| Starter | 2 | Core only: compliance, documents, e-sign, maintenance, tenant portal, AI assistant, calendar, deposit alerts, contractor book. NO rent tracking, insurance, MTD, inventory, custom templates. |
+| Landlord | 10 | Starter + bulk gen, portfolio health, audit log, rent tracking, insurance. NO MTD Tax, NO AI Inventory, NO Custom Templates. |
+| Portfolio | Unlimited | All features including MTD Tax, AI Inventory Report, Custom Templates. |
+
+**Enforcement:**
+- `nav()` intercepts restricted page routes (`mtd`, `financials`, `rent`, `insurance`, `contractors`) and shows `upgradePrompt()` modal with link to `profile.html`
+- `moAddProp()` blocks property creation at plan limit with upgrade prompt
+- MTD Tax sidebar item shows "PRO" badge for non-Portfolio users, opens upgrade prompt on click
+- Inventory Report banner hidden entirely from property detail page for non-Portfolio users
+- Plan helpers: `getUserPlan()`, `isPortfolio()`, `isLandlordOrAbove()`, `isStarter()`, `getPropLimit()`, `upgradePrompt(feature, targetPlan)`
 
 ### AI Chat Assistant (`sendChat()` in `landlord.html`)
 - Powered by Claude via `ai-proxy` edge function (replaced `super-processor` — Session 6)
@@ -592,7 +608,7 @@ Session 8 introduced a 3-checkbox pre-generation consent gate for 4 legal docume
 | 3 | RRA PDF (GOV.UK Form 3A) not attached | Section 8 notices | Pending |
 | 4 | Section 8 output is draft text only — handoff to Form 3A UI | UX | Pending |
 | 5 | Email sending via `super-processor` (not dedicated function) | Architecture | **FIXED Session 6** — replaced with `ai-proxy` |
-| 6 | PDF export via `window.print()` (not jsPDF) | Landlord dashboard | **FIXED Session 9** — `downloadAsPDF()` + `s8DownloadPDF()` rewritten to jsPDF with A4 auto-pagination |
+| 6 | PDF export via `window.print()` (not jsPDF) | Landlord dashboard | **FIXED Session 9** — `downloadAsPDF()`, `s8DownloadPDF()`, `invDownloadPDF()` all rewritten to jsPDF with A4 auto-pagination |
 | 7 | No tenant data input validation | Tenant portal | Technical debt |
 | 8 | No offline/error recovery states | General | Technical debt |
 | 9 | MX record missing for `rentsafeai.co.uk` | DNS / Email | Post-launch |
@@ -610,6 +626,7 @@ Session 8 introduced a 3-checkbox pre-generation consent gate for 4 legal docume
 | 21 | Calendar "Mark received" parsed rent amount from display label (address digits contaminated value) | Calendar | **FIXED Session 9** — `rentAmt` passed directly from calendar event object |
 | 22 | `rent_payments` table has no SQL migration file in repo | Database docs | Pending — Saby to document actual schema or create SQL file |
 | 23 | Inventory report: file input destroyed by `innerHTML` replacement — always says "upload at least one photo" | Inventory | **FIXED Session 9** — files saved to `window._invFiles`, input stays in DOM, PDF now jsPDF |
+| 24 | No subscription plan gating — all features available to all users regardless of plan | Architecture | **FIXED Session 9** — tiered access: Starter (2 props, core), Landlord (10 props, +rent/insurance/bulk), Portfolio (unlimited, all features incl. MTD + Inventory) |
 
 ---
 
@@ -1100,6 +1117,16 @@ When **touching any of these files for a new feature or bug fix**, follow this p
 - Photo limit increased 8→12; `max_tokens` 1500→2000
 - `invDownloadPDF()`: `window.print()` → jsPDF with auto-pagination
 - Output container: `max-height:280px` → `55vh`
+
+**7. Subscription plan gating implemented**
+- Added `stripe_subscriptions.plan_name` query to `loadData()` (now 13 parallel queries) — falls back to `'portfolio'` for grandfathered users
+- Plan helpers: `getUserPlan()`, `isPortfolio()`, `isLandlordOrAbove()`, `isStarter()`, `getPropLimit()`, `upgradePrompt(feature, plan)`
+- `applyPlanGating()` runs after load — adds PRO badge to MTD sidebar item, intercepts clicks with upgrade prompt
+- `nav()` intercepts restricted routes: `/mtd` (Portfolio only), `/financials`/`/rent`/`/insurance`/`/contractors` (Landlord+ only)
+- `moAddProp()` blocks property creation at plan limit (Starter: 2, Landlord: 10, Portfolio: unlimited)
+- Inventory Report banner hidden on property detail page for non-Portfolio users
+- **Landing page updated:** tagline changed to "Tiered by portfolio size", Landlord card removed MTD+Inventory, Portfolio card added both as unique features, comparison table rows shifted
+- All gated features show `upgradePrompt()` modal with a link to `profile.html` for Stripe billing
 
 #### Remaining for Next Session (Priority Order)
 1. **guidance-content.js** — NRLA compliance guide topics: Right to Rent checks, written tenancy terms, guarantor process, welcome letter

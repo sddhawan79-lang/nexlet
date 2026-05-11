@@ -412,9 +412,9 @@ tr:hover td{background:rgba(246,248,251,.8)}
         <svg class="sb-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 12V4l4 3 3-4 3 3 2-2v8H2z"/></svg>
         <span class="sb-label">Finance</span>
       </button>
-      <button class="sb-item" data-page="mtd">
+      <button class="sb-item" data-page="mtd" id="sb-mtd">
         <svg class="sb-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="3" width="13" height="10" rx="1.5"/><path d="M5 7h6M5 9.5h4"/><path d="M11.5 1.5v3M4.5 1.5v3"/></svg>
-        <span class="sb-label">MTD Tax</span>
+        <span class="sb-label" id="sb-mtd-label">MTD Tax</span>
       </button>
     </div>
 
@@ -790,7 +790,7 @@ async function logout() {
 
 // ── LOAD DATA ──
 async function loadData() {
-  const [p, t, c, m, r, i, el, ct, con, ja, td, up] = await Promise.all([
+  const [p, t, c, m, r, i, el, ct, con, ja, td, up, sub] = await Promise.all([
     sb.from('properties').select('*').order('created_at', {ascending: false}),
     sb.from('tenants').select('*'),
     sb.from('certificates').select('*'),
@@ -803,6 +803,7 @@ async function loadData() {
     sb.from('job_assignments').select('*, tenant_maintenance(prop_id, category, submitted_at)'),
     sb.from('tenant_documents').select('*').order('uploaded_at', {ascending: false}),
     sb.from('user_profiles').select('*').eq('id', currentUser.id).maybeSingle(),
+    sb.from('stripe_subscriptions').select('plan_name').eq('user_id', currentUser.id).maybeSingle(),
   ]);
 
   if (p.data?.length) {
@@ -845,7 +846,41 @@ async function loadData() {
   if (ja.data?.length) D.jobAssignments = ja.data;
   if (td.data?.length) D.tenantDocs = td.data;
   if (up.data) D.userProfile = up.data;
+  // Resolve user plan from Stripe subscription, fallback to portfolio (grandfather existing users)
+  window._userPlan = (sub.data && sub.data.plan_name) ? sub.data.plan_name : 'portfolio';
   await checkComplianceReminders();
+}
+
+// ── PLAN GATING HELPERS ──
+function getUserPlan(){ return window._userPlan || 'portfolio'; }
+function isPortfolio(){ return getUserPlan()==='portfolio'; }
+function isLandlordOrAbove(){ const p=getUserPlan(); return p==='landlord'||p==='portfolio'; }
+function isStarter(){ return getUserPlan()==='starter'; }
+const PLAN_LIMITS = { starter:2, landlord:10, portfolio:999 };
+function getPropLimit(){ return PLAN_LIMITS[getUserPlan()]||2; }
+function upgradePrompt(feature, plan){
+  const planLabels={starter:'Starter',landlord:'Landlord',portfolio:'Portfolio'};
+  openMo('Upgrade Required','',`
+    <div style="text-align:center;padding:8px 0">
+      <div style="font-size:40px;margin-bottom:10px">🔒</div>
+      <div style="font-size:16px;font-weight:600;color:var(--navy);margin-bottom:6px">${feature}</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Available on <strong>${planLabels[plan]||plan}</strong> plan and above</div>
+      <div style="background:var(--off);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:12px;color:var(--txt);margin-bottom:14px">Your current plan: <strong style="color:var(--navy)">${planLabels[getUserPlan()]||'Free'}</strong></div>
+      <a href="profile.html" class="btn btn-navy" style="display:inline-block;text-decoration:none">Upgrade plan →</a>
+    </div>`, `<button class="btn" onclick="closeMo()">Close</button>`);
+}
+function applyPlanGating(){
+  const mtdEl=document.getElementById('sb-mtd');
+  if(mtdEl){
+    if(isPortfolio()){
+      mtdEl.style.display='';
+    } else {
+      // Show PRO badge, keep clickable but gate in router
+      const lbl=document.getElementById('sb-mtd-label');
+      if(lbl)lbl.innerHTML='MTD Tax <span style="font-size:9px;background:var(--amber);color:#fff;border-radius:3px;padding:1px 5px;margin-left:4px;font-weight:600">PRO</span>';
+      mtdEl.onclick=function(e){ e.preventDefault(); upgradePrompt('MTD Tax Reporting','portfolio'); return false; };
+    }
+  }
 }
 
 function checkComplianceReminders() {
@@ -875,6 +910,7 @@ async function initApp() {
   document.getElementById('th-av').textContent = email.slice(0,2).toUpperCase();
 
   try { await loadData(); } catch(e) { console.error('loadData error:', e); }
+  applyPlanGating();
   updateNavBadges();
   initSbGroups();
   try {
@@ -1255,6 +1291,8 @@ async function scanDoc(input){
 
 // ── MODAL: ADD PROPERTY (5-step guided flow) ──
 function moAddProp(){
+  const limit=getPropLimit();
+  if(D.properties.length >= limit){ upgradePrompt('Add more properties','portfolio'); return; }
   document.getElementById('mo-t').textContent = 'Add property';
   document.getElementById('mo-s').textContent = 'Step 1 of 3 — address';
   document.querySelector('.mo-box').classList.add('mo-wide');
@@ -4032,6 +4070,7 @@ function pdTabContent(pid, tab) {
           </div>
           <button class="btn btn-sm" style="background:var(--green);color:#0B1E3D;border:none;font-weight:700;flex-shrink:0" onclick="moSection8('${pid}')">Generate →</button>
         </div>
+        ${isPortfolio() ? `
         <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:10px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px">
           <div>
             <div style="font-size:10px;font-weight:700;color:#3B6FE8;letter-spacing:.5px;text-transform:uppercase;margin-bottom:4px">✦ AI Powered</div>
@@ -4039,7 +4078,7 @@ function pdTabContent(pid, tab) {
             <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-top:2px">Move-in · Move-out · Saves £150–300</div>
           </div>
           <button class="btn btn-sm" style="background:var(--blue);color:#fff;border:none;font-weight:700;flex-shrink:0" onclick="moInventoryReport('${pid}')">Generate →</button>
-        </div>
+        </div>` : ''}
       </div>
 
       <div style="margin-bottom:14px">
@@ -7483,6 +7522,10 @@ async function loadSetupBanner() {
 }
 
 function nav(page, param){
+  // Plan gating — intercept restricted pages
+  if(page==='mtd' && !isPortfolio()){ upgradePrompt('MTD Tax Reporting','portfolio'); return; }
+  if((page==='financials'||page==='rent'||page==='insurance') && isStarter()){ upgradePrompt('Rent Tracking & Insurance','landlord'); return; }
+  if(page==='contractors' && isStarter()){ upgradePrompt('Contractor Book','landlord'); return; }
   const pageMap = {
     'prop-detail': 'properties',
     'tenant-detail': 'tenants',
@@ -9464,17 +9507,36 @@ Be specific and factual. Note exact defects you can see. This may be used for de
   }
 }
 
-function invDownloadPDF(){
+async function invDownloadPDF(){
   const report=document.getElementById('inv-report')?.textContent;
   const propId=document.getElementById('inv-prop')?.value;
   const p=P(propId)||{address:'Property'};
   const type=document.getElementById('inv-type')?.value||'Inventory Report';
   if(!report)return;
+
+  // Read photos from saved state
+  let photoUrls=[];
+  if(window._invFiles && window._invFiles.length){
+    for(const file of window._invFiles){
+      try{
+        const b64=await new Promise((res,rej)=>{
+          const r=new FileReader();
+          r.onload=()=>res(r.result);
+          r.onerror=rej;
+          r.readAsDataURL(file);
+        });
+        photoUrls.push({data:b64, name:file.name, type:file.type});
+      }catch(e){/* skip unreadable photo */}
+    }
+  }
+
   try{
     const{jsPDF}=window.jspdf;
     const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
     const W=doc.internal.pageSize.getWidth();
     let y=18;
+
+    // Header
     doc.setFontSize(15);doc.setTextColor(11,30,61);
     doc.text('RentSafe AI',16,y);
     doc.setFontSize(9);doc.setTextColor(153,153,153);
@@ -9482,11 +9544,13 @@ function invDownloadPDF(){
     doc.setDrawColor(11,30,61);
     doc.line(16,y+4,W-16,y+4);
     y+=11;
+
+    // Body text
     doc.setFontSize(9);doc.setTextColor(26,43,69);
     const lines=report.split('\n');
     for(const line of lines){
       if(line.trim().length===0){y+=4;continue;}
-      if(line.trim().startsWith('━━━')){
+      if(line.trim().startsWith('\u2501\u2501\u2501')){
         y+=4;doc.setFontSize(10);doc.setFont(undefined,'bold');
         const splits=doc.splitTextToSize(line.trim(),W-32);
         for(const s of splits){if(y>270){doc.addPage();y=18;}doc.text(s,16,y);y+=6;}
@@ -9496,14 +9560,52 @@ function invDownloadPDF(){
       const splits=doc.splitTextToSize(line.replace(/\*\*/g,''),W-32);
       for(const s of splits){if(y>270){doc.addPage();y=18;}doc.text(s,16,y);y+=4.5;}
     }
+
+    // Photo evidence gallery
+    if(photoUrls.length){
+      y+=8;
+      if(y>240){doc.addPage();y=18;}
+      doc.setFontSize(10);doc.setFont(undefined,'bold');
+      doc.text('\u2501\u2501\u2501 PHOTO EVIDENCE \u2501\u2501\u2501',16,y);
+      y+=7;
+      doc.setFontSize(7.5);doc.setFont(undefined,'normal');
+      doc.setTextColor(153,153,153);
+      doc.text(`${photoUrls.length} photo${photoUrls.length!==1?'s':''} attached`,16,y);
+      y+=5;
+      doc.setTextColor(26,43,69);
+
+      const imgW=(W-36)/2;
+      let col=0;
+      for(let i=0;i<photoUrls.length;i++){
+        const ph=photoUrls[i];
+        try{
+          if(col===0 && y>220){doc.addPage();y=18;}
+          const x=16+col*(imgW+4);
+          if(y+imgW*0.75+10>280){doc.addPage();y=18;col=0;}
+          doc.addImage(ph.data,ph.type||'JPEG',x,y,imgW,imgW*0.75);
+          doc.setFontSize(6.5);
+          doc.text(ph.name.length>30?ph.name.slice(0,28)+'..':ph.name,x,y+imgW*0.75+4);
+          if(col===1){y+=imgW*0.75+10;col=0;}
+          else{col=1;}
+        }catch(e){/* skip damaged image */}
+      }
+      if(col===1)y+=imgW*0.75+10;
+    }
+
+    // Footer
     y+=6;
     doc.setDrawColor(238,238,238);
     doc.line(16,y,W-16,y);
     y+=6;
     doc.setFontSize(7.5);doc.setTextColor(153,153,153);
-    doc.text(`Generated by RentSafe AI \u00b7 ${new Date().toLocaleDateString('en-GB')} \u00b7 AI-generated \u2014 verify against photos`,16,y);
+    const footer=`Generated by RentSafe AI \u00b7 ${new Date().toLocaleDateString('en-GB')} \u00b7 AI-generated \u2014 verify against photos`;
+    if(y>278){doc.addPage();y=18;}
+    doc.text(footer,16,y);
     doc.save((type.replace(/[^a-z0-9]/gi,'_').toLowerCase())+'.pdf');
-  }catch(e){toast('PDF generation failed — please try again',true);}
+  }catch(e){
+    console.error('[invDownloadPDF]',e);
+    toast('PDF generation failed — please try again',true);
+  }
 }
 
 // ── S6b: CONTRACTORS BOOK ──
