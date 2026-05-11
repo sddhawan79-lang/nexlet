@@ -3414,9 +3414,9 @@ function toggleColl(id){
 // ── ACTION ITEMS ──
 function UA(){
   const today=new Date(); today.setHours(0,0,0,0);
-  const miss=D.certs.filter(c=>c.status==='Missing').map(c=>({b:'red',l:'Urgent',t:`Missing ${c.type}`,s:(P(c.prop_id)||{address:'—'}).address}));
-  const mnt=D.maintenance.filter(x=>x.status!=='Resolved').map(x=>({b:x.priority==='Urgent'?'red':'amber',l:x.awaab?'Awaab':x.priority,t:x.title,s:(P(x.prop_id)||{address:'—'}).address}));
-  const rnt=D.rent.filter(x=>x.status==='Due'||x.status==='Late').map(x=>({b:x.status==='Late'?'red':'amber',l:x.status,t:`Rent ${x.status.toLowerCase()} — ${x.month}`,s:(P(x.prop_id)||{address:'—'}).address}));
+  const miss=D.certs.filter(c=>c.status==='Missing').map(c=>({b:'red',l:'Urgent',t:`Missing ${c.type}`,s:(P(c.prop_id)||{address:'—'}).address,link:'compliance'}));
+  const mnt=D.maintenance.filter(x=>x.status!=='Resolved').map(x=>({b:x.priority==='Urgent'?'red':'amber',l:x.awaab?'Awaab':x.priority,t:x.title,s:(P(x.prop_id)||{address:'—'}).address,link:'maintenance'}));
+  const rnt=D.rent.filter(x=>x.status==='Due'||x.status==='Late').map(x=>({b:x.status==='Late'?'red':'amber',l:x.status,t:`Rent ${x.status.toLowerCase()} — ${x.month}`,s:(P(x.prop_id)||{address:'—'}).address,link:'financials'}));
   // Smart reminders from calendar
   const reminders=[];
   D.certs.filter(c=>c.expiry).forEach(c=>{
@@ -3424,18 +3424,18 @@ function UA(){
     const days=Math.round((d-today)/864e5);
     if(days>=0&&days<=30){
       const prop=(P(c.prop_id)||{address:'—'}).address;
-      reminders.push({b:days<=7?'red':'amber',l:days===0?'Today':days<=7?'This week':'Due soon',t:`${c.type} expires in ${days===0?'today':days+' days'}`,s:prop});
+      reminders.push({b:days<=7?'red':'amber',l:days===0?'Today':days<=7?'This week':'Due soon',t:`${c.type} expires in ${days===0?'today':days+' days'}`,s:prop,link:'compliance'});
     }
   });
   D.properties.filter(p=>p.licence_expiry).forEach(p=>{
     const d=new Date(p.licence_expiry); d.setHours(0,0,0,0);
     const days=Math.round((d-today)/864e5);
-    if(days>=0&&days<=30) reminders.push({b:days<=7?'red':'amber',l:'Licence',t:`${p.licence_type||'Licence'} expires in ${days} days`,s:p.address});
+    if(days>=0&&days<=30) reminders.push({b:days<=7?'red':'amber',l:'Licence',t:`${p.licence_type||'Licence'} expires in ${days} days`,s:p.address,link:'compliance'});
   });
   D.properties.filter(p=>p.mortgage_end).forEach(p=>{
     const d=new Date(p.mortgage_end); d.setHours(0,0,0,0);
     const days=Math.round((d-today)/864e5);
-    if(days>=0&&days<=30) reminders.push({b:days<=7?'red':'amber',l:'Mortgage',t:`Mortgage ends in ${days} days`,s:p.address});
+    if(days>=0&&days<=30) reminders.push({b:days<=7?'red':'amber',l:'Mortgage',t:`Mortgage ends in ${days} days`,s:p.address,link:'financials'});
   });
   return[...miss,...reminders,...mnt,...rnt];
 }
@@ -3615,7 +3615,7 @@ function pgDashboard(){
     <div class="g2">
       <div class="panel">
         <div class="ph2"><div><h2>Action items</h2><p>Sorted by urgency</p></div></div>
-        ${acts.length?acts.map(a=>`<div class="ai-row"><span class="badge b-${a.b}">${a.l}</span><div class="ai-body"><div class="ai-title">${a.t}</div><div class="ai-sub">${a.s}</div></div><span style="color:var(--muted)">›</span></div>`).join(''):'<div class="empty"><div class="empty-ic">✓</div><div class="empty-t">All clear</div></div>'}
+        ${acts.length?acts.map(a=>`<div class="ai-row" style="cursor:pointer" onclick="${a.link ? `nav('${a.link}')` : `nav('compliance')`}" onmouseenter="this.style.background='var(--off)'" onmouseleave="this.style.background='transparent'"><span class="badge b-${a.b}">${a.l}</span><div class="ai-body"><div class="ai-title">${a.t}</div><div class="ai-sub">${a.s}</div></div><span style="color:var(--navy);font-weight:600">›</span></div>`).join(''):'<div class="empty"><div class="empty-ic">✓</div><div class="empty-t">All clear</div></div>'}
       </div>
       <div class="panel">
         <div class="ph2"><div><h2>Today</h2><p>${today}</p></div><button class="btn btn-sm" onclick="nav('calendar')">View calendar</button></div>
