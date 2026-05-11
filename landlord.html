@@ -9365,19 +9365,15 @@ function moInventoryReport(pid){
       <select id="inv-type"><option>Move-in condition report</option><option>Move-out condition report</option><option>Mid-tenancy inspection</option><option>General inventory</option></select>
     </div>
     <div class="fg"><label>Upload room photos <span class="req">*</span></label>
-      <div class="scan-box" style="padding:14px" id="inv-upload-box">
-        <input type="file" accept="image/*" multiple id="inv-photos" onchange="invPhotosSelected(this)">
-        <div class="scan-ic">📷</div>
-        <div class="scan-t">Upload photos of all rooms</div>
-        <div class="scan-s">Select multiple — kitchen, living room, bedrooms, bathroom, exterior</div>
-      </div>
+      <input type="file" accept="image/*" multiple id="inv-photos" onchange="invPhotosSelected(this)" style="display:block;width:100%;padding:8px;font-family:var(--font);font-size:13px;margin-bottom:10px">
+      <div id="inv-photo-info" style="font-size:11px;color:var(--muted)">📷 Select multiple — kitchen, living room, bedrooms, bathroom, exterior. AI identifies rooms and assesses condition.</div>
     </div>
     <div class="fg"><label>Additional notes (optional)</label>
       <textarea id="inv-notes" placeholder="e.g. New carpet in bedroom 1, landlord's furniture in living room…"></textarea>
     </div>
     <div id="inv-output" style="display:none">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:8px">Generated report</div>
-      <div id="inv-report" style="background:var(--off);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:12.5px;line-height:1.8;max-height:280px;overflow-y:auto;white-space:pre-wrap;font-family:Georgia,serif"></div>
+      <div id="inv-report" style="background:var(--off);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:12.5px;line-height:1.8;max-height:55vh;overflow-y:auto;white-space:pre-wrap;font-family:Georgia,serif"></div>
     </div>
   `,`<button class="btn" onclick="closeMo()">Cancel</button>
     <button class="btn btn-navy" id="inv-gen-btn" onclick="generateInventoryReport()">✦ Generate report</button>`);
@@ -9385,8 +9381,9 @@ function moInventoryReport(pid){
 
 function invPhotosSelected(input){
   const files=[...input.files];
-  const box=document.getElementById('inv-upload-box');
-  if(box) box.innerHTML=`<div style="font-size:13px;color:var(--green-dark);font-weight:600">✓ ${files.length} photo${files.length!==1?'s':''} selected</div><div style="font-size:11px;color:var(--muted);margin-top:3px">${files.map(f=>f.name).slice(0,3).join(', ')}${files.length>3?'…':''}</div>`;
+  window._invFiles = files;
+  const box=document.getElementById('inv-photo-info');
+  if(box) box.innerHTML=`<div style="font-size:13px;color:var(--green-dark);font-weight:600;margin-top:6px">✓ ${files.length} photo${files.length!==1?'s':''} selected — AI will identify rooms and assess condition</div><div style="font-size:11px;color:var(--muted);margin-top:3px">${files.map(f=>f.name).slice(0,4).join(', ')}${files.length>4?' +'+(files.length-4)+' more':''}</div>`;
 }
 
 async function generateInventoryReport(){
@@ -9394,23 +9391,24 @@ async function generateInventoryReport(){
   const propId=document.getElementById('inv-prop')?.value;
   const type=document.getElementById('inv-type')?.value;
   const notes=document.getElementById('inv-notes')?.value.trim();
-  const files=document.getElementById('inv-photos')?.files;
+  const files=(window._invFiles && window._invFiles.length) ? window._invFiles : [...(document.getElementById('inv-photos')?.files||[])];
   const p=P(propId)||{address:'[Property]',city:'',postcode:'',beds:'—',type:'—'};
   const t=D.tenants.find(x=>String(x.prop_id)===String(propId));
-  if(!files||!files.length){toast('Please upload at least one photo',true);return;}
+  if(!files.length){toast('Please upload at least one photo',true);return;}
   btn.disabled=true;
   btn.innerHTML='<span class="spin"></span>Analysing photos…';
   try{
-    const photoPromises=[...files].slice(0,8).map(file=>new Promise((res,rej)=>{
+    const photoPromises=files.slice(0,12).map(file=>new Promise((res,rej)=>{
       const r=new FileReader();
-      r.onload=()=>res({b64:r.result.split(',')[1],type:file.type});
+      r.onload=()=>res({b64:r.result.split(',')[1],type:file.type,name:file.name});
       r.onerror=rej;
       r.readAsDataURL(file);
     }));
     const photos=await Promise.all(photoPromises);
     const content=[
       ...photos.map(ph=>({type:'image',source:{type:'base64',media_type:ph.type,data:ph.b64}})),
-      {type:'text',text:`You are a professional UK property inventory clerk generating a formal condition report.
+      {type:'text',text:`You are a professional UK property inventory clerk generating a formal condition report. Reference filename hints for room identification: ${photos.map(p=>p.name).join(', ')}
+
 Property: ${p.address}, ${p.city||''}, ${p.postcode||''}
 Property type: ${p.type||'—'} · ${p.beds||'—'} bedrooms
 Tenant: ${t?t.name:'Not specified'}
@@ -9418,17 +9416,36 @@ Report type: ${type}
 Date: ${new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}
 ${notes?'Additional notes: '+notes:''}
 
-Analyse all uploaded photos and generate a professional condition report. For each room/area visible:
-1. Identify the room
-2. Describe condition (walls, floors, ceiling, fixtures, furniture if present)
-3. Note any damage, wear, or issues
-4. Rate: Excellent / Good / Fair / Poor
+Analyse ALL uploaded photos and generate a detailed room-by-room condition report. Format as:
+━━━ INVENTORY & CONDITION REPORT ━━━
+Report type · Property address · Date · Inspector: AI
 
-End with an overall summary. Be specific and factual. This may be used for deposit disputes.`}
+KITCHEN
+[Photo analysis: describe walls, floor, worktops, cabinets, sink, appliances, lighting. Note any scratches, stains, damage, wear. Rate: Excellent/Good/Fair/Poor.]
+
+LIVING ROOM
+[Same format — walls, floor, ceiling, windows, doors, any furniture visible.]
+
+BEDROOM 1 (or determine from context)
+[Same format.]
+
+BEDROOM 2 (if applicable)
+[Same format.]
+
+BATHROOM
+[Same format — tiles, bath/shower, toilet, sink, ventilation, any mould or damage.]
+
+HALLWAY / EXTERIOR (if photos provided)
+[Same format.]
+
+━━━ OVERALL SUMMARY ━━━
+Overall condition rating. Key issues found. Recommendations. Deposit risk assessment (Low/Medium/High).
+
+Be specific and factual. Note exact defects you can see. This may be used for deposit disputes or court evidence.`}
     ];
     const res=await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy',{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:1500,messages:[{role:'user',content}]})
+      body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:2000,messages:[{role:'user',content}]})
     });
     const data=await res.json();
     const report=data.content?.[0]?.text||'Could not generate report. Please try again.';
@@ -9453,21 +9470,40 @@ function invDownloadPDF(){
   const p=P(propId)||{address:'Property'};
   const type=document.getElementById('inv-type')?.value||'Inventory Report';
   if(!report)return;
-  const win=window.open('','_blank');
-  if(!win){toast('Please allow pop-ups',true);return;}
-  win.document.write(`<!DOCTYPE html><html><head><title>${type} — ${p.address}</title>
-    <style>body{font-family:Georgia,serif;font-size:13px;line-height:1.8;padding:48px;max-width:700px;margin:0 auto;color:#1A2B45}
-    pre{white-space:pre-wrap;font-family:Georgia,serif}@media print{body{padding:0}}</style></head><body>
-    <div style="border-bottom:2px solid #0B1E3D;margin-bottom:24px;padding-bottom:12px">
-      <strong style="font-size:16px;color:#0B1E3D">RentSafe AI</strong>
-      <span style="color:#999;font-size:12px;margin-left:12px">${type} — ${p.address}</span>
-    </div>
-    <pre>${report.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>
-    <div style="margin-top:32px;padding-top:12px;border-top:1px solid #eee;font-size:10px;color:#999">
-      Generated by RentSafe AI · ${new Date().toLocaleDateString('en-GB')} · AI-generated — verify against photos
-    </div><script>window.onload=function(){window.print();}<\/script>
-    </body></html>`);
-  win.document.close();
+  try{
+    const{jsPDF}=window.jspdf;
+    const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    const W=doc.internal.pageSize.getWidth();
+    let y=18;
+    doc.setFontSize(15);doc.setTextColor(11,30,61);
+    doc.text('RentSafe AI',16,y);
+    doc.setFontSize(9);doc.setTextColor(153,153,153);
+    doc.text(`${type} \u2014 ${p.address}`,45,y);
+    doc.setDrawColor(11,30,61);
+    doc.line(16,y+4,W-16,y+4);
+    y+=11;
+    doc.setFontSize(9);doc.setTextColor(26,43,69);
+    const lines=report.split('\n');
+    for(const line of lines){
+      if(line.trim().length===0){y+=4;continue;}
+      if(line.trim().startsWith('━━━')){
+        y+=4;doc.setFontSize(10);doc.setFont(undefined,'bold');
+        const splits=doc.splitTextToSize(line.trim(),W-32);
+        for(const s of splits){if(y>270){doc.addPage();y=18;}doc.text(s,16,y);y+=6;}
+        doc.setFontSize(9);doc.setFont(undefined,'normal');
+        y+=2;continue;
+      }
+      const splits=doc.splitTextToSize(line.replace(/\*\*/g,''),W-32);
+      for(const s of splits){if(y>270){doc.addPage();y=18;}doc.text(s,16,y);y+=4.5;}
+    }
+    y+=6;
+    doc.setDrawColor(238,238,238);
+    doc.line(16,y,W-16,y);
+    y+=6;
+    doc.setFontSize(7.5);doc.setTextColor(153,153,153);
+    doc.text(`Generated by RentSafe AI \u00b7 ${new Date().toLocaleDateString('en-GB')} \u00b7 AI-generated \u2014 verify against photos`,16,y);
+    doc.save((type.replace(/[^a-z0-9]/gi,'_').toLowerCase())+'.pdf');
+  }catch(e){toast('PDF generation failed — please try again',true);}
 }
 
 // ── S6b: CONTRACTORS BOOK ──

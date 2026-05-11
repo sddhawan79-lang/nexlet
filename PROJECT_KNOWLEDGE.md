@@ -563,6 +563,16 @@ The `user_profiles` row is queried by `currentUser.id` via `.maybeSingle()` and 
 - Input placeholder updated to hint at both legal and platform questions
 - `max_tokens` set to 800 (was 600 before Session 9)
 
+### AI Inventory Report (`moInventoryReport()` in `landlord.html`)
+- Upload room photos → AI generates a formal room-by-room condition report
+- Supports 4 report types: Move-in, Move-out, Mid-tenancy inspection, General inventory
+- **Session 9 bug fix:** file input was inside `#inv-upload-box` div — `invPhotosSelected()` replaced innerHTML, destroying the input element. Files now saved to `window._invFiles` and the input stays in DOM.
+- **Photo limit:** 12 photos (was 8 before fix)
+- **AI prompt:** structured room-by-room format (KITCHEN, LIVING ROOM, BEDROOM 1/2, BATHROOM, HALLWAY/EXTERIOR) with photo filenames as room hints, condition rating (Excellent/Good/Fair/Poor), deposit risk assessment
+- **PDF download:** jsPDF with auto-pagination (Session 9 upgrade from `window.print()`)
+- **Output container:** `max-height:55vh` (was 280px)
+- AI model: `claude-sonnet-4-5` with `max_tokens:2000`
+
 ### Legal Document Disclaimer Gate (`landlord.html`)
 Session 8 introduced a 3-checkbox pre-generation consent gate for 4 legal document types: `section13`, `noticetoquit`, `writtenstatement`. Section 8 has its own dedicated flow with identical wording. The gate:
 - Captures user form selections (`_gateCtx`) before replacing the modal body with the disclaimer
@@ -599,6 +609,7 @@ Session 8 introduced a 3-checkbox pre-generation consent gate for 4 legal docume
 | 20 | Generated document output shrunk to 360px — only ~10 lines visible | Document gen | **FIXED Session 9** — gen-text/s8-output/s13-preview `max-height` → vh units (50-55vh) |
 | 21 | Calendar "Mark received" parsed rent amount from display label (address digits contaminated value) | Calendar | **FIXED Session 9** — `rentAmt` passed directly from calendar event object |
 | 22 | `rent_payments` table has no SQL migration file in repo | Database docs | Pending — Saby to document actual schema or create SQL file |
+| 23 | Inventory report: file input destroyed by `innerHTML` replacement — always says "upload at least one photo" | Inventory | **FIXED Session 9** — files saved to `window._invFiles`, input stays in DOM, PDF now jsPDF |
 
 ---
 
@@ -1081,6 +1092,14 @@ When **touching any of these files for a new feature or bug fix**, follow this p
 - Rules for Claude: give exact sidebar paths, be honest about limitations, always disclaim "not legal advice"
 - Increased `max_tokens` 600→800
 - Updated initial greeting and input placeholder to hint at platform questions
+
+**6. Inventory report generation fixed**
+- File input was nested inside `#inv-upload-box` div — `invPhotosSelected()` replaced its innerHTML, destroying the `<input>` element
+- Files now saved to `window._invFiles` array; input stays in DOM; `generateInventoryReport()` reads from saved files
+- AI prompt rewritten: structured room-by-room format (KITCHEN/LIVING ROOM/BEDROOM/BATHROOM/HALLWAY) with photo filenames as hints, condition ratings, deposit risk
+- Photo limit increased 8→12; `max_tokens` 1500→2000
+- `invDownloadPDF()`: `window.print()` → jsPDF with auto-pagination
+- Output container: `max-height:280px` → `55vh`
 
 #### Remaining for Next Session (Priority Order)
 1. **guidance-content.js** — NRLA compliance guide topics: Right to Rent checks, written tenancy terms, guarantor process, welcome letter
