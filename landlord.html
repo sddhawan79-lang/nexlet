@@ -2524,8 +2524,8 @@ function _tenantStepHtml(n) {
   // ── STEP 2: ID DOCUMENTS ──
   if (n === 2) {
     const idTypes = ['Passport (any nationality)','Biometric Residence Permit (BRP)','Photo Card Driving Licence (UK)','National Identity Card (EU/EEA)','Biometric Residence Card (BRC)','HM Forces Identity Card','Firearms Certificate / Shotgun Licence','UK Birth Certificate','Other'];
-    const idTypeOpts1 = idTypes.map(d=>`<option${d===s.id1Type?' selected':''}>${d}</option>`).join('');
-    const idTypeOpts2 = idTypes.map(d=>`<option${d===s.id2Type?' selected':''}>${d}</option>`).join('');
+    const idTypeOpts1 = '<option value="">Select document type…</option>' + idTypes.map(d=>`<option${d===s.id1Type?' selected':''}>${d}</option>`).join('');
+    const idTypeOpts2 = '<option value="">Select document type…</option>' + idTypes.map(d=>`<option${d===s.id2Type?' selected':''}>${d}</option>`).join('');
     return `
     <div style="font-size:15px;font-weight:600;margin-bottom:2px">Identity documents</div>
     <div style="font-size:13px;color:var(--muted);margin-bottom:12px">At least 1 valid photo ID required — upload 2 for stronger verification</div>

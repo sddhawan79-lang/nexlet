@@ -1273,6 +1273,25 @@ When **touching any of these files for a new feature or bug fix**, follow this p
 - **Problem:** The `<select>` on the dark navy Section 8 dashboard card had `color:#fff` — the `<option>` elements inherited white text, rendering invisible against the browser's default white dropdown background
 - **Fix:** Added `style="color:var(--txt)"` to each `<option>` in the `s8-dash-sel` dropdown (`landlord.html:3555`) so property names render in dark navy text inside the dropdown popup while the select itself stays white-on-dark
 
+#### Postcode Lookup — Redesigned with Multi-Result Picker
+- **Problem:** `lookupPostcode()` used exact-match endpoint returning single result; picked wrong city (used `parliamentary_constituency` as fallback); no results list for partial postcodes; no lookup in Edit Property modal
+- **Fix (`landlord.html:10727`):** Switched to `api.postcodes.io/postcodes?q=` query endpoint returning up to 8 matches; shows clickable result list (postcode + ward/district/region); auto-fills city and postcode on selection; falls back to exact lookup; removed `parliamentary_constituency` fallback; added lookup to `moEditProp()` with `ep-` prefix IDs
+
+#### Tenant Wizard — Deposit Certificate AI Scan (Step 4)
+- Added `scanDepositCert()` function — uploads DPS/TDS/MyDeposits certificate, AI extracts scheme name, reference number, and deposit amount; auto-fills `ts-dep-scheme`, `ts-dep-ref`, `ts-deposit` fields
+- Scan box with "✦ AI auto-extraction" badge in Step 4 deposit section
+
+#### Tenant Wizard — Insurance Document AI Scan (Step 6)
+- Added `scanInsDoc(insKey, input)` function — each of 4 insurance types (Buildings, Contents, Liability, Rent Guarantee) now has scan box; AI extracts provider, policy number, expiry date, annual premium; auto-fills matching fields
+
+#### Tenant Wizard — ID Type Dropdown Default Bug Fix
+- **Problem:** Step 2 ID document type `<select>` had no empty placeholder — browser auto-selected "Passport" when state was empty, making review show "✓ 1 document" despite nothing being added
+- **Fix:** Added `<option value="">Select document type…</option>` as first option in both ID 1 and ID 2 selects
+
+#### Database — Missing Tenant Columns
+- **Problem:** `session10_tenants_columns.sql` had not been run — `rtr_check_date`, `rtr_checked_by`, `rtr_expiry`, `addr_proof_1`, `addr_proof_2`, `is_lead`, `invite_used` etc. columns missing from `tenants` table
+- **Fix:** Ran `session10_tenants_columns.sql` (13 columns added to `tenants` table)
+
 #### Tech Debt / Infrastructure
 - **`C:\Dev\rentsafeai\session_archive.sql`** — DB migration for archived tenants + account soft-delete
 - **`C:\Dev\rentsafeai\sprint10_fix_cron_key.sql`** — re-creates pg_cron jobs with real service role key
