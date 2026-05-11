@@ -6359,7 +6359,7 @@ function pgInsurance(){
       ${slots}
     </div>`;
   }).join('');
-  return`<div class="topbar"><span class="tb-title">Insurance</span></div>
+  return`<div class="topbar"><span class="tb-title">Insurance</span><div class="tb-right"><button class="btn btn-navy" onclick="moAddInsurance(null,'','')">+ Add policy</button></div></div>
   <div class="content">
     <div class="ph"><h1>Insurance</h1><p>Track policies across your portfolio</p></div>
     ${expiring.length||expired.length?`<div style="background:var(--amber-bg);border:1px solid rgba(217,119,6,0.25);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:var(--amber);display:flex;gap:8px"><span>⚠️</span><div><strong>${expiring.length} polic${expiring.length===1?'y':'ies'} expiring soon</strong>${expired.length?` · <strong style="color:var(--red)">${expired.length} expired</strong>`:''} — click Edit to renew.</div></div>`:''}
