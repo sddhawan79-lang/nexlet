@@ -6189,13 +6189,13 @@ function pgMaintenance(){
         ${items.length?items.map(m=>{
           const p=P(m.prop_id)||{address:'—'};
           const priCol=m.priority==='Urgent'?'var(--red)':m.priority==='High'?'var(--amber)':'var(--muted)';
-          return`<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;cursor:pointer;transition:box-shadow .15s;border-left:3px solid ${col}" onclick="moIssueDetail('${m.id}')" onmouseenter="this.style.boxShadow='0 2px 12px rgba(0,0,0,0.08)'" onmouseleave="this.style.boxShadow='none'">
+          return`<div style="background:var(--white);border:1px solid ${m.awaab?'var(--red)':'var(--border)'};border-radius:10px;padding:12px;margin-bottom:8px;cursor:pointer;transition:box-shadow .15s;border-left:3px solid ${m.awaab?'var(--red)':col}" onclick="moIssueDetail('${m.id}')" onmouseenter="this.style.boxShadow='0 2px 12px rgba(0,0,0,0.08)'" onmouseleave="this.style.boxShadow='none'">
             <div style="font-size:12px;font-weight:600;color:var(--txt);margin-bottom:4px;line-height:1.4">${m.title||m.desc||'—'}</div>
             <div style="font-size:11px;color:var(--muted);margin-bottom:8px">${p.address}</div>
             <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:6px">
               <span style="font-size:10px;font-weight:600;color:${priCol};background:${m.priority==='Urgent'?'rgba(229,62,62,0.08)':m.priority==='High'?'rgba(217,119,6,0.08)':'var(--off)'};padding:2px 7px;border-radius:100px">${m.priority||'Low'}</span>
               ${m.cat?`<span style="font-size:10px;color:var(--muted);background:var(--off);padding:2px 7px;border-radius:100px">${m.cat}</span>`:''}
-              ${m.awaab?'<span style="font-size:10px;font-weight:700;color:var(--red)">⚠ Awaab</span>':''}
+              ${m.awaab?`<span style="font-size:10px;font-weight:700;color:#fff;background:var(--red);padding:2px 7px;border-radius:100px;letter-spacing:.3px">⚠ Awaab's Law</span>`:''}
               ${m.cost?`<span style="font-size:10px;font-weight:600;color:var(--green-dark);margin-left:auto">£${m.cost}</span>`:''}
             </div>
             ${m.assigned_to?`<div style="font-size:10px;color:var(--blue);margin-bottom:6px">👷 ${m.assigned_to}</div>`:''}
@@ -6206,15 +6206,15 @@ function pgMaintenance(){
                 const others = stages.filter(s => s !== stage && s !== next);
                 return `${next ? `<button onclick="event.stopPropagation();moveStage('${m.id}','${next}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid ${stageCol[next]};background:transparent;color:${stageCol[next]};cursor:pointer;font-family:var(--font);font-weight:600" onmouseenter="this.style.background='${stageCol[next]}';this.style.color='#fff'" onmouseleave="this.style.background='transparent';this.style.color='${stageCol[next]}'">→ ${next}</button>` : ''}
                 ${others.length ? `<div style="position:relative;display:inline-block">
-                  <button onclick="event.stopPropagation();var d=this.nextElementSibling;d.style.display=d.style.display==='block'?'none':'block'" style="font-size:10px;padding:3px 7px;border-radius:5px;border:1px solid var(--border);background:var(--off);color:var(--muted);cursor:pointer;font-family:var(--font)">▾</button>
-                  <div style="display:none;position:absolute;bottom:100%;left:0;background:var(--white);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.1);z-index:50;min-width:130px;padding:4px 0">
+                  <button onclick="event.stopPropagation();var d=this.nextElementSibling;var wasOpen=d.style.display==='block';document.querySelectorAll('.stage-overflow-dd').forEach(function(x){x.style.display='none'});if(!wasOpen){d.style.display='block';var closer=function(e){if(!d.contains(e.target)){d.style.display='none';document.removeEventListener('click',closer)}};setTimeout(function(){document.addEventListener('click',closer)},0)}" style="font-size:10px;padding:3px 7px;border-radius:5px;border:1px solid var(--border);background:var(--off);color:var(--muted);cursor:pointer;font-family:var(--font)">▾</button>
+                  <div class="stage-overflow-dd" style="display:none;position:absolute;bottom:100%;left:0;background:var(--white);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.1);z-index:50;min-width:130px;padding:4px 0">
                     ${others.map(s=>`<div onclick="event.stopPropagation();moveStage('${m.id}','${s}')" style="padding:7px 12px;font-size:11px;cursor:pointer;color:var(--txt)" onmouseenter="this.style.background='var(--off)'" onmouseleave="this.style.background='transparent'">${s}</div>`).join('')}
                   </div>
                 </div>` : ''}`;
               })()}
             </div>
           </div>`;
-        }).join(''):`<div style="border:2px dashed var(--border);border-radius:10px;padding:16px;text-align:center;color:var(--muted);font-size:12px">No jobs</div>`}
+        }).join(''):`<div style="border:2px dashed var(--border);border-radius:10px;padding:20px 16px;text-align:center"><div style="font-size:18px;margin-bottom:4px">✓</div><div style="font-size:11px;color:var(--muted)">Clear</div></div>`}
       </div>`;
     }).join('')}
   </div>`;
