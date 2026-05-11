@@ -1332,7 +1332,7 @@ function moAddProp(){
         <div class="fg"><label>Postcode <span class="req">*</span></label>
           <div style="display:flex;gap:6px">
             <input type="text" id="p-post" placeholder="e.g. M4 1AQ" style="text-transform:uppercase;flex:1" oninput="this.value=this.value.toUpperCase()">
-            <button type="button" id="p-post-btn" onclick="lookupPostcode()" style="padding:0 12px;border-radius:7px;border:1px solid var(--border);background:var(--off);color:var(--txt);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:var(--font)">Find →</button>
+            <button type="button" id="p-post-btn" onclick="lookupPostcode('add')" style="padding:0 12px;border-radius:7px;border:1px solid var(--border);background:var(--off);color:var(--txt);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:var(--font)">Find →</button>
           </div>
           <div id="p-post-result" style="font-size:11px;margin-top:4px;color:var(--muted)"></div>
         </div>
@@ -1508,7 +1508,13 @@ function moEditProp(pid){
     <div class="fg"><label>Street address</label><input type="text" id="ep-addr" value="${p.address}"></div>
     <div class="fg-row">
       <div class="fg"><label>City</label><input type="text" id="ep-city" value="${p.city}"></div>
-      <div class="fg"><label>Postcode</label><input type="text" id="ep-post" value="${p.postcode}"></div>
+      <div class="fg"><label>Postcode</label>
+        <div style="display:flex;gap:6px">
+          <input type="text" id="ep-post" value="${p.postcode}" style="flex:1;text-transform:uppercase" oninput="this.value=this.value.toUpperCase()">
+          <button type="button" id="ep-post-btn" onclick="lookupPostcode('edit')" style="padding:0 12px;border-radius:7px;border:1px solid var(--border);background:var(--off);color:var(--txt);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:var(--font)">Find →</button>
+        </div>
+        <div id="ep-post-result" style="font-size:11px;margin-top:4px;color:var(--muted)"></div>
+      </div>
     </div>
     <div class="fg"><label>Property type</label>
       <select id="ep-type">
@@ -10677,26 +10683,64 @@ function filterCompliance(filter) {
   }, 80);
 }
 
-// ── POSTCODE LOOKUP (moAddProp Step 1) ──
-async function lookupPostcode() {
-  const pc = (document.getElementById('p-post')?.value || '').trim().replace(/\s+/g,'');
-  if (!pc) { toast('Enter a postcode first', true); return; }
-  const btn = document.getElementById('p-post-btn');
-  const res_div = document.getElementById('p-post-result');
+// ── POSTCODE LOOKUP (moAddProp + moEditProp) ──
+async function lookupPostcode(source) {
+  const prefix = source === 'edit' ? 'ep' : 'p';
+  const pc = (document.getElementById(prefix+'-post')?.value || '').trim().replace(/\s+/g,'');
+  if (!pc || pc.length < 2) { toast('Enter a postcode first (min 2 characters)', true); return; }
+  const btn = document.getElementById(prefix+'-post-btn');
+  const res = document.getElementById(prefix+'-post-result');
   if (btn) { btn.disabled = true; btn.textContent = '…'; }
   try {
-    const r = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(pc)}`);
+    const r = await fetch(`https://api.postcodes.io/postcodes?q=${encodeURIComponent(pc)}&limit=8`);
     const d = await r.json();
-    if (d.status === 200 && d.result) {
-      const city = d.result.admin_district || d.result.parliamentary_constituency || d.result.region || '';
-      const cityEl = document.getElementById('p-city');
-      if (cityEl && !cityEl.value) cityEl.value = city;
-      if (res_div) res_div.innerHTML = `<span style="color:var(--green-dark)">✓ ${d.result.admin_ward || ''}, ${city}, ${d.result.region || ''}</span>`;
+    if (d.status === 200 && d.result && d.result.length) {
+      const items = d.result.map(i => {
+        const parts = [i.admin_ward, i.admin_district, i.region].filter(Boolean);
+        return {
+          postcode: i.postcode,
+          city: i.admin_district || i.parliamentary_constituency || i.region || '',
+          region: i.region || '',
+          ward: i.admin_ward || '',
+          label: `${i.postcode} — ${parts.join(', ')}`,
+          fullResult: i
+        };
+      });
+      const cityEl = document.getElementById(prefix+'-city');
+      const addrEl = document.getElementById(prefix+'-addr');
+      // Single match: auto-fill city
+      if (items.length === 1 && cityEl && !cityEl.value) {
+        cityEl.value = items[0].city;
+      }
+      if (res) res.innerHTML = `
+        <div style="font-size:11px;font-weight:600;color:var(--muted);margin:4px 0 3px">${items.length} match${items.length!==1?'es':''} — pick one:</div>
+        ${items.map((it,i) => `
+          <div onclick="(function(){
+            var a=document.getElementById('${prefix}-addr');
+            var c=document.getElementById('${prefix}-city');
+            var p=document.getElementById('${prefix}-post');
+            var r=document.getElementById('${prefix}-post-result');
+            if(c) c.value='${it.city.replace(/'/g,"\\'")}';
+            if(p) p.value='${it.postcode}';
+            if(r) r.innerHTML='<span style=\\'color:var(--green-dark)\\'>✓ ${it.postcode} — ${it.ward||''}${it.ward&&it.city?', ':''}${it.city}</span>';
+          })()"
+          style="cursor:pointer;padding:5px 8px;border-radius:5px;margin-bottom:2px;font-size:11px;color:var(--txt);border:1px solid var(--border);background:var(--white);transition:background .1s"
+          onmouseenter="this.style.background='var(--off)'" onmouseleave="this.style.background='var(--white)'">${it.label}</div>`).join('')}`;
     } else {
-      if (res_div) res_div.innerHTML = `<span style="color:var(--red)">Postcode not found — enter city manually</span>`;
+      // Try exact lookup as fallback
+      const r2 = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(pc)}`);
+      const d2 = await r2.json();
+      if (d2.status === 200 && d2.result) {
+        const city = d2.result.admin_district || d2.result.region || '';
+        const cityEl = document.getElementById(prefix+'-city');
+        if (cityEl && !cityEl.value) cityEl.value = city;
+        if (res) res.innerHTML = `<span style="color:var(--green-dark)">✓ ${d2.result.admin_ward||''}${d2.result.admin_ward?', ':''}${city}, ${d2.result.region||''}</span>`;
+      } else {
+        if (res) res.innerHTML = `<span style="color:var(--red)">Not found — enter details manually</span>`;
+      }
     }
   } catch(e) {
-    if (res_div) res_div.innerHTML = `<span style="color:var(--red)">Lookup failed — enter city manually</span>`;
+    if (res) res.innerHTML = `<span style="color:var(--red)">Lookup failed — enter manually</span>`;
   }
   if (btn) { btn.disabled = false; btn.textContent = 'Find →'; }
 }
