@@ -411,6 +411,11 @@ tr:hover td{background:rgba(246,248,251,.8)}
       <span id="nav-badge-maintenance" class="sb-badge" style="display:none"></span>
     </button>
 
+    <button class="sb-item" data-page="calendar">
+      <svg class="sb-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="3" width="13" height="10" rx="1.5"/><path d="M5 7h2M9 7h2M5 10h2M9 10h2"/><path d="M5 1.5v3M11 1.5v3"/></svg>
+      <span class="sb-label">Calendar</span>
+    </button>
+
     <!-- Finance & Tax group -->
     <div class="sb-group-hdr" onclick="toggleSbGroup('finance')">
       <span>Finance &amp; Tax</span><span class="sb-chev" id="sbchev-finance">▾</span>
@@ -419,6 +424,11 @@ tr:hover td{background:rgba(246,248,251,.8)}
       <button class="sb-item" data-page="financials">
         <svg class="sb-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 12V4l4 3 3-4 3 3 2-2v8H2z"/></svg>
         <span class="sb-label">Finance</span>
+      </button>
+      <button class="sb-item" data-page="rent">
+        <svg class="sb-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5v13M5 4.5h4.5a2 2 0 010 4H6a2 2 0 000 4H11"/></svg>
+        <span class="sb-label">Rent Tracker</span>
+        <span id="nav-badge-rent" class="sb-badge" style="display:none"></span>
       </button>
       <button class="sb-item" data-page="mtd" id="sb-mtd">
         <svg class="sb-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="3" width="13" height="10" rx="1.5"/><path d="M5 7h6M5 9.5h4"/><path d="M11.5 1.5v3M4.5 1.5v3"/></svg>
@@ -3618,7 +3628,7 @@ function pgDashboard(){
         ${acts.length?acts.map(a=>`<div class="ai-row" style="cursor:pointer" onclick="${a.link ? `nav('${a.link}')` : `nav('compliance')`}" onmouseenter="this.style.background='var(--off)'" onmouseleave="this.style.background='transparent'"><span class="badge b-${a.b}">${a.l}</span><div class="ai-body"><div class="ai-title">${a.t}</div><div class="ai-sub">${a.s}</div></div><span style="color:var(--navy);font-weight:600">›</span></div>`).join(''):'<div class="empty"><div class="empty-ic">✓</div><div class="empty-t">All clear</div></div>'}
       </div>
       <div class="panel">
-        <div class="ph2"><div><h2>Today</h2><p>${today}</p></div><button class="btn btn-sm" onclick="nav('calendar')">View calendar</button></div>
+        <div class="ph2"><div><h2>Today</h2><p>${today}</p></div></div>
         ${getTodayEventsHtml()}
       </div>
     </div>
@@ -9589,6 +9599,13 @@ function updateNavBadges() {
   if (propEl) {
     if (vacBad > 0) { propEl.textContent = vacBad; propEl.className = 'nav-badge amber'; propEl.style.display = 'flex'; }
     else propEl.style.display = 'none';
+  }
+  // Rent Tracker — late or due payments
+  const rentBadge = document.getElementById('nav-badge-rent');
+  if (rentBadge) {
+    const overdue = D.rent.filter(r => r.status === 'Late' || r.status === 'Due').length;
+    if (overdue > 0) { rentBadge.textContent = overdue; rentBadge.className = 'nav-badge red'; rentBadge.style.display = 'inline-flex'; }
+    else rentBadge.style.display = 'none';
   }
 }
 
