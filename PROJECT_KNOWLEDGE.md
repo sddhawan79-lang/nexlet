@@ -1185,6 +1185,94 @@ When **touching any of these files for a new feature or bug fix**, follow this p
 
 ---
 
+### Session 11 — May 2026 — Account Deletion, Tenancy Lifecycle, Email Alerts & UX Polish
+
+#### Account Closure (profile.html + js/profile.js)
+- **Created `js/profile.js`** — full IIFE module for account & billing page (was missing — page was non-functional)
+- **Section 4 — Danger Zone** added to `profile.html`: red-bordered "Close My Account" card
+- **Closure modal:** Requires exact email confirmation, then soft-deletes via `user_profiles.deleted_at`, cancels Stripe subscription, logs `ACCOUNT_CLOSED` to `audit_log`, signs out
+- **CSS:** `.btn-close-account` red outline button, confirmation modal with disabled-till-match button
+- **New SQL:** `session_archive.sql` — adds `user_profiles.deleted_at`, `tenants.archived`, `tenants.archived_at`, `tenants.end_reason`
+
+#### End Tenancy & Archive (landlord.html)
+- **`moEndTenancy(tid)`** modal: end reason dropdown (mutual/notice/eviction/abandoned), end date picker
+- **`_endTenancy(tid)`** function: sets `status='Ended'`, `archived=true`, `archived_at`, `end_reason`, `end_date`; updates in-memory cache; logs `END_TENANCY` audit
+- **Tenancy card buttons** in `pgTenantDetail`: shows "✎ Edit" + "⏻ End Tenancy" for active tenants; shows "📦 Archived" label for ended tenants
+- **Archive banner** in tenant detail: "Tenancy Ended — Archived" with date, reason, preservation notice
+- **`pgTenants()` filter tabs:** Active / Ended / All toggle with counts, ended rows at `.65` opacity with "Archived" badge
+
+#### Email Alert System — Deploy & Fix
+- **`email-alerts` edge function deployed** — created `supabase/functions/email-alerts/index.ts`, deployed via `npx supabase functions deploy email-alerts`
+- **Fixed `YOUR_SERVICE_ROLE_KEY` placeholder** in `sprint10_step2_cron.sql` — replaced with real service role key, cron jobs recreated
+- **Added `checkAllReminders()` on login** — fires weekly compliance digest + all 12 reminder types at `landlord.html:852`
+- **Fixed premature `return` bug** in `checkAllReminders()` — digest section no longer exits entire function when already-sent
+
+#### Document Generation — Output Display Fixes
+- **CSS leaking into PDF:** Added `_stripCSSCrap()` function (line 8124) — strips `<style>` blocks, CSS `{...}` rule blocks, HTML tags, `@page`/`@media` blocks from AI output
+- **Scrollbar layout shift:** Added `scrollbar-gutter:stable` to `.mo-box` (desktop + mobile) — prevents horizontal reflow when scrollbar appears after generation
+- **Input form collapse:** Wrapped gen-modal inputs in `#gen-inputs`, auto-collapses after generation, `toggleGenInputs()` shows "✎ Edit document details ▸" link
+- **Modal wider:** Added `mo-wide` class (700px) for better document readability
+- **Prompt tightened:** `PLACEHOLDER_RULE` now explicitly says "NO HTML, NO CSS, NO markdown, NO code blocks"
+- **PDF signing block:** Added EXECUTION section to `downloadAsPDF()` with signature/date lines + document timestamp (HH:MM:SS)
+- **Model/performance:** `max_tokens` kept at 1000, prompt trimmed ~60%
+
+#### Sidebar Navigation Additions
+- **Calendar** — standalone sidebar item (between Maintenance and Finance), calendar grid SVG icon
+- **Rent Tracker** — inside Finance & Tax group, below Finance, with £ icon + `nav-badge-rent` badge showing Late/Due count
+- **Insurance** — inside Compliance group, shield+checkmark SVG icon, `data-page="insurance"`
+- **Inspections** — inside Compliance group, clipboard+magnifying glass SVG icon, `data-page="inspections"`
+- **`updateNavBadges()`** updated to show red badge on Rent Tracker for overdue payments
+
+#### Dashboard UX Improvements
+- **Quick actions dropdown:** Replaced 3 buttons (Scan docs, Add certificate, Report issue) with single "Quick actions ▾" dropdown toggle — opens upward on click, closes on outside click
+- **Action items clickable:** `ai-row` cards in dashboard now navigate to relevant page (compliance/maintenance/financials) with hover highlight + navy `›` arrow
+- **UA() action items:** Added `link` property to every action (cert→compliance, maintenance→maintenance, rent→financials, licence→compliance, mortgage→financials)
+- **Today panel:** Removed "View calendar" button (Calendar now in sidebar)
+
+#### Property List Cleanup
+- **Removed "🚀 Setup" button** from property rows — keep only `›` navigate button
+- **Removed beds/type badges** column from property rows — visible inside property detail page
+
+#### Templates Page Fixes
+- **RRA deadline banner:** Wrapped in date check — auto-hides after 31 May 2026 and when all tenants have been sent the sheet
+- **Disclaimer box:** Moved from above all templates to below categories (reads as footnote not warning), reduced margin
+- **"↑ Use my own" button:** Now passes `templateId` + `templateName` to `moUploadTemplate()` so modal knows context
+- **`moUploadTemplate()`** updated signature to `(templateId, templateName)` with context-aware subtitle + hidden `#upload-tmpl-id` input
+
+#### Maintenance / Kanban Fixes
+- **Kanban responsiveness:** Column `max-width:260px`, mobile touch scroll, "← Scroll to see all stages →" hint bar
+- **Stage buttons simplified:** Single "→ Next Stage" button per card + ▾ dropdown for other stages
+- **Dropdown outside-click-close:** `stage-overflow-dd` class, global click listener closes any open dropdown
+- **Awaab's Law prominence:** Cards get full red border + white-on-red `⚠ Awaab's Law` pill badge
+- **Empty column polish:** "✓ Clear" checkmark replacing grey "No jobs"
+
+#### Financials Table Slim-down
+- **9 columns → 6:** Removed separate Mortgage/Insurance/Maintenance/Tax columns
+- **Expenses column:** Combined total (mortgage + insurance + maintenance) with M / I / R breakdown sub-text
+- **Tax footnote:** Added "Tax estimates in Detail view are indicative only — not financial advice"
+
+#### Compliance Page — View Toggle
+- **⚠️ Action Required (default)** — filtered action items with urgency sorting
+- **📋 Full Audit** — property-by-property breakdown with every cert slot color-coded
+- **Toggle buttons** at panel header and full view header, `window._compView` persists across nav
+- **`filterCompliance()`** now resets `_compView='action'` when stat card clicked
+
+#### Inspection Photo Upload
+- **Photo field** in `moAddInspection()` modal: multi-file (max 5, jpg/png), live thumbnail preview with ✕ remove
+- **`previewInspPhotos()` / `removeInspPhoto()`** functions: DataTransfer-based file list management
+- **`saveInspection()`** uploads to `documents` storage bucket under `inspections/{propId}/`, stores `photos` array in JSONB
+- **`pgInspections()`** rows show 36px thumbnails, click to open full image
+
+#### Insurance Page Topbar
+- **"+ Add policy" button** added to `pgInsurance()` topbar, calls `moAddInsurance(null,'','')`
+
+#### Tech Debt / Infrastructure
+- **`C:\Dev\rentsafeai\session_archive.sql`** — DB migration for archived tenants + account soft-delete
+- **`C:\Dev\rentsafeai\sprint10_fix_cron_key.sql`** — re-creates pg_cron jobs with real service role key
+- **`C:\Dev\rentsafeai\supabase\functions\email-alerts\`** — deployed edge function directory
+
+---
+
 ## 14. Stripe Integration Guide
 
 > **Architecture:** Stripe Checkout (hosted). No Stripe.js SDK needed on the frontend.
