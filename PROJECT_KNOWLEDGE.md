@@ -118,6 +118,8 @@ rentsafeai/
 ├── session7_tenant_documents.sql   SQL migration: Session 7 (tenant_documents table + RLS) — run in Supabase SQL Editor
 ├── session10_multi_doc.sql          SQL migration: Session 10 (multi-doc KYC — drop slot unique, add columns)
 ├── session10_tenants_columns.sql    SQL migration: Session 10 (add missing tenants columns — rtr, rent_day, scheme_ref, etc.)
+├── session10_esign_requests.sql     SQL migration: Session 10 (esign_requests table + RLS)
+├── session13_inventory_reports.sql  SQL migration: Session 13 (inventory_reports table + RLS for report persistence)
 ├── SPRINT10_DEPLOY.md              Sprint 10 deployment guide
 ├── PROJECT_KNOWLEDGE.md            THIS FILE — agent initialization reference
 ├── fix.b64                         Binary patch (base64 encoded)
@@ -633,6 +635,8 @@ Session 8 introduced a 3-checkbox pre-generation consent gate for 4 legal docume
 | 28 | Stray `alert('Add rooms — coming soon')` | UX | **FIXED Session 13** — replaced with `toast()` |
 | 29 | `esign_requests` table has no SQL migration file | Database | **FIXED Session 13** — `session10_esign_requests.sql` created |
 | 30 | `moFinancials` PDF marked "coming soon" but actually implemented | Documentation | **FIXED Session 13** — comment corrected |
+| 31 | Inventory report was modal-only, no persistence or tenant sharing | Feature gap | **FIXED Session 13** — full-page view, send-to-tenant with email body, DB persistence added |
+| 32 | Document Library had no inline preview | UX | **FIXED Session 13** — View button opens inline viewer |
 
 ---
 
@@ -1347,6 +1351,20 @@ When **touching any of these files for a new feature or bug fix**, follow this p
 
 #### Database
 - **`esign_requests` SQL migration:** Created `session10_esign_requests.sql` with full table schema and RLS policies. Ready to run in Supabase SQL Editor.
+- **`inventory_reports` SQL migration:** Created `session13_inventory_reports.sql` — table for persistent storage of AI-generated inventory reports with photo metadata.
+
+#### Inventory Reports — Full-Page View & Send-to-Tenant
+- **Before:** Inventory report was text-only in a pop-up modal, no way to view past reports, no send-to-tenant
+- **After session 13:**
+  - **Full-page view:** Sidebar > Compliance > **Inventory Reports** — dedicated page lists all reports, click any for full-width scrolling view with text + photo gallery
+  - **Photo gallery:** 3-column responsive grid, click to enlarge any photo
+  - **Three actions per report:** Download PDF (text + photos embedded), Send to tenant, Copy text
+  - **Send-to-tenant:** Auto-generated email body with property details, report type, date, photo count, and 7-day review period. Editable before sending. PDF auto-generated and attached. Sent via `ai-proxy` edge function.
+  - **Persistence:** Auto-saves to `inventory_reports` table on generation (photos uploaded to `documents` Storage bucket). Loads saved reports on startup. Falls back to session-only if table doesn't exist yet.
+  - **Document Library:** All stored documents now have a "👁 View" button that opens inline viewer (images full-size, PDFs in iframe)
+- **New functions:** `pgInventoryReports()`, `pgInventoryReport()`, `sendInventoryReport()`, `sendInventoryNow()`, `invReportDownloadPDF()`, `_saveInventoryToDb()`
+- **Sidebar:** Added under Compliance group (between Inspections and Maintenance)
+- **AI system prompt** updated to include Inventory Reports location + features
 
 #### Infrastructure Items Noted (manual-only, not code-fixable)
 - Resend DKIM/SPF records — need DNS configuration

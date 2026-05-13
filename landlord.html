@@ -402,6 +402,10 @@ tr:hover td{background:rgba(246,248,251,.8)}
         <svg class="sb-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="2.5" width="10" height="12" rx="1.5"/><path d="M4.5 6h4M4.5 8.5h5M4.5 11h3"/><circle cx="13" cy="4" r="2.5"/><path d="M14.8 5.8L12.2 3.2"/></svg>
         <span class="sb-label">Inspections</span>
       </button>
+      <button class="sb-item" data-page="inventory-reports">
+        <span style="font-size:18px;line-height:1">📋</span>
+        <span class="sb-label">Inventory Reports</span>
+      </button>
     </div>
 
     <!-- Maintenance standalone -->
@@ -647,6 +651,7 @@ function _logError(label, err) { if (RENTSAFE_DEBUG) console.error('[' + label +
 const D = {
   properties: [], tenants: [], certs: [], maintenance: [], rent: [], insurance: [],
   emailLog: [], customTemplates: [], contractors: [], jobAssignments: [], tenantDocs: [],
+  _invReports: [],
   userProfile: null,
   chat: [{role:'ai', text:'Hello! I\'m your RentSafe AI assistant. I can help with UK landlord law (RRA 2025, Section 8/13, deposits, Awaab\'s Law, MTD tax) and the RentSafe platform itself — ask me where to find a feature, how to generate a document, or anything about your compliance obligations.'}]
 };
@@ -662,6 +667,8 @@ PLATFORM FEATURES — tell users exactly where to find things:
 - MTD Tax (sidebar > Finance & Tax > MTD Tax): Making Tax Digital quarterly filings, Section 24 calculator
 - Templates (sidebar > Documents > Templates): 20 AI-generated legal documents — Section 8 notices (all RRA 2025 grounds), Section 13 rent increase, Written Statement of Terms, deposit letters, inspection reports, arrears letters, and more
 - Document Library (sidebar > Documents): upload and store property documents
+- Inventory Reports (sidebar > Compliance > Inventory Reports): AI-generated room-by-room condition reports with photo evidence — upload photos, AI writes report, send to tenants with email + PDF
+- Inspections (sidebar > Compliance > Inspections): log and track property inspection records
 - Contractors (sidebar > My Properties > Contractors): contractor directory and job assignments
 - Calendar: date-based view of certificate expiries, rent due dates, insurance/licence renewals
 - AI Assistant (sidebar, bottom): you are here
@@ -872,6 +879,23 @@ async function loadData() {
   window._userPlan = (sub.data && sub.data.plan_name) ? sub.data.plan_name : 'portfolio';
   await checkComplianceReminders();
   checkAllReminders(); // fire-and-forget weekly digest + reminders on login
+
+  // Load saved inventory reports from DB (graceful — table may not exist yet)
+  try {
+    const { data: irData } = await sb.from('inventory_reports').select('*').eq('user_id', currentUser.id).order('created_at', {ascending: false});
+    if (irData?.length) {
+      const dbReports = irData.map(r => ({
+        id: r.id, propId: r.prop_id, address: '', type: r.type,
+        date: new Date(r.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}),
+        text: r.report_text, photos: r.photos || [], notes: r.notes, _fromDb: true
+      }));
+      dbReports.forEach(r => {
+        const p = D.properties.find(x => String(x.id) === String(r.propId));
+        if (p) r.address = p.address + (p.city?', '+p.city:'');
+      });
+      D._invReports = [...dbReports, ...D._invReports.filter(r => !r._fromDb)];
+    }
+  } catch(e) { /* table may not exist yet */ }
 }
 
 // ── PLAN GATING HELPERS ──
@@ -6317,7 +6341,271 @@ async function saveInspection(pid) {
   nav('inspections');
 }
 
-// ── PAGE: MAINTENANCE ──
+// ── PAGE: INVENTORY REPORTS (full-page view) ──
+function pgInventoryReports() {
+  const reports = D._invReports || [];
+  const propOpts = `${D.properties.map(p=>`<option value="${p.id}">${p.address}${p.city?' · '+p.city:''}</option>`).join('')}`;
+  return `<div class="topbar"><span class="tb-title">Inventory Reports</span><div class="tb-right">
+    <button class="btn btn-navy" onclick="moInventoryReport()">+ New report</button>
+  </div></div>
+  <div class="content">
+    <div class="ph"><h1>📋 Inventory Reports</h1><p>AI-generated room-by-room condition reports with photo evidence. Reports remain available during this session.</p></div>
+    ${reports.length === 0 ? `<div class="panel" style="padding:32px;text-align:center;color:var(--muted);font-size:13px">No reports yet. Click "+ New report" to generate your first AI inventory report.</div>` : reports.slice().reverse().map(r=>`
+      <div class="panel" style="margin-bottom:10px;cursor:pointer" onclick="nav('inventory-report','${r.id}')">
+        <div style="display:flex;align-items:center;gap:12px;padding:14px 18px">
+          <span style="font-size:22px">📋</span>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:600;color:var(--txt)">${r.type} — ${r.address}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:3px">${r.date} · ${r.photos?.length||0} photos · ${(r.text||'').length.toLocaleString()} chars</div>
+          </div>
+          <span style="font-size:13px;color:var(--muted)">→</span>
+        </div>
+      </div>`).join('')}
+  </div>`;
+}
+
+function pgInventoryReport(id) {
+  const r = D._invReports?.find(x => x.id === id);
+  if (!r) return `<div style="padding:32px;text-align:center"><h2 style="color:var(--red)">Report not found</h2><p style="color:var(--muted)">Reports are stored during this session only.</p><button class="btn" onclick="nav('inventory-reports')">← Back</button></div>`;
+
+  // Photo helper for inline
+  const photoGallery = (r.photos?.length ? `
+    <div class="panel" style="margin-top:16px">
+      <div style="padding:14px 18px 18px">
+        <h2 style="font-size:14px;color:var(--txt);margin-bottom:12px">📷 Photo Evidence (${r.photos.length})</h2>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px">
+          ${r.photos.map((ph,i)=>`
+            <div style="border:1px solid var(--border);border-radius:6px;overflow:hidden;background:var(--off)">
+              <img src="data:${ph.type};base64,${ph.b64}" alt="${ph.name}" style="width:100%;height:120px;object-fit:cover;display:block;cursor:pointer" onclick="this.style.position='fixed';this.style.top='50%';this.style.left='50%';this.style.transform='translate(-50%,-50%)';this.style.width='auto';this.style.height='90vh';this.style.zIndex='99999';this.style.borderRadius='8px';this.onclick=function(){this.remove()}" title="Click to enlarge">
+              <div style="padding:4px 6px;font-size:9px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ph.name}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    </div>` : '');
+
+  return `<div class="topbar">
+    <span class="tb-title" style="cursor:pointer" onclick="nav('inventory-reports')">← Inventory Reports</span>
+    <div class="tb-right">
+      <button class="btn btn-sm" onclick="invReportDownloadPDF('${id}')">📄 Download PDF</button>
+      <button class="btn btn-navy btn-sm" onclick="sendInventoryReport('${id}')">✉ Send to tenant</button>
+    </div>
+  </div>
+  <div class="content">
+    <div class="panel" style="margin-bottom:4px">
+      <div style="padding:18px 18px 0">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+          <div>
+            <h1 style="font-size:18px;font-weight:600;color:var(--txt);margin-bottom:4px">${r.type}</h1>
+            <div style="font-size:12px;color:var(--muted)">${r.address} · ${r.date} · ${r.photos?.length||0} photos</div>
+          </div>
+          <span style="font-size:11px;padding:3px 8px;border-radius:4px;background:var(--green-bg);color:var(--green-dark);font-weight:600">AI-generated</span>
+        </div>
+        <div style="background:var(--amber-bg);border:1px solid var(--amber);border-radius:8px;padding:9px 13px;font-size:11px;color:var(--txt);margin-bottom:14px">
+          <strong>⚠️ AI-generated draft:</strong> This report was produced by AI and should be verified against the original photos before use in legal proceedings or deposit disputes.
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div id="inv-full-report" style="padding:18px;font-size:13px;line-height:1.9;white-space:pre-wrap;font-family:Georgia,serif;max-height:60vh;overflow-y:auto">${r.text.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+    </div>
+    ${photoGallery}
+  </div>`;
+}
+
+// ── SEND INVENTORY REPORT TO TENANT ──
+function sendInventoryReport(id) {
+  const r = D._invReports?.find(x => x.id === id);
+  if (!r) { toast('Report not found', true); return; }
+  const p = P(r.propId);
+  const t = D.tenants.find(x => String(x.prop_id) === String(r.propId));
+  const landlordName = _profileName();
+
+  const defaultBody = `Dear ${t?.name||'Tenant'},
+
+Please find attached the ${r.type.toLowerCase()} for ${r.address}, generated on ${r.date}.
+
+This AI-assisted report includes a room-by-room condition assessment with photographic evidence. Please review the report carefully and let us know within 7 days if you have any questions or believe any observations need correction.
+
+Key details:
+- Property: ${r.address}
+- Report type: ${r.type}
+- Date: ${r.date}
+- Photos attached: ${r.photos?.length||0}
+
+If no response is received within 7 days, the report will be considered accepted as an accurate record of the property's condition.
+
+Kind regards,
+${landlordName}
+RentSafe AI`;
+
+  const tenantOpts = `<option value="">Select tenant…</option>${D.tenants.filter(x=>String(x.prop_id)===String(r.propId)).map(x=>`<option value="${x.id}">${x.name}${x.email?' — '+x.email:''}</option>`).join('')}`;
+
+  openMo('Send Inventory Report',`📋 ${r.type} · ${r.address}`,`
+    <div class="fg"><label>Send to</label><select id="inv-send-tenant">${tenantOpts}</select></div>
+    <div class="fg"><label>Email subject</label><input id="inv-send-subject" value="Inventory Report — ${r.address}"></div>
+    <div class="fg"><label>Email body</label><textarea id="inv-send-body" style="min-height:160px;font-size:12px;line-height:1.6">${defaultBody.replace(/`/g,'\\`').replace(/\$/g,'\\$')}</textarea></div>
+    <div style="font-size:11px;color:var(--muted);margin-top:6px">The report PDF will be attached. Sent from documents@rentsafeai.co.uk via Resend.</div>
+  `,`<button class="btn" onclick="closeMo()">Cancel</button>
+    <button class="btn btn-navy" id="inv-send-btn" onclick="sendInventoryNow('${id}')">✉ Send to tenant</button>`);
+}
+
+async function sendInventoryNow(id) {
+  const r = D._invReports?.find(x => x.id === id);
+  if (!r) { toast('Report not found', true); return; }
+  const tid = document.getElementById('inv-send-tenant')?.value;
+  const subject = document.getElementById('inv-send-subject')?.value?.trim();
+  const body = document.getElementById('inv-send-body')?.value?.trim();
+  if (!tid) { toast('Please select a tenant', true); return; }
+  if (!subject) { toast('Please enter a subject', true); return; }
+
+  const t = D.tenants.find(x => String(x.id) === String(tid));
+  if (!t?.email) { toast('Tenant has no email address', true); return; }
+
+  const btn = document.getElementById('inv-send-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Sending…';
+
+  // Generate PDF inline
+  let pdfBase64 = '';
+  try {
+    const {jsPDF} = window.jspdf;
+    const doc = new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    const W = doc.internal.pageSize.getWidth(); let y = 18;
+    doc.setFontSize(15); doc.setTextColor(11,30,61); doc.text('RentSafe AI',16,y);
+    doc.setFontSize(9); doc.setTextColor(153,153,153); doc.text(`${r.type} — ${r.address}`,45,y);
+    doc.setDrawColor(11,30,61); doc.line(16,y+4,W-16,y+4); y+=11;
+    doc.setFontSize(9); doc.setTextColor(26,43,69);
+    const lines = r.text.split('\n');
+    for (const line of lines) {
+      if (line.trim().length===0) { y+=4; continue; }
+      if (y>270) { doc.addPage(); y=18; }
+      const splits = doc.splitTextToSize(line.replace(/\*\*/g,''),W-32);
+      for (const s of splits) { if (y>270) { doc.addPage(); y=18; } doc.text(s,16,y); y+=4.5; }
+    }
+    // Photo gallery
+    if (r.photos?.length) {
+      y+=8; if (y>240) { doc.addPage(); y=18; }
+      doc.setFontSize(10); doc.setFont(undefined,'bold'); doc.text('PHOTO EVIDENCE',16,y); y+=7;
+      const imgW=(W-36)/2; let col=0;
+      for (const ph of r.photos) {
+        if (col===0 && y>220) { doc.addPage(); y=18; }
+        const x=16+col*(imgW+4);
+        if (y+imgW*0.75+10>280) { doc.addPage(); y=18; col=0; }
+        try {
+          doc.addImage(`data:${ph.type};base64,${ph.b64}`,ph.type||'JPEG',x,y,imgW,imgW*0.75);
+        } catch(e) {}
+        doc.setFontSize(6.5); doc.text(ph.name.length>25?ph.name.slice(0,23)+'..':ph.name,x,y+imgW*0.75+4);
+        if (col===1) { y+=imgW*0.75+10; col=0; } else { col=1; }
+      }
+    }
+    y+=6; doc.setDrawColor(238,238,238); doc.line(16,y,W-16,y); y+=6;
+    doc.setFontSize(7.5); doc.setTextColor(153,153,153);
+    doc.text(`Generated by RentSafe AI · ${r.date} · AI-generated`,16,y);
+    pdfBase64 = doc.output('datauristring').split(',')[1];
+  } catch(e) {
+    _logError('sendInventoryNow:pdf', e);
+    toast('PDF generation failed', true); btn.disabled = false; btn.innerHTML = '✉ Send to tenant';
+    return;
+  }
+
+  try {
+    const htmlBody = body.replace(/\n/g,'<br>');
+    const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        type:'send_email', to: t.email, subject,
+        html: `<div style="font-family:Arial,sans-serif;max-width:600px">${htmlBody}</div>`,
+        attachments: [{ filename: `${r.type.replace(/[^a-z0-9]/gi,'_')}_${r.address.replace(/[^a-z0-9]/gi,'_')}.pdf`, content: pdfBase64, content_type: 'application/pdf' }]
+      })
+    });
+    if (!res.ok) { const err = await res.text(); throw new Error(err); }
+    const ll = { landlord_id: currentUser.id, alert_type: 'inventory_report', reference_key: `inv_${id}_to_${tid}`, recipient_email: t.email, sent_at: new Date().toISOString(), metadata: { reportId: id } };
+    await sb.from('email_log').insert(ll);
+    closeMo();
+    toast(`✓ Inventory report sent to ${t.name}`);
+  } catch(e) {
+    _logError('sendInventoryNow', e);
+    toast('Send failed — please try again', true);
+  }
+  btn.disabled = false; btn.innerHTML = '✉ Send to tenant';
+}
+
+// ── DOWNLOAD PDF FROM FULL-PAGE VIEW ──
+function invReportDownloadPDF(id) {
+  const r = D._invReports?.find(x => x.id === id);
+  if (!r) { toast('Report not found', true); return; }
+  try {
+    const {jsPDF} = window.jspdf;
+    const doc = new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    const W = doc.internal.pageSize.getWidth(); let y = 18;
+    doc.setFontSize(15); doc.setTextColor(11,30,61); doc.text('RentSafe AI',16,y);
+    doc.setFontSize(9); doc.setTextColor(153,153,153); doc.text(`${r.type} — ${r.address}`,45,y);
+    doc.setDrawColor(11,30,61); doc.line(16,y+4,W-16,y+4); y+=11;
+    doc.setFontSize(9); doc.setTextColor(26,43,69);
+    const lines = r.text.split('\n');
+    for (const line of lines) {
+      if (line.trim().length===0) { y+=4; continue; }
+      if (y>270) { doc.addPage(); y=18; }
+      const splits = doc.splitTextToSize(line.replace(/\*\*/g,''),W-32);
+      for (const s of splits) { if (y>270) { doc.addPage(); y=18; } doc.text(s,16,y); y+=4.5; }
+    }
+    if (r.photos?.length) {
+      y+=8; if (y>240) { doc.addPage(); y=18; }
+      doc.setFontSize(10); doc.setFont(undefined,'bold'); doc.text('PHOTO EVIDENCE',16,y); y+=7;
+      const imgW=(W-36)/2; let col=0;
+      for (const ph of r.photos) {
+        if (col===0 && y>220) { doc.addPage(); y=18; }
+        const x=16+col*(imgW+4);
+        if (y+imgW*0.75+10>280) { doc.addPage(); y=18; col=0; }
+        try { doc.addImage(`data:${ph.type};base64,${ph.b64}`,ph.type||'JPEG',x,y,imgW,imgW*0.75); } catch(e) {}
+        doc.setFontSize(6.5); doc.text(ph.name.length>25?ph.name.slice(0,23)+'..':ph.name,x,y+imgW*0.75+4);
+        if (col===1) { y+=imgW*0.75+10; col=0; } else { col=1; }
+      }
+    }
+    y+=6; doc.setDrawColor(238,238,238); doc.line(16,y,W-16,y); y+=6;
+    doc.setFontSize(7.5); doc.setTextColor(153,153,153);
+    doc.text(`Generated by RentSafe AI · ${r.date} · AI-generated — verify against photos`,16,y);
+    doc.save((r.type.replace(/[^a-z0-9]/gi,'_').toLowerCase())+'.pdf');
+  } catch(e) {
+    _logError('invReportDownloadPDF', e);
+    toast('PDF generation failed', true);
+  }
+}
+
+async function _saveInventoryToDb(reportId) {
+  const r = D._invReports?.find(x => x.id === reportId);
+  if (!r || r._fromDb) return;
+  try {
+    // Upload photos to storage and collect paths
+    const photoPaths = [];
+    for (let i = 0; i < (r.photos||[]).length; i++) {
+      const ph = r.photos[i];
+      const ext = (ph.name||'photo.jpg').split('.').pop();
+      const path = `inventory/${currentUser.id}/${reportId}/${i}_${Date.now()}.${ext}`;
+      const blob = await fetch(`data:${ph.type};base64,${ph.b64}`).then(res => res.blob());
+      const { error: upErr } = await sb.storage.from('documents').upload(path, blob, { contentType: ph.type, upsert: true });
+      if (!upErr) {
+        const { data: urlData } = sb.storage.from('documents').getPublicUrl(path);
+        photoPaths.push({ name: ph.name, type: ph.type, url: urlData.publicUrl, path });
+      }
+    }
+
+    const { error } = await sb.from('inventory_reports').insert({
+      user_id: currentUser.id,
+      prop_id: r.propId || null,
+      type: r.type,
+      report_text: r.text,
+      photos: photoPaths.length ? photoPaths : r.photos.map(p=>({name:p.name,type:p.type,b64:p.b64})),
+      notes: r.notes || null
+    });
+    if (!error) {
+      r._fromDb = true;
+      console.debug('Inventory report saved to DB:', reportId);
+    }
+  } catch(e) {
+    // Non-critical — report still available in session
+  }
+}
 let _mview = 'kanban';
 let _mfilterProp = '';
 let _mfilterPri = '';
@@ -7074,6 +7362,8 @@ const PAGES={
   contractors:()=>pgContractors(),
   mtd:()=>pgMTD(),
   doclibrary:()=>pgDocLibrary(),
+  'inventory-report':(id)=>pgInventoryReport(id),
+  'inventory-reports':()=>pgInventoryReports(),
 };
 
 // ── FINANCE HELPERS ──
@@ -7939,6 +8229,7 @@ function nav(page, param){
     'insurance': 'financials',
     'calendar': 'dashboard',
     'doclibrary': 'doclibrary',
+    'inventory-report': 'inventory-reports',
   };
   const activeTab = pageMap[page] || page;
   document.querySelectorAll('.sb-item[data-page]').forEach(el=>{
@@ -10013,6 +10304,15 @@ Be specific and factual. Note exact defects you can see. This may be used for de
     });
     const data=await res.json();
     const report=data.content?.[0]?.text||'Could not generate report. Please try again.';
+
+    // Store report + photos for full-page view
+    const reportId = 'ir_' + Date.now();
+    D._invReports.push({
+      id: reportId, propId, address: (p.address||'Property') + (p.city?', '+p.city:''),
+      type, date: new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}),
+      text: report, photos: photos.map(ph=>({b64:ph.b64, type:ph.type, name:ph.name}))
+    });
+
     document.getElementById('inv-output').style.display='block';
     document.getElementById('inv-report').textContent=report;
 
@@ -10022,9 +10322,9 @@ Be specific and factual. Note exact defects you can see. This may be used for de
       galleryEl.innerHTML = `
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:8px">Attached photos (${photos.length})</div>
         <div style="display:flex;flex-wrap:wrap;gap:8px">
-          ${photos.map((ph,i) => `
+          ${photos.map(ph => `
             <div style="position:relative;width:calc(33.33% - 6px);min-width:100px;border:1px solid var(--border);border-radius:6px;overflow:hidden;background:var(--off)">
-              <img src="data:${ph.type};base64,${ph.b64}" alt="${ph.name}" style="width:100%;height:90px;object-fit:cover;display:block" onclick="this.style.position='fixed';this.style.top='50%';this.style.left='50%';this.style.transform='translate(-50%,-50%)';this.style.width='auto';this.style.height='90vh';this.style.zIndex='99999';this.style.borderRadius='8px';this.onclick=function(){this.remove()}" title="Click to enlarge">
+              <img src="data:${ph.type};base64,${ph.b64}" alt="${ph.name}" style="width:100%;height:90px;object-fit:cover;display:block;cursor:pointer" onclick="this.style.position='fixed';this.style.top='50%';this.style.left='50%';this.style.transform='translate(-50%,-50%)';this.style.width='auto';this.style.height='90vh';this.style.zIndex='99999';this.style.borderRadius='8px';this.onclick=function(){this.remove()}" title="Click to enlarge">
               <div style="padding:4px 6px;font-size:9px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ph.name}</div>
             </div>
           `).join('')}
@@ -10034,7 +10334,10 @@ Be specific and factual. Note exact defects you can see. This may be used for de
     document.getElementById('mo-f').innerHTML=`
       <button class="btn" onclick="closeMo()">Close</button>
       <button class="btn" onclick="navigator.clipboard.writeText(document.getElementById('inv-report').textContent);toast('✓ Copied!')">📋 Copy</button>
-      <button class="btn btn-navy" onclick="invDownloadPDF()">📄 Download PDF</button>`;
+      <button class="btn btn-navy" onclick="closeMo();nav('inventory-report','${reportId}');return false">📄 View Full Report</button>`;
+
+    // Auto-save to DB in background
+    _saveInventoryToDb(reportId);
     await logAudit('GENERATE_INVENTORY','maintenance',propId,`${type} generated`);
     toast('✓ Inventory report generated!');
   }catch(e){
