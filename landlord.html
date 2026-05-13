@@ -9854,6 +9854,7 @@ function moInventoryReport(pid){
     <div id="inv-output" style="display:none">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:8px">Generated report</div>
       <div id="inv-report" style="background:var(--off);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:12.5px;line-height:1.8;max-height:55vh;overflow-y:auto;white-space:pre-wrap;font-family:Georgia,serif"></div>
+      <div id="inv-gallery" style="margin-top:12px"></div>
     </div>
   `,`<button class="btn" onclick="closeMo()">Cancel</button>
     <button class="btn btn-navy" id="inv-gen-btn" onclick="generateInventoryReport()">✦ Generate report</button>`);
@@ -9931,6 +9932,21 @@ Be specific and factual. Note exact defects you can see. This may be used for de
     const report=data.content?.[0]?.text||'Could not generate report. Please try again.';
     document.getElementById('inv-output').style.display='block';
     document.getElementById('inv-report').textContent=report;
+
+    // Render photo gallery below report
+    const galleryEl = document.getElementById('inv-gallery');
+    if (galleryEl && photos.length) {
+      galleryEl.innerHTML = `
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:8px">Attached photos (${photos.length})</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          ${photos.map((ph,i) => `
+            <div style="position:relative;width:calc(33.33% - 6px);min-width:100px;border:1px solid var(--border);border-radius:6px;overflow:hidden;background:var(--off)">
+              <img src="data:${ph.type};base64,${ph.b64}" alt="${ph.name}" style="width:100%;height:90px;object-fit:cover;display:block" onclick="this.style.position='fixed';this.style.top='50%';this.style.left='50%';this.style.transform='translate(-50%,-50%)';this.style.width='auto';this.style.height='90vh';this.style.zIndex='99999';this.style.borderRadius='8px';this.onclick=function(){this.remove()}" title="Click to enlarge">
+              <div style="padding:4px 6px;font-size:9px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ph.name}</div>
+            </div>
+          `).join('')}
+        </div>`;
+    }
     btn.disabled=false; btn.innerHTML='✦ Regenerate';
     document.getElementById('mo-f').innerHTML=`
       <button class="btn" onclick="closeMo()">Close</button>
