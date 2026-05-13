@@ -1400,7 +1400,7 @@ When **touching any of these files for a new feature or bug fix**, follow this p
 
 #### 30-Day Free Trial System
 - **Trial fields on `user_profiles`:** `trial_started_at`, `trial_expires_at`, `plan`, `plan_activated_at`
-- **On first login:** `_ensureTrialStarted()` auto-sets `trial_expires_at` to now + 30 days, `plan = 'trial'`
+- **On first login:** Inline IIFE in `initApp` auto-sets `trial_expires_at` to now + 30 days on `user_profiles`, `plan = 'trial'`
 - **During trial:** Full portfolio-level access — `effectivePlan()` returns `'portfolio'`
 - **Trial expiry (hard popup):** Non-dismissable modal with 3 tier cards (Starter/Landlord/Portfolio), founding prices, CTA links to `profile.html`. No close/X — user must upgrade or log out.
 - **Amber banner:** Shown on every page after trial expiry — "Your trial ended on [date]. Upgrade to keep access →"
