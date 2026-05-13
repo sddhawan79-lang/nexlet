@@ -469,13 +469,16 @@ tr:hover td{background:rgba(246,248,251,.8)}
         <div class="sb-avatar" id="th-av">—</div>
         <span class="sb-username" id="sb-username">Loading…</span>
       </a>
+      <span id="trial-indicator" style="display:none;font-size:10px;font-weight:600;padding:2px 8px;border-radius:100px;margin:4px 0"></span>
       <button class="sb-logout" onclick="logout()">Out</button>
     </div>
   </div>
+  <div id="sb-trial-chip" style="display:none"></div>
 </aside>
 
 <!-- MAIN CONTENT -->
 <div class="main-wrap">
+<div id="trial-expired-banner" style="display:none;background:var(--amber-bg);border-bottom:1px solid var(--amber);padding:8px 18px;font-size:12px;color:var(--txt);text-align:center;align-items:center;justify-content:center;gap:6px;font-weight:500"></div>
 <main class="main" id="main">
   <div style="display:flex;align-items:center;justify-content:center;height:100%;gap:10px;color:var(--muted)">
     <div style="width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--navy);border-radius:50%;animation:spin .6s linear infinite"></div>
@@ -899,12 +902,13 @@ async function loadData() {
 }
 
 // ── PLAN GATING HELPERS ──
-function getUserPlan(){ return window._userPlan || 'portfolio'; }
+function getUserPlan(){ return effectivePlan(); }
 function isPortfolio(){ return getUserPlan()==='portfolio'; }
 function isLandlordOrAbove(){ const p=getUserPlan(); return p==='landlord'||p==='portfolio'; }
 function isStarter(){ return getUserPlan()==='starter'; }
+function isExpired(){ return getUserPlan()==='expired'; }
 const PLAN_LIMITS = { starter:2, landlord:10, portfolio:999 };
-function getPropLimit(){ return PLAN_LIMITS[getUserPlan()]||2; }
+function getPropLimit(){ if(isExpired()) return 0; return PLAN_LIMITS[getUserPlan()]||2; }
 function upgradePrompt(feature, plan){
   const planLabels={starter:'Starter',landlord:'Landlord',portfolio:'Portfolio'};
   openMo('Upgrade Required','',`
@@ -957,9 +961,33 @@ async function initApp() {
   document.getElementById('th-av').textContent = email.slice(0,2).toUpperCase();
 
   try { await loadData(); } catch(e) { _logError('loadData', e); }
+
+  // ── TRIAL RESOLUTION ──
+  await _ensureTrialStarted();
+  getTrialState(); // cache state
+  // Override plan during trial — full access
+  if (isTrialActive()) {
+    window._userPlan = 'portfolio';
+    getUserPlan(); // invalidate any cached plan
+  }
+  if (isTrialExpired() && getTrialState().plan === 'trial') {
+    window._userPlan = 'expired';
+  }
+
   applyPlanGating();
   updateNavBadges();
   initSbGroups();
+
+  // ── TRIAL UI ──
+  renderTrialIndicator();
+  renderTrialUpgradeChip();
+  if (isTrialExpired() && getTrialState().plan === 'trial') {
+    // Show banner on every page
+    showTrialExpiredBanner();
+    // Hard popup only once on load
+    setTimeout(() => showTrialExpiryPopup(), 800);
+  }
+
   try {
     nav('dashboard');
   } catch(err) {
@@ -7833,10 +7861,18 @@ async function loadSetupBanner() {
 }
 
 function nav(page, param){
+  // Trial expiry — hard block all non-profile pages
+  if (isExpired() && page !== 'dashboard') {
+    upgradePrompt('Trial expired — upgrade to restore access', 'landlord');
+    renderTrialIndicator();
+    renderTrialUpgradeChip();
+    return;
+  }
   // Plan gating — intercept restricted pages
   if(page==='mtd' && !isPortfolio()){ upgradePrompt('MTD Tax Reporting','portfolio'); return; }
   if((page==='financials'||page==='rent'||page==='insurance') && isStarter()){ upgradePrompt('Rent Tracking & Insurance','landlord'); return; }
   if(page==='contractors' && isStarter()){ upgradePrompt('Contractor Book','landlord'); return; }
+  if(page==='inventory-reports' && !isPortfolio()){ upgradePrompt('AI Inventory Reports','portfolio'); return; }
   const pageMap = {
     'prop-detail': 'properties',
     'tenant-detail': 'tenants',
@@ -10958,7 +10994,194 @@ function scanPropEPC(input) {
       if (parsed.rating) {
         const r = parsed.rating.toUpperCase().charAt(0);
         const sel = document.getElementById('p-epc');
-        if (sel) { for (const opt of sel.options) { if (opt.value.startsWith(r)) { sel.value = opt.value; break; } } }
+        if (sel) { for (const opt of sel.options) { if (opt.value.startsWith(r)) { sel.value = opt.value; break;     }
+  }
+}
+
+// ── TRIAL STATE ──
+const TRIAL_DAYS = 30;
+let _trialState = null; // { isTrialing, daysLeft, hasExpired, plan, expiresAt }
+
+function getTrialState() {
+  if (_trialState) return _trialState;
+  const up = D.userProfile || {};
+  const now = Date.now();
+  const started = up.trial_started_at ? new Date(up.trial_started_at).getTime() : null;
+  const expires = up.trial_expires_at ? new Date(up.trial_expires_at).getTime() : null;
+  const plan = up.plan || 'trial';
+  const daysLeft = expires ? Math.max(0, Math.ceil((expires - now) / 864e5)) : 0;
+  const isTrialing = plan === 'trial' && expires && now < expires;
+  const hasExpired = plan === 'trial' && expires && now >= expires;
+  _trialState = { isTrialing, daysLeft, hasExpired, plan, expiresAt: expires, startedAt: started };
+  return _trialState;
+}
+
+function isTrialActive() { const s = getTrialState(); return s.isTrialing; }
+function isTrialExpired() { const s = getTrialState(); return s.hasExpired; }
+function trialDaysLeft()  { const s = getTrialState(); return s.daysLeft; }
+
+/** Resolves the effective plan: full access during trial, actual plan after */
+function effectivePlan() {
+  const s = getTrialState();
+  if (s.isTrialing) return 'portfolio'; // full access during trial
+  if (s.hasExpired) return s.plan === 'trial' ? 'expired' : s.plan;
+  return s.plan === 'trial' ? 'portfolio' : s.plan;
+}
+
+/** Upserts trial_started_at + trial_expires_at to user_profiles on first login */
+async function _ensureTrialStarted() {
+  const up = D.userProfile;
+  if (!up) return;
+  if (up.trial_expires_at) return; // already set
+  const now = new Date();
+  const expires = new Date(now.getTime() + TRIAL_DAYS * 864e5);
+  const patch = { trial_started_at: now.toISOString(), trial_expires_at: expires.toISOString(), plan: 'trial' };
+  try {
+    await sb.from('user_profiles').upsert({ id: currentUser.id, ...patch }, { onConflict: 'id' });
+    D.userProfile = { ...up, ...patch };
+  } catch(e) { /* non-critical */ }
+  _trialState = null; // invalidate cache
+}
+
+// ── TRIAL EXPIRY UI ──
+function showTrialExpiryPopup() {
+  const daysAgo = Math.abs(trialDaysLeft()) || 0;
+  const tierCards = [
+    { plan:'starter',   label:'Starter',   price:'£4.99', limit:2,  desc:'Core compliance & documents',     highlight:false },
+    { plan:'landlord',  label:'Landlord',  price:'£9.99', limit:10, desc:'Rent tracking, insurance & bulk tools', highlight:true },
+    { plan:'portfolio', label:'Portfolio', price:'£23.99',limit:999,desc:'MTD Tax, AI Inventory & unlimited properties', highlight:false },
+  ];
+
+  openMo('Your free trial has ended', `${daysAgo > 0 ? `Expired ${daysAgo} day${daysAgo !== 1 ? 's' : ''} ago` : 'Expired today'}`, `
+    <div style="text-align:center;padding:8px 0 16px">
+      <div style="font-size:14px;color:var(--muted);margin-bottom:18px">To keep managing your properties, choose a plan below.<br>Your data is safe and waiting.</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+        ${tierCards.map(tc => `
+          <div style="border:2px solid ${tc.highlight?'var(--green)':'var(--border)'};border-radius:10px;padding:14px 10px;text-align:center;background:${tc.highlight?'var(--green-bg)':'var(--white)'};position:relative">
+            ${tc.highlight?'<span style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);font-size:10px;font-weight:700;background:var(--green);color:#fff;padding:2px 10px;border-radius:100px">Most popular</span>':''}
+            <div style="font-size:12px;font-weight:700;color:var(--navy);margin-top:${tc.highlight?'8px':'0'}">${tc.label}</div>
+            <div style="font-size:20px;font-weight:700;color:var(--green-dark);margin:6px 0">${tc.price}<span style="font-size:12px;font-weight:400">/mo</span></div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Founding price · Up to ${tc.limit} properties</div>
+            <div style="font-size:10px;color:var(--muted);margin-bottom:10px">${tc.desc}</div>
+            <a href="profile.html" class="btn ${tc.highlight?'btn-navy':'btn-sm'}" style="display:inline-block;text-decoration:none;width:100%;font-size:11px;padding:6px 0" onclick="closeMo()">Choose ${tc.label}</a>
+          </div>
+        `).join('')}
+      </div>
+      <div style="margin-top:14px;font-size:10px;color:var(--muted)">First 100 users lock founding price for life · All plans include 30-day trial</div>
+    </div>
+  `, `<button class="btn" onclick="sb.auth.signOut();window.location.href='login.html'">Log out</button>`);
+
+  // Remove close button — hard popup
+  const closeBtn = document.querySelector('#mo .mo-x');
+  if (closeBtn) closeBtn.style.display = 'none';
+}
+
+function showTrialExpiredBanner() {
+  const s = getTrialState();
+  const dateStr = s.expiresAt ? new Date(s.expiresAt).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : '';
+  const banner = document.getElementById('trial-expired-banner');
+  if (banner) {
+    banner.style.display = 'flex';
+    banner.innerHTML = `<span>⏰ Your trial ended on <strong>${dateStr}</strong>. <a href="profile.html" style="color:var(--navy);font-weight:700;text-decoration:underline">Upgrade to keep access →</a></span>`;
+  }
+}
+
+// ── TRIAL STATUS INDICATOR (header) ──
+function renderTrialIndicator() {
+  const s = getTrialState();
+  const el = document.getElementById('trial-indicator');
+  if (!el) return;
+  if (s.hasExpired && s.plan === 'trial') {
+    el.innerHTML = '<span style="color:var(--red);font-weight:700">⚠ Trial expired</span>';
+    el.style.background = 'var(--red-bg)';
+  } else if (s.isTrialing) {
+    const urgent = s.daysLeft <= 5;
+    el.innerHTML = `<span style="color:${urgent?'var(--red)':'var(--amber)'};font-weight:700">${urgent?'⚠ ':''}Trial — ${s.daysLeft} day${s.daysLeft!==1?'s':''} left</span>`;
+    el.style.background = urgent ? 'var(--red-bg)' : 'var(--amber-bg)';
+  } else if (s.plan !== 'trial') {
+    const planLabels = { starter:'Starter', landlord:'Landlord', portfolio:'Portfolio', pro:'Pro' };
+    el.innerHTML = `<span style="color:var(--green-dark);font-weight:700">${planLabels[s.plan]||'Plan'}</span>`;
+    el.style.background = 'var(--green-bg)';
+  }
+  el.style.display = 'inline-flex';
+}
+
+// ── MID-TRIAL UPGRADE CHIP (sidebar) ──
+function renderTrialUpgradeChip() {
+  const chip = document.getElementById('sb-trial-chip');
+  if (!chip) return;
+  const s = getTrialState();
+  if (s.isTrialing) {
+    chip.style.display = 'block';
+    chip.innerHTML = `<div style="background:linear-gradient(135deg,var(--green-bg),rgba(0,200,150,0.05));border:1px solid var(--green);border-radius:8px;padding:10px;margin:6px 10px;cursor:pointer;font-size:11px;text-align:center" onclick="showTrialUpgradeModal()">
+      <div style="font-weight:700;color:var(--green-dark)">🎁 Founding price — upgrade now</div>
+      <div style="color:var(--muted);margin-top:2px">First 100 users lock price for life</div>
+    </div>`;
+  } else if (s.hasExpired && s.plan === 'trial') {
+    chip.style.display = 'block';
+    chip.innerHTML = `<div style="background:var(--red-bg);border:1px solid var(--red);border-radius:8px;padding:10px;margin:6px 10px;cursor:pointer;font-size:11px;text-align:center" onclick="showTrialExpiryPopup()">
+      <div style="font-weight:700;color:var(--red)">⚠ Trial expired — upgrade now</div>
+    </div>`;
+  } else {
+    chip.style.display = 'none';
+  }
+}
+
+function showTrialUpgradeModal() {
+  const tierCards = [
+    { plan:'starter',   label:'Starter',   price:'£4.99', limit:2,  desc:'Core compliance & documents' },
+    { plan:'landlord',  label:'Landlord',  price:'£9.99', limit:10, desc:'Rent, insurance & bulk tools', highlight:true },
+    { plan:'portfolio', label:'Portfolio', price:'£23.99',limit:999,desc:'MTD Tax, AI Inventory & unlimited' },
+  ];
+  openMo('Upgrade your plan', `Founding prices — lock for life`, `
+    <div style="text-align:center;padding:8px 0">
+      <div style="font-size:13px;color:var(--muted);margin-bottom:14px">First 100 users lock founding price for life. You can upgrade anytime.</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+        ${tierCards.map(tc => `
+          <div style="border:2px solid ${tc.highlight?'var(--green)':'var(--border)'};border-radius:10px;padding:14px 10px;text-align:center;background:${tc.highlight?'var(--green-bg)':'var(--white)'};position:relative">
+            ${tc.highlight?'<span style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);font-size:10px;font-weight:700;background:var(--green);color:#fff;padding:2px 10px;border-radius:100px">Best value</span>':''}
+            <div style="font-size:12px;font-weight:700;color:var(--navy);margin-top:${tc.highlight?'8px':'0'}">${tc.label}</div>
+            <div style="font-size:20px;font-weight:700;color:var(--green-dark);margin:6px 0">${tc.price}<span style="font-size:12px;font-weight:400">/mo</span></div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Up to ${tc.limit} properties</div>
+            <a href="profile.html" class="btn ${tc.highlight?'btn-navy':'btn-sm'}" style="display:inline-block;text-decoration:none;width:100%;font-size:11px;padding:6px 0" onclick="closeMo()">Choose ${tc.label}</a>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `, `<button class="btn" onclick="closeMo()">Close</button>`);
+}
+
+// ── POST-TRIAL FEATURE GATE ──
+/** Hard block for expired trial users trying to access gated features */
+function trialFeatureGate(page) {
+  if (!isTrialExpired()) return false;
+  upgradePrompt('This feature requires a paid plan', 'landlord');
+  return true;
+}
+
+// ── TRIAL EMAIL TRIGGER (placeholder — called from cron or manually) ──
+async function sendTrialEmail(type) {
+  // type: 'day25' | 'day28' | 'day30' | 'expired'
+  const s = getTrialState();
+  const daysLeft = s.daysLeft;
+  const subjectMap = { day25:'5 days left in your trial', day28:'2 days left', day30:'Last day of your trial', expired:'Your trial has ended' };
+  const bodyMap = {
+    day25: `Your 30-day free trial ends in 5 days. Upgrade now to lock your founding price.`,
+    day28: `Only 2 days left in your RentSafe AI trial. Choose a plan to keep managing your properties.`,
+    day30: `Today is the last day of your trial. Upgrade now before access is restricted.`,
+    expired: `Your trial has ended. Upgrade to a paid plan to restore full access. Your data is safe.`
+  };
+  try {
+    await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        type:'send_email', to: currentUser.email,
+        subject: subjectMap[type] || 'Trial update',
+        html: `<div style="font-family:sans-serif;max-width:600px"><h2>RentSafe AI</h2><p>${bodyMap[type]}</p><p><a href="https://rentsafeai.co.uk/profile.html">Manage your plan →</a></p><p style="color:#999;font-size:11px">Sent by RentSafe AI</p></div>`
+      })
+    });
+  } catch(e) { /* non-critical */ }
+}
       }
       if (box) box.innerHTML = `<span style="font-size:20px">✅</span><div><div style="font-size:12px;font-weight:600;color:var(--green-dark)">✓ EPC scanned${parsed.rating?' — Rating '+parsed.rating.toUpperCase().charAt(0):''}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">${file.name}</div></div>`;
       toast('✓ EPC scanned — check fields below');

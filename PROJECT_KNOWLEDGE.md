@@ -120,6 +120,8 @@ rentsafeai/
 ├── session10_tenants_columns.sql    SQL migration: Session 10 (add missing tenants columns — rtr, rent_day, scheme_ref, etc.)
 ├── session10_esign_requests.sql     SQL migration: Session 10 (esign_requests table + RLS)
 ├── session13_inventory_reports.sql  SQL migration: Session 13 (inventory_reports table + RLS for report persistence)
+├── session14_tenant_checklist.sql   SQL migration: Session 14 (compliance_checklist JSONB column on tenants)
+├── session14_trial_fields.sql       SQL migration: Session 14 (trial fields on user_profiles — trial_started_at, trial_expires_at, plan, plan_activated_at)
 ├── SPRINT10_DEPLOY.md              Sprint 10 deployment guide
 ├── PROJECT_KNOWLEDGE.md            THIS FILE — agent initialization reference
 ├── fix.b64                         Binary patch (base64 encoded)
@@ -132,16 +134,16 @@ rentsafeai/
 
 ### HTML File Responsibilities
 
-| File | Purpose | Auth required |
-|---|---|---|
-| `index.html` | Marketing: hero, pricing, features, founder, FAQ | None |
-| `login.html` | Supabase email+password + Google OAuth + password reset | None |
-| `signup.html` | Account creation with password strength meter | None |
-| `profile.html` | Account details, personal info, Stripe subscription management | Yes — redirects to `login.html` |
-| `landlord.html` | Full landlord SPA — all dashboard modules | Yes — redirects to `login.html` |
-| `tenant.html` | Tenant portal — token-based, no Supabase auth needed | Token in URL or localStorage |
-| `esign.html` | Standalone e-sign page — landlord initiates, tenant counter-signs, both get full PDF | Token in URL + design token |
-| `mtd.html` | MTD tax module — standalone (Tailwind CSS) | Yes — uses Supabase session |
+| File | Purpose | Auth required | Notes |
+|---|---|---|---|
+| `index.html` | Marketing landing page — slate teal/amber palette (rebranded May 2026) | None | |
+| `login.html` | Supabase email+password + Google OAuth + password reset | None | |
+| `signup.html` | Account creation with password strength meter | None | |
+| `profile.html` | Account details, personal info, Stripe subscription management | Yes | |
+| `landlord.html` | Full landlord SPA — all dashboard modules | Yes | ~11,200 lines |
+| `tenant.html` | Tenant portal — token-based, no Supabase auth needed | Token | |
+| `esign.html` | Standalone e-sign page | Token | |
+| `mtd.html` | MTD tax module — standalone (Tailwind CSS) | Yes | |
 
 ---
 
@@ -637,6 +639,10 @@ Session 8 introduced a 3-checkbox pre-generation consent gate for 4 legal docume
 | 30 | `moFinancials` PDF marked "coming soon" but actually implemented | Documentation | **FIXED Session 13** — comment corrected |
 | 31 | Inventory report was modal-only, no persistence or tenant sharing | Feature gap | **FIXED Session 13** — full-page view, send-to-tenant with email body, DB persistence added |
 | 32 | Document Library had no inline preview | UX | **FIXED Session 13** — View button opens inline viewer |
+| 33 | Tenant wizard was 7-step, overly complex for basic tenant creation | UX | **FIXED Session 14** — replaced with single-screen fast-add modal |
+| 34 | No compliance checklist per tenant | Feature gap | **FIXED Session 14** — RAG checklist with 5 items, expandable accordion, JSONB persistence |
+| 35 | No free trial system — all users defaulted to portfolio | Feature gap | **FIXED Session 14** — 30-day trial with expiry popup, banner, indicator, email triggers |
+| 36 | No plan gating on inventory-reports page | Plan gating | **FIXED Session 14** — `nav()` now gates `inventory-reports` for non-Portfolio users |
 
 ---
 
@@ -1371,6 +1377,65 @@ When **touching any of these files for a new feature or bug fix**, follow this p
 - GitHub Pages HTTPS/SSL — needs enabling
 - MX record for `rentsafeai.co.uk` — DNS
 - `tenant-documents` Storage bucket — create in Supabase Dashboard
+
+---
+
+### Session 14 — May 2026 — Tenant Fast-Add + Compliance Checklist + Free Trial System
+**Date:** May 2026
+
+#### Tenant Onboarding — Fast-Add Modal
+- **Removed:** 7-step tenant wizard (~645 lines — `_renderTenantStep`, `_tenantStepHtml`, `tenantStepNext`, `tenantStepBack`, `tsAddrFile`)
+- **Replaced with:** Single-screen fast-add modal (`moTenant`) with 7 fields: name, email, phone, property, move-in date, rent, deposit + portal invite toggle
+- **Simplified insert:** `_saveTenantSetupToDB` reduced to ~80 lines — basic tenant insert with default `compliance_checklist` JSONB
+- **All 6 call sites preserved** — backwards-compatible `moTenant(pid)` signature
+
+#### RAG Compliance Checklist
+- **5 checklist items per tenant:** Right to Rent, ID documents, Tenancy agreement, Rent Guarantee Insurance, Buildings/Contents Insurance
+- **Auto-detect:** RTR checks `rtr_check_date` on tenant record; ID docs count uploaded documents from `tenant_documents`
+- **Insurance rows:** Manual-only — show "Unprotected" (red) until explicitly saved
+- **Display:** `pgTenants()` table shows 5 RAG dots column; `pgTenantDetail()` shows full expandable accordion with dropdown, detail input, date picker
+- **Persistence:** `compliance_checklist` JSONB column on `tenants` table. Falls back gracefully if column doesn't exist yet.
+- **New functions:** `CHECKLIST_ITEMS`, `_checklistDefault`, `_checklistRAG`, `_checklistRowHtml`, `toggleChecklistItem`, `_saveChecklistToDB`, `_onChecklistChange`, `_onChecklistDetailChange`, `_onChecklistDateChange`
+- **SQL migration:** `session14_tenant_checklist.sql`
+
+#### 30-Day Free Trial System
+- **Trial fields on `user_profiles`:** `trial_started_at`, `trial_expires_at`, `plan`, `plan_activated_at`
+- **On first login:** `_ensureTrialStarted()` auto-sets `trial_expires_at` to now + 30 days, `plan = 'trial'`
+- **During trial:** Full portfolio-level access — `effectivePlan()` returns `'portfolio'`
+- **Trial expiry (hard popup):** Non-dismissable modal with 3 tier cards (Starter/Landlord/Portfolio), founding prices, CTA links to `profile.html`. No close/X — user must upgrade or log out.
+- **Amber banner:** Shown on every page after trial expiry — "Your trial ended on [date]. Upgrade to keep access →"
+- **Header indicator:** Sidebar footer shows "Trial — X days left" (amber), turns red at ≤5 days. After upgrade shows plan name in green.
+- **Mid-trial upgrade chip:** Sidebar shows "🎁 Founding price — upgrade now" card during trial. Click opens tier card modal with X to dismiss.
+- **Post-trial gating:** `nav()` blocks all non-dashboard pages for expired trial users. `getPropLimit()` returns 0.
+- **Trial emails:** `sendTrialEmail(type)` — day 25 (5 days left), day 28 (2 days), day 30 (last day), expired. Sent via `ai-proxy` edge function. Called from cron or manually.
+- **Existing users:** SQL migration grandfaters existing users to `plan = 'portfolio'` with `trial_expires_at = now()` (trial ended).
+- **Plan resolution:** `effectivePlan()` is the single source of truth. Replaces `window._userPlan` for all feature gating.
+- **New functions:** `getTrialState`, `isTrialActive`, `isTrialExpired`, `trialDaysLeft`, `effectivePlan`, `isExpired`, `_ensureTrialStarted`, `showTrialExpiryPopup`, `showTrialExpiredBanner`, `renderTrialIndicator`, `renderTrialUpgradeChip`, `showTrialUpgradeModal`, `trialFeatureGate`, `sendTrialEmail`
+- **SQL migration:** `session14_trial_fields.sql`
+- **Stripe checkout:** All plan upgrade CTAs link to `profile.html` (placeholder — Stripe PHP checkout endpoints to be wired post-launch)
+
+#### Landing Page Rebrand (index.html) — Visual Differentiation from LetCompliance
+- **Colour palette replaced:** Navy/blue/grey enterprise scheme → warm slate teal + amber scheme
+  - `--navy #1B2F5E` → `--teal #2D6A6A` | `--blue #3B82F6` + `--gold #D4A853` → `--amber #E8923A`
+  - `--bg #F8FAFC` → `--bg #F8F6F1` (off-white warmth) | `--text #0F1F3D` → `--text #1E2A2A`
+  - All 4 variable renames applied globally + hardcoded `#131F35`, `#1a2a4a`, `#EFF6FF` hex values replaced
+- **Hero rewritten:** Founder-voice copy — "The Renters' Rights Act changes everything. Are your properties ready?" / "Built by a landlord who manages real properties..."
+- **CTA changed:** "Start free — no card needed" primary, "See what's changing on 31 May" secondary
+- **Dashboard mockup replaced:** Inline compliance score gauge SVG with gradient arc (no external assets)
+- **Urgency banner:** "Renters' Rights Act enforcement begins 31 May 2026 — are you compliant?" at page top
+- **Founder strip:** "Built by Saby — landlord, managing agent, and developer. 115+ compliance checks run." between hero and features
+- **Pricing cards:** "Founding member" amber badge + "Price locked for life" microcopy on all 3 tiers
+- **Preserved:** All navigation links, signup hrefs, pricing points, Crisp/Formspree wiring, footer links
+
+#### Modified Functions (Session 14)
+- `getUserPlan()` — now delegates to `effectivePlan()`
+- `getPropLimit()` — returns 0 for expired trial
+- `nav()` — adds expired trial block + `inventory-reports` gating (was missing)
+- `initApp()` — adds trial resolution, UI rendering
+- `moTenant()` — replaced wizard with fast-add modal
+- `_saveTenantSetupToDB()` — simplified to basic insert
+- `pgTenants()` — added compliance RAG dots column
+- `pgTenantDetail()` — added compliance checklist panel
 
 ---
 
