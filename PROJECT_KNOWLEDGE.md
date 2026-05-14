@@ -4,6 +4,12 @@
 > **Purpose:** Single point of truth for any agentic AI coding agent working on this project.
 > Read this file first before making any changes. Update it as new features are added or
 > architectural decisions are made.
+>
+> **Standing instruction:** After **every completed task** (feature, bug fix, refactor, config change,
+> schema migration, edge function change, etc.), the AI agent **must** append an entry to
+> [Section 13 — Feature Change Log](#13-feature-change-log) and update any other affected sections
+> (schema, file structure, known issues, business logic, etc.) to keep this document current.
+> Do not wait for the user to ask — do it automatically as part of task completion.
 
 ---
 
