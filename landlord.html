@@ -5807,27 +5807,144 @@ async function exportEvidenceBundle(tid) {
 
 function pgRent(){
   if (!canAccess('rent_tracking')) return;
-  const tot=D.properties.reduce((s,p)=>s+(p.rent||0),0);
-  const paid=D.rent.filter(r=>r.status==='Paid').reduce((s,r)=>s+(r.amount||0),0);
-  const due=D.rent.filter(r=>r.status==='Due').reduce((s,r)=>s+(r.amount||0),0);
-  return`<div class="topbar"><span class="tb-title">Rent</span><div class="tb-right"><button class="btn btn-navy" onclick="moAddPayment()">+ Record payment</button></div></div>
+  const filterProp = window._rentFilterProp || 'all';
+  const showProp = filterProp === 'all' ? D.properties : D.properties.filter(p => String(p.id) === filterProp);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const thisMonth = today.toISOString().slice(0,7);
+  const now = Date.now();
+
+  const propOpts = `<option value="all">All properties</option>${D.properties.map(p => `<option value="${p.id}"${filterProp===String(p.id)?' selected':''}>${p.address}${p.city?', '+p.city:''}</option>`).join('')}`;
+
+  // ── AUTO-GEN MISSING SCHEDULE ──
+  // For each active lead tenant with rent set, ensure current month record exists
+  D.tenants.filter(t => t.status === 'Active' && t.is_lead && t.rent > 0).forEach(t => {
+    const dueDay = Math.min(t.rent_day || 1, 28);
+    const dueThisMonth = new Date(today.getFullYear(), today.getMonth(), dueDay);
+    const dueStr = dueThisMonth.toISOString().slice(0,10);
+    const exists = D.rent.some(r =>
+      String(r.prop_id) === String(t.prop_id) && r.due_date === dueStr
+    );
+    if (!exists) {
+      D.rent.push({
+        id: 'auto_'+t.prop_id+'_'+dueStr, prop_id: t.prop_id, tenant_id: t.id,
+        amount: t.rent, due_date: dueStr, status: today > dueThisMonth ? 'Late' : dueThisMonth <= today ? 'Due' : 'Upcoming',
+        _auto: true
+      });
+    }
+  });
+
+  // ── SUMMARIES ──
+  let totalExpected = 0, totalCollected = 0, totalOutstanding = 0, totalLate = 0;
+  const propCards = showProp.filter(p => p.rent > 0 || D.tenants.some(t => String(t.prop_id) === String(p.id) && t.is_lead && t.rent > 0))
+    .map(p => {
+      const lead = D.tenants.find(t => String(t.prop_id) === String(p.id) && t.is_lead && t.status === 'Active');
+      const leadName = lead?.name || '—';
+      const leadRent = lead?.rent || p.rent || 0;
+      const rentDay = lead?.rent_day || 1;
+      const pid = String(p.id);
+
+      // Get all rent records for this property (real + auto), sorted by due_date desc
+      const records = D.rent
+        .filter(r => String(r.prop_id) === pid)
+        .sort((a,b) => new Date(b.due_date || b.due_date) - new Date(a.due_date || a.due_date));
+
+      const collected = records.filter(r => r.status === 'Paid').reduce((s,r) => s + (r.amount||0), 0);
+      const outstanding = records.filter(r => r.status === 'Due' || r.status === 'Late').reduce((s,r) => s + (r.amount||0), 0);
+      const lateCount = records.filter(r => r.status === 'Late').length;
+      totalExpected += collected + outstanding;
+      totalCollected += collected;
+      totalOutstanding += outstanding;
+      totalLate += lateCount;
+
+      const rows = records.slice(0, 6).map(r => {
+        const monthLabel = r.month || (r.due_date ? FMS(r.due_date) : '—');
+        const due = r.due_date ? new Date(r.due_date) : null;
+        const paid = r.paid_date ? new Date(r.paid_date) : null;
+        const isLate = r.status === 'Late';
+        const isDue = r.status === 'Due' && due && due < today;
+        const actualStatus = isDue ? 'Late' : r.status;
+        const daysOverdue = isLate && due ? Math.max(0, Math.floor((today - due) / 864e5)) : 0;
+        const statusLabel = r.status === 'Paid' ? `✓ Paid ${paid ? FMS(r.paid_date) : ''}`
+          : isLate ? `⚠ Late ${daysOverdue}d`
+          : r.status === 'Due' ? (due && due < today ? '⚠ Late' : 'Due')
+          : 'Upcoming';
+        const statusCol = r.status === 'Paid' ? 'var(--green-dark)'
+          : (isLate || isDue) ? 'var(--red)' : 'var(--amber)';
+        const actionBtn = r.status !== 'Paid'
+          ? `<button onclick="event.stopPropagation();markRentPaid('${r.id||r.prop_id}','${r.due_date||''}')" style="font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid var(--green-dark);background:var(--green-bg);color:var(--green-dark);cursor:pointer;font-family:var(--font);font-weight:600">Mark paid</button>`
+          : '';
+        return `<tr style="border-bottom:1px solid var(--border)">
+          <td style="font-size:11px">${monthLabel}</td>
+          <td>£${(r.amount||0).toLocaleString()}</td>
+          <td style="font-size:11px;color:var(--muted)">${FMS(r.due_date||'')}</td>
+          <td style="color:${statusCol};font-weight:500;font-size:11px">${statusLabel}</td>
+          <td style="text-align:right">${actionBtn}</td>
+        </tr>`;
+      }).join('');
+
+      const lateAlert = lateCount > 0 ? `<span style="font-size:10px;background:var(--red-bg);color:var(--red);padding:2px 7px;border-radius:100px;font-weight:600;margin-left:6px">${lateCount} late</span>` : '';
+
+      return `<div class="panel" style="margin-bottom:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border)">
+          <div style="flex:1">
+            <div style="font-size:14px;font-weight:700;color:var(--text)">${p.address}${p.city?', '+p.city:''} ${lateAlert}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">Lead: ${leadName} · £${leadRent.toLocaleString()}/mo · Due ${rentDay}${rentDay===1?'st':rentDay===2?'nd':rentDay===3?'rd':'th'}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:11px;color:var(--green-dark);font-weight:600">£${collected.toLocaleString()} collected</div>
+            ${outstanding > 0 ? `<div style="font-size:11px;color:var(--red);font-weight:600">£${outstanding.toLocaleString()} outstanding</div>` : ''}
+          </div>
+        </div>
+        <div style="padding:0 18px 10px">
+          ${records.length ? `<div class="tw"><table style="width:100%">
+            <thead><tr><th style="font-size:10px">Month</th><th style="font-size:10px">Amount</th><th style="font-size:10px">Due</th><th style="font-size:10px">Status</th><th style="font-size:10px"></th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table></div>` : `<div style="color:var(--muted);font-size:12px;padding:8px 0">No rent records yet — adding a tenant with rent amount auto-generates the schedule.</div>`}
+        </div>
+      </div>`;
+    }).join('');
+
+  return `<div class="topbar"><span class="tb-title">Rent Tracker</span><div class="tb-right">
+    <select onchange="window._rentFilterProp=this.value;nav('rent')" style="font-size:12px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);font-family:var(--font);margin-right:8px">${propOpts}</select>
+    <button class="btn btn-navy" onclick="moAddPayment()">+ Record payment</button>
+  </div></div>
   <div class="content">
-    <div class="ph"><h1>Rent</h1><p>Track payments across your portfolio</p></div>
+    <div class="ph"><h1>Rent Tracker</h1><p>Per-property view — auto-generated from tenant rent data. ${filterProp==='all'?'':'Filtered to one property.'}</p></div>
     <div class="metrics metrics-3">
-      <div class="mc"><div class="mc-top"><span class="mc-label">Collected</span></div><div class="mc-val" style="color:var(--green-dark)">£${paid.toLocaleString()}</div><div class="mc-sub">of £${tot.toLocaleString()} expected</div></div>
-      <div class="mc"><div class="mc-top"><span class="mc-label">Outstanding</span></div><div class="mc-val" style="color:var(--amber)">£${due.toLocaleString()}</div></div>
-      <div class="mc"><div class="mc-top"><span class="mc-label">Late payments</span></div><div class="mc-val" style="color:var(--red)">${D.rent.filter(r=>r.status==='Late').length}</div></div>
+      <div class="mc"><div class="mc-top"><span class="mc-label">Expected this month</span></div><div class="mc-val" style="color:var(--text)">£${totalExpected.toLocaleString()}</div></div>
+      <div class="mc"><div class="mc-top"><span class="mc-label">Collected</span></div><div class="mc-val" style="color:var(--green-dark)">£${totalCollected.toLocaleString()}</div><div class="mc-sub">${totalExpected>0?Math.round(totalCollected/totalExpected*100):0}% collected</div></div>
+      <div class="mc"><div class="mc-top"><span class="mc-label">Overdue</span></div><div class="mc-val" style="color:${totalLate>0?'var(--red)':'var(--muted)'}">£${totalOutstanding.toLocaleString()}</div><div class="mc-sub">${totalLate} late payment${totalLate!==1?'s':''}</div></div>
     </div>
-    ${D.rent.length?`<div class="panel"><div class="tw"><table>
-      <thead><tr><th>Property</th><th>Month</th><th>Amount</th><th>Due</th><th>Paid</th><th>Status</th><th></th></tr></thead>
-      <tbody>${D.rent.map(r=>{const p=P(r.prop_id)||{address:'—',city:''};return`<tr>
-        <td class="td-bold">${p.address}</td><td>${r.month}</td>
-        <td>£${(r.amount||0).toLocaleString()}</td><td>${FMS(r.due||r.due_date)}</td>
-        <td>${r.paid||r.paid_date?FMS(r.paid||r.paid_date):'—'}</td><td>${B(r.status)}</td>
-        <td><button onclick="moAddPayment('${r.prop_id}',${r.id})" style="font-size:11px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:none;cursor:pointer;font-family:var(--font)">Edit</button></td>
-      </tr>`}).join('')}</tbody>
-    </table></div></div>`:'<div class="empty"><div class="empty-ic">💷</div><div class="empty-t">No rent records yet</div></div>'}
+    ${propCards || '<div class="empty"><div class="empty-ic">💷</div><div class="empty-t">No rent to track</div><div class="empty-s">Add a tenant with a rent amount to auto-generate the rent schedule. Then mark payments as received.</div></div>'}
   </div>`;
+}
+
+/** One-click mark as paid from the rent tracker card */
+async function markRentPaid(idOrPid, dueDate) {
+  const rec = D.rent.find(r => String(r.id) === String(idOrPid));
+  const today = new Date().toISOString().slice(0,10);
+  try {
+    if (rec && !rec._auto) {
+      const { error } = await sb.from('rent_payments').update({ status:'Paid', paid_date:today }).eq('id', rec.id);
+      if (error) { toast('Error: ' + error.message, true); return; }
+      rec.status = 'Paid'; rec.paid_date = today;
+    } else {
+      // Auto-generated record or by due_date — insert new
+      const prop_id = rec?.prop_id || idOrPid;
+      const amount = rec?.amount || D.tenants.find(t => String(t.prop_id) === String(prop_id) && t.is_lead)?.rent || 0;
+      const lead = D.tenants.find(t => String(t.prop_id) === String(prop_id) && t.is_lead && t.status === 'Active');
+      const { data, error } = await sb.from('rent_payments').insert({
+        prop_id: String(prop_id), tenant_id: lead?.id || null, user_id: currentUser.id,
+        amount, due_date: rec?.due_date || dueDate, status: 'Paid', paid_date: today
+      }).select().single();
+      if (error) { toast('Error: ' + error.message, true); return; }
+      // Remove auto placeholder, add real record
+      if (rec) { const idx = D.rent.indexOf(rec); if (idx > -1) D.rent[idx] = data; }
+      else { D.rent.unshift(data); }
+    }
+    toast('✓ Payment recorded');
+    nav('rent');
+  } catch(e) { _logError('markRentPaid', e); toast('Error — please try again', true); }
 }
 
 function moAddPayment(prefPropId, editId) {
@@ -5904,7 +6021,9 @@ async function savePayment(editId) {
 /** Writes payment to rent_payments only. Returns { success, error?, data? } */
 async function savePaymentRecord(payload, editId) {
   const { prop_id, amount, due, paid, status } = payload;
-  const dp = { prop_id, amount, due_date:due||null, paid_date:paid||null, status };
+  // Auto-lookup lead tenant for this property
+  const lead = D.tenants.find(t => String(t.prop_id) === String(prop_id) && t.is_lead && t.status === 'Active');
+  const dp = { prop_id, amount, due_date:due||null, paid_date:paid||null, status, tenant_id: lead?.id || null };
   try {
     if (editId) {
       const { error } = await sb.from('rent_payments').update(dp).eq('id', editId);
