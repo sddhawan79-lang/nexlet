@@ -510,6 +510,57 @@ tr:hover td{background:rgba(246,248,251,.8)}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
 <script>
+// ── PLAN FEATURE GATES ──────────────────────────────────────────
+const PLAN_FEATURES = {
+  trial:     { propertyLimit: Infinity, features: ['all'] },
+  starter:   { propertyLimit: 2,        features: ['compliance_score','legal_docs','starter_kit','cert_alerts','tenant_portal','s8_generator','ai_assistant','maintenance','contractor_book','deposit_alerts','compliance_calendar'] },
+  landlord:  { propertyLimit: 10,       features: ['compliance_score','legal_docs','starter_kit','cert_alerts','tenant_portal','s8_generator','ai_assistant','maintenance','contractor_book','deposit_alerts','compliance_calendar','bulk_docs','portfolio_health','audit_log','rent_tracking','insurance_tracking'] },
+  portfolio: { propertyLimit: Infinity, features: ['all'] }
+};
+
+function canAccess(feature) {
+  const profile = window.currentUserProfile;
+  if (!profile) return false;
+  const plan = profile.plan || 'trial';
+  const status = profile.plan_status || 'active';
+  if (plan === 'trial') {
+    if (new Date() < new Date(profile.trial_ends_at)) return true;
+    showUpgradeWall('trial_expired'); return false;
+  }
+  if (['canceled','expired'].includes(status)) { showUpgradeWall('lapsed'); return false; }
+  const allowed = PLAN_FEATURES[plan]?.features || [];
+  if (allowed.includes('all') || allowed.includes(feature)) return true;
+  showUpgradeWall(feature); return false;
+}
+
+function canAddProperty() {
+  const profile = window.currentUserProfile;
+  const plan = profile?.plan || 'trial';
+  if (plan === 'trial' && new Date() < new Date(profile.trial_ends_at)) return true;
+  const limit = PLAN_FEATURES[plan]?.propertyLimit ?? 0;
+  return (window.propertyCount || 0) < limit;
+}
+
+function showUpgradeWall(reason) {
+  const messages = {
+    trial_expired: { title: 'Your free trial has ended', body: 'Choose a plan to keep access to your compliance dashboard.' },
+    lapsed:        { title: 'Subscription inactive',    body: 'Reactivate your plan to continue.' },
+    property_limit:{ title: 'Property limit reached',   body: 'You have reached the maximum number of properties for your plan.' },
+    rent_tracking:     { title: 'Rent tracking is a Landlord feature', body: 'Upgrade to track payments, send receipts and get overdue alerts.' },
+    insurance_tracking:{ title: 'Insurance tracking is a Landlord feature', body: 'Upgrade to track all policies and get expiry alerts.' },
+    bulk_docs:         { title: 'Bulk document generation is a Landlord feature', body: 'Upgrade to generate documents across your entire portfolio in one click.' },
+    portfolio_health:  { title: 'Portfolio health overview is a Landlord feature', body: 'Upgrade to see your full portfolio compliance at a glance.' },
+    audit_log:         { title: 'Compliance audit log is a Landlord feature', body: 'Upgrade to access your full audit trail.' },
+    mtd_reporting:     { title: 'MTD tax reporting is a Portfolio feature', body: 'Upgrade to Portfolio for MTD-ready tax reporting.' },
+    ai_inventory:      { title: 'AI inventory reports are a Portfolio feature', body: 'Upgrade to Portfolio for AI-generated inventory reports.' },
+  };
+  const m = messages[reason] || { title: 'Upgrade required', body: 'This feature is not included in your current plan.' };
+  document.getElementById('uw-title').textContent = m.title;
+  document.getElementById('uw-body').textContent  = m.body;
+  document.getElementById('upgrade-wall').style.display = 'flex';
+}
+// ─────────────────────────────────────────────────────────────────
+
 // ══════════════════════════════════════════════════════════════
 // RENTSAFE AI — CODE MAP (auto-generated, update each session)
 // File: landlord.html · Lines: ~3973
@@ -1459,6 +1510,7 @@ async function scanDoc(input){
 
 // ── MODAL: ADD PROPERTY (5-step guided flow) ──
 function moAddProp(){
+  if (!canAddProperty()) { showUpgradeWall('property_limit'); return; }
   const limit=getPropLimit();
   if(D.properties.length >= limit){ upgradePrompt('Add more properties','portfolio'); return; }
   document.getElementById('mo-t').textContent = 'Add property';
@@ -2347,6 +2399,7 @@ function _setBulkFiles(files) {
 }
 
 async function runBulkScan() {
+  if (!canAccess('bulk_docs')) return;
   const btn = document.getElementById('bulk-scan-btn');
   if (btn) { btn.disabled=true; btn.innerHTML='<span class="spin"></span>Scanning…'; }
   const files = window._bulkScan.files;
@@ -5753,6 +5806,7 @@ async function exportEvidenceBundle(tid) {
 
 
 function pgRent(){
+  if (!canAccess('rent_tracking')) return;
   const tot=D.properties.reduce((s,p)=>s+(p.rent||0),0);
   const paid=D.rent.filter(r=>r.status==='Paid').reduce((s,r)=>s+(r.amount||0),0);
   const due=D.rent.filter(r=>r.status==='Due').reduce((s,r)=>s+(r.amount||0),0);
@@ -6580,6 +6634,7 @@ async function updateIssueStatus(id,status){
 
 // ── PAGE: INSURANCE ──
 function pgInsurance(){
+  if (!canAccess('insurance_tracking')) return;
   const INS_TYPES = ['Buildings Insurance','Landlord Contents Insurance','Rent Guarantee Insurance'];
   const INS_ICONS = {'Buildings Insurance':'🏠','Landlord Contents Insurance':'🛋','Rent Guarantee Insurance':'💰'};
   const expiring = D.insurance.filter(i=>i.expiry&&Math.round((new Date(i.expiry)-new Date())/864e5)<60&&Math.round((new Date(i.expiry)-new Date())/864e5)>=0);
@@ -11302,5 +11357,17 @@ function acceptCookies(){localStorage.setItem('rsa_cookies','accepted');document
 function declineCookies(){localStorage.setItem('rsa_cookies','essential');document.getElementById('cookie-banner').style.display='none';}
 (function(){if(!localStorage.getItem('rsa_cookies')){document.getElementById('cookie-banner').style.display='flex';}})();
 </script>
+
+<div id="upgrade-wall" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:#0D1626;border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:40px;max-width:460px;width:90%;text-align:center;">
+    <div style="font-size:2.2rem;margin-bottom:14px;">🔒</div>
+    <h2 id="uw-title" style="color:#fff;margin-bottom:8px;font-size:1.2rem;"></h2>
+    <p id="uw-body" style="color:rgba(255,255,255,0.5);margin-bottom:24px;font-size:0.88rem;line-height:1.5;"></p>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <button onclick="window.location.href='index.html#pricing'" style="background:#2DD4BF;color:#0D1626;border:none;border-radius:8px;padding:13px;font-weight:700;cursor:pointer;">View Plans</button>
+      <button onclick="document.getElementById('upgrade-wall').style.display='none'" style="background:transparent;color:rgba(255,255,255,0.3);border:none;padding:8px;cursor:pointer;font-size:0.8rem;">Maybe later</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>

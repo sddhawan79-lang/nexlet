@@ -1465,6 +1465,16 @@ When **touching any of these files for a new feature or bug fix**, follow this p
 - **Column fix:** `month` and `notes` columns removed from DB payload until SQL migration (`session14_rent_payments.sql`) is run, which adds them via `ALTER TABLE ADD COLUMN IF NOT EXISTS`.
 - **No plan gating** in either function — payment recording works for all tiers.
 - **Known issue #22 fixed** — `session14_rent_payments.sql` created with full table schema + RLS.
+#### Plan Feature Gates + Upgrade Wall (May 2026)
+- **`PLAN_FEATURES`** added at top of script — defines property limits and feature lists per plan tier
+  - Trial/Portfolio: all features, unlimited properties
+  - Starter: 2 properties, core features only (no rent, insurance, bulk, portfolio health, audit)
+  - Landlord: 10 properties, core + rent/insurance/bulk/health/audit (no MTD/AI inventory)
+- **`canAccess(feature)`** — checks `window.currentUserProfile` for plan/status. Returns false with upgrade wall for expired trials, lapsed subscriptions, or missing features.
+- **`canAddProperty()`** — checks property count against plan limit. Trial users bypass during active trial.
+- **`showUpgradeWall(reason)`** — fullscreen dark overlay with reason-specific title/body + "View Plans" button + "Maybe later" dismiss.
+- **Gated:** `moAddProp`, `pgRent`, `pgInsurance`, `runBulkScan` — prepended with `canAccess()`/`canAddProperty()`.
+- **Pricing (index.html):** Starter £5.99/£9.99, Landlord £12.99/£19.99, Portfolio £24.99/£39.99. "+ VAT" removed.
 
 ---
 

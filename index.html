@@ -733,8 +733,8 @@ footer { background:var(--teal-dark); border-top:1px solid rgba(255,255,255,0.05
         <div class="pc-name">Starter</div>
         <div class="pc-props">Up to 2 properties</div>
         <span class="pc-founding">🏅 Founding member</span>
-        <div class="pc-price-row"><span class="pc-amount" id="starter-price">£4.99</span><span class="pc-period">/mo + VAT</span></div>
-        <span class="pc-standard" id="starter-standard">Standard: £7.99/mo + VAT</span>
+        <div class="pc-price-row"><span class="pc-amount" id="starter-price">£5.99</span><span class="pc-period">/mo</span></div>
+        <span class="pc-standard" id="starter-standard">Standard: £9.99/mo</span>
         <div class="pc-lock" style="margin-top:2px">🔒 Price locked for life</div>
         <a href="signup.html" class="pc-btn pc-btn-o">Start free trial</a>
         <div class="pc-div"></div>
@@ -752,8 +752,8 @@ footer { background:var(--teal-dark); border-top:1px solid rgba(255,255,255,0.05
         <div class="pc-name">Landlord</div>
         <div class="pc-props">Up to 10 properties</div>
         <span class="pc-founding">🏅 Founding member</span>
-        <div class="pc-price-row"><span class="pc-amount" id="landlord-price">£9.99</span><span class="pc-period">/mo + VAT</span></div>
-        <span class="pc-standard" id="landlord-standard">Standard: £14.99/mo + VAT</span>
+        <div class="pc-price-row"><span class="pc-amount" id="landlord-price">£12.99</span><span class="pc-period">/mo</span></div>
+        <span class="pc-standard" id="landlord-standard">Standard: £19.99/mo</span>
         <div class="pc-lock" style="margin-top:2px">🔒 Price locked for life</div>
         <a href="signup.html" class="pc-btn pc-btn-p">Start free trial</a>
         <div class="pc-div"></div>
@@ -770,8 +770,8 @@ footer { background:var(--teal-dark); border-top:1px solid rgba(255,255,255,0.05
         <div class="pc-name">Portfolio</div>
         <div class="pc-props">Unlimited properties</div>
         <span class="pc-founding">🏅 Founding member</span>
-        <div class="pc-price-row"><span class="pc-amount" id="portfolio-price">£23.99</span><span class="pc-period">/mo + VAT</span></div>
-        <span class="pc-standard" id="portfolio-standard">Standard: £39.99/mo + VAT</span>
+        <div class="pc-price-row"><span class="pc-amount" id="portfolio-price">£24.99</span><span class="pc-period">/mo</span></div>
+        <span class="pc-standard" id="portfolio-standard">Standard: £39.99/mo</span>
         <div class="pc-lock" style="margin-top:2px">🔒 Price locked for life</div>
         <a href="signup.html" class="pc-btn pc-btn-o">Start free trial</a>
         <div class="pc-div"></div>
@@ -947,9 +947,9 @@ function switchTab(id, btn) {
 
 // BILLING TOGGLE
 const prices = {
-  starter:   { founding:{m:'£4.99',a:'£3.99'}, standard:{m:'£7.99',a:'£6.66'} },
-  landlord:  { founding:{m:'£9.99',a:'£8.33'}, standard:{m:'£14.99',a:'£12.49'} },
-  portfolio: { founding:{m:'£23.99',a:'£19.99'}, standard:{m:'£39.99',a:'£33.32'} },
+  starter:   { founding:{m:'£5.99',a:'£4.99'}, standard:{m:'£9.99',a:'£8.32'} },
+  landlord:  { founding:{m:'£12.99',a:'£10.82'}, standard:{m:'£19.99',a:'£16.66'} },
+  portfolio: { founding:{m:'£24.99',a:'£20.82'}, standard:{m:'£39.99',a:'£33.32'} },
 };
 let isAnnual = false;
 function toggleBilling() {
@@ -958,7 +958,7 @@ function toggleBilling() {
   document.getElementById('monthly-label').classList.toggle('active', !isAnnual);
   document.getElementById('annual-label').classList.toggle('active', isAnnual);
   const p = isAnnual ? 'a' : 'm';
-  const pl = isAnnual ? '/mo + VAT (billed annually)' : '/mo + VAT';
+  const pl = isAnnual ? '/mo (billed annually)' : '/mo';
   for (const [plan, d] of Object.entries(prices)) {
     const a = document.getElementById(plan+'-price');
     const s = document.getElementById(plan+'-standard');
