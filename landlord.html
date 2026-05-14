@@ -520,7 +520,7 @@ const PLAN_FEATURES = {
 
 function canAccess(feature) {
   const profile = window.currentUserProfile;
-  if (!profile) return false;
+  if (!profile) return true; // no profile yet — default to full access
   const plan = profile.plan || 'trial';
   const status = profile.plan_status || 'active';
   if (plan === 'trial') {
@@ -535,8 +535,9 @@ function canAccess(feature) {
 
 function canAddProperty() {
   const profile = window.currentUserProfile;
-  const plan = profile?.plan || 'trial';
-  if (plan === 'trial' && new Date() < new Date(profile.trial_ends_at)) return true;
+  if (!profile) return true;
+  const plan = profile.plan || 'trial';
+  if (plan === 'trial' && profile.trial_ends_at && new Date() < new Date(profile.trial_ends_at)) return true;
   const limit = PLAN_FEATURES[plan]?.propertyLimit ?? 0;
   return (window.propertyCount || 0) < limit;
 }
