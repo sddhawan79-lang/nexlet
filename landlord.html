@@ -10,13 +10,13 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --navy:#0B1E3D;--navy-mid:#132847;
-  --green:#00C896;--green-dark:#009970;--green-bg:rgba(0,200,150,0.1);
+  --navy:#2D6A6A;--navy-mid:#1F4D4D;
+  --green:#E8923A;--green-dark:#B86E20;--green-bg:rgba(232,146,58,0.1);
   --blue:#3B6FE8;--blue-bg:rgba(59,111,232,0.09);
   --red:#E53E3E;--red-bg:rgba(229,62,62,0.09);
   --amber:#D97706;--amber-bg:rgba(217,119,6,0.09);
-  --white:#fff;--off:#F6F8FB;--border:#E4EAF1;
-  --txt:#1A2B45;--muted:#7A8FA6;
+  --white:#fff;--off:#F8F6F1;--border:#D8D4CC;
+  --txt:#1E2A2A;--muted:#6B7A7A;
   --font:'DM Sans',system-ui,sans-serif;
   --disp:'DM Serif Display',Georgia,serif;
   --sb:228px;
@@ -688,7 +688,7 @@ KEY WORKFLOWS:
 - Log maintenance issues: Maintenance page or property > Maintenance tab
 - Tenant portal: each tenant gets unique invite link (no login) — manage in Tenants
 
-PRICING (founding member rates — first 100 users locked for life): Starter £4.99/mo founding (£7.99 standard, up to 2 properties), Landlord £9.99/mo founding (£14.99 standard, up to 10 properties, most popular), Portfolio £23.99/mo founding (£39.99 standard, unlimited properties, includes MTD tax reporting). Annual billing saves 2 months (Starter £3.99, Landlord £8.33, Portfolio £19.99). All plans: 30-day free trial, no card required. Manage billing at profile.html (Account & Billing).
+PRICING (founding member rates — first 100 users locked for life): Starter £4.99/mo founding (£7.99 standard, 1 property), Landlord £6.99/mo founding (£12.99 standard, 2-5 properties, most popular), Portfolio £11.99/mo founding (£23.99 standard, 6-15 properties), Pro £17.99/mo founding (£34.99 standard, unlimited). All plans: 30-day free trial, no card required. Manage billing at profile.html (Account & Billing).
 
 UK LAW EXPERTISE:
 - Renters Rights Act 2025 (in force 1 May 2026): Section 21 abolished, all tenancies now periodic assured tenancies, Written Statement of Terms replaces AST, pet permission within 42 days, Decent Homes Standard extended to private sector
@@ -949,7 +949,6 @@ async function initApp() {
   document.getElementById('th-av').textContent = email.slice(0,2).toUpperCase();
 
   try { await loadData(); } catch(e) { _logError('loadData', e); }
-
   // ── TRIAL RESOLUTION (inline — avoids hoisting issues) ──
   (function(){
     const up = D.userProfile||{};
@@ -5776,6 +5775,33 @@ function pgRent(){
   </div>`;
 }
 
+/** One-click mark as paid from the rent tracker card */
+async function markRentPaid(idOrPid, dueDate) {
+  const rec = D.rent.find(r => String(r.id) === String(idOrPid));
+  const today = new Date().toISOString().slice(0,10);
+  try {
+    if (rec && !rec._auto) {
+      const { error } = await sb.from('rent_payments').update({ status:'Paid', paid_date:today }).eq('id', rec.id);
+      if (error) { toast('Error: ' + error.message, true); return; }
+      rec.status = 'Paid'; rec.paid_date = today;
+    } else {
+      // Auto-generated record or by due_date — insert new
+      const prop_id = rec?.prop_id || idOrPid;
+      const amount = rec?.amount || D.tenants.find(t => String(t.prop_id) === String(prop_id) && t.is_lead)?.rent || 0;
+      const lead = D.tenants.find(t => String(t.prop_id) === String(prop_id) && t.is_lead && t.status === 'Active');
+      const { data, error } = await sb.from('rent_payments').insert({
+        prop_id: String(prop_id), tenant_id: lead?.id || null, user_id: currentUser.id,
+        amount, due_date: rec?.due_date || dueDate, status: 'Paid', paid_date: today
+      }).select().single();
+      if (error) { toast('Error: ' + error.message, true); return; }
+      // Remove auto placeholder, add real record
+      if (rec) { const idx = D.rent.indexOf(rec); if (idx > -1) D.rent[idx] = data; }
+      else { D.rent.unshift(data); }
+    }
+    toast('✓ Payment recorded');
+    nav('rent');
+  } catch(e) { _logError('markRentPaid', e); toast('Error — please try again', true); }
+}
 function moAddPayment(prefPropId, editId) {
   const rec = editId ? D.rent.find(r=>String(r.id)===String(editId)) : null;
   const propOpts = D.properties.map(p=>`<option value="${p.id}"${String(p.id)===(rec?String(rec.prop_id):String(prefPropId||''))?' selected':''}>${p.address}${p.city?', '+p.city:''}</option>`).join('');
@@ -5850,7 +5876,9 @@ async function savePayment(editId) {
 /** Writes payment to rent_payments only. Returns { success, error?, data? } */
 async function savePaymentRecord(payload, editId) {
   const { prop_id, amount, due, paid, status } = payload;
-  const dp = { prop_id, amount, due_date:due||null, paid_date:paid||null, status };
+  // Auto-lookup lead tenant for this property
+  const lead = D.tenants.find(t => String(t.prop_id) === String(prop_id) && t.is_lead && t.status === 'Active');
+  const dp = { prop_id, amount, due_date:due||null, paid_date:paid||null, status, tenant_id: lead?.id || null };
   try {
     if (editId) {
       const { error } = await sb.from('rent_payments').update(dp).eq('id', editId);
@@ -11097,9 +11125,9 @@ async function _ensureTrialStarted() {
 function showTrialExpiryPopup() {
   const daysAgo = Math.abs(trialDaysLeft()) || 0;
   const tierCards = [
-    { plan:'starter',   label:'Starter',   price:'£4.99', limit:2,  desc:'Core compliance & documents',     highlight:false },
-    { plan:'landlord',  label:'Landlord',  price:'£9.99', limit:10, desc:'Rent tracking, insurance & bulk tools', highlight:true },
-    { plan:'portfolio', label:'Portfolio', price:'£23.99',limit:999,desc:'MTD Tax, AI Inventory & unlimited properties', highlight:false },
+    { plan:'starter',   label:'Starter',   price:'£4.99', limit:1,  desc:'Core compliance & documents',     highlight:false },
+    { plan:'landlord',  label:'Landlord',  price:'£6.99', limit:5,  desc:'Rent tracking, insurance & bulk tools', highlight:true },
+    { plan:'portfolio', label:'Portfolio', price:'£11.99',limit:15, desc:'MTD Tax, AI Inventory & unlimited properties', highlight:false },
   ];
 
   openMo('Your free trial has ended', `${daysAgo > 0 ? `Expired ${daysAgo} day${daysAgo !== 1 ? 's' : ''} ago` : 'Expired today'}`, `
@@ -11113,7 +11141,7 @@ function showTrialExpiryPopup() {
             <div style="font-size:20px;font-weight:700;color:var(--green-dark);margin:6px 0">${tc.price}<span style="font-size:12px;font-weight:400">/mo</span></div>
             <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Founding price · Up to ${tc.limit} properties</div>
             <div style="font-size:10px;color:var(--muted);margin-bottom:10px">${tc.desc}</div>
-            <a href="profile.html" class="btn ${tc.highlight?'btn-navy':'btn-sm'}" style="display:inline-block;text-decoration:none;width:100%;font-size:11px;padding:6px 0" onclick="closeMo()">Choose ${tc.label}</a>
+            <button class="btn ${tc.highlight?'btn-navy':'btn-sm'}" style="width:100%;font-size:11px;padding:6px 0;cursor:pointer" onclick="closeMo();redirectToCheckout('${tc.plan}')">Choose ${tc.label}</button>
           </div>
         `).join('')}
       </div>
@@ -11179,9 +11207,9 @@ function renderTrialUpgradeChip() {
 
 function showTrialUpgradeModal() {
   const tierCards = [
-    { plan:'starter',   label:'Starter',   price:'£4.99', limit:2,  desc:'Core compliance & documents' },
-    { plan:'landlord',  label:'Landlord',  price:'£9.99', limit:10, desc:'Rent, insurance & bulk tools', highlight:true },
-    { plan:'portfolio', label:'Portfolio', price:'£23.99',limit:999,desc:'MTD Tax, AI Inventory & unlimited' },
+    { plan:'starter',   label:'Starter',   price:'£4.99', limit:1,  desc:'Core compliance & documents' },
+    { plan:'landlord',  label:'Landlord',  price:'£6.99', limit:5,  desc:'Rent, insurance & bulk tools', highlight:true },
+    { plan:'portfolio', label:'Portfolio', price:'£11.99',limit:15, desc:'Portfolio health & 6–15 properties' },
   ];
   openMo('Upgrade your plan', `Founding prices — lock for life`, `
     <div style="text-align:center;padding:8px 0">
@@ -11193,7 +11221,7 @@ function showTrialUpgradeModal() {
             <div style="font-size:12px;font-weight:700;color:var(--navy);margin-top:${tc.highlight?'8px':'0'}">${tc.label}</div>
             <div style="font-size:20px;font-weight:700;color:var(--green-dark);margin:6px 0">${tc.price}<span style="font-size:12px;font-weight:400">/mo</span></div>
             <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Up to ${tc.limit} properties</div>
-            <a href="profile.html" class="btn ${tc.highlight?'btn-navy':'btn-sm'}" style="display:inline-block;text-decoration:none;width:100%;font-size:11px;padding:6px 0" onclick="closeMo()">Choose ${tc.label}</a>
+            <button class="btn ${tc.highlight?'btn-navy':'btn-sm'}" style="width:100%;font-size:11px;padding:6px 0;cursor:pointer" onclick="closeMo();redirectToCheckout('${tc.plan}')">Choose ${tc.label}</button>
           </div>
         `).join('')}
       </div>
@@ -11302,5 +11330,6 @@ function acceptCookies(){localStorage.setItem('rsa_cookies','accepted');document
 function declineCookies(){localStorage.setItem('rsa_cookies','essential');document.getElementById('cookie-banner').style.display='none';}
 (function(){if(!localStorage.getItem('rsa_cookies')){document.getElementById('cookie-banner').style.display='flex';}})();
 </script>
+
 </body>
 </html>
