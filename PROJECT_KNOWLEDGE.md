@@ -1483,12 +1483,16 @@ When **touching any of these files for a new feature or bug fix**, follow this p
 - **No plan gating** in either function — payment recording works for all tiers.
 - **Known issue #22 fixed** — `session14_rent_payments.sql` created with full table schema + RLS.
 
-### Session 15 — May 2026 — Stripe Checkout Fixes
-**Date:** May 2026
-- **`stripe-checkout-index.ts:35`** — BASE_URL corrected from `https://rentsafeai.co.uk` to `https://nexlet.co.uk` (post-rebrand fix). The old domain would redirect users to the wrong URL after Stripe checkout.
-- **`stripe-checkout-index.ts:44`** — CORS headers fixed: added `Access-Control-Allow-Methods: POST, OPTIONS` to resolve "Cross-Origin Request Blocked" error when the browser sends a preflight request to the edge function.
-- **Pending:** `stripe-checkout` edge function still needs to be deployed (`supabase/functions/stripe-checkout/` directory does not exist yet). The deploy steps are fully documented in Section 14.
-- **Note:** `stripe-webhook-index.ts` does not need a BASE_URL (it's a webhook receiver, not a session creator).
+### Session 15 — May 2026 — Stripe Checkout Fixes & Deploy
+**Date:** 15 May 2026
+- **`stripe-checkout-index.ts:35`** — BASE_URL corrected from `https://rentsafeai.co.uk` to `https://nexlet.co.uk` (post-rebrand fix).
+- **`stripe-checkout-index.ts:44`** — CORS headers fixed: added `Access-Control-Allow-Methods: POST, OPTIONS` to resolve preflight issues.
+- **`stripe-checkout-index.ts` copied** to `supabase/functions/stripe-checkout/index.ts` — ready for deploy.
+- **Pending — blocked on auth:** `npx supabase login` required before deploy. No `SUPABASE_ACCESS_TOKEN` present in environment. Once logged in, run:
+  ```powershell
+  npx supabase functions deploy stripe-checkout --project-ref mahtcfukgzbonwibtsxz
+  ```
+- **Note:** `stripe-webhook` also not yet deployed — same login needed first.
 
 ---
 
