@@ -2606,7 +2606,7 @@ async function _saveTenantSetupToDB() {
       const inviteToken = td?.invite_token || tenant.invite_token;
       const inviteUrl = `https://nexlet.co.uk/tenant.html?token=${inviteToken}`;
       const inviteHtml = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:28px 24px;color:#1A2B45">
-        <div style="border-bottom:2px solid #0B1E3D;padding-bottom:12px;margin-bottom:20px"><span style="font-size:17px;font-weight:700;color:#0B1E3D">Rent<span style="color:var(--green)">Safe AI</span></span></div>
+        <div style="border-bottom:2px solid #0B1E3D;padding-bottom:12px;margin-bottom:20px"><span style="font-size:17px;font-weight:700;color:#0B1E3D">NexLet</span></div>
         <h2 style="font-size:16px;font-weight:600;margin-bottom:8px">Your tenant portal is ready — ${propAddr}</h2>
         <p style="font-size:13px;color:#7A8FA6;margin-bottom:20px">Hi ${s.name}, your landlord has set up your tenant portal. Use the link below to report maintenance issues, view your certificates and sign documents.</p>
         <div style="text-align:center;margin:24px 0"><a href="${inviteUrl}" style="background:#0B1E3D;color:#fff;padding:13px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;display:inline-block">Access your portal →</a></div>
@@ -3016,7 +3016,7 @@ async function sendWelcomeKit(pid) {
 
   const html = `<!DOCTYPE html><html><body style="font-family:DM Sans,Arial,sans-serif;color:#1A2B45;max-width:620px;margin:0 auto;padding:0">
     <div style="background:#0B1E3D;padding:24px 28px;border-radius:12px 12px 0 0">
-      <div style="font-size:20px;font-weight:700;color:#fff">Rent<span style="color:var(--green)">Safe AI</span></div>
+      <div style="font-size:20px;font-weight:700;color:#fff">NexLet</div>
       <div style="font-size:13px;color:rgba(255,255,255,0.5);margin-top:4px">Tenancy Welcome Pack</div>
     </div>
     <div style="background:#fff;border:1px solid #E4EAF1;border-top:none;border-radius:0 0 12px 12px;padding:28px">
@@ -4638,7 +4638,7 @@ async function checkAllReminders() {
   function emailWrap(title, subtitle, bodyHtml) {
     return `<div style="font-family:DM Sans,Arial,sans-serif;color:#1A2B45;max-width:600px;margin:0 auto;padding:0">
       <div style="background:#0B1E3D;padding:20px 24px;border-radius:10px 10px 0 0">
-        <div style="font-size:17px;font-weight:700;color:#fff">Rent<span style="color:var(--green)">Safe AI</span></div>
+        <div style="font-size:17px;font-weight:700;color:#fff">NexLet</div>
         <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:3px">${subtitle}</div>
       </div>
       <div style="background:#fff;border:1px solid #E4EAF1;border-top:none;border-radius:0 0 10px 10px;padding:24px">
@@ -4862,7 +4862,7 @@ async function checkAllReminders() {
 
     const html = `<div style="font-family:DM Sans,Arial,sans-serif;color:#1A2B45;max-width:620px;margin:0 auto">
       <div style="background:#0B1E3D;padding:20px 24px;border-radius:10px 10px 0 0">
-        <div style="font-size:17px;font-weight:700;color:#fff">Rent<span style="color:var(--green)">Safe AI</span></div>
+        <div style="font-size:17px;font-weight:700;color:#fff">NexLet</div>
         <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:3px">Weekly compliance digest · ${today.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>
       </div>
       <div style="background:#fff;border:1px solid #E4EAF1;border-top:none;border-radius:0 0 10px 10px;padding:24px">
@@ -5015,7 +5015,7 @@ async function testReminder(id) {
   if (!rt) return;
   toast(`Sending test reminder for "${rt.label}"…`);
   const html = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#fff;border:1px solid #E4EAF1;border-radius:10px">
-    <div style="font-size:17px;font-weight:700;color:#0B1E3D;margin-bottom:14px">Rent<span style="color:var(--green)">Safe AI</span> — Test reminder</div>
+    <div style="font-size:17px;font-weight:700;color:#0B1E3D;margin-bottom:14px">NexLet — Test reminder</div>
     <p style="font-size:13px;color:#1A2B45;margin:0 0 10px">${rt.icon} <strong>${rt.label}</strong></p>
     <p style="font-size:12px;color:#7A8FA6">${rt.desc}</p>
     <p style="font-size:11px;color:#999;margin-top:16px">This is a test reminder. Real reminders fire automatically when conditions are met.</p>
@@ -6544,7 +6544,7 @@ async function moveStage(id,stage){
         'Completed':   `Your maintenance request has been completed. Please contact us if you have any concerns.`,
       }[stage];
       const html = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#1A2B45">
-        <div style="border-bottom:2px solid #0B1E3D;padding-bottom:10px;margin-bottom:16px"><span style="font-size:16px;font-weight:700;color:#0B1E3D">Rent<span style="color:var(--green)">Safe AI</span></span></div>
+        <div style="border-bottom:2px solid #0B1E3D;padding-bottom:10px;margin-bottom:16px"><span style="font-size:16px;font-weight:700;color:#0B1E3D">NexLet</span></div>
         <h2 style="font-size:15px;margin-bottom:8px">Maintenance Update — ${m?.title||'Job'}</h2>
         <p style="font-size:13px;color:#7A8FA6">${prop.address}, ${prop.city}</p>
         <div style="background:#f0fdf9;border:1px solid var(--green);border-radius:8px;padding:14px;margin:16px 0">
@@ -7451,7 +7451,7 @@ function exportPortfolioPDF(){
   +'.footer{margin-top:32px;padding-top:12px;border-top:1px solid #eee;font-size:11px;color:#999;text-align:center}'
   +'@media print{body{padding:16px}}'
   +'</style></head><body>'
-  +'<div class="logo">Rent<span>Safe</span> AI</div>'
+  +'<div class="logo">NexLet</div>'
   +'<hr>'
   +'<h1>Portfolio P&amp;L Overview</h1>'
   +'<p>Generated '+date+' &nbsp;·&nbsp; '+D.properties.length+' propert'+(D.properties.length===1?'y':'ies')+' &nbsp;·&nbsp; Confidential</p>'
@@ -8817,7 +8817,7 @@ async function sendEmailNow() {
   btn.innerHTML = '<span class="spin"></span>Sending…';
   const htmlBody = `<div style="font-family:sans-serif;max-width:680px;margin:0 auto;padding:32px 24px;color:#1A2B45">
     <div style="border-bottom:2px solid #0B1E3D;padding-bottom:14px;margin-bottom:24px">
-      <span style="font-size:18px;font-weight:700;color:#0B1E3D">Rent<span style="color:var(--green)">Safe AI</span></span>
+      <span style="font-size:18px;font-weight:700;color:#0B1E3D">NexLet</span>
       <span style="color:#999;font-size:12px;margin-left:8px">${ctx.templateName}</span>
     </div>
     <div style="font-size:13px;line-height:1.8">${(ctx.liveContent || mdToHtml(ctx.rawText)).replace(/var\(--[\w-]+\)/g,'#333')}</div>
@@ -9657,7 +9657,7 @@ async function s8SendToTenant() {
   const subject = `Section 8 Notice — ${p.address}`;
   const htmlBody = `<div style="font-family:sans-serif;max-width:680px;margin:0 auto;padding:32px 24px;color:#1A2B45">
     <div style="border-bottom:2px solid #0B1E3D;padding-bottom:14px;margin-bottom:24px">
-      <span style="font-size:18px;font-weight:700;color:#0B1E3D">Rent<span style="color:var(--green)">Safe AI</span></span>
+      <span style="font-size:18px;font-weight:700;color:#0B1E3D">NexLet</span>
       <span style="color:#999;font-size:12px;margin-left:8px">Section 8 Notice</span>
     </div>
     <pre style="font-family:Georgia,serif;font-size:13px;line-height:1.8;white-space:pre-wrap">${text.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>
@@ -9852,7 +9852,7 @@ Keep it under 200 words. Professional but warm. Plain text, no markdown.`;
 
     const htmlBody = `<div style="font-family:sans-serif;max-width:680px;margin:0 auto;padding:32px 24px;color:#1A2B45">
       <div style="border-bottom:2px solid #0B1E3D;padding-bottom:14px;margin-bottom:24px">
-        <span style="font-size:18px;font-weight:700;color:#0B1E3D">Rent<span style="color:var(--green)">Safe AI</span></span>
+        <span style="font-size:18px;font-weight:700;color:#0B1E3D">NexLet</span>
         <span style="color:#999;font-size:12px;margin-left:8px">Renters' Rights Act 2025 — Important Information</span>
       </div>
       <pre style="font-family:Georgia,serif;font-size:13px;line-height:1.8;white-space:pre-wrap">${letter}</pre>
@@ -10304,7 +10304,7 @@ async function sendPortalInvite(tenantId) {
   const propAddr = P(t.prop_id)?.address || 'your property';
   const html = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:28px 24px;color:#1A2B45">
     <div style="border-bottom:2px solid #0B1E3D;padding-bottom:12px;margin-bottom:20px">
-      <span style="font-size:17px;font-weight:700;color:#0B1E3D">Rent<span style="color:var(--green)">Safe AI</span></span>
+      <span style="font-size:17px;font-weight:700;color:#0B1E3D">NexLet</span>
     </div>
     <h2 style="font-size:16px;font-weight:600;margin-bottom:8px">You've been invited to your tenant portal</h2>
     <p style="font-size:13px;color:#7A8FA6;margin-bottom:20px">Hi ${t.name}, your landlord has invited you to manage maintenance requests for <strong>${propAddr}</strong> through NexLet.</p>
@@ -10573,7 +10573,7 @@ async function _sendEsignRequest(pid, tid, mode) {
   const expDate     = new Date(expiresAt).toLocaleDateString('en-GB', {day:'numeric',month:'long',year:'numeric'});
 
   const html = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:28px 24px;color:#1A2B45">
-    <div style="border-bottom:2px solid #0B1E3D;padding-bottom:12px;margin-bottom:20px"><span style="font-size:17px;font-weight:700;color:#0B1E3D">Rent<span style="color:var(--green)">Safe AI</span></span></div>
+    <div style="border-bottom:2px solid #0B1E3D;padding-bottom:12px;margin-bottom:20px"><span style="font-size:17px;font-weight:700;color:#0B1E3D">NexLet</span></div>
     <h2 style="font-size:16px;font-weight:600;margin-bottom:8px">Action required — please sign your tenancy document</h2>
     <p style="font-size:13px;color:#7A8FA6;margin-bottom:20px">Hi ${t.name}, your landlord has sent a document for you to review and sign electronically.</p>
     <div style="background:#F6F8FB;border-radius:8px;padding:16px;margin-bottom:24px">
@@ -10832,7 +10832,7 @@ async function _sendS13() {
     if (sendEmail && tenant?.email) {
       const emailHtml = `<div style="font-family:sans-serif;max-width:620px;margin:0 auto">
         <div style="background:#0B1E3D;padding:20px 24px;border-radius:10px 10px 0 0">
-          <div style="font-size:17px;font-weight:700;color:#fff">Rent<span style="color:var(--green)">Safe AI</span></div>
+          <div style="font-size:17px;font-weight:700;color:#fff">NexLet</div>
           <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:3px">Section 13 Rent Increase Notice</div>
         </div>
         <div style="background:#fff;border:1px solid #E4EAF1;border-top:none;border-radius:0 0 10px 10px;padding:24px">
@@ -10941,7 +10941,7 @@ async function sendMaintenanceNotify(maintenanceId) {
   if (!tenant?.email) { toast('No tenant email', true); return; }
   const prop = P(m.prop_id);
   const html = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#1A2B45">
-    <div style="border-bottom:2px solid #0B1E3D;padding-bottom:10px;margin-bottom:16px"><span style="font-size:16px;font-weight:700;color:#0B1E3D">Rent<span style="color:var(--green)">Safe AI</span></span></div>
+    <div style="border-bottom:2px solid #0B1E3D;padding-bottom:10px;margin-bottom:16px"><span style="font-size:16px;font-weight:700;color:#0B1E3D">NexLet</span></div>
     <h2 style="font-size:15px;margin-bottom:8px">Maintenance Update — ${m.title||'Maintenance'}</h2>
     <p style="font-size:13px;color:#7A8FA6;margin-bottom:16px">${prop?.address||''}</p>
     <div style="font-size:13px;line-height:1.7;white-space:pre-wrap">${msg}</div>
@@ -11157,7 +11157,7 @@ function showTrialExpiryPopup() {
             ${tc.highlight?'<span style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);font-size:10px;font-weight:700;background:var(--green);color:#fff;padding:2px 10px;border-radius:100px">Most popular</span>':''}
             <div style="font-size:12px;font-weight:700;color:var(--navy);margin-top:${tc.highlight?'8px':'0'}">${tc.label}</div>
             <div style="font-size:20px;font-weight:700;color:var(--green-dark);margin:6px 0">${tc.price}<span style="font-size:12px;font-weight:400">/mo</span></div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Founding price · Up to ${tc.limit} properties</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Founding price · ${tc.limit >= 999 ? 'Unlimited properties' : 'Up to ' + tc.limit + ' properties'}</div>
             <div style="font-size:10px;color:var(--muted);margin-bottom:10px">${tc.desc}</div>
             <button class="btn ${tc.highlight?'btn-navy':'btn-navy btn-sm'}" style="width:100%;font-size:11px;padding:6px 0;cursor:pointer" onclick="closeMo();redirectToCheckout('${tc.plan}')">Choose ${tc.label}</button>
           </div>
@@ -11238,7 +11238,7 @@ function showTrialUpgradeModal() {
             ${tc.highlight?'<span style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);font-size:10px;font-weight:700;background:var(--green);color:#fff;padding:2px 10px;border-radius:100px">Best value</span>':''}
             <div style="font-size:12px;font-weight:700;color:var(--navy);margin-top:${tc.highlight?'8px':'0'}">${tc.label}</div>
             <div style="font-size:20px;font-weight:700;color:var(--green-dark);margin:6px 0">${tc.price}<span style="font-size:12px;font-weight:400">/mo</span></div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Up to ${tc.limit} properties</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:8px">${tc.limit >= 999 ? 'Unlimited properties' : 'Up to ' + tc.limit + ' properties'}</div>
             <button class="btn ${tc.highlight?'btn-navy':'btn-navy btn-sm'}" style="width:100%;font-size:11px;padding:6px 0;cursor:pointer" onclick="closeMo();redirectToCheckout('${tc.plan}')">Choose ${tc.label}</button>
           </div>
         `).join('')}
