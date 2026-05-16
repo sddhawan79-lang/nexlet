@@ -688,7 +688,7 @@ KEY WORKFLOWS:
 - Log maintenance issues: Maintenance page or property > Maintenance tab
 - Tenant portal: each tenant gets unique invite link (no login) — manage in Tenants
 
-PRICING (founding member rates — first 100 users locked for life): Starter £4.99/mo founding (£7.99 standard, 1 property), Landlord £6.99/mo founding (£12.99 standard, 2-5 properties, most popular), Portfolio £11.99/mo founding (£23.99 standard, 6-15 properties), Pro £17.99/mo founding (£34.99 standard, unlimited). All plans: 30-day free trial, no card required. Manage billing at profile.html (Account & Billing).
+PRICING (founding rates — first 100 users locked for life, standard rates apply after): Starter £5.99/mo founding (£9.99 standard, £59.90/yr), 2 properties. Landlord £12.99/mo founding (£19.99 standard, £129.90/yr), 5 properties. Portfolio £24.99/mo founding (£39.99 standard, £249.90/yr), unlimited properties. No card required · Cancel anytime. Manage billing at profile.html (Account & Billing).
 
 UK LAW EXPERTISE:
 - Renters Rights Act 2025 (in force 1 May 2026): Section 21 abolished, all tenancies now periodic assured tenancies, Written Statement of Terms replaces AST, pet permission within 42 days, Decent Homes Standard extended to private sector
@@ -907,7 +907,7 @@ function isPortfolio(){ return getUserPlan()==='portfolio'||getUserPlan()==='pro
 function isLandlordOrAbove(){ return true; }
 function isStarter(){ return getUserPlan()==='starter'; }
 function isExpired(){ return getUserPlan()==='expired'; }
-const PLAN_LIMITS = { starter:2, landlord:10, portfolio:999 };
+const PLAN_LIMITS = { starter:2, landlord:5, portfolio:999 };
 function getPropLimit(){ if(isExpired()) return 0; return PLAN_LIMITS[getUserPlan()]||2; }
 async function redirectToCheckout(plan) {
   try {
@@ -11143,9 +11143,9 @@ async function _ensureTrialStarted() {
 function showTrialExpiryPopup() {
   const daysAgo = Math.abs(trialDaysLeft()) || 0;
   const tierCards = [
-    { plan:'starter',   label:'Starter',   price:'£4.99', limit:1,  desc:'Core compliance & documents',     highlight:false },
-    { plan:'landlord',  label:'Landlord',  price:'£6.99', limit:5,  desc:'Rent tracking, insurance & bulk tools', highlight:true },
-    { plan:'portfolio', label:'Portfolio', price:'£11.99',limit:15, desc:'MTD Tax, AI Inventory & unlimited properties', highlight:false },
+    { plan:'starter',   label:'Starter',   price:'£5.99', limit:2,  desc:'Core compliance & documents',     highlight:false },
+    { plan:'landlord',  label:'Landlord',  price:'£12.99', limit:5,  desc:'Rent tracking, insurance & bulk tools', highlight:true },
+    { plan:'portfolio', label:'Portfolio', price:'£24.99',limit:999, desc:'MTD Tax, AI Inventory & unlimited properties', highlight:false },
   ];
 
   openMo('Your free trial has ended', `${daysAgo > 0 ? `Expired ${daysAgo} day${daysAgo !== 1 ? 's' : ''} ago` : 'Expired today'}`, `
@@ -11163,7 +11163,7 @@ function showTrialExpiryPopup() {
           </div>
         `).join('')}
       </div>
-      <div style="margin-top:14px;font-size:10px;color:var(--muted)">First 100 users lock founding price for life · All plans include 30-day trial</div>
+      <div style="margin-top:14px;font-size:10px;color:var(--muted)">First 100 users lock founding price for life · No card required · Cancel anytime</div>
     </div>
   `, `<button class="btn" onclick="sb.auth.signOut();window.location.href='login.html'">Log out</button>`);
 
@@ -11225,9 +11225,9 @@ function renderTrialUpgradeChip() {
 
 function showTrialUpgradeModal() {
   const tierCards = [
-    { plan:'starter',   label:'Starter',   price:'£4.99', limit:1,  desc:'Core compliance & documents' },
-    { plan:'landlord',  label:'Landlord',  price:'£6.99', limit:5,  desc:'Rent, insurance & bulk tools', highlight:true },
-    { plan:'portfolio', label:'Portfolio', price:'£11.99',limit:15, desc:'Portfolio health & 6–15 properties' },
+    { plan:'starter',   label:'Starter',   price:'£5.99', limit:2,  desc:'Core compliance & documents' },
+    { plan:'landlord',  label:'Landlord',  price:'£12.99', limit:5,  desc:'Rent, insurance & bulk tools', highlight:true },
+    { plan:'portfolio', label:'Portfolio', price:'£24.99',limit:999, desc:'All features & unlimited properties' },
   ];
   openMo('Upgrade your plan', `Founding prices — lock for life`, `
     <div style="text-align:center;padding:8px 0">
