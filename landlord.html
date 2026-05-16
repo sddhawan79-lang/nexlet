@@ -25,7 +25,7 @@ html,body{height:100%;font-family:var(--font);color:var(--txt);background:var(--
 /* ── APP LAYOUT ── */
 .app{display:flex;height:100vh;overflow:hidden}
 /* ── SIDEBAR ── */
-.sidebar{width:220px;min-width:220px;background:#0B1E3D;display:flex;flex-direction:column;height:100vh;position:relative;z-index:100}
+.sidebar{width:220px;min-width:220px;background:var(--navy);display:flex;flex-direction:column;height:100vh;position:relative;z-index:100}
 .sb-logo{padding:20px 18px 16px;border-bottom:1px solid rgba(255,255,255,0.08)}
 .sb-logo a{font-family:var(--disp);font-size:17px;color:#fff;text-decoration:none;display:block}
 .sb-logo a span{color:var(--green)}
@@ -904,7 +904,7 @@ async function loadData() {
 // ── PLAN GATING HELPERS ──
 function getUserPlan(){ return window._userPlan || 'trial'; }
 function isPortfolio(){ return getUserPlan()==='portfolio'||getUserPlan()==='pro'; }
-function isLandlordOrAbove(){ return true; }
+function isLandlordOrAbove(){ return ['landlord','portfolio','pro'].includes(getUserPlan()); }
 function isStarter(){ return getUserPlan()==='starter'; }
 function isExpired(){ return getUserPlan()==='expired'; }
 const PLAN_LIMITS = { starter:2, landlord:5, portfolio:999 };
