@@ -938,7 +938,7 @@ function upgradePrompt(feature, plan){
       <a href="profile.html" class="btn btn-navy" style="display:inline-block;text-decoration:none">Upgrade plan →</a>
     </div>`, `<button class="btn" onclick="closeMo()">Close</button>`);
 }
-function applyPlanGating(){ return; }
+function applyPlanGating(){ return; } // intentional no-op — gating handled by nav() at lines 7977–7980
 
 function checkComplianceReminders() {
   const today = new Date(); today.setHours(0,0,0,0);
