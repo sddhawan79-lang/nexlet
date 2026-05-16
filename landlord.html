@@ -47,7 +47,7 @@ html,body{height:100%;font-family:var(--font);color:var(--txt);background:var(--
 .sb-chev{font-size:10px;color:rgba(255,255,255,0.2);transition:transform .2s}
 .sb-chev.closed{transform:rotate(-90deg)}
 .sb-group-body{overflow:hidden;transition:max-height .25s ease}
-.sb-item[data-page="assistant"]{color:rgba(0,200,150,0.75)}
+.sb-item[data-page="assistant"]{color:var(--green-bg)}
 .sb-item[data-page="assistant"]:hover{color:var(--green);background:var(--green-bg)}
 .sb-item[data-page="assistant"].active{color:var(--green)}
 .sb-item[data-page="assistant"] .sb-icon{color:var(--green)}
@@ -903,12 +903,30 @@ async function loadData() {
 
 // ── PLAN GATING HELPERS ──
 function getUserPlan(){ return 'trial'; }
-function isPortfolio(){ return true; }
+function isPortfolio(){ return getUserPlan()==='portfolio'||getUserPlan()==='pro'; }
 function isLandlordOrAbove(){ return true; }
 function isStarter(){ return getUserPlan()==='starter'; }
 function isExpired(){ return getUserPlan()==='expired'; }
 const PLAN_LIMITS = { starter:2, landlord:10, portfolio:999 };
 function getPropLimit(){ if(isExpired()) return 0; return PLAN_LIMITS[getUserPlan()]||2; }
+async function redirectToCheckout(plan) {
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) return;
+    const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/stripe-checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+      body: JSON.stringify({ plan, billing_cycle: 'monthly' })
+    });
+    const { url, error } = await res.json();
+    if (error) throw new Error(error);
+    window.location.href = url;
+  } catch(e) {
+    toast('Could not start checkout — please try again.', true);
+    window.location.href = 'profile.html';
+  }
+}
+
 function upgradePrompt(feature, plan){
   const planLabels={starter:'Starter',landlord:'Landlord',portfolio:'Portfolio'};
   openMo('Upgrade Required','',`
@@ -3598,7 +3616,7 @@ function renderPropChecklist(prefix, pid, mode, saved, meters){
     gitems.forEach(function(item){
       var checked=saved[item.id]?true:false;
       html+='<div data-prefix="'+prefix+'" data-pid="'+pid+'" data-id="'+item.id+'" onclick="togglePropCheck(this.dataset.prefix,this.dataset.pid,this.dataset.id)" ';
-      html+='style="display:flex;align-items:flex-start;gap:10px;padding:8px 10px;border-radius:7px;border:1px solid '+(checked?'var(--green)':'var(--border)')+';background:'+(checked?'rgba(0,200,150,0.04)':'var(--white)')+';cursor:pointer;margin-bottom:6px;transition:all .12s">';
+      html+='style="display:flex;align-items:flex-start;gap:10px;padding:8px 10px;border-radius:7px;border:1px solid '+(checked?'var(--green)':'var(--border)')+';background:'+(checked?'var(--green-bg)':'var(--white)')+';cursor:pointer;margin-bottom:6px;transition:all .12s">';
       html+='<div style="width:17px;height:17px;border-radius:4px;border:2px solid '+(checked?'var(--green)':'#C5D0DD')+';background:'+(checked?'var(--green)':'transparent')+';flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center">';
       html+=checked?'<svg width="8" height="8" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>':'';
       html+='</div>';
@@ -11141,7 +11159,7 @@ function showTrialExpiryPopup() {
             <div style="font-size:20px;font-weight:700;color:var(--green-dark);margin:6px 0">${tc.price}<span style="font-size:12px;font-weight:400">/mo</span></div>
             <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Founding price · Up to ${tc.limit} properties</div>
             <div style="font-size:10px;color:var(--muted);margin-bottom:10px">${tc.desc}</div>
-            <button class="btn ${tc.highlight?'btn-navy':'btn-sm'}" style="width:100%;font-size:11px;padding:6px 0;cursor:pointer" onclick="closeMo();redirectToCheckout('${tc.plan}')">Choose ${tc.label}</button>
+            <button class="btn ${tc.highlight?'btn-navy':'btn-navy btn-sm'}" style="width:100%;font-size:11px;padding:6px 0;cursor:pointer" onclick="closeMo();redirectToCheckout('${tc.plan}')">Choose ${tc.label}</button>
           </div>
         `).join('')}
       </div>
@@ -11221,7 +11239,7 @@ function showTrialUpgradeModal() {
             <div style="font-size:12px;font-weight:700;color:var(--navy);margin-top:${tc.highlight?'8px':'0'}">${tc.label}</div>
             <div style="font-size:20px;font-weight:700;color:var(--green-dark);margin:6px 0">${tc.price}<span style="font-size:12px;font-weight:400">/mo</span></div>
             <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Up to ${tc.limit} properties</div>
-            <button class="btn ${tc.highlight?'btn-navy':'btn-sm'}" style="width:100%;font-size:11px;padding:6px 0;cursor:pointer" onclick="closeMo();redirectToCheckout('${tc.plan}')">Choose ${tc.label}</button>
+            <button class="btn ${tc.highlight?'btn-navy':'btn-navy btn-sm'}" style="width:100%;font-size:11px;padding:6px 0;cursor:pointer" onclick="closeMo();redirectToCheckout('${tc.plan}')">Choose ${tc.label}</button>
           </div>
         `).join('')}
       </div>
