@@ -571,26 +571,26 @@ All migrations run manually in **Supabase → SQL Editor** (no automated migrati
 
 The `user_profiles` row is queried by `currentUser.id` via `.maybeSingle()` and stored in `D.userProfile`. Use the `_profileName()` helper (not raw `email.split('@')[0]`) for all landlord name references in AI prompts and legal documents — it resolves `full_name` from the profile, falling back to email username.
 
-### Subscription Plan Gating (Session 9 → Simplified May 2026)
+### Subscription Plan Gating (Session 9 → Updated May 2026)
 **Trial state:** All trial functions stubbed to always return full access (`isTrialActive() → true`, `isTrialExpired() → false`, `trialDaysLeft() → 30`). `getTrialState()` returns a safe full-access state with both old (`isTrialing`, `daysLeft`) and new (`isExpired`, `daysRemaining`) key shapes preserved.
 
-**Plan resolution:** `stripe_subscriptions.plan_name` queried on startup via `loadData()`. Falls back to `'trial'` if no row exists. Trial users get full Portfolio access via `effectivePlan()`.
+**Plan resolution:** `window._userPlan` set at startup from `stripe_subscriptions.plan_name` (falls back to `'trial'`). `getUserPlan()` reads from this cached value. Trial users get full Portfolio access via `effectivePlan()`.
 
 | Plan | Property limit | Features gated |
 |---|---|---|
-| Starter | 2 | Core only: compliance, documents, e-sign, maintenance, tenant portal, AI assistant, calendar, deposit alerts, contractor book. NO rent tracking, insurance, MTD, inventory, custom templates. |
-| Landlord | 10 | Starter + bulk gen, portfolio health, audit log, rent tracking, insurance. NO MTD Tax, NO AI Inventory, NO Custom Templates. |
-| Portfolio | Unlimited | All features including MTD Tax, AI Inventory Report, Custom Templates. |
+| Starter | 2 | Core only: compliance, certificates, maintenance, templates, calendar, AI assistant. NO financials, rent, insurance, contractors, MTD, inventory. |
+| Landlord | **5** (was 10) | Starter + financials, rent, insurance, contractors. NO MTD, NO inventory. |
+| Portfolio | Unlimited | All features: compliance, certificates, maintenance, templates, calendar, assistant, financials, rent, insurance, contractors, MTD, inventory-reports. |
 
-**Gating removed from landlord.html (May 2026):** The `PLAN_FEATURES`, `canAccess()`, `canAddProperty()`, `showUpgradeWall()`, and `upgrade-wall` HTML were removed during a git merge. The `redirectToCheckout()` function was recreated with a Stripe checkout fallback (redirects to `profile.html` on failure). Trial modals use `btn-navy btn-sm` for consistent button styling.
+**Gating enforcement:** `PLAN_FEATURES` constant (line 911) maps each plan to an array of allowed feature slugs. `nav()` checks feature access before rendering restricted pages. `PLAN_LIMITS = { starter:2, landlord:5, portfolio:999 }` controls property creation.
 
-**Active plan helpers:** `getUserPlan()`, `isPortfolio()`, `isLandlordOrAbove()`, `isStarter()`, `getPropLimit()`, `upgradePrompt(feature, targetPlan)`, `redirectToCheckout(plan)`.
+**Active plan helpers:** `getUserPlan()`, `isPortfolio()`, `isLandlordOrAbove()`, `isStarter()`, `getPropLimit()`, `upgradePrompt(feature, targetPlan)`, `redirectToCheckout(plan)`, `applyPlanGating()`. `redirectToCheckout()` recreates the Stripe checkout session and falls back to `profile.html` on edge function failure. Trial modals (`showTrialExpiryPopup`, `showTrialUpgradeModal`) use `btn-navy btn-sm` for non-highlighted plan cards.
 
 ### AI Chat Assistant (`sendChat()` in `landlord.html`)
 - Powered by Claude via `ai-proxy` edge function (replaced `super-processor` — Session 6)
 - Session 9 upgrade: `SYSTEM_PROMPT` constant (line 631, template literal) provides the AI with full platform knowledge + UK law expertise
 - **Platform knowledge:** all sidebar navigation paths, feature locations, key workflows (Section 8, e-sign, rent marking, RRA sheet), pricing
-- **Law expertise:** RRA 2025, all 31 Section 8 grounds, Section 13, Awaab's Law, deposits, EPC/EICR/GSC, Right to Rent, HMO licensing, MTD phases, Section 24
+- **Law expertise:** RRA 2025, all 38 Section 8 grounds, Section 13, Awaab's Law, deposits, EPC/EICR/GSC, Right to Rent, HMO licensing, MTD phases, Section 24
 - **Rules for AI:** give exact sidebar navigation path for platform questions, be honest about limitations, always state guidance only/not legal advice
 - Chat history stored in `D.chat[]` (in-memory only — clears on refresh)
 - Input placeholder updated to hint at both legal and platform questions
@@ -667,10 +667,10 @@ Session 8 introduced a 3-checkbox pre-generation consent gate for 4 legal docume
 Pricing uses a **founding / standard** two-tier model displayed via a billing toggle on `index.html`. The JS `prices` object (in the inline `<script>` at the bottom of `index.html`) drives all displayed values.
 
 | Plan | Founding price (monthly) | Founding price (annual) | Standard price (monthly) | Standard price (annual) | Properties | Target user |
-|---|---|---|---|---|---|---|
-| Starter | £4.99/mo | £3.99/mo | £7.99/mo | £6.66/mo | Up to 3 | Accidental landlords |
-| Landlord | £9.99/mo | £8.33/mo | £14.99/mo | £12.49/mo | Up to 10 | ★ Most popular |
-| Portfolio | £23.99/mo | £19.99/mo | £39.99/mo | £33.32/mo | Unlimited | Portfolio landlords |
+|---|---|---|---|---|---|---|---|
+| Starter | £5.99/mo | £4.99/mo | £9.99/mo | £8.33/mo | Up to 2 | Accidental landlords |
+| Landlord | £12.99/mo | £10.83/mo | £19.99/mo | £16.66/mo | Up to 5 | ★ Most popular |
+| Portfolio | £24.99/mo | £20.83/mo | £39.99/mo | £33.32/mo | Unlimited | Portfolio landlords |
 
 Annual billing: 2 months free (pay 10 months, get 12)
 
@@ -952,14 +952,12 @@ When **touching any of these files for a new feature or bug fix**, follow this p
 - Uses existing `maintenance_jobs` and `certificates` tables
 - All submissions create a row in `maintenance_jobs` and trigger landlord email alerts (Sprint 10 system)
 
-### Pricing Update — May 2026 — index.html Pricing Corrections
-**Date:** May 2026
-- **Portfolio founding price:** updated from £11.99/mo → £23.99/mo
-- **Portfolio standard price:** updated from £23.99/mo → £39.99/mo
-- **Landlord standard price:** updated from £15.99/mo → £14.99/mo
-- Annual equivalents recalculated consistently (10 months ÷ 12): Portfolio founding £19.99/mo, Portfolio standard £33.32/mo, Landlord standard £12.49/mo
-- Changes applied in: HTML display (`id="portfolio-price"`, `id="portfolio-standard"`, `id="landlord-standard"`) and the `prices` JS object in `index.html`
-- Section 11 of `PROJECT_KNOWLEDGE.md` updated to reflect the full founding/standard price matrix
+### Pricing Update — 17 May 2026 — Full Price Refresh
+**Date:** 17 May 2026
+- **All plans repriced:** Starter £5.99/£9.99, Landlord £12.99/£19.99, Portfolio £24.99/£39.99 (founding/standard monthly)
+- **Yearly rates added:** Starter £59.90/£99.90, Landlord £129.90/£199.90, Portfolio £249.90/£399.90
+- **Property limits updated:** Starter 2, Landlord 5, Portfolio Unlimited
+- Changes applied in `index.html` (HTML display + JS `prices` object), `landlord.html` (PRICING comment, trial modals, PLAN_LIMITS, PLAN_FEATURES)
 
 ### Session 6 — May 2026 — AI Fix & Edge Function Rebuild
 **Date:** May 2026
@@ -1481,6 +1479,26 @@ When **touching any of these files for a new feature or bug fix**, follow this p
 - **Column fix:** `month` and `notes` columns removed from DB payload until SQL migration (`session14_rent_payments.sql`) is run, which adds them via `ALTER TABLE ADD COLUMN IF NOT EXISTS`.
 - **No plan gating** in either function — payment recording works for all tiers.
 - **Known issue #22 fixed** — `session14_rent_payments.sql` created with full table schema + RLS.
+
+### Session 17 — 17 May 2026 — Plan Gating Restore & Pricing Update
+**Date:** 17 May 2026
+- **Plan gating re-enabled:**
+  - `getUserPlan()` → reads `window._userPlan` (no longer hardcoded `'trial'`)
+  - `isPortfolio()` → `getUserPlan()==='portfolio'||getUserPlan()==='pro'`
+  - `isLandlordOrAbove()` → `['landlord','portfolio','pro'].includes(getUserPlan())`
+  - `applyPlanGating()` → annotated as intentional no-op
+  - `PLAN_FEATURES` constant added (maps plan → allowed feature array for `canAccess()` equivalent)
+  - `PLAN_LIMITS` landlord cap reduced: 10 → **5**
+- **Pricing updated** across `landlord.html` and `index.html`:
+  - Starter: £4.99→**£5.99** (founding), £7.99→**£9.99** (standard), yearly £59.90/£99.90
+  - Landlord: £9.99→**£12.99** (founding), £14.99→**£19.99** (standard), yearly £129.90/£199.90
+  - Portfolio: £23.99→**£24.99** (founding), standard £39.99 unchanged, yearly £249.90/£399.90
+  - PRICING comment in AI system prompt updated with yearly rates
+  - Trial footer changed: `"All plans include 30-day trial"` → `"No card required · Cancel anytime"`
+- **Portfolio display:** `limit:999` now renders `"Unlimited properties"` in tier cards (conditional: ≥999)
+- **Logo rebranding complete:** `login.html`, `signup.html` left/mobile logos fixed. All 14 email template `Rent<span>Safe AI</span>` → `NexLet` in `landlord.html`.
+- **Sidebar CSS:** `.sidebar` background now uses `var(--navy)` instead of hardcoded `#0B1E3D`.
+- **`redirectToCheckout()`** recreated with Stripe checkout fallback (redirects to `profile.html` on edge function failure).
 
 ### Session 16 — 16 May 2026 — Rebrand Completion & Colour Fixes
 **Date:** 16 May 2026
