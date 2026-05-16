@@ -2,7 +2,7 @@
 // SPRINT 10 — email-alerts Edge Function
 // File: supabase/functions/email-alerts/index.ts
 //
-// Handles all 8 RentSafeAI alert types via Resend.
+// Handles all 8 NexLet alert types via Resend.
 // Called by pg_cron daily (09:00) and weekly (Mon 08:00).
 // ============================================================
 
@@ -13,8 +13,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 const RESEND_API_KEY          = Deno.env.get("RESEND_API_KEY")!
 const SUPABASE_URL            = Deno.env.get("SUPABASE_URL")!
 const SUPABASE_SERVICE_ROLE   = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-const FROM_EMAIL              = "documents@rentsafeai.co.uk"
-const APP_URL                 = "https://rentsafeai.co.uk"
+const FROM_EMAIL              = "documents@nexlet.co.uk"
+const APP_URL                 = "https://nexlet.co.uk"
 
 // Alert thresholds
 const CERT_DAYS_BEFORE        = [60, 30, 14, 7]
@@ -90,7 +90,7 @@ async function sendEmail(to: string, subject: string, html: string): Promise<boo
         'Authorization': `Bearer ${RESEND_API_KEY}`
       },
       body: JSON.stringify({
-        from: `RentSafeAI <${FROM_EMAIL}>`,
+        from: `NexLet <${FROM_EMAIL}>`,
         to,
         subject,
         html
@@ -155,7 +155,7 @@ function buildEmail(opts: EmailOpts): string {
                 <tr>
                   <td>
                     <span style="font-size:26px;vertical-align:middle;">🏠</span>
-                    <span style="color:#FFFFFF;font-size:22px;font-weight:700;letter-spacing:-0.3px;vertical-align:middle;margin-left:8px;">RentSafeAI</span>
+                    <span style="color:#FFFFFF;font-size:22px;font-weight:700;letter-spacing:-0.3px;vertical-align:middle;margin-left:8px;">NexLet</span>
                   </td>
                   <td align="right">
                     <span style="display:inline-block;background:${badgeColour};color:#FFFFFF;font-size:11px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;padding:5px 12px;border-radius:20px;">
@@ -198,9 +198,9 @@ function buildEmail(opts: EmailOpts): string {
           <tr>
             <td style="padding:20px 40px;background:#F8FAFC;border-top:1px solid #E2E8F0;">
               <p style="margin:0;color:#94A3B8;font-size:12px;line-height:1.5;">
-                ${opts.footerNote ?? 'This is an automated alert from RentSafeAI.'}
+                ${opts.footerNote ?? 'This is an automated alert from NexLet.'}
                 &nbsp;&bull;&nbsp;
-                <a href="${APP_URL}" style="color:#1B3A6B;text-decoration:none;">rentsafeai.co.uk</a>
+                <a href="${APP_URL}" style="color:#1B3A6B;text-decoration:none;">nexlet.co.uk</a>
               </p>
             </td>
           </tr>
@@ -316,7 +316,7 @@ async function processCertExpiry(supabase: ReturnType<typeof getSupabase>) {
         </p>`,
       ctaUrl:  `${APP_URL}/certificates`,
       ctaText: 'View Certificate',
-      footerNote: 'Compliance alert — sent by your RentSafeAI account.'
+      footerNote: 'Compliance alert — sent by your NexLet account.'
     })
 
     const ok = await sendEmail(email, `⚠ ${certLabel} expires in ${days} days — ${property?.address ?? ''}`, html)
@@ -381,11 +381,11 @@ async function processRentOverdue(supabase: ReturnType<typeof getSupabase>) {
           <tr><td style="color:#DC2626;font-weight:600;font-size:14px;">${fmtDate(dueDateStr)}</td></tr>
         </table>
         <p style="color:#6B7280;font-size:13px;">
-          Log in to RentSafeAI to record a payment, send a tenant reminder, or review your rent schedule.
+          Log in to NexLet to record a payment, send a tenant reminder, or review your rent schedule.
         </p>`,
       ctaUrl:  `${APP_URL}/rent`,
       ctaText: 'View Rent Tracker',
-      footerNote: 'Rent alert — sent by your RentSafeAI account.'
+      footerNote: 'Rent alert — sent by your NexLet account.'
     })
 
     const ok = await sendEmail(email, `🔴 Rent overdue — ${property?.address ?? 'Your property'}`, html)
@@ -457,7 +457,7 @@ async function processMaintenanceOverdue(supabase: ReturnType<typeof getSupabase
         </p>`,
       ctaUrl:  `${APP_URL}/maintenance`,
       ctaText: 'View Job',
-      footerNote: 'Maintenance alert — sent by your RentSafeAI account.'
+      footerNote: 'Maintenance alert — sent by your NexLet account.'
     })
 
     const ok = await sendEmail(email, `⚠ Stale maintenance job — ${job.title ?? 'update required'}`, html)
@@ -536,7 +536,7 @@ async function processAwaabLaw(supabase: ReturnType<typeof getSupabase>) {
         </p>`,
       ctaUrl:  `${APP_URL}/maintenance`,
       ctaText: 'Take Action Now',
-      footerNote: "Awaab's Law compliance alert — sent by your RentSafeAI account."
+      footerNote: "Awaab's Law compliance alert — sent by your NexLet account."
     })
 
     const ok = await sendEmail(email, `🚨 URGENT: Awaab's Law breach risk — ${property?.address ?? 'your property'}`, html)
@@ -600,7 +600,7 @@ async function processMtdDeadline(supabase: ReturnType<typeof getSupabase>) {
         </p>`,
       ctaUrl:  `${APP_URL}/finance`,
       ctaText: 'View Finance',
-      footerNote: 'MTD compliance alert — sent by your RentSafeAI account.'
+      footerNote: 'MTD compliance alert — sent by your NexLet account.'
     })
 
     const ok = await sendEmail(email, `📋 MTD deadline in ${days} days — action required`, html)
@@ -726,7 +726,7 @@ async function processComplianceScore(supabase: ReturnType<typeof getSupabase>) 
       badgeText:  `COMPLIANCE: ${score}%`,
       heading:    `Your Compliance Score Has Dropped to ${score}%`,
       bodyHtml: `
-        <p>Your RentSafeAI compliance score has dropped to <strong style="color:#DC2626;">${score}%</strong>, which is below the recommended minimum of <strong>${COMPLIANCE_THRESHOLD}%</strong>.</p>
+        <p>Your NexLet compliance score has dropped to <strong style="color:#DC2626;">${score}%</strong>, which is below the recommended minimum of <strong>${COMPLIANCE_THRESHOLD}%</strong>.</p>
         
         <!-- Score bar -->
         <div style="background:#E2E8F0;border-radius:20px;height:18px;margin:20px 0;overflow:hidden;">
@@ -746,7 +746,7 @@ async function processComplianceScore(supabase: ReturnType<typeof getSupabase>) 
         </p>`,
       ctaUrl:  `${APP_URL}/compliance`,
       ctaText: 'Fix Compliance Issues',
-      footerNote: 'Compliance alert — sent by your RentSafeAI account.'
+      footerNote: 'Compliance alert — sent by your NexLet account.'
     })
 
     const ok = await sendEmail(email, `🔴 Compliance score at ${score}% — action needed`, html)
@@ -840,7 +840,7 @@ async function processWeeklySummary(supabase: ReturnType<typeof getSupabase>) {
       badgeText:  'WEEKLY SUMMARY',
       heading:    `Your Portfolio — Week of ${weekLabel}`,
       bodyHtml: `
-        <p>Here's your weekly snapshot from RentSafeAI. Have a great week.</p>
+        <p>Here's your weekly snapshot from NexLet. Have a great week.</p>
 
         <!-- Stats grid -->
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
@@ -871,10 +871,10 @@ async function processWeeklySummary(supabase: ReturnType<typeof getSupabase>) {
         </div>`}`,
       ctaUrl:  `${APP_URL}/dashboard`,
       ctaText: 'Open Dashboard',
-      footerNote: 'Weekly portfolio summary — sent every Monday by RentSafeAI.'
+      footerNote: 'Weekly portfolio summary — sent every Monday by NexLet.'
     })
 
-    const ok = await sendEmail(email, `📊 Your RentSafeAI weekly summary — ${weekLabel}`, html)
+    const ok = await sendEmail(email, `📊 Your NexLet weekly summary — ${weekLabel}`, html)
     if (ok) {
       await markSent(supabase, landlordId, alertType, refKey, email, { week: currentWeek, score })
       console.log(`  ✓ Weekly summary sent: ${email}`)

@@ -226,7 +226,7 @@
 
       doc.setFont('helvetica', 'bold'); doc.setFontSize(18);
       doc.setTextColor(11, 30, 61);
-      doc.text('RentSafe AI', 105, 28, { align: 'center' });
+      doc.text('NexLet', 105, 28, { align: 'center' });
       doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
       doc.setTextColor(100, 100, 100);
       doc.text('Electronically Signed Tenancy Document', 105, 38, { align: 'center' });
@@ -365,7 +365,7 @@
         '<div style="background:#F6F8FB;border-radius:8px;padding:16px;margin-bottom:24px">' +
         '<div style="font-size:12px;color:#7A8FA6;margin-bottom:2px">Signed at</div><div style="font-size:13px;font-weight:600">' + signedTimeStr + '</div></div>' +
         '<div style="text-align:center;margin:24px 0"><a href="' + signedPdfUrl + '" style="background:#0B1E3D;color:#fff;padding:13px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;display:inline-block">⬇ Download signed document</a></div>' +
-        '<div style="margin-top:20px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#999">Sent via RentSafe AI · documents@rentsafeai.co.uk</div></div>';
+        '<div style="margin-top:20px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#999">Sent via NexLet · documents@nexlet.co.uk</div></div>';
 
       var landlordEmailHtml = '<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:28px 24px;color:#1A2B45">' +
         '<div style="border-bottom:2px solid #0B1E3D;padding-bottom:12px;margin-bottom:20px"><span style="font-size:17px;font-weight:700;color:#0B1E3D">Rent<span style="color:#00C896">Safe AI</span></span></div>' +
@@ -376,7 +376,7 @@
         '<div style="font-size:12px;color:#7A8FA6;margin-bottom:2px">Signed at</div><div style="font-size:13px;font-weight:600;margin-bottom:10px">' + signedTimeStr + '</div>' +
         '<div style="font-size:12px;color:#7A8FA6;margin-bottom:2px">IP address</div><div style="font-size:13px;font-weight:600">' + ipAddress + '</div></div>' +
         '<div style="text-align:center;margin:24px 0"><a href="' + signedPdfUrl + '" style="background:#0B1E3D;color:#fff;padding:13px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;display:inline-block">⬇ Download signed document</a></div>' +
-        '<div style="margin-top:20px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#999">Sent via RentSafe AI · documents@rentsafeai.co.uk</div></div>';
+        '<div style="margin-top:20px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#999">Sent via NexLet · documents@nexlet.co.uk</div></div>';
 
       if (tenant?.email) {
         await fetch(EDGE_URL, {

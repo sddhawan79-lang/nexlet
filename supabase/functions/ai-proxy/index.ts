@@ -24,7 +24,7 @@ serve(async (req) => {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: 'RentSafe AI <documents@rentsafeai.co.uk>',
+          from: 'NexLet <documents@nexlet.co.uk>',
           to: [body.to],
           subject: body.subject,
           html: body.html,
