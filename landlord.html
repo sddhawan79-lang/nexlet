@@ -1768,9 +1768,23 @@ async function changePropertyStatus(pid, newStatus) {
 }
 
 // ── TENANCY FLOW STUBS ──
-function startTenancy(pid) { toast('Coming soon'); }
-function endTenancy(pid) { toast('Coming soon'); }
-function markRefurbReady(pid) { toast('Coming soon'); }
+function startTenancy(pid) {
+  openMo('Start Tenancy', '',
+    `<p style="font-size:13px;color:var(--txt);line-height:1.6;margin-bottom:16px">This will open the tenancy start guide for this property. You'll be taken to the Pre-Tenancy Checklist, then guided to add your tenant.</p>`,
+    `<button class="btn" onclick="closeMo()">Cancel</button>
+     <button class="btn btn-navy" onclick="closeMo();window._addPropOrigin='property-detail';nav('prop-detail','${pid}');setTimeout(function(){pdSetTab('${pid}','tenant')},100)">Begin setup →</button>`);
+}
+function endTenancy(pid) {
+  const t = D.tenants.find(x => String(x.prop_id) === String(pid) && x.status === 'Active');
+  if (!t) { toast('No active tenant found for this property.', true); return; }
+  moEndTenancy(t.id);
+}
+function markRefurbReady(pid) {
+  openMo('Mark property as ready?', '',
+    `<p style="font-size:13px;color:var(--txt);line-height:1.6;margin-bottom:16px">This will change the property status from Refurbishment to Vacant, making it available for a new tenancy.</p>`,
+    `<button class="btn" onclick="closeMo()">Cancel</button>
+     <button class="btn btn-navy" onclick="changePropertyStatus('${pid}','vacant')">Mark Vacant →</button>`);
+}
 
 // ── MODAL: LICENCE ──
 function moLicence(pid){
