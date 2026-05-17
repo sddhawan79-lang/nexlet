@@ -3995,6 +3995,32 @@ async function initPropChecklist(prefix, pid, mode) {
         window._pretenancyRecord[pid][key] = { checkedAt: new Date().toISOString(), landlordId: currentUser.id };
       }
     });
+
+    // ── AUTO-DETECT: tick checklist items based on uploaded docs & system state ──
+    const p = P(pid);
+    const t = D.tenants.find(x => String(x.prop_id) === String(pid) && x.status === 'Active');
+    const tenantId = t ? t.id : null;
+    const tenantDocs = tenantId ? (D.tenantDocs || []).filter(d => String(d.tenant_id) === String(tenantId)) : [];
+    const certs = (D.certs || []).filter(c => String(c.prop_id) === String(pid));
+    const esigns = (D.esignReq || []).filter(r => String(r.property_id) === String(pid));
+    const emailLog = (D.emailLog || []).filter(e => String(e.prop_id) === String(pid));
+    const insurance = (D.insurance || []).filter(i => String(i.prop_id) === String(pid));
+
+    function autoCheck(id) { if (!saved[id]) { saved[id] = true; if (!window._pretenancyRecord[pid][id]) window._pretenancyRecord[pid][id] = { checkedAt: new Date().toISOString(), landlordId: currentUser.id, auto: true }; } }
+
+    if (tenantDocs.some(d => d.slot === 'right_to_rent')) autoCheck('ob1');
+    if (esigns.some(r => r.document_type === 'written_statement' && r.status === 'signed')) autoCheck('ob5');
+    if (emailLog.some(e => e.template_id === 'rra_sheet')) autoCheck('ob6');
+    if (emailLog.some(e => e.template_id === 'how_to_rent')) autoCheck('ob7');
+    if (certs.some(c => (c.cert_type || c.type || '').toLowerCase().includes('gas') && c.status !== 'Expired')) autoCheck('ob8');
+    if (certs.some(c => (c.cert_type || c.type || '').toLowerCase().includes('eicr') && c.status !== 'Expired')) autoCheck('ob9');
+    if (p && p.epc_rating && p.epc_expiry && new Date(p.epc_expiry) > new Date()) autoCheck('ob10');
+    if (t && t.deposit_scheme) autoCheck('ob11');
+    if (tenantDocs.some(d => d.slot === 'deposit' || (d.doc_label && d.doc_label.toLowerCase().includes('deposit')))) autoCheck('ob12');
+    if ((D._invReports || []).some(r => String(r.propId) === String(pid) && (r.type || '').toLowerCase().includes('move-in'))) autoCheck('ob13');
+    if (insurance.length > 0) autoCheck('ob19');
+    // Persist auto-detected checks to Supabase so they survive refresh
+    sbSaveChecklist(pid, prefix, saved).catch(function(){});
   }
 
   const el = document.getElementById('cb-'+prefix+'-'+pid);
