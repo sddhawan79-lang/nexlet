@@ -641,38 +641,15 @@ Session 8 introduced a 3-checkbox pre-generation consent gate for 4 legal docume
 | 10 | Supabase credentials hardcoded in HTML files | Security hygiene | Acceptable — anon key is public-safe |
 | 11 | `parseInt()` on UUID `prop_id`/`tenant_id` values — produces NaN | Data integrity | **FIXED Session 7** — replaced with `String()` (22 locations) |
 | 12 | `tenant_documents` table missing from DB — KYC scanning fails silently | Database | **SQL created** — run `session7_tenant_documents.sql` in Supabase SQL Editor |
-| 13 | `tenant-documents` Storage bucket RLS — uploads fail with "row-level security policy" | Storage | Pending — add INSERT + SELECT RLS policies via Supabase Dashboard (see Session 18 step-by-step) |
-| 14 | Section 8 missing RRA 2025 grounds (1B, 2ZA, 2ZB, 2ZC, 2ZD) | Legal compliance | **FIXED Session 7** |
-| 15 | Landlord name derived from email username instead of `user_profiles.full_name` | Document generation | **FIXED Session 8** — added `_profileName()` helper |
-| 16 | Footer links on `index.html` — 6 dead `href="#"` links | Marketing page | **FIXED Session 8** — all now point to real `.html` files; added Complaints link |
-| 17 | No complaints policy page | Legal compliance | **FIXED Session 8** — created `complaints.html` |
-| 18 | Rent "Mark received" errors on save | Rent module | **FIXED Session 9** |
-| 19 | Property detail tabs unresponsive | Property detail | **FIXED Session 9** |
-| 20 | Generated document output shrunk to 360px | Document gen | **FIXED Session 9** |
-| 21 | Calendar "Mark received" parsed rent amount from display label | Calendar | **FIXED Session 9** |
-| 22 | `rent_payments` table has no SQL migration file in repo | Database docs | **PARTIAL** — table exists in DB but `session14_rent_payments.sql` not yet committed to repo |
-| 23 | Inventory report: file input destroyed by `innerHTML` replacement | Inventory | **FIXED Session 9** |
-| 24 | No subscription plan gating | Architecture | **FIXED Session 9** |
-| 25 | S8_GROUNDS had 31 entries, comment said "37" | Documentation | **FIXED Session 13** — expanded to 38 grounds, all comments updated |
-| 26 | Template count comment said "17 AI-generated" (actual: 20) | Documentation | **FIXED Session 13** |
-| 27 | 14 bare `console.error` calls in production code | Code quality | **FIXED Session 13** — wrapped in `_logError()` behind `RENTSAFE_DEBUG` flag |
-| 28 | Stray `alert('Add rooms — coming soon')` | UX | **FIXED Session 13** — replaced with `toast()` |
-| 29 | `esign_requests` table has no SQL migration file | Database | **FIXED Session 13** — `session10_esign_requests.sql` created |
-| 30 | `moFinancials` PDF marked "coming soon" but actually implemented | Documentation | **FIXED Session 13** — comment corrected |
-| 31 | Inventory report was modal-only, no persistence or tenant sharing | Feature gap | **FIXED Session 13** — full-page view, send-to-tenant with email body, DB persistence added |
-| 32 | Document Library had no inline preview | UX | **FIXED Session 13** — View button opens inline viewer |
-| 33 | Tenant wizard was 7-step, overly complex for basic tenant creation | UX | **FIXED Session 14** — replaced with single-screen fast-add modal |
-| 34 | No compliance checklist per tenant | Feature gap | **FIXED Session 14** — RAG checklist with 5 items, expandable accordion, JSONB persistence |
-| 35 | No free trial system — all users defaulted to portfolio | Feature gap | **FIXED Session 14** — 30-day trial with expiry popup, banner, indicator, email triggers |
-| 36 | No plan gating on inventory-reports page | Plan gating | **FIXED Session 14** — `nav()` now gates `inventory-reports` for non-Portfolio users |
-| 37 | `session13_inventory_reports.sql` referenced in change log but not committed to repo | Database docs | Pending — file must be created |
-| 38 | `session14_tenant_checklist.sql` referenced in change log but not committed to repo | Database docs | Pending — file must be created |
-| 39 | `pretenancy_checks` table + `pretenancy-audits` Storage bucket not created | Database | Pending — run `CREATE TABLE` in SQL Editor + create bucket in Supabase Dashboard → Storage |
-| 40 | `tenant_type` column may not exist on `tenants` table | Database | Pending — `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS tenant_type text;` |
-| 41 | `session14_trial_fields.sql` referenced in change log but not committed to repo | Database docs | Pending — file must be created |
+| 13 | `tenant-documents` Storage bucket RLS — uploads fail with "row-level security policy" | Storage | **FIXED** — INSERT + SELECT policies added via SQL Editor |
 | 42 | Back button exits app (no browser history in SPA) | Navigation | **FIXED Session 18** — `nav()` uses `history.pushState` + `popstate` listener |
 | 43 | `certificates` table missing `amount` column — EICR save fails | Database | **FIXED Session 18** — code-side fallback removes `amount` + `cert_ref` on schema error. Pending DB: `ALTER TABLE certificates ADD COLUMN IF NOT EXISTS amount numeric;` |
 | 44 | `properties` table missing `status`, `archive_reason`, `archived_at`, `vacant_since`, `tenancy_started_at`, `tenancy_ended_at` columns | Database | Pending — run: `ALTER TABLE properties ADD COLUMN IF NOT EXISTS status text, ADD COLUMN IF NOT EXISTS archive_reason text, ADD COLUMN IF NOT EXISTS archived_at timestamptz, ADD COLUMN IF NOT EXISTS vacant_since timestamptz, ADD COLUMN IF NOT EXISTS tenancy_started_at timestamptz, ADD COLUMN IF NOT EXISTS tenancy_ended_at timestamptz;` |
+| 45 | `esign_requests` RLS too permissive — anon UPDATE on any row | Security | **FIXED** — policy tightened to `USING (token IS NOT NULL)`; run SQL in Editor |
+| 46 | Missing cert types: Boiler Service, Fire Extinguisher, Emergency Lighting, Pest Control | Compliance | **FIXED Session 18** — added to all cert lists + compliance grid |
+| 47 | AI scan skips fields without warning — missing data silently dropped | AI / UX | **FIXED Session 18** — missing-field detection + amber warning banner in scan results |
+| 48 | No-expiry docs (RTR, S48, How to Rent, etc.) show as "EXPIRED" | Compliance | **FIXED Session 18** — show "✓ SERVED / ⚠ NOT SERVED" via `NO_EXPIRY` constant in `buildCertStatusGrid` |
+| 49 | HMO-only certs (Fire Extinguisher, Emergency Lighting) shown for non-HMO properties | Compliance | **FIXED Session 18** — `HMO_ONLY` constant hides them when property is not HMO |
 
 ---
 
@@ -1635,6 +1612,42 @@ When **touching any of these files for a new feature or bug fix**, follow this p
    ```
 6. Click **Review** → **Save policy**
 7. Verify in **SQL Editor**: `SELECT * FROM tenant_documents;` and `SELECT * FROM storage.objects WHERE bucket_id = 'tenant-documents';`
+
+#### E-Sign Workflow Fixes
+- **Edit button after AI generation:** `_esignToggleEdit()` toggles between preview and raw HTML editor (`landlord.html:11018`)
+- **Signed documents retrieval:** `esign_requests` loaded in `loadData()` (`D.esignReq`). Signed Documents panel in property detail tenant tab with download links (`landlord.html:4342`)
+- **Email error logging:** `.catch(() => {})` replaced with `console.error` on landlord + tenant email sends
+- **Email branding:** "RentSafe AI" → "NexLet" in esign email templates (`esign-content.js`)
+- **RLS fix SQL:** Added tighter `esign_requests` anon policies (run in SQL Editor)
+
+#### Document Upload Fixes
+- **Navigation removed from `uploadTenantDoc`:** no longer jumps to `tenant-detail` on success/failure — stays in current workflow (`landlord.html:5845-5866`)
+- **Upload Docs buttons:** Added `📄 Docs` button next to Edit on tenant detail page + property detail tenant tab, opens `moTenantDocs(tid, propId)` modal with 6 doc slots + AI scan (`landlord.html:4308, 5586`)
+- **Checklist auto-refresh:** `moTenantDocsUpload` re-runs `initPropChecklist` after upload so auto-detection re-ticks items
+- **Guidance message:** Blue box in Start Tenancy checklist pointing to Upload Docs button (`landlord.html:3829`)
+- **Storage RLS:** `rent_payments` UPDATE policy added (SQL run in Editor)
+- **Syntax fix:** Missing closing backtick restored in `pdTabContent` template literal
+
+#### Compliance Section Enhancement
+- **New cert types:** Boiler Service Certificate, Fire Extinguisher Service Record, Emergency Lighting Test Record, Pest Control Report — added to `CERT_TYPES`, `moCert()` dropdown, `_GD`/`_GN`/`_GS` arrays, `_pgGD`/`_pgGN`/`_pgGS` arrays
+- **AI scan improved:** `max_tokens` 300→500, type-specific prompts, missing-data detection with amber warnings (`landlord.html:1103-1122`). `scanDoc` shows "⚠ Could not determine: X, Y" banner (`landlord.html:1479`)
+- **Smart expiry:** No-expiry docs (How to Rent, Written Statement, RRA Sheet, RTR, S48, Inventory, Pest Control) show "✓ SERVED / ⚠ NOT SERVED" instead of Valid/Expired (`buildCertStatusGrid`: `NO_EXPIRY` constant)
+- **HMO-only certs:** HMO Licence, Fire Extinguisher, Emergency Lighting hidden from compliance grid unless property `type === 'HMO'` or `licence_type` contains "hmo"/"mandatory" (`buildCertStatusGrid`: `HMO_ONLY` constant)
+- **`findCert()`:** Rewritten with generic fallback matching, covers all 25 cert types
+
+#### Checklist Auto-Detection
+- `initPropChecklist` auto-ticks checklist items when corresponding documents already exist in the system (`landlord.html:3999-4023`):
+  - RTR check → right_to_rent doc uploaded
+  - Written Statement → esign signed
+  - RRA Sheet / How to Rent → email_log sent
+  - Gas Safety → valid GSC cert
+  - EICR → valid EICR cert
+  - EPC → EPC rating set + not expired
+  - Deposit registered → tenant.deposit_scheme set
+  - Prescribed info → deposit doc uploaded
+  - Move-in inventory → inventory report generated
+  - Insurers notified → insurance policy exists
+- Auto-detected checks persist to Supabase via `sbSaveChecklist`
 
 ---
 
