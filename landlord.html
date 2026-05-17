@@ -4345,7 +4345,7 @@ function pdTabContent(pid, tab) {
         return '<div class="panel" style="margin-bottom:16px"><div class="ph2"><div><h2>📄 Signed Documents</h2><p>Completed e-signatures</p></div></div><div style="padding:8px 18px 14px">'
           + signed.map(r => '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);gap:10px"><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:var(--txt)">'+(r.document_type==='written_statement'?'Written Statement':'Uploaded PDF')+'</div><div style="font-size:10px;color:var(--muted)">Signed '+new Date(r.signed_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})+' · '+(r.tenant_name||'Tenant')+'</div></div>'+(r.signed_pdf_url?'<a href="'+r.signed_pdf_url+'" target="_blank" class="btn btn-sm" style="font-size:11px;text-decoration:none;flex-shrink:0">⬇ Download</a>':'<span style="font-size:10px;color:var(--muted)">No file</span>')+'</div>').join('')
           + '</div></div>';
-      })()}
+      })()}`
 
     : `<div class="panel"><div style="padding:36px 28px;text-align:center">
         <div style="font-size:38px;margin-bottom:12px">🏠</div>
