@@ -1724,7 +1724,7 @@ function moPropertyStatus(pid) {
   const p = P(pid); if (!p) return;
   const cur = p.status || 'active';
   const curInfo = PROPERTY_STATUS[cur] || PROPERTY_STATUS.active;
-  const rows = Object.entries(PROPERTY_STATUS).map(([key, info]) => {
+  const rows = Object.entries(PROPERTY_STATUS).filter(([key])=>key!=='archived').map(([key, info]) => {
     const isCur = key === cur;
     return `<button type="button" onclick="changePropertyStatus('${pid}','${key}')" ${isCur?'disabled':''}
       style="display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;border:${isCur?'2px solid '+info.colour:'1px solid var(--border)'};border-radius:9px;background:${isCur?'rgba(255,255,255,0.5)':'var(--white)'};cursor:${isCur?'default':'pointer'};font-family:var(--font);text-align:left;transition:all .15s;${isCur?'opacity:1':'opacity:.85'}"
@@ -1749,7 +1749,7 @@ async function changePropertyStatus(pid, newStatus) {
   const p = P(pid);
   if (p) p.status = newStatus;
   await logAudit('PROPERTY_STATUS_CHANGE', 'properties', pid, `Status changed to: ${info.label}`);
-  closeMo(); toast(`Status updated to ${info.label}`); nav('prop-detail', pid);
+  closeMo(); toast(`Status updated to ${info.label}`); nav('properties');
 }
 
 // ── TENANCY FLOW STUBS ──
