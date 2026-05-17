@@ -1709,18 +1709,36 @@ function moEditProp(pid){
   `,`<button class="btn" onclick="closeMo()">Cancel</button><button class="btn btn-navy" onclick="saveEditPropToDB('${pid}')">Save changes</button>`);
 }
 
-async function archiveProperty(pid) {
-  if (!confirm('Mark this property as sold? It will be archived and removed from your active portfolio. You can restore it from your database if needed.')) return;
-  const now = new Date().toISOString();
-  try {
-    const { error } = await sb.from('properties').update({ status: 'archived', archived_at: now }).eq('id', pid);
-    if (error) throw error;
-  } catch (e) {
-    try { await sb.from('properties').update({ status: 'archived' }).eq('id', pid); } catch (_) {}
-  }
-  const p = D.properties.find(p => String(p.id) === String(pid));
-  if (p) { p.status = 'archived'; p.archived_at = now; }
-  await logAudit('ARCHIVE_PROPERTY', 'properties', pid, 'Property archived / marked as sold');
+function archiveProperty(pid) {
+  const p = P(pid); if (!p) return;
+  openMo('Archive property', `${p.address}${p.city ? ', ' + p.city : ''}`, `
+    <div style="background:rgba(229,62,62,0.06);border:1px solid rgba(229,62,62,0.2);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:var(--red)">
+      ⚠️ Archiving removes this property from your active portfolio. All tenant history, documents and rent records are preserved.
+    </div>
+    <div class="fg"><label>Reason for archiving <span style="color:var(--red)">*</span></label>
+      <select id="arch-reason" class="fi" style="width:100%">
+        <option value="">Select reason…</option>
+        <option value="Sold">Sold</option>
+        <option value="No longer letting">No longer letting</option>
+        <option value="Long-term vacant">Long-term vacant</option>
+        <option value="Major refurbishment">Major refurbishment</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+  `, `<button class="btn" onclick="closeMo()">Cancel</button>
+     <button class="btn btn-navy" id="arch-btn" onclick="_archivePropertyConfirm('${pid}')">Archive property</button>`);
+}
+
+async function _archivePropertyConfirm(pid) {
+  const reason = document.getElementById('arch-reason')?.value;
+  if (!reason) { toast('Please select a reason', true); return; }
+  const btn = document.getElementById('arch-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Archiving…';
+  const { error } = await sb.from('properties').update({ status: 'archived', archive_reason: reason, archived_at: new Date().toISOString() }).eq('id', pid);
+  if (error) { toast('Error: ' + error.message, true); btn.disabled = false; btn.textContent = 'Archive property'; return; }
+  const p = P(pid);
+  if (p) { p.status = 'archived'; p.archive_reason = reason; }
+  await logAudit('ARCHIVE_PROPERTY', 'properties', pid, `Archived — reason: ${reason}`);
   closeMo(); toast('✓ Property archived'); nav('properties');
 }
 
