@@ -3597,6 +3597,11 @@ function pgProperties(){
     const isArchived=(p.status||'active')==='archived';
     const rowStyle=isArchived?'opacity:0.55':'';
     const st=p.status||'active';
+    let voidLine='';
+    if(st==='vacant'&&p.vacant_since){
+      const vd=Math.floor((Date.now()-new Date(p.vacant_since).getTime())/(86400000));
+      if(vd>=30) voidLine='<div style="font-size:10px;color:var(--amber);margin-top:3px">🟡 Vacant '+vd+'d — ready to re-let?</div>';
+    }
     let voidNudge='';
     if(st==='vacant'&&p.vacant_since){
       const days=Math.floor((Date.now()-new Date(p.vacant_since).getTime())/(86400000));
@@ -3609,6 +3614,7 @@ function pgProperties(){
       +'<div style="flex:2;min-width:0">'
         +'<div style="font-size:13px;font-weight:600;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+p.address+'</div>'
         +'<div style="font-size:11px;color:var(--muted)">'+(p.city||'')+(p.postcode?'· '+p.postcode:'')+'</div>'
+        +voidLine
       +'</div>'
       +'<div style="flex:1.5;min-width:0;display:flex;align-items:center;gap:6px">'
         +(isArchived
@@ -4184,6 +4190,20 @@ function pgPropDetail(pid) {
       else if (sk === 'refurbishment') btns = btn('Mark Ready', 'btn-navy', `markRefurbReady('${pid}')`) + btn('Archive', '', `archiveProperty('${pid}')`);
       else if (sk === 'archived') btns = '<span style="font-size:12px;color:var(--muted);font-weight:500;padding:7px 0">📋 View History</span>';
       return btns ? `<div style="display:flex;align-items:center;gap:8px;margin-bottom:18px">${btns}</div>` : '';
+    })()}
+
+    ${(() => {
+      if ((p.status || 'vacant') !== 'vacant') return '';
+      if (!p.vacant_since) return '';
+      const daysSince = Math.floor((Date.now() - new Date(p.vacant_since).getTime()) / 864e5);
+      if (daysSince < 30) return '';
+      return `<div style="background:rgba(217,119,6,0.08);border:1px solid rgba(217,119,6,0.25);border-radius:8px;padding:10px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <div>
+          <div style="font-size:12px;font-weight:700;color:var(--amber)">🟡 Vacant for ${daysSince} days</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">Ready to find a new tenant?</div>
+        </div>
+        <button class="btn btn-sm btn-navy" onclick="startTenancy('${pid}')" style="font-size:11px;white-space:nowrap">Start Tenancy →</button>
+      </div>`;
     })()}
 
     ${statHtml}
