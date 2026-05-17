@@ -1787,10 +1787,18 @@ async function changePropertyStatus(pid, newStatus) {
 
 // ── TENANCY FLOW STUBS ──
 function startTenancy(pid) {
-  openMo('Start Tenancy', '',
-    `<p style="font-size:13px;color:var(--txt);line-height:1.6;margin-bottom:16px">This will open the tenancy start guide for this property. You'll be taken to the Pre-Tenancy Checklist, then guided to add your tenant.</p>`,
-    `<button class="btn" onclick="closeMo()">Cancel</button>
-     <button class="btn btn-navy" onclick="closeMo();window._addPropOrigin='property-detail';nav('prop-detail','${pid}');setTimeout(function(){pdSetTab('${pid}','tenant')},100)">Begin setup →</button>`);
+  const p = P(pid); if (!p) return;
+  openMo(
+    '✅ Start Tenancy — ' + p.address,
+    'Complete the pre-tenancy checklist, then add your tenant',
+    `<div id="cb-ob-${pid}" style="min-height:80px">
+       <div style="color:var(--muted);font-size:13px;padding:20px 0;text-align:center">Loading checklist…</div>
+     </div>`,
+    `<button class="btn" onclick="closeMo()">Close</button>`
+  );
+  document.querySelector('.mo-box').classList.add('mo-wide');
+  window._addPropOrigin = 'property-detail';
+  initPropChecklist('ob', pid, 'onboard');
 }
 function endTenancy(pid) {
   const t = D.tenants.find(x => String(x.prop_id) === String(pid) && x.status === 'Active');
@@ -4231,12 +4239,6 @@ function pdSetTab(pid, tab) {
     </div>`;
     _logError('pdTabContent:'+tab, err);
   }
-  if (tab === 'tenant') {
-    try {
-      initPropChecklist('ob', pid, 'onboard');
-      initPropChecklist('db', pid, 'deboard');
-    } catch(e) { console.warn('checklist init failed', e); }
-  }
 }
 
 function pdTabContent(pid, tab) {
@@ -4323,21 +4325,12 @@ function pdTabContent(pid, tab) {
         <div class="ph2"><div><h2>✉ Email log</h2><p>Documents sent to this tenant</p></div><button class="btn btn-sm" onclick="nav('templates')">+ Send document</button></div>
         <div style="padding:14px 18px">${propEmailLogHtml(pid)}</div>
       </div>
-
-      <div class="panel" style="margin-bottom:16px">
-        <div class="ph2"><div><h2>✅ Tenancy start guide</h2><p>Onboarding checklist</p></div></div>
-        <div style="padding:14px 18px"><div id="cb-ob-${pid}"><div style="color:var(--muted);font-size:13px">Loading…</div></div></div>
-      </div>
-
-      <div class="panel">
-        <div class="ph2"><div><h2>📋 Tenancy end guide</h2><p>Offboarding checklist</p></div></div>
-        <div style="padding:14px 18px"><div id="cb-db-${pid}"><div style="color:var(--muted);font-size:13px">Loading…</div></div></div>
-      </div>` 
-    : `<div class="panel"><div style="padding:40px;text-align:center">
-        <div style="font-size:32px;margin-bottom:10px">👤</div>
-        <div style="font-size:14px;font-weight:500;margin-bottom:4px">No tenant linked</div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Add a tenant to this property to track rent, generate notices and manage the tenancy.</div>
-        <button class="btn btn-navy" onclick="moTenant('${pid}')">+ Add tenant</button>
+    : `<div class="panel"><div style="padding:36px 28px;text-align:center">
+        <div style="font-size:38px;margin-bottom:12px">🏠</div>
+        <div style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:6px">Ready to start a tenancy?</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:6px;max-width:320px;margin-left:auto;margin-right:auto;line-height:1.6">Complete the pre-tenancy checklist first — it takes 2 minutes and protects you legally under the Renters' Rights Act 2025.</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:20px">Covers: Right to Rent · ID docs · Deposit protection · Tenancy agreement · Insurance</div>
+        <button class="btn btn-navy" style="padding:10px 28px;font-size:14px" onclick="startTenancy('${pid}')">▶ Start Tenancy Setup</button>
       </div></div>`;
     return tenantCard;
   }
