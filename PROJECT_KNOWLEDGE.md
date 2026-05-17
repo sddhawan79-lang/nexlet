@@ -177,6 +177,13 @@ rentsafeai/
 | `mortgage_outstanding` | numeric | |
 | `licence_type` | text | HMO, selective, etc. |
 | `epc_rating` | text | A–G |
+| `status` | text | Session 18: `vacant` \| `active` \| `refurbishment` \| `archived` (default: `active`) |
+| `archive_reason` | text | Session 18: e.g. Sold, No longer letting, Long-term vacant |
+| `archive_reason_detail` | text | Session 18: free-text detail |
+| `archived_at` | timestamptz | Session 18 |
+| `tenancy_started_at` | timestamptz | Session 18 |
+| `tenancy_ended_at` | timestamptz | Session 18 |
+| `vacant_since` | timestamptz | Session 18 |
 
 #### `tenants`
 | Column | Type | Notes |
@@ -634,7 +641,7 @@ Session 8 introduced a 3-checkbox pre-generation consent gate for 4 legal docume
 | 10 | Supabase credentials hardcoded in HTML files | Security hygiene | Acceptable — anon key is public-safe |
 | 11 | `parseInt()` on UUID `prop_id`/`tenant_id` values — produces NaN | Data integrity | **FIXED Session 7** — replaced with `String()` (22 locations) |
 | 12 | `tenant_documents` table missing from DB — KYC scanning fails silently | Database | **SQL created** — run `session7_tenant_documents.sql` in Supabase SQL Editor |
-| 13 | `tenant-documents` Storage bucket not created | Storage | Pending — create in Supabase Dashboard → Storage |
+| 13 | `tenant-documents` Storage bucket RLS — uploads fail with "row-level security policy" | Storage | Pending — add INSERT + SELECT RLS policies via Supabase Dashboard (see Session 18 step-by-step) |
 | 14 | Section 8 missing RRA 2025 grounds (1B, 2ZA, 2ZB, 2ZC, 2ZD) | Legal compliance | **FIXED Session 7** |
 | 15 | Landlord name derived from email username instead of `user_profiles.full_name` | Document generation | **FIXED Session 8** — added `_profileName()` helper |
 | 16 | Footer links on `index.html` — 6 dead `href="#"` links | Marketing page | **FIXED Session 8** — all now point to real `.html` files; added Complaints link |
@@ -662,7 +669,10 @@ Session 8 introduced a 3-checkbox pre-generation consent gate for 4 legal docume
 | 38 | `session14_tenant_checklist.sql` referenced in change log but not committed to repo | Database docs | Pending — file must be created |
 | 39 | `pretenancy_checks` table + `pretenancy-audits` Storage bucket not created | Database | Pending — run `CREATE TABLE` in SQL Editor + create bucket in Supabase Dashboard → Storage |
 | 40 | `tenant_type` column may not exist on `tenants` table | Database | Pending — `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS tenant_type text;` |
-| 39 | `session14_trial_fields.sql` referenced in change log but not committed to repo | Database docs | Pending — file must be created |
+| 41 | `session14_trial_fields.sql` referenced in change log but not committed to repo | Database docs | Pending — file must be created |
+| 42 | Back button exits app (no browser history in SPA) | Navigation | **FIXED Session 18** — `nav()` uses `history.pushState` + `popstate` listener |
+| 43 | `certificates` table missing `amount` column — EICR save fails | Database | **FIXED Session 18** — code-side fallback removes `amount` + `cert_ref` on schema error. Pending DB: `ALTER TABLE certificates ADD COLUMN IF NOT EXISTS amount numeric;` |
+| 44 | `properties` table missing `status`, `archive_reason`, `archived_at`, `vacant_since`, `tenancy_started_at`, `tenancy_ended_at` columns | Database | Pending — run: `ALTER TABLE properties ADD COLUMN IF NOT EXISTS status text, ADD COLUMN IF NOT EXISTS archive_reason text, ADD COLUMN IF NOT EXISTS archived_at timestamptz, ADD COLUMN IF NOT EXISTS vacant_since timestamptz, ADD COLUMN IF NOT EXISTS tenancy_started_at timestamptz, ADD COLUMN IF NOT EXISTS tenancy_ended_at timestamptz;` |
 
 ---
 
