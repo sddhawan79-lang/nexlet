@@ -5216,18 +5216,20 @@ function pgTenants(){
 
   const rows = visibleList.length
     ? `<div class="panel"><div class="tw"><table>
-      <thead><tr><th>Name</th><th>Property</th><th>Start</th><th>Deposit</th><th>Compliance</th><th>Status</th></tr></thead>
+      <thead><tr><th>Name</th><th>Property</th><th>Start</th><th>Deposit</th><th>Compliance</th><th>Docs</th><th>Status</th></tr></thead>
       <tbody>${visibleList.map(t=>{const p=P(t.prop_id)||{address:'—'};const isEnded=t.status==='Ended'||t.archived;
         const ragDots = CHECKLIST_ITEMS.map(item => {
           const cl = _checklistRAG(t, item.key);
           return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${RAG_COLORS[cl.ra]};margin:0 1px" title="${item.label}: ${cl.status}"></span>`;
         }).join('');
+        const docCount = D.tenantDocs.filter(d => String(d.tenant_id) === String(t.id)).length;
         return`<tr style="cursor:pointer;${isEnded?'opacity:.65':''}" onclick="nav('tenant-detail','${t.id}')">
         <td><div style="display:flex;align-items:center;gap:10px"><div class="t-av">${INI(t.name)}</div><div><div class="td-bold">${t.name}${isEnded?endedBadge:''}</div><div style="font-size:11px;color:var(--muted)">${t.phone||'—'}</div></div></div></td>
         <td style="font-size:12px">${p.address}</td>
         <td>${FMS(t.start||t.start_date)}</td>
         <td>${t.scheme?B('Protected'):'<span style="color:var(--muted);font-size:12px">Not set</span>'}</td>
         <td><span title="Compliance checklist">${ragDots}</span></td>
+        <td><button class="btn btn-sm btn-navy" style="font-size:10px;padding:3px 8px" onclick="event.stopPropagation();moTenantDocs('${t.id}','${t.prop_id}')">📎 ${docCount||''}</button></td>
         <td>${isEnded?B('Ended'):B(t.status)}</td>
       </tr>`}).join('')}</tbody>
     </table></div></div>`
@@ -5676,6 +5678,106 @@ async function deleteTenantDoc(docId, tid) {
   D.tenantDocs = D.tenantDocs.filter(d => String(d.id) !== String(docId));
   toast('✓ Document removed');
   nav('tenant-detail', tid);
+}
+
+// ── SHARED DOCUMENT UPLOAD MODAL ──
+function moTenantDocs(tenantId, propId) {
+  const t = D.tenants.find(x => String(x.id) === String(tenantId));
+  if (!t) { toast('Tenant not found', true); return; }
+  const SUPABASE_URL = 'https://mahtcfukgzbonwibtsxz.supabase.co';
+  const getDocUrl = d => d?.file_name ? `${SUPABASE_URL}/storage/v1/object/public/tenant-documents/${d.file_name}` : '#';
+  const docs = D.tenantDocs.filter(d => String(d.tenant_id) === String(tenantId));
+
+  const SLOTS = [
+    { slot: 'passport',      icon: '🪪', label: 'Passport / Photo ID' },
+    { slot: 'right_to_rent', icon: '✅', label: 'Right to Rent Document' },
+    { slot: 'address_1',     icon: '📬', label: 'Proof of Address 1' },
+    { slot: 'address_2',     icon: '📬', label: 'Proof of Address 2' },
+    { slot: 'reference',     icon: '📋', label: 'References' },
+    { slot: 'other',         icon: '📎', label: 'Other Document' },
+  ];
+
+  const slotRows = SLOTS.map(s => {
+    const slotDocs = docs.filter(d => d.slot === s.slot);
+    const docCards = slotDocs.length ? slotDocs.map((d,i) => `
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--off);border-radius:6px;margin-top:4px;font-size:11px">
+        <span>📎</span>
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.doc_label||d.file_name||'File'}</span>
+        ${d.doc_type_extracted ? `<span style="color:var(--green-dark);font-size:10px">✦ ${d.doc_type_extracted}</span>` : ''}
+        <a href="#" onclick="viewDocInline('${getDocUrl(d)}','${(d.doc_label||'File').replace(/'/g,"\\'")}');return false" style="font-size:10px;color:var(--blue)">View</a>
+      </div>`).join('') : '';
+
+    return `<div style="padding:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;display:flex;align-items:flex-start;gap:12px">
+      <span style="font-size:22px;flex-shrink:0">${s.icon}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600">${s.label}</div>
+        ${docCards}
+      </div>
+      <div style="flex-shrink:0;display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+        <label class="btn btn-navy btn-sm" style="cursor:pointer;font-size:11px;margin:0">
+          📤 Upload
+          <input type="file" style="display:none" accept=".pdf,.jpg,.jpeg,.png" onchange="moTenantDocsUpload('${tenantId}','${s.slot}',this)">
+        </label>
+        ${slotDocs.length ? `<button class="btn btn-sm" style="font-size:11px" onclick="moTenantDocsScan('${tenantId}','${s.slot}')">✦ AI Scan</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  openMo(`📎 Documents — ${t.name}`, `${t.email||'No email'} · ${slotRows.split('id="').length-1} slots`, `
+    <div style="max-height:55vh;overflow-y:auto;padding:0 2px">${slotRows}</div>
+  `, `<button class="btn" onclick="closeMo()">Close</button>`);
+}
+
+async function moTenantDocsUpload(tid, slot, input) {
+  await uploadTenantDoc(tid, slot, input);
+  const t = D.tenants.find(x => String(x.id) === String(tid));
+  if (t) moTenantDocs(tid, t.prop_id);
+}
+
+async function moTenantDocsScan(tid, slot) {
+  const doc = D.tenantDocs.find(d => String(d.tenant_id) === String(tid) && d.slot === slot);
+  if (!doc) { toast('Upload a document first', true); return; }
+  const t = D.tenants.find(x => String(x.id) === String(tid));
+  toast('✦ Scanning document…');
+  try {
+    const SUPABASE_URL = 'https://mahtcfukgzbonwibtsxz.supabase.co';
+    const url = doc.file_name ? `${SUPABASE_URL}/storage/v1/object/public/tenant-documents/${doc.file_name}` : null;
+    if (!url) { toast('Document file not found', true); return; }
+    const EDGE = 'https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy';
+    const prompts = {
+      passport: 'Extract: full_name, doc_number, expiry (YYYY-MM-DD), nationality, date_of_birth (YYYY-MM-DD), issuing_authority, doc_type_extracted. Return JSON.',
+      right_to_rent: 'Extract: full_name, share_code, share_code_expiry, doc_type_extracted. Return JSON.',
+      address_1: 'Extract: full_name, address, issuing_authority, doc_type_extracted. Return JSON.',
+      address_2: 'Extract: full_name, address, issuing_authority, doc_type_extracted. Return JSON.',
+      reference: 'Extract: full_name, issuing_authority, doc_type_extracted. Return JSON.',
+      other: 'Extract: full_name, issuing_authority, doc_number, expiry, doc_type_extracted. Return JSON.',
+    };
+    const prompt = prompts[slot] || prompts.other;
+    const res = await fetch(EDGE, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ type:'scan_doc', docUrl: url, prompt, max_tokens: 300 })
+    });
+    const aiData = await res.json();
+    const text = aiData.content?.[0]?.text || '';
+    let parsed = {};
+    try { parsed = JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] || '{}'); } catch(e) {}
+    const nameMismatch = parsed.full_name && t?.name ? parsed.full_name.toLowerCase().trim() !== t.name.toLowerCase().trim() : false;
+    const updates = {
+      extracted_name: parsed.full_name || null,
+      extracted_doc_number: parsed.doc_number || null,
+      extracted_expiry: parsed.expiry || null,
+      extracted_address: parsed.address || null,
+      share_code: parsed.share_code || null,
+      share_code_expiry: parsed.share_code_expiry || null,
+      issuing_authority: parsed.issuing_authority || null,
+      doc_type_extracted: parsed.doc_type_extracted || null,
+      name_mismatch: nameMismatch,
+    };
+    await sb.from('tenant_documents').update(updates).eq('id', doc.id);
+    D.tenantDocs = D.tenantDocs.map(d => String(d.id) === String(doc.id) ? { ...d, ...updates } : d);
+    toast(nameMismatch ? '⚠ Name mismatch detected' : '✓ Document scanned');
+    if (t) moTenantDocs(tid, t.prop_id);
+  } catch(e) { _logError('moTenantDocsScan', e); toast('Scan failed — try again', true); }
 }
 
 // ── In-app document viewer ──
