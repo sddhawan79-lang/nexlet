@@ -5199,6 +5199,68 @@ async function testReminder(id) {
 }
 
 // ── PAGE: TENANTS ──
+function openTenantPanel(tid) {
+  const t = D.tenants.find(x => String(x.id) === String(tid));
+  if (!t) return;
+  const p = P(t.prop_id) || { address:'—', city:'' };
+  const certs = D.certs.filter(c => String(c.prop_id) === String(t.prop_id));
+  const today = new Date(); today.setHours(0,0,0,0);
+  const expiring = certs.filter(c => c.expiry && new Date(c.expiry) > today && new Date(c.expiry) - today <= 60*864e5);
+
+  // RAG calculation (simplified)
+  var ragScore = 100; var ragLabel = 'green';
+  const hasGSC = certs.some(c => (c.type||'').toLowerCase().includes('gas') && (!c.expiry || new Date(c.expiry) > today));
+  const hasEICR = certs.some(c => (c.type||'').toLowerCase().includes('eicr') && (!c.expiry || new Date(c.expiry) > today));
+  const hasEPC = certs.some(c => (c.type||'').toLowerCase().includes('epc') && (!c.expiry || new Date(c.expiry) > today));
+  const hasDep = t.scheme && t.scheme_ref;
+  if (!hasGSC) ragScore -= 30;
+  if (!hasEICR) ragScore -= 25;
+  if (!hasEPC) ragScore -= 20;
+  if (!hasDep) ragScore -= 25;
+  if (ragScore < 50) ragLabel = 'red';
+  else if (ragScore < 80) ragLabel = 'amber';
+
+  const ragColors = { red: '#E53E3E', amber: '#D97706', green: 'var(--green)' };
+
+  document.getElementById('tenant-slide-body').innerHTML = `
+    <div style="margin-bottom:16px">
+      <div style="font-size:13px;font-weight:700;color:var(--muted);margin-bottom:2px">${t.name}</div>
+      <div style="font-size:20px;font-weight:700;color:var(--navy)">${p.address}${p.city?', '+p.city:''}</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:2px">${p.postcode||''}</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding:12px;background:var(--off);border-radius:8px">
+      <div style="font-size:28px;font-weight:700;color:${ragColors[ragLabel]}">${ragScore}%</div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Compliance Score</div>
+        <div style="font-size:12px;font-weight:700;color:${ragColors[ragLabel]}">${ragLabel.toUpperCase()}</div>
+      </div>
+    </div>
+    ${expiring.length ? `<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:var(--amber);margin-bottom:6px">⚠ Expiring within 60 days</div>
+      ${expiring.map(c => `<div style="font-size:12px;padding:6px 10px;background:var(--amber-bg);border-radius:6px;margin-bottom:4px;display:flex;justify-content:space-between">
+        <span>${c.type||'Certificate'}</span>
+        <span style="font-weight:700">${new Date(c.expiry).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span>
+      </div>`).join('')}</div>` : `<div style="font-size:12px;color:var(--green-dark);margin-bottom:14px;padding:8px;background:var(--green-bg);border-radius:6px">✓ No certificates expiring within 60 days</div>`}
+    <div style="font-size:13px;margin-bottom:8px">${t.email||'No email'} · ${t.phone||'No phone'}</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Move-in: ${t.start_date ? FMS(t.start_date) : '—'}</div>
+    <div style="font-size:12px;color:var(--muted)">Deposit: ${t.deposit ? '£'+t.deposit.toLocaleString() : 'Not set'} ${t.scheme?'('+t.scheme+')':''}</div>
+  `;
+
+  document.getElementById('tenant-slide-actions').innerHTML = `
+    <button class="btn btn-navy" onclick="closeTenantPanel();nav('tenant-detail','${t.id}')" style="width:100%">📋 View tenant details →</button>
+    <button class="btn" onclick="closeTenantPanel();nav('prop-detail','${t.prop_id}')" style="width:100%;margin-top:8px">🏠 View property →</button>
+  `;
+
+  document.getElementById('tenant-slide-panel').style.transform = 'translateX(0)';
+  document.getElementById('tenant-slide-backdrop').style.display = 'block';
+}
+
+function closeTenantPanel() {
+  var panel = document.getElementById('tenant-slide-panel');
+  var backdrop = document.getElementById('tenant-slide-backdrop');
+  if (panel) panel.style.transform = 'translateX(100%)';
+  if (backdrop) backdrop.style.display = 'none';
+}
+
 function pgTenants(){
   const filter = window._tenantFilter || 'Active';
   const activeList = D.tenants.filter(t => t.status === 'Active');
@@ -5223,8 +5285,8 @@ function pgTenants(){
           return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${RAG_COLORS[cl.ra]};margin:0 1px" title="${item.label}: ${cl.status}"></span>`;
         }).join('');
         const docCount = D.tenantDocs.filter(d => String(d.tenant_id) === String(t.id)).length;
-        return`<tr style="cursor:pointer;${isEnded?'opacity:.65':''}" onclick="nav('tenant-detail','${t.id}')">
-        <td><div style="display:flex;align-items:center;gap:10px"><div class="t-av">${INI(t.name)}</div><div><div class="td-bold">${t.name}${isEnded?endedBadge:''}</div><div style="font-size:11px;color:var(--muted)">${t.phone||'—'}</div></div></div></td>
+        return`<tr style="cursor:pointer;${isEnded?'opacity:.65':''}" onclick="openTenantPanel('${t.id}')">
+        <td><div style="display:flex;align-items:center;gap:10px"><div class="t-av">${INI(t.name)}</div><div><div class="td-bold">${t.name}${isEnded?endedBadge:''}</div><div style="font-size:11px;color:var(--muted)">${p.address}${p.city?', '+p.city:''}</div></div></div></td>
         <td style="font-size:12px">${p.address}</td>
         <td>${FMS(t.start||t.start_date)}</td>
         <td>${t.scheme?B('Protected'):'<span style="color:var(--muted);font-size:12px">Not set</span>'}</td>
@@ -5237,9 +5299,18 @@ function pgTenants(){
 
   return`<div class="topbar"><span class="tb-title">Tenants</span><div class="tb-right"><button class="btn btn-navy" onclick="moTenant()">+ Add tenant</button></div></div>
   <div class="content">
-    <div class="ph"><h1>Tenants</h1><p>${activeList.length} active · ${endedList.length} ended · Click any row to view details</p></div>
+    <div class="ph"><h1>Tenants</h1><p>${activeList.length} active · ${endedList.length} ended · Click any row for quick view</p></div>
     ${filterTabs}
     ${rows}
+    <div id="tenant-slide-panel" style="position:fixed;top:0;right:0;width:380px;max-width:90vw;height:100vh;background:var(--white);box-shadow:-4px 0 20px rgba(0,0,0,0.15);z-index:9999;transform:translateX(100%);transition:transform .25s cubic-bezier(.4,0,.2,1);overflow-y:auto;display:flex;flex-direction:column">
+      <div style="padding:16px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+        <h3 style="font-size:15px;font-weight:700;color:var(--navy)">Tenant Quick View</h3>
+        <button onclick="closeTenantPanel()" style="background:none;border:none;font-size:22px;color:var(--muted);cursor:pointer;line-height:1;padding:0">&times;</button>
+      </div>
+      <div id="tenant-slide-body" style="flex:1;padding:18px;overflow-y:auto"></div>
+      <div id="tenant-slide-actions" style="padding:14px 18px;border-top:1px solid var(--border)"></div>
+    </div>
+    <div id="tenant-slide-backdrop" onclick="closeTenantPanel()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.3);z-index:9998"></div>
   </div>`;
 }
 
