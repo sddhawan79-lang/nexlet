@@ -8553,38 +8553,6 @@ window.addEventListener('popstate', function(e) {
     }
   }
 });
-  // Plan gating — intercept restricted pages
-  if(page==='mtd' && !isPortfolio()){ upgradePrompt('MTD Tax Reporting','portfolio'); return; }
-  if((page==='financials'||page==='rent'||page==='insurance') && isStarter()){ upgradePrompt('Rent Tracking & Insurance','landlord'); return; }
-  if(page==='contractors' && isStarter()){ upgradePrompt('Contractor Book','landlord'); return; }
-  if(page==='inventory-reports' && !isPortfolio()){ upgradePrompt('AI Inventory Reports','portfolio'); return; }
-  const pageMap = {
-    'prop-detail': 'properties',
-    'tenant-detail': 'tenants',
-    'tenants': 'tenants',
-    'rent': 'financials',
-    'insurance': 'financials',
-    'calendar': 'dashboard',
-    'doclibrary': 'doclibrary',
-    'inventory-report': 'inventory-reports',
-  };
-  const activeTab = pageMap[page] || page;
-  document.querySelectorAll('.sb-item[data-page]').forEach(el=>{
-    el.classList.toggle('active', el.dataset.page === activeTab);
-  });
-  try {
-    main.innerHTML=(PAGES[page]||pgDashboard)(param);
-  } catch(err) {
-    main.innerHTML='<div style="padding:32px;font-family:sans-serif"><h2 style="color:#E53E3E">Page Error: '+page+'</h2><pre style="background:#fff5f5;padding:16px;border-radius:8px;font-size:12px;overflow:auto;white-space:pre-wrap">'+err.stack+'</pre></div>';
-    _logError('Nav:'+page, err);
-  }
-  main.scrollTo(0,0);
-  // Async post-render hooks
-  if (page === 'dashboard') { loadSetupBanner(); }
-  if (page === 'prop-detail' && param) {
-    const activeTab = window._pdTab && window._pdTab[param] || 'tenant';
-  }
-}
 // ── PAGE: TEMPLATES ──
 function pgTemplates() {
   const cats = [
