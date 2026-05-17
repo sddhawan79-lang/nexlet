@@ -910,6 +910,15 @@ function isExpired(){ return getUserPlan()==='expired'; }
 const PLAN_LIMITS = { starter:2, landlord:5, portfolio:999 };
 const PLAN_FEATURES = { starter:['compliance','certificates','maintenance','templates','calendar','assistant'], landlord:['compliance','certificates','maintenance','templates','calendar','assistant','financials','rent','insurance','contractors'], portfolio:['compliance','certificates','maintenance','templates','calendar','assistant','financials','rent','insurance','contractors','mtd','inventory-reports'] };
 function getPropLimit(){ if(isExpired()) return 0; return PLAN_LIMITS[getUserPlan()]||2; }
+
+// ── PROPERTY STATUS ──
+const PROPERTY_STATUS = {
+  vacant:          { label:'Vacant',          colour:'var(--amber)',  badge:'🟡' },
+  active:          { label:'Active Tenancy',  colour:'var(--green)',  badge:'🟢' },
+  refurbishment:   { label:'Refurbishment',   colour:'#3B82F6',       badge:'🔵' },
+  archived:        { label:'Archived',        colour:'var(--muted)',  badge:'⚫' }
+};
+function _statusPillClr(s){ const m={vacant:'rgba(217,119,6,',active:'rgba(232,146,58,',refurbishment:'rgba(59,130,246,',archived:'rgba(107,122,122,'}; return m[s]||'rgba(107,122,122,'; }
 async function redirectToCheckout(plan) {
   try {
     const { data: { session } } = await sb.auth.getSession();
@@ -1059,6 +1068,7 @@ async function savePropToDB() {
     epc_expiry:      null,
     notes:           document.getElementById('p-notes')?.value.trim() || null,
     user_id:         currentUser.id,
+    status:          'active',
     score: 50, rooms: [], inspections: []
   };
 
@@ -1701,12 +1711,45 @@ function moEditProp(pid){
 
 async function archiveProperty(pid) {
   if (!confirm('Mark this property as sold? It will be archived and removed from your active portfolio. You can restore it from your database if needed.')) return;
-  const { error } = await sb.from('properties').update({ status: 'Archived' }).eq('id', pid);
+  const { error } = await sb.from('properties').update({ status: 'archived' }).eq('id', pid);
   if (error) { toast('Error: ' + error.message, true); return; }
-  const idx = D.properties.findIndex(p => String(p.id) === String(pid));
-  if (idx >= 0) D.properties.splice(idx, 1);
+  const p = D.properties.find(p => String(p.id) === String(pid));
+  if (p) p.status = 'archived';
   await logAudit('ARCHIVE_PROPERTY', 'properties', pid, 'Property archived / marked as sold');
   closeMo(); toast('✓ Property archived'); nav('properties');
+}
+
+// ── PROPERTY STATUS CHANGE ──
+function moPropertyStatus(pid) {
+  const p = P(pid); if (!p) return;
+  const cur = p.status || 'active';
+  const curInfo = PROPERTY_STATUS[cur] || PROPERTY_STATUS.active;
+  const rows = Object.entries(PROPERTY_STATUS).map(([key, info]) => {
+    const isCur = key === cur;
+    return `<button type="button" onclick="changePropertyStatus('${pid}','${key}')" ${isCur?'disabled':''}
+      style="display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;border:${isCur?'2px solid '+info.colour:'1px solid var(--border)'};border-radius:9px;background:${isCur?'rgba(255,255,255,0.5)':'var(--white)'};cursor:${isCur?'default':'pointer'};font-family:var(--font);text-align:left;transition:all .15s;${isCur?'opacity:1':'opacity:.85'}"
+      onmouseenter="if(!this.disabled){this.style.borderColor='var(--navy)';this.style.opacity='1'}"
+      onmouseleave="if(!this.disabled){this.style.borderColor='var(--border)';this.style.opacity='.85'}">
+      <span style="font-size:18px">${info.badge}</span>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:${isCur?'700':'500'};color:var(--txt)">${info.label}</div>
+        ${isCur?`<div style="font-size:11px;color:var(--muted);margin-top:1px">Current status</div>`:''}
+      </div>
+      ${isCur?`<span style="font-size:11px;font-weight:600;color:${info.colour}">✓ Selected</span>`:''}
+    </button>`;
+  }).join('<div style="height:8px"></div>');
+  openMo('Change property status', `${p.address}, ${p.city||''} · Current: ${curInfo.badge} ${curInfo.label}`, `${rows}`, '');
+}
+
+async function changePropertyStatus(pid, newStatus) {
+  const info = PROPERTY_STATUS[newStatus];
+  if (!info) return;
+  const { error } = await sb.from('properties').update({ status: newStatus }).eq('id', pid);
+  if (error) { toast('Error: ' + error.message, true); return; }
+  const p = P(pid);
+  if (p) p.status = newStatus;
+  await logAudit('PROPERTY_STATUS_CHANGE', 'properties', pid, `Status changed to: ${info.label}`);
+  closeMo(); toast(`Status updated to ${info.label}`); nav('prop-detail', pid);
 }
 
 // ── MODAL: LICENCE ──
@@ -3472,12 +3515,15 @@ function pgProperties(){
   const occupied=allProps.filter(p=>D.tenants.some(t=>String(t.prop_id)===String(p.id)&&t.status==='Active')).length;
   const occupancyPct=allProps.length?Math.round(occupied/allProps.length*100):0;
   const occColor=occupancyPct===100?'var(--green)':occupancyPct>=50?'#D97706':'#E53E3E';
-  const attention=[],active=[],archived=[];
+  const attention=[],vacantG=[],activeG=[],refurbG=[],archived=[];
   filtered.forEach(p=>{
-    if(p.status==='Archived'){archived.push(p);return;}
+    const st=p.status||'active';
+    if(st==='archived'){archived.push(p);return;}
+    if(st==='refurbishment'){refurbG.push(p);return;}
+    if(st==='vacant'){vacantG.push(p);return;}
     const hasTenant=D.tenants.some(t=>String(t.prop_id)===String(p.id)&&t.status==='Active');
     const rag=calcRAG(p.id);
-    if(!hasTenant||rag.rag==='red')attention.push(p); else active.push(p);
+    if(!hasTenant||rag.rag==='red')attention.push(p); else activeG.push(p);
   });
   function propRow(p){
     const t=D.tenants.find(x=>String(x.prop_id)===String(p.id)&&x.status==='Active');
@@ -3485,16 +3531,16 @@ function pgProperties(){
     const ragCol=rag.rag==='green'?'var(--green)':rag.rag==='amber'?'#D97706':'#E53E3E';
     const openIssues=D.maintenance.filter(m=>String(m.prop_id)===String(p.id)&&m.status!=='Resolved').length;
     const awaab=D.maintenance.some(m=>String(m.prop_id)===String(p.id)&&m.awaab&&m.status!=='Resolved');
+    const ps=PROPERTY_STATUS[p.status]||PROPERTY_STATUS.active;
     return '<div style="display:flex;align-items:center;gap:14px;padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s" onclick="nav(\'prop-detail\',\''+p.id+'\')" onmouseenter="this.style.background=\'var(--off)\'" onmouseleave="this.style.background=\'transparent\'">'
       +'<div style="width:9px;height:9px;border-radius:50%;background:'+ragCol+';flex-shrink:0" title="'+rag.label+'"></div>'
       +'<div style="flex:2;min-width:0">'
         +'<div style="font-size:13px;font-weight:600;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+p.address+'</div>'
         +'<div style="font-size:11px;color:var(--muted)">'+(p.city||'')+(p.postcode?'· '+p.postcode:'')+'</div>'
       +'</div>'
-      +'<div style="flex:1.5;min-width:0">'
-        +(t?'<div style="font-size:12px;font-weight:500;color:var(--txt)">'+t.name+'</div><div style="font-size:11px;color:var(--muted)">Active tenant</div>'
-           :'<span style="font-size:11px;font-weight:600;color:#E53E3E;background:rgba(229,62,62,0.08);padding:2px 8px;border-radius:100px">Vacant</span>')
-      +'</div>'
+      +'<div style="flex:1.5;min-width:0;display:flex;align-items:center;gap:6px">'
+        +'<span style="font-size:11px;font-weight:600;color:'+ps.colour+';background:'+(_statusPillClr(p.status))+'0.1);padding:2px 8px;border-radius:100px;cursor:pointer" onclick="event.stopPropagation();moPropertyStatus(\''+p.id+'\')" title="Click to change status">'+ps.badge+' '+ps.label+'</span>'
+        +'</div>'
       +'<div style="flex:1;text-align:right;font-size:13px;font-weight:600;color:var(--green-dark)">'+(p.rent?'£'+(p.rent).toLocaleString()+'/mo':'&#8212;')+'</div>'
       +'<div style="flex:0.7;text-align:center">'
         +(openIssues>0?'<span style="font-size:11px;font-weight:600;color:'+(awaab?'#E53E3E':'#D97706')+'">'+(awaab?'⚠ ':'')+openIssues+' issue'+(openIssues!==1?'s':'')+' open</span>'
@@ -3537,7 +3583,7 @@ function pgProperties(){
   +'</div>'
   +(noResults
     ?'<div class="empty"><div class="empty-ic">🔍</div><div class="empty-t">No results for &ldquo;'+q+'&rdquo;</div><div class="empty-s">Try a different address, city or tenant name</div></div>'
-    :groupBlock('attention','⚠️','Needs attention',attention,true)+groupBlock('active','✅','Active',active,true)+groupBlock('archived','📦','Archived',archived,false))
+    :groupBlock('attention','⚠️','Needs attention',attention,true)+groupBlock('active','🟢','Active Tenancy',activeG,true)+groupBlock('vacant','🟡','Vacant',vacantG,true)+groupBlock('refurb','🔵','Refurbishment',refurbG,true)+groupBlock('archived','⚫','Archived',archived,false))
   +'</div>';
 }
 
@@ -3992,6 +4038,7 @@ function pgPropDetail(pid) {
   const pm = D.maintenance.filter(m => String(m.prop_id) === String(pid) && m.status !== 'Resolved');
   const rag = calcRAG(pid);
   const ragCol = rag.rag === 'red' ? 'var(--red)' : rag.rag === 'amber' ? 'var(--amber)' : 'var(--green)';
+  const ps = PROPERTY_STATUS[p.status] || PROPERTY_STATUS.active;
   const activeTab = window._pdTab[pid] || 'tenant';
 
   // Stat cards
@@ -4036,7 +4083,7 @@ function pgPropDetail(pid) {
         <p style="font-size:13px;color:var(--muted)">${p.city}, ${p.postcode}</p>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-        ${B(t?'Active':'Vacant')}
+        <span class="badge" style="background:${_statusPillClr(p.status)}0.1);color:${ps.colour};cursor:pointer" onclick="moPropertyStatus('${pid}')" title="Click to change status">${ps.badge} ${ps.label}</span>
         <span class="badge b-gray">${p.type||'—'}</span>
         ${p.beds?`<span class="badge b-gray">${p.beds} bed · ${p.bathrooms||1} bath</span>`:''}
         ${p.licence_type&&p.licence_type!=='None'?`<span class="badge b-amber">${p.licence_type}</span>`:''}
