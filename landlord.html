@@ -4933,101 +4933,310 @@ function pdTabContent(pid, tab) {
   // ── COMPLIANCE TAB ──
   if (tab === 'compliance') {
     const rag = calcRAG(pid);
-    const ragCol = rag.rag==='red'?'#E53E3E':rag.rag==='amber'?'#D97706':'var(--green)';
-    const ragBg = rag.rag==='red'?'#fff5f5':rag.rag==='amber'?'#fffbeb':'#f0fdf9';
-    const _cgToday = new Date(); _cgToday.setHours(0,0,0,0);
+    const ragCol = rag.rag==='red' ? '#E53E3E'
+      : rag.rag==='amber' ? '#D97706'
+      : 'var(--green)';
+    const ragBg = rag.rag==='red' ? '#fff5f5'
+      : rag.rag==='amber' ? '#fffbeb'
+      : '#f0fdf9';
 
-    const _cgGetSt = label => {
-      const lo = label.toLowerCase();
-      const cert = pc.find(c => {
-        const t = (c.type||'').toLowerCase();
-        if (lo.includes('gas safety')) return t.includes('gas');
-        if (lo.includes('eicr')||lo.includes('electrical installation')) return t.includes('eicr')||t.includes('electrical installation');
-        if (lo.includes('epc')||lo.includes('energy performance')) return t.includes('epc')||t.includes('energy performance');
-        if (lo.includes('how to rent')) return t.includes('how to rent');
-        if (lo.includes('deposit protection')) return t.includes('deposit');
-        if (lo.includes('written statement')) return t.includes('written statement')||t.includes('tenancy agreement');
-        if (lo.includes('right to rent')) return t.includes('right to rent');
-        if (lo.includes('smoke alarm')) return t.includes('smoke alarm');
-        if (lo.includes('co alarm')) return t.includes('co alarm');
-        if (lo.includes('legionella')) return t.includes('legionella');
-        if (lo.includes('fire risk')) return t.includes('fire risk');
-        if (lo.includes('asbestos')) return t.includes('asbestos');
-        if (lo.includes('pat testing')) return t.includes('pat');
-        if (lo.includes('hmo licence')) return t.includes('hmo');
-        if (lo.includes('selective licence')) return t.includes('selective');
-        if (lo.includes('planning permission')) return t.includes('planning')||t.includes('article 4');
-        if (lo.includes('inventory')) return t.includes('inventory');
-        if (lo.includes('buildings insurance')) return t.includes('buildings insurance');
-        if (lo.includes('contents insurance')) return t.includes('contents insurance');
-        if (lo.includes('rent guarantee')) return t.includes('rent guarantee');
-        if (lo.includes('section 48')) return t.includes('section 48')||t.includes('s48');
-        return t.includes(lo.substring(0,8));
-      });
-      if (!cert) return { lbl:'MISSING', bg:'#E4EAF1', col:'#7A8FA6', bdr:'transparent', days:null, overdue:true };
-      if (cert.expiry) {
-        const days = Math.round((new Date(cert.expiry)-_cgToday)/864e5);
-        if (days < 0)   return { lbl:'EXPIRED',      bg:'rgba(229,62,62,0.1)',   col:'#E53E3E', bdr:'rgba(229,62,62,0.25)',  days, overdue:true  };
-        if (days <= 14) return { lbl:'URGENT',        bg:'rgba(217,119,6,0.1)',   col:'#D97706', bdr:'rgba(217,119,6,0.25)',  days, overdue:false };
-        if (days <= 60) return { lbl:'EXPIRING SOON', bg:'rgba(59,111,232,0.08)', col:'#3B6FE8', bdr:'rgba(59,111,232,0.2)', days, overdue:false };
-        return               { lbl:'VALID',           bg:'var(--green-bg)',  col:'#00A87A', bdr:'var(--green-bg)',  days, overdue:false };
-      }
-      return { lbl:'NO DATE SET', bg:'rgba(229,62,62,0.07)', col:'#E53E3E', bdr:'rgba(229,62,62,0.2)', days:null, overdue:true };
-    };
+    const propDocs = getDocsForProperty(pid);
+    const pi = D.insurance.filter(
+      i => String(i.prop_id) === String(pid)
+    );
 
-    const _cgGroup = (gid, icon, title, types, addBtn) => {
-      const items = types.map(label => ({ label, st: _cgGetSt(label) }));
-      items.sort((a,b) => (b.st.overdue?1:0)-(a.st.overdue?1:0));
-      const overdueCount = items.filter(i=>i.st.overdue).length;
-      const rows = items.map(({label,st}) => {
-        const dayStr = st.days!==null ? (st.days<0?`${Math.abs(st.days)}d overdue`:`${st.days}d left`) : '';
-        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 11px;background:${st.bg};border:1px solid ${st.bdr};border-radius:7px;gap:8px">
-          <span style="font-size:12px;font-weight:500;color:var(--txt);flex:1;min-width:0">${label}</span>
-          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-            ${st.overdue?`<span style="font-size:10px;font-weight:700;color:#fff;background:#E53E3E;padding:2px 7px;border-radius:100px">Action required</span>`:''}
-            ${dayStr?`<span style="font-size:10px;color:${st.col}">${dayStr}</span>`:''}
-            <span style="font-size:10px;font-weight:700;color:${st.col};letter-spacing:.3px;white-space:nowrap">${st.lbl}</span>
+    // ── GROUP RENDERER ──
+    function renderCompGroup(
+      groupKey, group, certList, insuranceList,
+      addBtn, defaultOpen
+    ) {
+      if (!group.docs.length) return '';
+
+      const items = group.docs.map(doc => {
+        const st = getDocStatus(
+          doc, certList, insuranceList
+        );
+        const dayStr = st.days !== null
+          ? (st.days < 0
+            ? `${Math.abs(st.days)}d overdue`
+            : `${st.days}d left`)
+          : '';
+
+        // Action button per row
+        let rowAction = '';
+        if (st.action === 'insurance') {
+          rowAction = `<button onclick="nav('insurance')"
+            style="font-size:10px;padding:3px 8px;
+            border-radius:5px;border:1px solid var(--border);
+            background:var(--white);color:var(--muted);
+            cursor:pointer;font-family:var(--font);
+            white-space:nowrap">Manage →</button>`;
+        } else if (st.overdue) {
+          rowAction = `<button onclick="moCert('${pid}')"
+            style="font-size:10px;padding:3px 8px;
+            border-radius:5px;border:1px solid var(--red);
+            background:rgba(229,62,62,0.07);color:var(--red);
+            cursor:pointer;font-family:var(--font);
+            white-space:nowrap;font-weight:600">
+            + Upload</button>`;
+        }
+
+        return `
+          <div style="display:flex;align-items:center;
+            justify-content:space-between;padding:9px 12px;
+            background:${st.bg};border:1px solid ${st.bdr};
+            border-radius:8px;gap:8px">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12.5px;font-weight:500;
+                color:var(--txt)">${doc.label}</div>
+              <div style="font-size:10.5px;color:var(--muted);
+                margin-top:1px;line-height:1.4">
+                ${doc.note}</div>
+            </div>
+            <div style="display:flex;align-items:center;
+              gap:6px;flex-shrink:0">
+              ${dayStr
+                ? `<span style="font-size:10px;
+                    color:${st.col}">${dayStr}</span>`
+                : ''}
+              <span style="font-size:10px;font-weight:700;
+                color:${st.col};letter-spacing:.3px;
+                white-space:nowrap">${st.lbl}</span>
+              ${rowAction}
+            </div>
+          </div>`;
+      }).join('');
+
+      const overdueCount = group.docs.filter(doc => {
+        const st = getDocStatus(
+          doc, certList, insuranceList
+        );
+        return st.overdue;
+      }).length;
+
+      const hdrBadge = overdueCount
+        ? `<span style="font-size:10px;font-weight:700;
+            color:#fff;background:#E53E3E;padding:2px 7px;
+            border-radius:100px;margin-left:8px">
+            ${overdueCount} action required</span>`
+        : `<span style="font-size:10px;font-weight:700;
+            color:#00A87A;background:var(--green-bg);
+            padding:2px 7px;border-radius:100px;
+            margin-left:8px">✓ All good</span>`;
+
+      const gid = `ct-${pid}-${groupKey}`;
+      const isOpen = defaultOpen || overdueCount > 0;
+
+      return `
+        <div class="panel" style="margin-bottom:12px">
+          <div class="ph2" style="cursor:pointer;
+            user-select:none"
+            onclick="(function(el){
+              var b=document.getElementById('${gid}');
+              var open=b.style.display!=='none';
+              b.style.display=open?'none':'block';
+              el.querySelector('.cg-chev').textContent=
+                open?'▸':'▾';
+            })(this)">
+            <div>
+              <div style="display:flex;align-items:center;
+                gap:6px">
+                <h2>${group.icon} ${group.label}</h2>
+                ${hdrBadge}
+              </div>
+              <p style="font-size:11px;color:var(--muted);
+                margin-top:2px">${group.description}</p>
+            </div>
+            <div style="display:flex;align-items:center;
+              gap:8px">
+              ${addBtn || ''}
+              <span class="cg-chev"
+                style="font-size:13px;color:var(--muted)">
+                ${isOpen ? '▾' : '▸'}
+              </span>
+            </div>
+          </div>
+          <div id="${gid}"
+            style="${isOpen ? '' : 'display:none'}">
+            <div style="padding:10px 16px 14px">
+              <div style="display:flex;flex-direction:column;
+                gap:6px">${items}</div>
+            </div>
           </div>
         </div>`;
-      }).join('');
-      const hdrBadge = overdueCount ? `<span style="font-size:10px;font-weight:700;color:#fff;background:#E53E3E;padding:2px 7px;border-radius:100px;margin-left:8px">${overdueCount} overdue</span>` : '';
-      return `<div class="panel" style="margin-bottom:16px">
-        <div class="ph2" style="cursor:pointer;user-select:none" onclick="(function(el){var b=document.getElementById('cg-${gid}');var open=b.style.display!=='none';b.style.display=open?'none':'block';el.querySelector('.cg-chev').textContent=open?'▸':'▾';})(this)">
-          <div style="display:flex;align-items:center;gap:4px"><h2>${icon} ${title}</h2>${hdrBadge}</div>
-          <div style="display:flex;align-items:center;gap:8px">${addBtn||''}<span class="cg-chev" style="font-size:13px;color:var(--muted)">▾</span></div>
-        </div>
-        <div id="cg-${gid}">
-          <div style="padding:12px 18px"><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">${rows}</div></div>
-        </div>
-      </div>`;
-    };
+    }
 
-    const _GD = ['Gas Safety Certificate','EICR (Electrical Installation)','EPC (Energy Performance)','Smoke Alarm Test Record','CO Alarm Check Record','Boiler Service Certificate','Legionella Risk Assessment','Fire Risk Assessment','Asbestos Survey','PAT Testing Certificate','HMO Licence','Selective Licence','Planning Permission / Article 4','Fire Extinguisher Service Record','Emergency Lighting Test Record','Buildings Insurance Schedule','Contents Insurance Schedule','Rent Guarantee Insurance'];
-    const _GN = ['Deposit Protection Certificate','Right to Rent Record','Section 48 Notice (Landlord Address)'];
-    const _GS = ['How to Rent Guide','Written Statement of Terms','Inventory / Schedule of Condition','Pest Control Report'];
+    // Add cert button for group 1
+    const addCertBtn = `<button class="btn btn-sm btn-navy"
+      onclick="event.stopPropagation();moCert('${pid}')"
+      style="font-size:11px">+ Add cert</button>`;
+
+    // Recommended group — neutral amber styling,
+    // always collapsed by default
+    const recGroup = propDocs.recommended;
+    const recItems = recGroup.docs.map(doc => {
+      const st = getDocStatus(doc, pc, pi);
+      const dayStr = st.days !== null
+        ? (st.days < 0
+          ? `${Math.abs(st.days)}d overdue`
+          : `${st.days}d left`)
+        : '';
+      return `
+        <div style="display:flex;align-items:center;
+          justify-content:space-between;padding:9px 12px;
+          background:${st.bg};border:1px solid ${st.bdr};
+          border-radius:8px;gap:8px;opacity:0.85">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12.5px;font-weight:500;
+              color:var(--txt)">${doc.label}</div>
+            <div style="font-size:10.5px;color:var(--muted);
+              margin-top:1px">${doc.note}</div>
+          </div>
+          <div style="display:flex;align-items:center;
+            gap:6px;flex-shrink:0">
+            ${dayStr
+              ? `<span style="font-size:10px;
+                  color:${st.col}">${dayStr}</span>`
+              : ''}
+            <span style="font-size:10px;font-weight:600;
+              color:${st.col};white-space:nowrap">
+              ${st.lbl}</span>
+          </div>
+        </div>`;
+    }).join('');
 
     return `
-      <div style="background:${ragBg};border:1px solid ${ragCol};border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:14px">
-        <div style="font-size:26px">${rag.rag==='red'?'⚠️':rag.rag==='amber'?'⚡':'✅'}</div>
+      <!-- RAG score bar -->
+      <div style="background:${ragBg};border:1px solid
+        ${ragCol};border-radius:10px;padding:14px 18px;
+        margin-bottom:16px;display:flex;align-items:center;
+        gap:14px">
+        <div style="font-size:26px">
+          ${rag.rag==='red' ? '⚠️'
+            : rag.rag==='amber' ? '⚡' : '✅'}
+        </div>
         <div style="flex:1">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-            <div style="font-size:13px;font-weight:600;color:${ragCol}">Compliance: ${rag.label}</div>
-            <div style="font-size:18px;font-weight:700;color:${ragCol}">${rag.score}/100</div>
+          <div style="display:flex;justify-content:
+            space-between;align-items:center;margin-bottom:6px">
+            <div style="font-size:13px;font-weight:600;
+              color:${ragCol}">
+              Compliance: ${rag.label}</div>
+            <div style="font-size:18px;font-weight:700;
+              color:${ragCol}">${rag.score}/100</div>
           </div>
-          <div style="height:5px;background:#E4EAF1;border-radius:100px;overflow:hidden"><div style="height:100%;width:${rag.score}%;background:${ragCol};border-radius:100px"></div></div>
-          <div style="font-size:11px;color:#7A8FA6;margin-top:5px">${pc.length} certificate${pc.length!==1?'s':''} · ${pc.filter(c=>c.status==='Valid').length} valid · ${pc.filter(c=>c.status==='Missing').length} missing</div>
+          <div style="height:5px;background:#E4EAF1;
+            border-radius:100px;overflow:hidden">
+            <div style="height:100%;width:${rag.score}%;
+              background:${ragCol};border-radius:100px">
+            </div>
+          </div>
+          <div style="font-size:11px;color:#7A8FA6;
+            margin-top:5px">
+            ${pc.length} certificate${pc.length!==1?'s':''}
+            · ${pc.filter(c=>c.status==='Valid').length} valid
+            · ${pc.filter(c=>c.status==='Missing').length}
+            missing
+          </div>
         </div>
       </div>
 
-      ${_cgGroup(`${pid}-docs`,'📄','Documents & Certificates',_GD,`<button class="btn btn-sm btn-navy" onclick="event.stopPropagation();moCert('${pid}')">+ Add certificate</button>`)}
-      ${_cgGroup(`${pid}-notices`,'📋','Tenancy Notices',_GN,'')}
-      ${_cgGroup(`${pid}-starter`,'🚀','Starter Kit',_GS,'')}
+      <!-- Group 1: Safety Certificates -->
+      ${renderCompGroup(
+        'safety', propDocs.safety, pc, pi, addCertBtn, true
+      )}
 
+      <!-- Group 2: Licensing — only renders if HMO
+           or has docs after filtering -->
+      ${propDocs.licensing.docs.length
+        ? renderCompGroup(
+            'licensing', propDocs.licensing, pc, pi, '', false
+          )
+        : ''}
+
+      <!-- Group 3: Tenancy Documents -->
+      ${renderCompGroup(
+        'tenancy', propDocs.tenancy, pc, pi, '', false
+      )}
+
+      <!-- Group 4: Move-In Pack -->
+      ${renderCompGroup(
+        'movein', propDocs.movein, pc, pi, '', false
+      )}
+
+      <!-- Group 5: Insurance -->
+      ${renderCompGroup(
+        'insurance', propDocs.insurance, pc, pi, '', false
+      )}
+
+      <!-- Recommended — neutral, always collapsed -->
+      <div class="panel" style="margin-bottom:12px;
+        opacity:0.9">
+        <div class="ph2" style="cursor:pointer;
+          user-select:none"
+          onclick="(function(el){
+            var b=document.getElementById(
+              'ct-${pid}-recommended');
+            var open=b.style.display!=='none';
+            b.style.display=open?'none':'block';
+            el.querySelector('.cg-chev').textContent=
+              open?'▸':'▾';
+          })(this)">
+          <div>
+            <div style="display:flex;align-items:center;
+              gap:6px">
+              <h2>💡 Recommended</h2>
+              <span style="font-size:10px;font-weight:600;
+                color:var(--muted);background:var(--off);
+                padding:2px 7px;border-radius:100px;
+                margin-left:8px">Best practice</span>
+            </div>
+            <p style="font-size:11px;color:var(--muted);
+              margin-top:2px">
+              Not legally required. Amber when missing
+              — not red. No fines apply.</p>
+          </div>
+          <span class="cg-chev"
+            style="font-size:13px;color:var(--muted)">
+            ▸</span>
+        </div>
+        <div id="ct-${pid}-recommended"
+          style="display:none">
+          <div style="padding:10px 16px 14px">
+            <div style="display:flex;flex-direction:column;
+              gap:6px">${recItems}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Inspections — unchanged -->
       <div class="panel">
-        <div class="ph2"><div><h2>🔍 Inspections</h2></div><button class="btn btn-sm" onclick="moInspection('${pid}')">+ Log inspection</button></div>
-        <div style="padding:14px 18px">${(p.inspections||[]).length
-          ? `<div class="tw"><table><thead><tr><th>Date</th><th>Type</th><th>Inspector</th><th>Notes</th></tr></thead><tbody>${(p.inspections||[]).map(i=>`<tr><td>${FMS(i.date)}</td><td>${B(i.type||'Routine')}</td><td>${i.inspector||'—'}</td><td style="font-size:12px;max-width:200px">${i.notes||'—'}</td></tr>`).join('')}</tbody></table></div>`
-          : `<div style="color:var(--muted);font-size:13px">No inspections logged yet</div>`}
+        <div class="ph2">
+          <div><h2>🔍 Inspections</h2></div>
+          <button class="btn btn-sm"
+            onclick="moInspection('${pid}')">
+            + Log inspection</button>
+        </div>
+        <div style="padding:14px 18px">
+          ${(p.inspections||[]).length
+            ? `<div class="tw"><table>
+                <thead><tr>
+                  <th>Date</th><th>Type</th>
+                  <th>Inspector</th><th>Notes</th>
+                </tr></thead>
+                <tbody>
+                  ${(p.inspections||[]).map(i=>`<tr>
+                    <td>${FMS(i.date)}</td>
+                    <td>${B(i.type||'Routine')}</td>
+                    <td>${i.inspector||'—'}</td>
+                    <td style="font-size:12px;
+                      max-width:200px">
+                      ${i.notes||'—'}</td>
+                  </tr>`).join('')}
+                </tbody>
+              </table></div>`
+            : `<div style="color:var(--muted);
+                font-size:13px">
+                No inspections logged yet</div>`}
         </div>
       </div>`;
   }
