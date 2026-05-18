@@ -1384,6 +1384,16 @@ async function loadData() {
   if (ja.data?.length) D.jobAssignments = ja.data;
   if (td.data?.length) D.tenantDocs = td.data;
   if (up.data) D.userProfile = up.data;
+  // If newsletter_opted_in is null and auth metadata has it from signup,
+  // sync to user_profiles so the banner shows correct state
+  if ((!D.userProfile || D.userProfile.newsletter_opted_in === null || D.userProfile.newsletter_opted_in === undefined) && currentUser?.user_metadata?.newsletter_opted_in !== undefined) {
+    const nlVal = currentUser.user_metadata.newsletter_opted_in;
+    const now = new Date().toISOString();
+    sb.from('user_profiles').upsert({ id: currentUser.id, newsletter_opted_in: nlVal, newsletter_opted_at: now }, { onConflict: 'id' }).then(() => {});
+    if (!D.userProfile) D.userProfile = {};
+    D.userProfile.newsletter_opted_in = nlVal;
+    D.userProfile.newsletter_opted_at = now;
+  }
   // Resolve user plan from Stripe subscription, fallback to portfolio (grandfather existing users)
   window._userPlan = (sub.data && sub.data.plan_name) ? sub.data.plan_name : 'portfolio';
   if (er.data?.length) D.esignReq = er.data;
@@ -4128,6 +4138,50 @@ function pgDashboard(){
   </div></div>
   <div class="content">
     <div id="setup-banner-slot"></div>
+
+    ${_nlShouldShowBanner() ? `
+    <div id="nl-dashboard-banner"
+      style="background:var(--white);
+      border:1px solid var(--border);
+      border-radius:12px;padding:14px 18px;
+      margin-bottom:16px;display:flex;
+      align-items:center;gap:14px;
+      transition:max-height .4s ease,
+        opacity .4s ease,
+        margin-bottom .4s ease;
+      flex-wrap:wrap">
+      <div style="font-size:22px;flex-shrink:0">
+        📬
+      </div>
+      <div style="flex:1;min-width:200px">
+        <div style="font-size:13px;font-weight:700;
+          color:var(--txt);margin-bottom:2px">
+          Get free compliance tips by email
+        </div>
+        <div style="font-size:11px;
+          color:var(--muted);line-height:1.5">
+          RRA updates, legal changes and
+          landlord guides — free,
+          unsubscribe anytime
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;
+        gap:8px;flex-shrink:0">
+        <button onclick="nlSubscribe('dashboard')"
+          class="btn btn-navy btn-sm"
+          style="font-size:12px;font-weight:600">
+          Subscribe
+        </button>
+        <button onclick="nlDismiss()"
+          style="font-size:12px;padding:5px 12px;
+          border-radius:7px;border:1px solid
+          var(--border);background:transparent;
+          color:var(--muted);cursor:pointer;
+          font-family:var(--font)">
+          No thanks
+        </button>
+      </div>
+    </div>` : ''}
     <div style="margin-bottom:16px">
       <p style="font-size:12px;color:var(--muted);
         margin:0">
@@ -13825,6 +13879,140 @@ document.addEventListener('keydown', function(e) {
     if (overlay && overlay.style.display === 'flex') { dvoClose(); }
   }
 });
+
+// ── NEWSLETTER OPT-IN FUNCTIONS ──
+
+// Check if banner should show
+function _nlShouldShowBanner() {
+  const dismissed = localStorage.getItem('nl_banner_dismissed');
+  if (dismissed) return false;
+  const profile = D.userProfile;
+  if (!profile) return false;
+  return profile.newsletter_opted_in === null || profile.newsletter_opted_in === undefined;
+}
+
+// Subscribe
+async function nlSubscribe(source) {
+  try {
+    const uid = currentUser?.id;
+    if (!uid) return;
+    const now = new Date().toISOString();
+    const { error } = await sb
+      .from('user_profiles')
+      .update({ newsletter_opted_in: true, newsletter_opted_at: now })
+      .eq('id', uid);
+    if (error) throw error;
+    if (D.userProfile) {
+      D.userProfile.newsletter_opted_in = true;
+      D.userProfile.newsletter_opted_at = now;
+    }
+    localStorage.setItem('nl_banner_dismissed', '1');
+    toast('✓ Subscribed — we\'ll send you compliance updates');
+    if (window._currentPage === 'dashboard') { nav('dashboard'); }
+    if (window._currentPage === 'profile') { nav('profile'); }
+  } catch(err) {
+    console.error('nlSubscribe error:', err);
+    toast('Could not save preference', true);
+  }
+}
+
+// Unsubscribe
+async function nlUnsubscribe(source) {
+  try {
+    const uid = currentUser?.id;
+    if (!uid) return;
+    const now = new Date().toISOString();
+    const { error } = await sb
+      .from('user_profiles')
+      .update({ newsletter_opted_in: false, newsletter_opted_at: now })
+      .eq('id', uid);
+    if (error) throw error;
+    if (D.userProfile) {
+      D.userProfile.newsletter_opted_in = false;
+      D.userProfile.newsletter_opted_at = now;
+    }
+    localStorage.setItem('nl_banner_dismissed', '1');
+    toast('Unsubscribed from email updates');
+    if (window._currentPage === 'dashboard') { nav('dashboard'); }
+    if (window._currentPage === 'profile') { nav('profile'); }
+  } catch(err) {
+    console.error('nlUnsubscribe error:', err);
+    toast('Could not save preference', true);
+  }
+}
+
+// Dismiss banner without choosing
+function nlDismiss() {
+  localStorage.setItem('nl_banner_dismissed', '1');
+  const uid = currentUser?.id;
+  if (uid) {
+    sb.from('user_profiles')
+      .update({ newsletter_dismissed_at: new Date().toISOString() })
+      .eq('id', uid)
+      .then(() => {});
+  }
+  const banner = document.getElementById('nl-dashboard-banner');
+  if (banner) {
+    banner.style.maxHeight = '0';
+    banner.style.opacity = '0';
+    banner.style.overflow = 'hidden';
+    banner.style.marginBottom = '0';
+    setTimeout(() => banner.remove(), 400);
+  }
+}
+
+// Build the newsletter toggle row HTML
+function nlToggleHtml() {
+  const profile = D.userProfile || {};
+  const isOn = profile.newsletter_opted_in === true;
+  const lastUpdated = profile.newsletter_opted_at
+    ? 'Last updated: ' + new Date(profile.newsletter_opted_at).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' })
+    : 'Not set';
+
+  return `
+    <div style="display:flex;align-items:center;
+      justify-content:space-between;
+      padding:14px 0;border-bottom:1px solid
+      var(--border)">
+      <div style="flex:1;min-width:0;
+        padding-right:16px">
+        <div style="font-size:13px;font-weight:600;
+          color:var(--txt);margin-bottom:2px">
+          Email updates & compliance tips
+        </div>
+        <div style="font-size:11px;
+          color:var(--muted);line-height:1.5">
+          RRA updates, legal changes and landlord
+          guides. Free, unsubscribe anytime.
+        </div>
+        <div style="font-size:10px;
+          color:var(--muted);margin-top:3px">
+          ${lastUpdated}
+        </div>
+      </div>
+      <div style="flex-shrink:0">
+        <div onclick="${isOn
+            ? 'nlUnsubscribe(\'settings\')'
+            : 'nlSubscribe(\'settings\')'}"
+          style="width:44px;height:24px;
+          border-radius:100px;cursor:pointer;
+          transition:background .2s;
+          position:relative;flex-shrink:0;
+          background:${isOn
+            ? 'var(--navy)'
+            : '#CBD5E0'}">
+          <div style="position:absolute;
+            top:3px;
+            left:${isOn ? '23px' : '3px'};
+            width:18px;height:18px;
+            background:#fff;border-radius:50%;
+            transition:left .2s;
+            box-shadow:0 1px 3px rgba(0,0,0,0.2)">
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
 
 // ── START ──
 // Wire nav clicks
