@@ -487,7 +487,13 @@ tr:hover td{background:rgba(246,248,251,.8)}
 
 <!-- MAIN CONTENT -->
 <div class="main-wrap">
-<div id="trial-expired-banner" style="display:none;background:var(--amber-bg);border-bottom:1px solid var(--amber);padding:8px 18px;font-size:12px;color:var(--txt);text-align:center;align-items:center;justify-content:center;gap:6px;font-weight:500"></div>
+<div id="trial-expired-banner" style="display:none;background:rgba(229,62,62,0.07);border-bottom:2px solid var(--red);padding:10px 20px;font-size:12px;color:var(--txt);align-items:center;justify-content:space-between;gap:12px;font-weight:500;flex-wrap:wrap">
+  <div style="display:flex;align-items:center;gap:8px"><span style="font-size:16px">⏰</span><span id="trial-expired-banner-text"></span></div>
+  <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+    <button onclick="showTrialExpiryPopup()" style="font-size:11px;padding:5px 14px;background:var(--red);color:#fff;border:none;border-radius:7px;font-weight:700;cursor:pointer;font-family:var(--font)">View plans →</button>
+    <button onclick="closeMo();nav('dashboard')" style="font-size:11px;padding:5px 12px;background:none;border:1px solid var(--border);border-radius:7px;cursor:pointer;color:var(--muted);font-family:var(--font)">Read-only mode</button>
+  </div>
+</div>
 <main class="main" id="main">
   <div style="display:flex;align-items:center;justify-content:center;height:100%;gap:10px;color:var(--muted)">
     <div style="width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--navy);border-radius:50%;animation:spin .6s linear infinite"></div>
@@ -1424,6 +1430,60 @@ function isPortfolio(){ return getUserPlan()==='portfolio'||getUserPlan()==='pro
 function isLandlordOrAbove(){ return ['landlord','portfolio','pro'].includes(getUserPlan()); }
 function isStarter(){ return getUserPlan()==='starter'; }
 function isExpired(){ return getUserPlan()==='expired'; }
+
+// Guard for write actions when trial expired
+function _expiredGuard(actionLabel) {
+  if (!isExpired()) return false;
+  openMo('⏰ Trial ended', actionLabel || 'This action requires an active subscription', `
+    <div style="font-size:13px;color:var(--muted);margin-bottom:18px;line-height:1.6">Your trial has ended. Subscribe to continue saving changes — your existing data is safe and visible in read-only mode.</div>
+    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+      <a href="profile.html" class="btn btn-navy" style="text-decoration:none;font-weight:600">View plans →</a>
+      <button class="btn" onclick="closeMo()">Continue read-only</button>
+    </div>
+  `, '');
+  return true;
+}
+
+async function moDeleteAccount() {
+  closeMo();
+  openMo('⚠️ Delete account permanently', 'This cannot be undone', `
+    <div style="font-size:13px;color:var(--txt);line-height:1.7;margin-bottom:18px">This will permanently delete:<ul style="margin:10px 0 10px 16px;font-size:12px;color:var(--muted);line-height:2"><li>All your properties and tenants</li><li>All uploaded certificates and documents</li><li>All compliance records and audit trails</li><li>Your account and login</li></ul><strong>This is permanent and cannot be reversed.</strong><br>Type <strong>DELETE</strong> below to confirm.</div>
+    <div style="margin-bottom:6px"><input type="text" id="delete-account-input" placeholder="Type DELETE to confirm" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:7px;font-family:var(--font);font-size:13px;box-sizing:border-box" oninput="var v=this.value.trim().toUpperCase();var btn=document.getElementById('delete-account-btn');if(btn) btn.disabled = v !== 'DELETE'"></div>
+    <div style="font-size:11px;color:var(--muted)">Your data will be deleted within 30 days in line with our privacy policy.</div>
+  `, `<button class="btn" onclick="closeMo()">Cancel — keep my account</button><button class="btn" id="delete-account-btn" disabled style="background:#E53E3E;color:#fff;border-color:#E53E3E;opacity:0.5" onclick="execDeleteAccount()">⚠️ Delete permanently</button>`);
+  setTimeout(() => {
+    const btn = document.getElementById('delete-account-btn');
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
+    const inp = document.getElementById('delete-account-input');
+    if (inp) {
+      inp.addEventListener('input', function() {
+        const match = this.value.trim().toUpperCase() === 'DELETE';
+        btn.disabled = !match;
+        btn.style.opacity = match ? '1' : '0.5';
+      });
+    }
+  }, 50);
+}
+
+async function execDeleteAccount() {
+  try {
+    const uid = currentUser?.id;
+    if (!uid) return;
+    closeMo();
+    toast('Deleting account…');
+    const tables = ['certificates','maintenance','rent','tenants','insurance','legal_movein_packs','signatures','documents','properties','user_profiles','stripe_subscriptions','profiles'];
+    for (const table of tables) {
+      await sb.from(table).delete().eq('user_id', uid).then(() => {}).catch(() => {});
+      await sb.from(table).delete().eq('id', uid).then(() => {}).catch(() => {});
+    }
+    await sb.auth.signOut();
+    toast('Account deleted');
+    setTimeout(() => { window.location.href = 'login.html'; }, 1500);
+  } catch(err) {
+    console.error('execDeleteAccount error:', err);
+    toast('Error deleting account — please contact support', true);
+  }
+}
 const PLAN_LIMITS = { starter:2, landlord:5, portfolio:999 };
 const PLAN_FEATURES = { starter:['compliance','certificates','maintenance','templates','calendar','assistant'], landlord:['compliance','certificates','maintenance','templates','calendar','assistant','financials','rent','insurance','contractors'], portfolio:['compliance','certificates','maintenance','templates','calendar','assistant','financials','rent','insurance','contractors','mtd','inventory-reports'] };
 function getPropLimit(){ if(isExpired()) return 0; return PLAN_LIMITS[getUserPlan()]||2; }
@@ -1536,7 +1596,8 @@ async function initApp() {
     const banner = document.getElementById('trial-expired-banner');
     if (banner && hasExpired && plan==='trial') {
       banner.style.display='flex';
-      banner.innerHTML='<span>⏰ Your trial ended on <strong>'+new Date(expiresAt).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})+'</strong>. <a href="profile.html" style="color:var(--navy);font-weight:700;text-decoration:underline">Upgrade to keep access →</a></span>';
+      const bannerText2 = document.getElementById('trial-expired-banner-text');
+      if (bannerText2) { bannerText2.innerHTML = 'Your trial ended on <strong>'+new Date(expiresAt).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})+'</strong> — data is safe, subscribe to restore full access'; }
     }
     // Hard popup
     if (hasExpired && plan==='trial') { setTimeout(()=>showTrialExpiryPopup(),800); }
@@ -1556,6 +1617,7 @@ async function initApp() {
 
 // ── SAVE: PROPERTY ──
 async function savePropToDB() {
+  if (_expiredGuard('Save property')) return;
   const btn = document.getElementById('mo-next-btn');
   btn.disabled = true;
   btn.innerHTML = '<span class="spin"></span>Saving…';
@@ -1920,6 +1982,7 @@ function closeMo(){
 
 // ── MODAL: ADD CERTIFICATE ──
 function moCert(pid){
+  if (_expiredGuard('Upload certificate')) return;
   const opts=D.properties.map(p=>`<option value="${p.id}"${p.id==pid?' selected':''}>${p.address}, ${p.city}</option>`).join('');
   openMo('Add certificate','Upload document — AI will scan and fill details',`
     <div class="scan-box" id="sb-scan">
@@ -2010,6 +2073,7 @@ async function scanDoc(input){
 
 // ── MODAL: ADD PROPERTY (5-step guided flow) ──
 function moAddProp(){
+  if (_expiredGuard('Add property')) return;
   window._addPropOrigin = 'properties';
   const limit=getPropLimit();
   if(D.properties.length >= limit){ upgradePrompt('Add more properties','portfolio'); return; }
@@ -3134,6 +3198,7 @@ function toggleTenantType(type) {
 }
 
 function moTenant(pid) {
+  if (_expiredGuard('Add tenant')) return;
   const propOpts = D.properties.map(pr => `<option value="${pr.id}"${String(pr.id)===String(pid)?' selected':''}>${pr.address}${pr.city?', '+pr.city:''}</option>`).join('');
   window._tsetup = { pid: pid ? String(pid) : (D.properties[0]?.id ? String(D.properties[0].id) : ''), tenantType: 'lead' };
 
@@ -3186,6 +3251,7 @@ function moTenant(pid) {
 }
 
 async function _saveTenantSetupToDB() {
+  if (_expiredGuard('Save tenant')) return;
   const btn = document.getElementById('tsetup-next');
   const s = window._tsetup;
   const isCoTenant = s.tenantType === 'co';
@@ -3793,6 +3859,7 @@ function moWelcomeKit(pid) {
 }
 
 async function sendWelcomeKit(pid) {
+  if (_expiredGuard('Send welcome kit')) return;
   const btn = document.getElementById('wk-send-btn');
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Sending…'; }
 
@@ -3973,6 +4040,7 @@ async function sendWelcomeKit(pid) {
 
 // ── MODAL: MAINTENANCE ISSUE ──
 function moIssue(pid){
+  if (_expiredGuard('Report issue')) return;
   const opts=D.properties.map(p=>`<option value="${p.id}"${p.id==pid?' selected':''}>${p.address}, ${p.city}</option>`).join('');
   openMo('Report maintenance issue','Log a new job for this property',`
     <div class="fg"><label>Property <span class="req">*</span></label><select id="i-prop">${opts}</select></div>
@@ -10336,10 +10404,15 @@ async function loadSetupBanner() {
 }
 
 function nav(page, param){
-  // Trial expiry — hard block all non-profile pages
-  if (isExpired() && page !== 'dashboard') {
-    upgradePrompt('Trial expired — upgrade to restore access', 'landlord');
-    return;
+  // Trial expiry — soft lock: allow browsing, block write pages
+  if (isExpired()) {
+    const allowedPages = ['dashboard','properties','tenants','compliance','maintenance','insurance','inspections','rent','financials','calendar','doclibrary','contractors','prop-detail'];
+    if (page === 'profile' || page === 'billing') {
+      // always allow billing
+    } else if (!allowedPages.includes(page)) {
+      showTrialExpiryPopup();
+      return;
+    }
   }
   // Plan gating — intercept restricted pages
   if(page==='mtd' && !isPortfolio()){ upgradePrompt('MTD Tax Reporting','portfolio'); return; }
@@ -11578,6 +11651,7 @@ const S8_CATS = [
 let _s8 = {};
 
 function moSection8(pid) {
+  if (_expiredGuard('Generate Section 8')) return;
   const p = D.properties.find(x => String(x.id) === String(pid));
   const t = D.tenants.find(x => String(x.prop_id) === String(pid));
   if (!p) { toast('Property not found', true); return; }
@@ -13560,35 +13634,51 @@ async function _ensureTrialStarted() {
 
 // ── TRIAL EXPIRY UI ──
 function showTrialExpiryPopup() {
-  const daysAgo = Math.abs(trialDaysLeft()) || 0;
-  const tierCards = [
-    { plan:'starter',   label:'Starter',   price:'£5.99', limit:2,  desc:'Core compliance & documents',     highlight:false },
-    { plan:'landlord',  label:'Landlord',  price:'£12.99', limit:5,  desc:'Rent tracking, insurance & bulk tools', highlight:true },
-    { plan:'portfolio', label:'Portfolio', price:'£24.99',limit:999, desc:'MTD Tax, AI Inventory & unlimited properties', highlight:false },
+  const state = getTrialState();
+  const endDate = state.expiresAt
+    ? new Date(state.expiresAt)
+      .toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      })
+    : 'recently';
+
+  const plans = [
+    { plan:'starter', label:'Starter', founding:'£5.99', standard:'£9.99', props:'2 properties', highlight:false },
+    { plan:'landlord', label:'Landlord', founding:'£12.99', standard:'£19.99', props:'5 properties', highlight:true },
+    { plan:'portfolio', label:'Portfolio', founding:'£24.99', standard:'£39.99', props:'Unlimited', highlight:false }
   ];
 
-  openMo('Your free trial has ended', `${daysAgo > 0 ? `Expired ${daysAgo} day${daysAgo !== 1 ? 's' : ''} ago` : 'Expired today'}`, `
-    <div style="text-align:center;padding:8px 0 16px">
-      <div style="font-size:14px;color:var(--muted);margin-bottom:18px">To keep managing your properties, choose a plan below.<br>Your data is safe and waiting.</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
-        ${tierCards.map(tc => `
-          <div style="border:2px solid ${tc.highlight?'var(--green)':'var(--border)'};border-radius:10px;padding:14px 10px;text-align:center;background:${tc.highlight?'var(--green-bg)':'var(--white)'};position:relative">
-            ${tc.highlight?'<span style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);font-size:10px;font-weight:700;background:var(--green);color:#fff;padding:2px 10px;border-radius:100px">Most popular</span>':''}
-            <div style="font-size:12px;font-weight:700;color:var(--navy);margin-top:${tc.highlight?'8px':'0'}">${tc.label}</div>
-            <div style="font-size:20px;font-weight:700;color:var(--green-dark);margin:6px 0">${tc.price}<span style="font-size:12px;font-weight:400">/mo</span></div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Founding price · ${tc.limit >= 999 ? 'Unlimited properties' : 'Up to ' + tc.limit + ' properties'}</div>
-            <div style="font-size:10px;color:var(--muted);margin-bottom:10px">${tc.desc}</div>
-            <button class="btn ${tc.highlight?'btn-navy':'btn-navy btn-sm'}" style="width:100%;font-size:11px;padding:6px 0;cursor:pointer" onclick="closeMo();redirectToCheckout('${tc.plan}')">Choose ${tc.label}</button>
-          </div>
-        `).join('')}
-      </div>
-      <div style="margin-top:14px;font-size:10px;color:var(--muted)">First 100 users lock founding price for life · No card required · Cancel anytime</div>
-    </div>
-  `, `<button class="btn" onclick="sb.auth.signOut();window.location.href='login.html'">Log out</button>`);
+  const planCards = plans.map(p => `
+    <div style="flex:1;min-width:120px;
+      border:2px solid ${p.highlight ? 'var(--navy)' : 'var(--border)'};
+      border-radius:10px;padding:14px 12px;
+      text-align:center;position:relative;
+      background:${p.highlight ? 'var(--navy)' : 'var(--white)'}">
+      ${p.highlight ? `<div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--green);color:#0B1E3D;font-size:9px;font-weight:700;padding:2px 10px;border-radius:100px;white-space:nowrap">MOST POPULAR</div>` : ''}
+      <div style="font-size:13px;font-weight:700;color:${p.highlight?'#fff':'var(--txt)'};margin-bottom:4px">${p.label}</div>
+      <div style="font-size:20px;font-weight:700;color:${p.highlight?'var(--green)':'var(--navy)'};margin-bottom:2px">${p.founding}<span style="font-size:10px;font-weight:400;color:${p.highlight?'rgba(255,255,255,0.5)':'var(--muted)'}">/mo</span></div>
+      <div style="font-size:10px;color:${p.highlight?'rgba(255,255,255,0.4)':'var(--muted)'};margin-bottom:10px;text-decoration:line-through">${p.standard}/mo after</div>
+      <div style="font-size:11px;color:${p.highlight?'rgba(255,255,255,0.7)':'var(--muted)'};margin-bottom:12px">${p.props}</div>
+      <button class="btn ${p.highlight?'btn-navy':''}" style="width:100%;font-size:11px;padding:7px 0;cursor:pointer;${p.highlight?'background:var(--green);color:#0B1E3D;border:none;font-weight:700;':''}" onclick="closeMo();redirectToCheckout('${p.plan}')">Choose ${p.label}</button>
+    </div>`
+  ).join('');
 
-  // Remove close button — hard popup
-  const closeBtn = document.querySelector('#mo .mo-x');
-  if (closeBtn) closeBtn.style.display = 'none';
+  openMo(
+    '⏰ Your trial has ended',
+    `Trial ended ${endDate} · Founding prices locked for first 100 users`,
+    `
+    <div style="font-size:13px;color:var(--muted);margin-bottom:18px;line-height:1.6">Your data is safe. Subscribe to restore full access — or browse read-only until you decide.</div>
+    <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap">${planCards}</div>
+    <div style="background:var(--green-bg);border:1px solid var(--green-bg);border-radius:8px;padding:10px 14px;font-size:11px;color:var(--green-dark);margin-bottom:14px;text-align:center">✦ Founding member prices — locked for life for first 100 users. No card required during trial.</div>
+    <div style="text-align:center;margin-top:4px">
+      <button onclick="closeMo()" style="font-size:11px;color:var(--muted);background:none;border:none;cursor:pointer;font-family:var(--font);text-decoration:underline;margin-right:16px">Continue read-only →</button>
+      <button onclick="moDeleteAccount()" style="font-size:11px;color:var(--red);background:none;border:none;cursor:pointer;font-family:var(--font)">Delete my account</button>
+    </div>
+    `,
+    ''
+  );
 }
 
 function showTrialExpiredBanner() {
@@ -13597,7 +13687,10 @@ function showTrialExpiredBanner() {
   const banner = document.getElementById('trial-expired-banner');
   if (banner) {
     banner.style.display = 'flex';
-    banner.innerHTML = `<span>⏰ Your trial ended on <strong>${dateStr}</strong>. <a href="profile.html" style="color:var(--navy);font-weight:700;text-decoration:underline">Upgrade to keep access →</a></span>`;
+    const bannerText = document.getElementById('trial-expired-banner-text');
+    if (bannerText) {
+      bannerText.innerHTML = 'Your trial ended on <strong>' + dateStr + '</strong> — data is safe, subscribe to restore full access';
+    }
   }
 }
 
