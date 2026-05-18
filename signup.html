@@ -188,6 +188,27 @@ body{display:flex;flex-direction:column;min-height:100vh}
           <div class="match-hint" id="match-hint"></div>
         </div>
 
+        <label style="display:flex;
+          align-items:flex-start;gap:10px;
+          cursor:pointer;margin-bottom:14px;
+          padding:10px 12px;background:var(--off);
+          border:1px solid var(--border);
+          border-radius:8px">
+          <input type="checkbox"
+            id="signup-newsletter"
+            checked
+            style="width:15px;height:15px;
+            margin-top:1px;flex-shrink:0;
+            cursor:pointer;accent-color:var(--navy)">
+          <span style="font-size:12px;
+            color:var(--muted);line-height:1.5">
+            Send me free landlord compliance tips,
+            RRA updates and legal changes by email.
+            Unsubscribe anytime.
+            No spam — one useful email per week max.
+          </span>
+        </label>
+
         <button class="btn-login" id="signup-btn">Create account</button>
 
         <div class="login-footer">

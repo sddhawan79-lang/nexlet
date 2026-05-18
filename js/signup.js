@@ -238,7 +238,8 @@
     RSA.UI.setLoading(btn, true, 'Creating account…');
 
     try {
-      var result = await RSA.sb.auth.signUp({ email: email, password: pw });
+      var newsletterOptedIn = !!(document.getElementById('signup-newsletter')?.checked);
+      var result = await RSA.sb.auth.signUp({ email: email, password: pw, options: { data: { newsletter_opted_in: newsletterOptedIn } } });
       var data   = result.data;
       var error  = result.error;
 

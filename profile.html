@@ -338,6 +338,56 @@ html,body{min-height:100%;font-family:var(--font);color:var(--txt);background:va
     </div>
   </section>
 
+  <!-- ── MY DATA ── -->
+  <section class="section-card">
+    <div class="section-hd">
+      <h2>📦 My Data</h2>
+      <p>Export or delete your account data</p>
+    </div>
+    <div class="section-body">
+      <div style="padding:0 0 4px">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:var(--txt);margin-bottom:3px">Export all data</div>
+            <div style="font-size:11px;color:var(--muted);line-height:1.5;max-width:320px">Download all your properties, tenants, certificates, rent records and compliance data as CSV files in a ZIP archive. For legal records, solicitor use or switching platforms.</div>
+          </div>
+          <button onclick="exportData()" class="btn btn-save" style="flex-shrink:0;font-size:12px;font-weight:600;margin-top:8px">⬇ Export all data</button>
+        </div>
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:12px 0;flex-wrap:wrap">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:var(--txt);margin-bottom:3px">Delete account</div>
+            <div style="font-size:11px;color:var(--muted);line-height:1.5;max-width:320px">Permanently delete your account and all data. This cannot be undone. We recommend exporting your data first.</div>
+          </div>
+          <button onclick="moDeleteAccount()" style="flex-shrink:0;font-size:12px;padding:7px 14px;border-radius:8px;border:1px solid var(--red);background:rgba(229,62,62,0.07);color:var(--red);font-family:var(--font);cursor:pointer;font-weight:600;margin-top:8px">Delete account</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── COMMUNICATION PREFERENCES ── -->
+  <section class="section-card">
+    <div class="section-hd">
+      <h2>📬 Communication preferences</h2>
+      <p>Manage your email subscriptions</p>
+    </div>
+    <div class="section-body" id="nl-toggle-container">
+      <div style="padding:0 0 4px">
+        <div id="nl-toggle-row" style="display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--border)">
+          <div style="flex:1;min-width:0;padding-right:16px">
+            <div style="font-size:13px;font-weight:600;color:var(--txt);margin-bottom:2px">Email updates & compliance tips</div>
+            <div style="font-size:11px;color:var(--muted);line-height:1.5">RRA updates, legal changes and landlord guides. Free, unsubscribe anytime.</div>
+            <div id="nl-updated" style="font-size:10px;color:var(--muted);margin-top:3px">Loading…</div>
+          </div>
+          <div style="flex-shrink:0">
+            <div id="nl-toggle-switch" style="width:44px;height:24px;border-radius:100px;cursor:pointer;transition:background .2s;position:relative;flex-shrink:0;background:#CBD5E0">
+              <div style="position:absolute;top:3px;left:3px;width:18px;height:18px;background:#fff;border-radius:50%;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,0.2)"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- ── SECTION 3: SUBSCRIPTION & BILLING ── -->
   <section class="section-card" id="sect-billing">
     <div class="section-hd">
@@ -459,6 +509,65 @@ html,body{min-height:100%;font-family:var(--font);color:var(--txt);background:va
 <script src="js/lib/ui.js" defer></script>
 <!-- Page script -->
 <script src="js/profile.js" defer></script>
+<script>
+(function(){
+  var uid = null;
+  var optedIn = null;
+  var optedAt = null;
+
+  window.RSA.Auth.getSession().then(function(session){
+    if (!session) return;
+    uid = session.user.id;
+    return window.RSA.sb.from('user_profiles').select('newsletter_opted_in,newsletter_opted_at').eq('id',uid).single();
+  }).then(function(result){
+    if (!result) return;
+    if (result.data) {
+      optedIn = result.data.newsletter_opted_in;
+      optedAt = result.data.newsletter_opted_at;
+    }
+    renderToggle();
+  }).catch(function(){});
+
+  function renderToggle(){
+    var isOn = optedIn === true;
+    var switchEl = document.getElementById('nl-toggle-switch');
+    var updatedEl = document.getElementById('nl-updated');
+    if (!switchEl) return;
+    switchEl.style.background = isOn ? 'var(--navy)' : '#CBD5E0';
+    var knob = switchEl.querySelector('div');
+    if (knob) knob.style.left = isOn ? '23px' : '3px';
+    if (updatedEl) {
+      updatedEl.textContent = optedAt
+        ? 'Last updated: ' + new Date(optedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})
+        : 'Not set';
+    }
+  }
+
+  var switchEl = document.getElementById('nl-toggle-switch');
+  if (switchEl) {
+    switchEl.addEventListener('click', function(){
+      if (!uid) return;
+      var newVal = optedIn !== true;
+      var now = new Date().toISOString();
+      window.RSA.sb.from('user_profiles').update({
+        newsletter_opted_in: newVal,
+        newsletter_opted_at: now
+      }).eq('id',uid).then(function(result){
+        if (result.error) { console.error(result.error); return; }
+        optedIn = newVal;
+        optedAt = now;
+        renderToggle();
+        var msg = newVal
+          ? '✓ Subscribed — we\'ll send you compliance updates'
+          : 'Unsubscribed from email updates';
+        if (window.RSA && window.RSA.UI && window.RSA.UI.toast) {
+          window.RSA.UI.toast(msg);
+        }
+      });
+    });
+  }
+})();
+</script>
 
 </body>
 </html>
