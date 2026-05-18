@@ -6774,9 +6774,9 @@ function pgCompliance(){
           border-radius:7px;cursor:pointer;
           font-family:var(--font);font-weight:600;
           border:1px solid var(--navy);
-          background:${(window._compView||'action')
+          background:${(window._compView||'full')
             ==='action'?'var(--navy)':'transparent'};
-          color:${(window._compView||'action')==='action'
+          color:${(window._compView||'full')==='action'
             ?'#fff':'var(--navy)'}">
           ⚠️ Action required</button>
         <button onclick="window._compView='full';
@@ -6792,7 +6792,7 @@ function pgCompliance(){
           📋 Full audit</button>
       </div>
 
-      ${(window._compView||'action')==='action' ? `
+      ${(window._compView||'full')==='action' ? `
         <div class="panel" id="comp-action-list">
           <div class="ph2"
             style="flex-wrap:wrap;gap:8px">
