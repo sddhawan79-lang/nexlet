@@ -5583,7 +5583,7 @@ function pdTabContent(pid, tab) {
 
         // View button — only if cert has a URL
         const _certRec = findCertForDoc(doc, certList);
-        const _certUrl = _certRec ? (_certRec.url || _certRec.file_url || _certRec.document_url || null) : null;
+        const _certUrl = _certRec ? (_certRec.url || _certRec.file_url || _certRec.document_url || (_certRec.engineer && String(_certRec.engineer).startsWith('http') ? _certRec.engineer : null) || null) : null;
 
         const _viewBtn = _certUrl ? `<button onclick="dvoOpen('${_certUrl}','${doc.label.replace(/'/g,"\\'")}','${p ? p.address : ''}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:600">👁 View</button>` : '';
 
@@ -6553,7 +6553,7 @@ function pgCompliance(){
                     white-space:nowrap">${st.lbl}</span>
                   ${(() => {
                     const _cr = findCertForDoc(doc, certList);
-                    const _cu = _cr ? (_cr.url || _cr.file_url || _cr.document_url || null) : null;
+                    const _cu = _cr ? (_cr.url || _cr.file_url || _cr.document_url || (_cr.engineer && String(_cr.engineer).startsWith('http') ? _cr.engineer : null) || null) : null;
                     const _vb = _cu ? `<button onclick="dvoOpen('${_cu}','${doc.label.replace(/'/g,"\\'")}','${selProp.address}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:600">👁 View</button>` : '';
                     if (st.action==='insurance') {
                       return `<button onclick="nav('insurance')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font)">Manage →</button>`;
