@@ -227,9 +227,9 @@
       for (var i = 0; i < _files.length; i++) {
         var f     = _files[i];
         var ext   = f.name.split('.').pop();
-        var path  = 'feedback/' + _userId + '/' + Date.now() + '_' + i + '.' + ext;
+        var path  = 'user-feedback-documents/' + _userId + '/' + Date.now() + '_' + i + '.' + ext;
 
-        var upResult = await sb.storage.from('documents').upload(path, f, {
+        var upResult = await sb.storage.from('user-feedback-documents').upload(path, f, {
           contentType: f.type,
           upsert: false,
         });
