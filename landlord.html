@@ -1986,6 +1986,19 @@ function closeMo(){
 function closeModal() { closeMo(); }
 
 // ── MODAL: ADD CERTIFICATE ──
+function _toggleCertExpiry() {
+  const t = (document.getElementById('ct')?.value||'').toLowerCase();
+  const noExp = ['smoke alarm','co alarm','pest control',
+    'how to rent','right to rent','deposit protection',
+    'prescribed information','rra','written statement',
+    'section 48'];
+  const hide = noExp.some(n => t.includes(n));
+  const row = document.getElementById('ce')
+    ?.closest('.fg') || 
+    document.getElementById('ce')?.parentElement;
+  if (row) row.style.display = hide ? 'none' : '';
+}
+
 function moCert(pid){
   if (_expiredGuard('Upload certificate')) return;
   const opts=D.properties.map(p=>`<option value="${p.id}"${p.id==pid?' selected':''}>${p.address}, ${p.city}</option>`).join('');
@@ -2001,7 +2014,7 @@ function moCert(pid){
     <div class="fg-div"></div>
     <div class="fg"><label>Property</label><select id="cp">${opts}</select></div>
     <div class="fg"><label>Document / certificate type</label>
-      <select id="ct" onchange="document.getElementById('ct-other-row').style.display=this.value==='Other'?'block':'none';var noExp=['Smoke Alarm Test Record','CO Alarm Check Record','How to Rent Guide','Right to Rent Record','Deposit Protection Certificate','Written Statement of Terms','Prescribed Information','Pest Control Report'];var er=document.getElementById('ce');if(!er)return;var fg=er.closest('.fg');if(!fg)return;fg.style.display=noExp.includes(this.value)?'none':'block';">
+      <select id="ct" onchange="document.getElementById('ct-other-row').style.display=this.value==='Other'?'block':'none';_toggleCertExpiry();">
         <optgroup label="Mandatory">
           <option>Gas Safety Certificate (GSC)</option>
           <option>EICR (Electrical Installation)</option>
@@ -2052,6 +2065,7 @@ function moCert(pid){
     </div>
     <div class="fg"><label>Notes (optional)</label><textarea placeholder="Any notes…"></textarea></div>
   `,'<button class="btn" onclick="closeMo()">Cancel</button><button class="btn btn-navy" onclick="saveCertToDB()">Save certificate</button>');
+  setTimeout(() => { try { _toggleCertExpiry(); } catch(e) {} }, 50);
 }
 
 async function scanDoc(input){
