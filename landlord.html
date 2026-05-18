@@ -651,6 +651,501 @@ const NEXLET_DEBUG = true; // Set to false to suppress console.error in producti
 function _logError(label, err) { if (NEXLET_DEBUG) console.error('[' + label + ']', err); }
 
 // ── DATA STORE ──
+const COMPLIANCE_DOCS = {
+
+  // ─────────────────────────────────────────────
+  // GROUP 1 — SAFETY CERTIFICATES
+  // Mandatory legal obligations. Tracked by expiry date.
+  // Fines apply if missing or expired.
+  // ─────────────────────────────────────────────
+  safety: {
+    label: 'Safety Certificates',
+    icon: '🛡',
+    description: 'Legally required for all rental properties. Fines apply if missing or expired.',
+    docs: [
+      {
+        id: 'gas',
+        label: 'Gas Safety Certificate (CP12)',
+        frequency: 'Annual',
+        note: 'Must be served to tenant before tenancy begins. Fine up to £6,000.',
+        mandatory: true,
+        no_expiry: false,
+        hmo_only: false,
+        match: ['gas safety','cp12','gas cert']
+      },
+      {
+        id: 'eicr',
+        label: 'EICR (Electrical Installation)',
+        frequency: 'Every 5 years',
+        note: 'Required for all rental properties since 2020. Fine up to £30,000.',
+        mandatory: true,
+        no_expiry: false,
+        hmo_only: false,
+        match: ['eicr','electrical installation','electrical condition']
+      },
+      {
+        id: 'epc',
+        label: 'EPC (Energy Performance)',
+        frequency: 'Every 10 years',
+        note: 'Minimum E rating required. Must be provided to tenant before tenancy.',
+        mandatory: true,
+        no_expiry: false,
+        hmo_only: false,
+        match: ['epc','energy performance']
+      },
+      {
+        id: 'smoke',
+        label: 'Smoke Alarm Test Record',
+        frequency: 'Day 1 of tenancy',
+        note: 'Required on every storey. Must be tested on first day and record kept.',
+        mandatory: true,
+        no_expiry: true,
+        hmo_only: false,
+        match: ['smoke alarm','smoke detector']
+      },
+      {
+        id: 'co',
+        label: 'CO Alarm Check Record',
+        frequency: 'Day 1 of tenancy',
+        note: 'Required in any room with a fixed combustion appliance including gas boilers.',
+        mandatory: true,
+        no_expiry: true,
+        hmo_only: false,
+        match: ['co alarm','carbon monoxide','co detector']
+      },
+      {
+        id: 'legionella',
+        label: 'Legionella Risk Assessment',
+        frequency: 'Every 2 years',
+        note: 'Legal duty for ALL rental properties under HSWA 1974 and COSHH 2002. Self-assessment is acceptable — no formal certificate required but must be documented.',
+        mandatory: true,
+        no_expiry: false,
+        hmo_only: false,
+        match: ['legionella','water risk','l8']
+      },
+    ]
+  },
+
+  // ─────────────────────────────────────────────
+  // GROUP 2 — LICENSING & PROPERTY TYPE
+  // Only shown when property is HMO or has a specific licence
+  // type set. Hidden for standard single-let properties.
+  // ─────────────────────────────────────────────
+  licensing: {
+    label: 'Licensing & Property Type',
+    icon: '📋',
+    description: 'Only required for HMO or specially licensed properties. Not applicable to standard single-let properties.',
+    hmo_section: true,
+    docs: [
+      {
+        id: 'hmo_licence',
+        label: 'HMO Licence',
+        frequency: 'Per licence term',
+        note: 'Mandatory for properties with 5+ tenants across 2+ storeys.',
+        mandatory: true,
+        no_expiry: false,
+        hmo_only: true,
+        match: ['hmo licence','hmo license','mandatory hmo','additional hmo']
+      },
+      {
+        id: 'selective_licence',
+        label: 'Selective Licence',
+        frequency: 'Per licence term',
+        note: 'Required in designated council areas. Check with your local authority.',
+        mandatory: true,
+        no_expiry: false,
+        hmo_only: false,
+        conditional: true,
+        match: ['selective licence','selective license']
+      },
+      {
+        id: 'planning',
+        label: 'Planning Permission / Article 4',
+        frequency: 'One-off',
+        note: 'Required for HMO conversions or short-term lets in Article 4 areas.',
+        mandatory: true,
+        no_expiry: true,
+        hmo_only: false,
+        conditional: true,
+        match: ['planning','article 4','article four']
+      },
+      {
+        id: 'fire_risk',
+        label: 'Fire Risk Assessment',
+        frequency: 'Annual review',
+        note: 'Mandatory for all HMOs. Must be carried out by a competent person.',
+        mandatory: true,
+        no_expiry: false,
+        hmo_only: true,
+        match: ['fire risk','fire assessment']
+      },
+      {
+        id: 'fire_extinguisher',
+        label: 'Fire Extinguisher Service Record',
+        frequency: 'Annual',
+        note: 'Required in HMOs. Serviced annually by a competent engineer.',
+        mandatory: true,
+        no_expiry: false,
+        hmo_only: true,
+        match: ['fire extinguisher','extinguisher service']
+      },
+      {
+        id: 'emergency_lighting',
+        label: 'Emergency Lighting Test Record',
+        frequency: 'Annual',
+        note: 'Required in HMOs with communal areas or more than 2 storeys.',
+        mandatory: true,
+        no_expiry: false,
+        hmo_only: true,
+        match: ['emergency lighting','emergency light']
+      },
+    ]
+  },
+
+  // ─────────────────────────────────────────────
+  // GROUP 3 — TENANCY DOCUMENTS
+  // Served to tenant at or before tenancy start. Tracked by
+  // served/not-served status, not expiry date.
+  // ─────────────────────────────────────────────
+  tenancy: {
+    label: 'Tenancy Documents',
+    icon: '📄',
+    description: 'Documents that must be served to your tenant at or before tenancy start. Tracked by whether they have been served — not by expiry.',
+    docs: [
+      {
+        id: 'rra_sheet',
+        label: 'RRA 2025 Information Sheet',
+        frequency: 'Once per tenancy',
+        note: 'Mandatory from 1 May 2026. Must be the official GOV.UK PDF — a link is not valid. Fine up to £7,000.',
+        mandatory: true,
+        no_expiry: true,
+        hmo_only: false,
+        match: ['rra','renters rights','information sheet','rra 2025','rra 2026']
+      },
+      {
+        id: 'how_to_rent',
+        label: 'How to Rent Guide',
+        frequency: 'Once per tenancy',
+        note: 'Must be current edition from GOV.UK. Keep timestamped proof of delivery.',
+        mandatory: true,
+        no_expiry: true,
+        hmo_only: false,
+        match: ['how to rent','how to let']
+      },
+      {
+        id: 'written_statement',
+        label: 'Written Statement of Terms',
+        frequency: 'Before tenancy agreed',
+        note: 'Replaces AST from 1 May 2026 under RRA 2025. Must be provided before tenant agrees to the tenancy.',
+        mandatory: true,
+        no_expiry: true,
+        hmo_only: false,
+        match: ['written statement','tenancy agreement','ast','statement of terms']
+      },
+      {
+        id: 'right_to_rent',
+        label: 'Right to Rent Check Record',
+        frequency: 'Before tenancy starts',
+        note: 'Passport, share code or biometric card. Keep copy on file. Civil penalty up to £20,000 per tenant if missed.',
+        mandatory: true,
+        no_expiry: true,
+        hmo_only: false,
+        match: ['right to rent','rtr','right to reside']
+      },
+      {
+        id: 's48',
+        label: 'Section 48 Notice (Landlord Address)',
+        frequency: 'Once per tenancy',
+        note: 'Landlord must provide a UK address where legal notices can be served. Rent cannot be enforced until this is provided.',
+        mandatory: true,
+        no_expiry: true,
+        hmo_only: false,
+        match: ['section 48','s48','landlord address','s.48']
+      },
+      {
+        id: 'deposit_cert',
+        label: 'Deposit Protection Certificate',
+        frequency: 'Within 30 days of deposit receipt',
+        note: 'DPS, MyDeposits or TDS. Must protect within 30 days. Fine up to 3x deposit if late.',
+        mandatory: true,
+        no_expiry: true,
+        hmo_only: false,
+        match: ['deposit protection','deposit cert','deposit certificate','dps','mydeposits','tds']
+      },
+      {
+        id: 'prescribed_info',
+        label: 'Prescribed Information (Deposit)',
+        frequency: 'Within 30 days of deposit receipt',
+        note: 'Confirms scheme name, amount and how tenant can reclaim. Keep proof of service.',
+        mandatory: true,
+        no_expiry: true,
+        hmo_only: false,
+        match: ['prescribed information','prescribed info','deposit information','deposit details']
+      },
+    ]
+  },
+
+  // ─────────────────────────────────────────────
+  // GROUP 4 — MOVE-IN PACK
+  // Documents physically handed or sent to tenant on or before
+  // move-in day. Some cross-reference Group 1 certs — tracked
+  // separately because "cert exists" and "copy served to tenant"
+  // are two different compliance checks.
+  // ─────────────────────────────────────────────
+  movein: {
+    label: 'Move-In Pack',
+    icon: '📦',
+    description: 'Documents handed or sent to tenant on move-in day. Gas Safety, EICR and EPC must exist in Safety Certificates AND be served here — two separate checks.',
+    docs: [
+      {
+        id: 'movein_gas',
+        label: 'Gas Safety Certificate — Copy Served',
+        frequency: 'Before tenancy begins',
+        note: 'A copy must be given to the tenant before they move in. Separate to holding the certificate — you must prove service.',
+        mandatory: true,
+        no_expiry: true,
+        hmo_only: false,
+        ref_group: 'safety',
+        ref_id: 'gas',
+        match: ['gas safety','cp12']
+      },
+      {
+        id: 'movein_eicr',
+        label: 'EICR — Copy Served',
+        frequency: 'Before tenancy begins',
+        note: 'Copy must be given to tenant before tenancy begins. Keep proof of delivery.',
+        mandatory: true,
+        no_expiry: true,
+        hmo_only: false,
+        ref_group: 'safety',
+        ref_id: 'eicr',
+        match: ['eicr','electrical installation']
+      },
+      {
+        id: 'movein_epc',
+        label: 'EPC — Copy Served',
+        frequency: 'Before tenancy begins',
+        note: 'Copy must be provided before tenancy. Minimum E rating required.',
+        mandatory: true,
+        no_expiry: true,
+        hmo_only: false,
+        ref_group: 'safety',
+        ref_id: 'epc',
+        match: ['epc','energy performance']
+      },
+      {
+        id: 'inventory',
+        label: 'Inventory / Schedule of Condition',
+        frequency: 'Move-in day',
+        note: 'Room-by-room condition report with dated photos. Both parties should sign. Essential for deposit dispute protection.',
+        mandatory: false,
+        recommended: true,
+        no_expiry: true,
+        hmo_only: false,
+        match: ['inventory','schedule of condition','condition report']
+      },
+      {
+        id: 'alarm_test',
+        label: 'Smoke & CO Alarm Test Record',
+        frequency: 'Day 1 of tenancy',
+        note: 'Landlord must test all alarms on day 1 and keep a signed record. Fine up to £5,000 if not done.',
+        mandatory: true,
+        no_expiry: true,
+        hmo_only: false,
+        match: ['alarm test','smoke test','co test','alarm record','alarm confirmation']
+      },
+      {
+        id: 'deposit_info',
+        label: 'Deposit Protection Details',
+        frequency: 'Within 30 days',
+        note: 'Tenant must receive scheme name, ref number, amount and dispute process in writing.',
+        mandatory: true,
+        no_expiry: true,
+        hmo_only: false,
+        match: ['deposit protection','deposit details','prescribed information']
+      },
+    ]
+  },
+
+  // ─────────────────────────────────────────────
+  // GROUP 5 — INSURANCE
+  // Pulled from Insurance module data — not duplicated. Shows
+  // real status. Links to Insurance tab for management. No red
+  // MISSING badges — Insurance tab owns this.
+  // ─────────────────────────────────────────────
+  insurance: {
+    label: 'Insurance',
+    icon: '🔒',
+    description: 'Insurance policies tracked in the Insurance module. Status shown here — click Manage to add or update.',
+    docs: [
+      {
+        id: 'buildings_ins',
+        label: 'Buildings Insurance',
+        frequency: 'Annual renewal',
+        note: 'Required by most mortgage lenders. Notify insurer when tenancy starts or changes.',
+        mandatory: false,
+        recommended: true,
+        no_expiry: false,
+        hmo_only: false,
+        insurance_type: 'Buildings Insurance',
+        match: ['buildings insurance','building insurance','structure insurance']
+      },
+      {
+        id: 'contents_ins',
+        label: 'Contents Insurance',
+        frequency: 'Annual renewal',
+        note: 'Covers landlord fixtures, fittings and furnishings. Tenant contents not included.',
+        mandatory: false,
+        recommended: true,
+        no_expiry: false,
+        hmo_only: false,
+        insurance_type: 'Contents Insurance',
+        match: ['contents insurance']
+      },
+      {
+        id: 'rgi',
+        label: 'Rent Guarantee Insurance',
+        frequency: 'Annual renewal',
+        note: 'Covers rent arrears if tenant defaults. Usually requires referencing.',
+        mandatory: false,
+        recommended: false,
+        no_expiry: false,
+        hmo_only: false,
+        insurance_type: 'Rent Guarantee Insurance',
+        match: ['rent guarantee','rgi','rent protection']
+      },
+    ]
+  },
+
+  // ─────────────────────────────────────────────
+  // RECOMMENDED — Best practice, not law
+  // Shown in neutral styling. No red badges. Collapsible
+  // section at bottom of compliance tab. Amber when missing,
+  // not red.
+  // ─────────────────────────────────────────────
+  recommended: {
+    label: 'Recommended',
+    icon: '💡',
+    description: 'Best practice documents. Not legally required but strongly recommended. Shown in amber when missing — not red.',
+    docs: [
+      {
+        id: 'boiler',
+        label: 'Boiler Service Certificate',
+        frequency: 'Annual',
+        note: 'Not a legal requirement but recommended annually. Helps prevent gas safety issues and warranty claims.',
+        mandatory: false,
+        recommended: true,
+        no_expiry: false,
+        hmo_only: false,
+        match: ['boiler service','boiler cert','boiler certificate','boiler inspection']
+      },
+      {
+        id: 'pat',
+        label: 'PAT Testing Certificate',
+        frequency: 'Per furnished let',
+        note: 'Not a legal requirement for residential lettings. Recommended for furnished properties only.',
+        mandatory: false,
+        recommended: true,
+        no_expiry: false,
+        hmo_only: false,
+        match: ['pat testing','pat test','portable appliance']
+      },
+      {
+        id: 'asbestos',
+        label: 'Asbestos Survey',
+        frequency: 'One-off for pre-2000 properties',
+        note: 'Not required unless renovation work is planned. Relevant for pre-2000 properties where disturbing materials may occur.',
+        mandatory: false,
+        recommended: true,
+        no_expiry: true,
+        hmo_only: false,
+        match: ['asbestos','asbestos survey','asbestos report']
+      },
+      {
+        id: 'pest',
+        label: 'Pest Control Report',
+        frequency: 'As needed',
+        note: 'Not legally required. Recommended at void periods and if tenant reports infestation.',
+        mandatory: false,
+        recommended: true,
+        no_expiry: true,
+        hmo_only: false,
+        match: ['pest control','pest report','pest inspection','infestation']
+      },
+    ]
+  }
+};
+
+function getDocsForProperty(pid) {
+  const p = P(pid);
+  const isHMO = p ? (
+    p.type === 'HMO' ||
+    (p.licence_type||'').toLowerCase().includes('hmo') ||
+    (p.licence_type||'').toLowerCase().includes('mandatory')
+  ) : false;
+
+  const result = {};
+  Object.entries(COMPLIANCE_DOCS).forEach(([groupKey, group]) => {
+    result[groupKey] = {
+      ...group,
+      docs: group.docs.filter(doc => {
+        if (doc.hmo_only && !isHMO) return false;
+        return true;
+      })
+    };
+  });
+  return result;
+}
+
+function findCertForDoc(doc, certList) {
+  return certList.find(c => {
+    const t = (c.type || '').toLowerCase();
+    return doc.match.some(m => t.includes(m));
+  });
+}
+
+function getDocStatus(doc, certList, insuranceList) {
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  if (doc.insurance_type) {
+    const ins = (insuranceList||[]).find(i =>
+      (i.type||'').toLowerCase().includes(doc.insurance_type.toLowerCase())
+    );
+    if (!ins) return { lbl:'NOT ADDED', bg:'#E4EAF1', col:'#7A8FA6', bdr:'transparent', days:null, overdue:false, action:'insurance' };
+    if (ins.expiry) {
+      const days = Math.round((new Date(ins.expiry) - today) / 864e5);
+      if (days < 0) return { lbl:'EXPIRED', bg:'rgba(229,62,62,0.1)', col:'#E53E3E', bdr:'rgba(229,62,62,0.25)', days, overdue:true, action:'insurance' };
+      if (days <= 14) return { lbl:'URGENT', bg:'rgba(217,119,6,0.1)', col:'#D97706', bdr:'rgba(217,119,6,0.25)', days, overdue:false, action:'insurance' };
+      if (days <= 60) return { lbl:'EXPIRING SOON', bg:'rgba(59,111,232,0.08)', col:'#3B6FE8', bdr:'rgba(59,111,232,0.2)', days, overdue:false, action:'insurance' };
+      return { lbl:'VALID', bg:'var(--green-bg)', col:'#00A87A', bdr:'var(--green-bg)', days, overdue:false, action:'insurance' };
+    }
+    return { lbl:'VALID', bg:'var(--green-bg)', col:'#00A87A', bdr:'var(--green-bg)', days:null, overdue:false, action:'insurance' };
+  }
+
+  const cert = findCertForDoc(doc, certList);
+
+  if (doc.no_expiry) {
+    if (!cert) return { lbl:'NOT UPLOADED', bg:'#E4EAF1', col:'#7A8FA6', bdr:'transparent', days:null, overdue:doc.mandatory };
+    const served = cert.served;
+    if (served) return { lbl:'✓ SERVED', bg:'var(--green-bg)', col:'#00A87A', bdr:'var(--green-bg)', days:null, overdue:false };
+    return { lbl:'NOT SERVED', bg:'rgba(217,119,6,0.07)', col:'#D97706', bdr:'rgba(217,119,6,0.25)', days:null, overdue:doc.mandatory };
+  }
+
+  if (!cert) {
+    if (doc.recommended && !doc.mandatory) return { lbl:'NOT ON FILE', bg:'rgba(217,119,6,0.05)', col:'#D97706', bdr:'rgba(217,119,6,0.15)', days:null, overdue:false };
+    return { lbl:'MISSING', bg:'#E4EAF1', col:'#7A8FA6', bdr:'transparent', days:null, overdue:doc.mandatory };
+  }
+
+  if (cert.expiry) {
+    const days = Math.round((new Date(cert.expiry) - today) / 864e5);
+    if (days < 0) return { lbl:'EXPIRED', bg:'rgba(229,62,62,0.1)', col:'#E53E3E', bdr:'rgba(229,62,62,0.25)', days, overdue:true };
+    if (days <= 14) return { lbl:'URGENT', bg:'rgba(217,119,6,0.1)', col:'#D97706', bdr:'rgba(217,119,6,0.25)', days, overdue:false };
+    if (days <= 60) return { lbl:'EXPIRING SOON', bg:'rgba(59,111,232,0.08)', col:'#3B6FE8', bdr:'rgba(59,111,232,0.2)', days, overdue:false };
+    return { lbl:'VALID', bg:'var(--green-bg)', col:'#00A87A', bdr:'var(--green-bg)', days, overdue:false };
+  }
+  return { lbl:'VALID', bg:'var(--green-bg)', col:'#00A87A', bdr:'var(--green-bg)', days:null, overdue:false };
+}
+
 const D = {
   properties: [], tenants: [], certs: [], maintenance: [], rent: [], insurance: [],
   emailLog: [], customTemplates: [], contractors: [], jobAssignments: [], tenantDocs: [],
