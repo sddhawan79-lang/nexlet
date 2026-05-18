@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Feedback &amp; Suggestions — NexLet</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#0B1E3D;--navy-mid:#132847;
+  --green:#00C896;--green-dark:#009970;--green-bg:rgba(0,200,150,0.08);
+  --white:#fff;--off:#F6F8FB;--border:#E4EAF1;
+  --txt:#1A2B45;--muted:#7A8FA6;
+  --red:#E53E3E;--red-bg:rgba(229,62,62,0.06);--red-border:rgba(229,62,62,0.2);
+  --amber:#D97706;--amber-bg:rgba(217,119,6,0.07);
+  --font:'DM Sans',system-ui,sans-serif;
+  --disp:'DM Serif Display',Georgia,serif;
+}
+html,body{min-height:100%;font-family:var(--font);color:var(--txt);background:var(--off);-webkit-font-smoothing:antialiased}
+
+/* ── TOP BAR ── */
+.topbar{
+  position:sticky;top:0;z-index:100;
+  background:var(--navy);
+  height:58px;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 28px;
+  box-shadow:0 1px 6px rgba(0,0,0,0.18);
+}
+.tb-logo{font-family:var(--disp);font-size:18px;color:#fff;text-decoration:none}
+.tb-logo span{color:var(--green)}
+.tb-title{font-size:14px;font-weight:600;color:rgba(255,255,255,0.7);letter-spacing:.01em}
+.tb-back{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:13px;color:rgba(255,255,255,0.55);
+  text-decoration:none;padding:6px 12px;border-radius:6px;
+  border:1px solid rgba(255,255,255,0.12);
+  transition:all .15s;
+}
+.tb-back:hover{color:#fff;border-color:rgba(255,255,255,0.3);background:rgba(255,255,255,0.07)}
+
+/* ── MAIN CONTENT ── */
+.content{max-width:680px;margin:0 auto;padding:32px 20px 64px}
+
+/* ── SECTION CARDS ── */
+.section-card{
+  background:var(--white);
+  border:1px solid var(--border);
+  border-radius:12px;
+  overflow:hidden;
+  margin-bottom:20px;
+}
+.section-hd{
+  padding:18px 24px 16px;
+  border-bottom:1px solid var(--border);
+}
+.section-hd h2{font-size:15px;font-weight:600;color:var(--txt);margin-bottom:2px}
+.section-hd p{font-size:13px;color:var(--muted)}
+.section-body{padding:24px}
+
+/* ── TYPE TOGGLE ── */
+.type-toggle{
+  display:grid;grid-template-columns:1fr 1fr;
+  gap:12px;
+}
+.type-card{
+  border:1.5px solid var(--border);
+  border-radius:10px;padding:18px 16px;
+  cursor:pointer;text-align:center;
+  transition:box-shadow .15s,border-color .15s,background .15s;
+  background:var(--white);
+}
+.type-card:hover{border-color:#c5d0dd}
+.type-card.type-active{
+  border-color:var(--navy);
+  background:rgba(11,30,61,0.03);
+  box-shadow:0 2px 10px rgba(11,30,61,0.08);
+}
+.type-icon{font-size:22px;margin-bottom:6px}
+.type-label{font-size:14px;font-weight:600;color:var(--txt);margin-bottom:2px}
+.type-desc{font-size:11px;color:var(--muted)}
+
+/* ── FORM FIELDS ── */
+.fg{display:flex;flex-direction:column;margin-bottom:16px}
+.fg label{
+  font-size:11px;font-weight:600;color:var(--txt);
+  margin-bottom:6px;letter-spacing:.3px;text-transform:uppercase;
+}
+.fg input,.fg textarea,.fg select{
+  width:100%;padding:11px 14px;border-radius:9px;
+  border:1.5px solid var(--border);
+  font-family:var(--font);font-size:14px;color:var(--txt);
+  outline:none;transition:border .2s;background:var(--white);
+}
+.fg input:focus,.fg textarea:focus,.fg select:focus{border-color:var(--navy)}
+.fg textarea{resize:vertical;min-height:120px}
+.field-hint{font-size:11px;color:var(--muted);margin-top:5px}
+.char-count{font-size:11px;color:var(--muted);text-align:right;margin-top:3px}
+
+/* ── FILE UPLOAD ── */
+.file-upload-area{
+  border:2px dashed var(--border);
+  border-radius:10px;padding:24px;text-align:center;
+  cursor:pointer;transition:border-color .15s,background .15s;
+  background:var(--white);
+}
+.file-upload-area:hover{border-color:var(--navy);background:rgba(11,30,61,0.02)}
+.file-upload-area.has-files{padding:16px}
+.upload-hint{font-size:13px;color:var(--muted)}
+.upload-hint strong{color:var(--navy)}
+.file-list{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px}
+.file-thumb{
+  display:flex;align-items:center;gap:8px;
+  background:var(--off);border:1px solid var(--border);
+  border-radius:8px;padding:8px 10px;font-size:12px;color:var(--txt);
+  max-width:100%;
+}
+.file-thumb-name{max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-thumb-remove{
+  flex-shrink:0;width:20px;height:20px;border-radius:50%;
+  border:none;background:rgba(229,62,62,0.1);color:var(--red);
+  cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;
+  transition:background .15s;
+}
+.file-thumb-remove:hover{background:var(--red);color:#fff}
+.file-status{font-size:11px;color:var(--green-dark);margin-top:4px;display:none}
+
+/* ── BUTTONS ── */
+.btn-row{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+.btn-cancel{
+  padding:10px 20px;border:1px solid var(--border);border-radius:8px;
+  background:var(--white);font-family:var(--font);font-size:13px;font-weight:500;
+  cursor:pointer;color:var(--txt);transition:border .15s;
+}
+.btn-cancel:hover{border-color:var(--muted)}
+.btn-submit{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:11px 24px;border-radius:9px;
+  background:var(--navy);color:#fff;
+  font-family:var(--font);font-size:14px;font-weight:600;
+  border:none;cursor:pointer;transition:background .15s;
+}
+.btn-submit:hover{background:var(--navy-mid)}
+.btn-submit:disabled{opacity:.6;cursor:not-allowed}
+
+/* ── MESSAGE ELEMENTS ── */
+.error-msg{
+  background:var(--red-bg);border:1px solid var(--red-border);
+  border-radius:8px;padding:10px 14px;font-size:13px;
+  color:var(--red);margin-bottom:16px;display:none;
+}
+.success-msg{
+  background:var(--green-bg);border:1px solid rgba(0,200,150,0.3);
+  border-radius:8px;padding:10px 14px;font-size:13px;
+  color:var(--green-dark);margin-bottom:16px;display:none;
+}
+.spinner{
+  display:inline-block;width:14px;height:14px;
+  border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;
+  border-radius:50%;animation:spin .6s linear infinite;
+  margin-right:6px;vertical-align:middle;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── SUCCESS STATE ── */
+.success-card{
+  background:var(--white);border:1px solid var(--border);
+  border-radius:12px;padding:32px 24px;text-align:center;
+}
+.success-icon{font-size:36px;margin-bottom:12px}
+.success-title{font-size:16px;font-weight:700;color:var(--txt);margin-bottom:6px}
+.success-sub{font-size:13px;color:var(--muted);margin-bottom:20px}
+
+/* ── RESPONSIVE ── */
+@media(max-width:768px){
+  .topbar{padding:0 16px}
+  .tb-title{display:none}
+  .content{padding:20px 12px 48px}
+  .type-toggle{grid-template-columns:1fr;gap:10px}
+  .section-body{padding:16px}
+  .section-hd{padding:14px 16px 12px}
+}
+@media(max-width:500px){
+  .tb-back span{display:none}
+}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<header class="topbar">
+  <a class="tb-logo" href="landlord.html">Nex<span>Let</span></a>
+  <span class="tb-title">Feedback &amp; Suggestions</span>
+  <a class="tb-back" href="landlord.html">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 2L4 7l5 5"/></svg>
+    <span>Dashboard</span>
+  </a>
+</header>
+
+<!-- MAIN CONTENT -->
+<main class="content" id="feedback-main">
+
+  <!-- ── SECTION 1: TYPE ── -->
+  <section class="section-card" id="sect-type">
+    <div class="section-hd">
+      <h2>What would you like to share?</h2>
+      <p>Choose one — we review every submission</p>
+    </div>
+    <div class="section-body">
+      <div class="type-toggle" id="type-toggle">
+        <div class="type-card type-active" data-type="bug">
+          <div class="type-icon">🐛</div>
+          <div class="type-label">Report a Bug</div>
+          <div class="type-desc">Something isn't working as expected</div>
+        </div>
+        <div class="type-card" data-type="feature">
+          <div class="type-icon">💡</div>
+          <div class="type-label">Suggest a Feature</div>
+          <div class="type-desc">Something you'd like NexLet to do</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── SECTION 2: DETAILS ── -->
+  <section class="section-card" id="sect-details">
+    <div class="section-hd">
+      <h2>Details</h2>
+      <p>Help us understand what you need</p>
+    </div>
+    <div class="section-body">
+      <div class="error-msg" id="feedback-error"></div>
+
+      <div class="fg">
+        <label for="fb-title">Brief description</label>
+        <input type="text" id="fb-title" placeholder="e.g. Calendar shows wrong rent amount" maxlength="120">
+        <div class="char-count" id="fb-title-count">0 / 120</div>
+      </div>
+
+      <div class="fg">
+        <label for="fb-urgency">Urgency</label>
+        <select id="fb-urgency">
+          <option value="low">Low — nice to have, no rush</option>
+          <option value="medium" selected>Medium — would help soon</option>
+          <option value="high">High — causing real friction</option>
+          <option value="critical">Critical — blocking work entirely</option>
+        </select>
+      </div>
+
+      <div class="fg">
+        <label for="fb-description">Full description</label>
+        <textarea id="fb-description" placeholder="Tell us what happened (or what you'd like to see). Include steps to reproduce a bug, or describe the feature you need."></textarea>
+        <div class="char-count" id="fb-desc-count">0 / 2000</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── SECTION 3: ATTACHMENTS ── -->
+  <section class="section-card" id="sect-files">
+    <div class="section-hd">
+      <h2>Attachments</h2>
+      <p>Upload screenshots, error logs, or reference files (optional)</p>
+    </div>
+    <div class="section-body">
+      <div class="file-upload-area" id="file-upload-area">
+        <div class="file-list" id="file-list"></div>
+        <div class="upload-hint" id="upload-hint">
+          <strong>Click to browse</strong> or drag files here<br>
+          <span style="font-size:11px">Images (PNG, JPG) or PDFs — up to 5 files, 5 MB each</span>
+        </div>
+        <input type="file" id="fb-files" accept=".png,.jpg,.jpeg,.pdf" multiple style="display:none">
+      </div>
+      <div class="file-status" id="file-status"></div>
+    </div>
+  </section>
+
+  <!-- Submit -->
+  <div class="btn-row">
+    <button class="btn-cancel" onclick="window.location.href='landlord.html'">Cancel</button>
+    <button class="btn-submit" id="submit-btn">Submit Feedback</button>
+  </div>
+
+</main>
+
+<!-- SUCCESS STATE (hidden by default) -->
+<div style="display:none" id="feedback-success">
+  <div class="content">
+    <div class="success-card">
+      <div class="success-icon">✅</div>
+      <div class="success-title">Thank you for your feedback</div>
+      <div class="success-sub">We review every submission and prioritise the most impactful changes. You'll hear back if we need more detail.</div>
+      <button class="btn-submit" onclick="window.location.href='landlord.html'">← Back to Dashboard</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── SCRIPTS ── -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
+<script src="js/lib/supabase-client.js" defer></script>
+<script src="js/lib/auth.js" defer></script>
+<script src="js/lib/ui.js" defer></script>
+<script src="js/feedback.js" defer></script>
+
+</body>
+</html>
