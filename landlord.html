@@ -1980,6 +1980,7 @@ function closeMo(){
   const box = document.querySelector('.mo-box');
   if (box) box.classList.remove('mo-wide');
 }
+function closeModal() { closeMo(); }
 
 // ── MODAL: ADD CERTIFICATE ──
 function moCert(pid){
@@ -4306,15 +4307,7 @@ function pgDashboard(){
           </div>
           <button class="btn btn-sm"
             style="font-size:11px;flex-shrink:0"
-            onclick="(function(){
-              var v=document.getElementById(
-                's8-compact-sel'
-              );
-              if(v&&v.value) moSection8(v.value);
-              else if(${props.length}===1)
-                moSection8('${props[0]?.id||''}');
-              else toast('Select a property',true);
-            })()">
+            onclick="s8LaunchFromTemplates()">
             Generate →
           </button>
         </div>`;
