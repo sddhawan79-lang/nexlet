@@ -524,6 +524,7 @@ tr:hover td{background:rgba(246,248,251,.8)}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script>
 // ══════════════════════════════════════════════════════════════
 // NEXLET — CODE MAP (auto-generated, update each session)
@@ -5806,6 +5807,30 @@ function pdTabContent(pid, tab) {
             missing
           </div>
         </div>
+      </div>
+
+      <!-- Per-property export -->
+      <div style="display:flex;
+        justify-content:flex-end;
+        margin-bottom:14px">
+        <button
+          onclick="exportData('${pid}')"
+          style="font-size:11px;
+          padding:5px 12px;
+          border-radius:7px;
+          border:1px solid var(--border);
+          background:var(--white);
+          color:var(--muted);
+          font-family:var(--font);
+          cursor:pointer;
+          display:flex;align-items:center;
+          gap:5px"
+          onmouseenter="this.style.background=
+            'var(--off)'"
+          onmouseleave="this.style.background=
+            'var(--white)'">
+          ⬇ Download audit trail
+        </button>
       </div>
 
       <!-- Group 1: Safety Certificates -->
@@ -14105,6 +14130,255 @@ function nlToggleHtml() {
         </div>
       </div>
     </div>`;
+}
+
+// ── DATA EXPORT FUNCTIONS ──
+
+function _toCSV(rows) {
+  if (!rows || !rows.length) return 'No data\n';
+  const keys = [];
+  rows.forEach(row => {
+    Object.keys(row).forEach(k => {
+      if (!keys.includes(k)) keys.push(k);
+    });
+  });
+  const escape = val => {
+    if (val === null || val === undefined) return '';
+    const str = String(val);
+    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+      return '"' + str.replace(/"/g, '""') + '"';
+    }
+    return str;
+  };
+  const header = keys.map(escape).join(',');
+  const lines = rows.map(row => keys.map(k => escape(row[k])).join(','));
+  return [header, ...lines].join('\n');
+}
+
+function _expFmt(val) {
+  if (!val) return '';
+  try {
+    return new Date(val).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  } catch(e) { return String(val); }
+}
+
+function _exportReadme() {
+  const now = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return `NEXLET DATA EXPORT\n==================\nGenerated: ${now}\nUser: ${currentUser?.email || 'Unknown'}\n\nFILES IN THIS EXPORT:\n---------------------\n\nproperties.csv\n  All your rental properties including address, type, rent, EPC rating, licence details and status.\n\ntenants.csv\n  All tenant records including name, email, tenancy dates, deposit details and deposit scheme.\n\ncertificates.csv\n  All compliance certificates including type, issue date, expiry date, upload timestamp and file URL.\n\nmaintenance.csv\n  All maintenance issues including title, description, priority, status, Awaab Law flag and dates.\n\nrent.csv\n  All rent payment records including month, amount due, amount paid, status and payment date.\n\ninsurance.csv\n  All insurance policies including type, provider, policy number, premium and expiry date.\n\nemail-log.csv\n  All emails sent via the platform including recipient, template, subject and sent timestamp.\n\ncontractors.csv\n  Your contractor directory including name, trade, phone and email.\n\nesign.csv\n  All e-sign requests including document type, tenant, status and signed date.\n\nLEGAL NOTICE:\n-------------\nThis export contains personal data about your tenants. Handle in accordance with UK GDPR and your privacy policy. Do not share without legal basis. Timestamps are in GMT/BST local time.\n\nThis export is provided for data portability under UK GDPR Article 20. For compliance evidence in legal proceedings, timestamps and records in this export reflect data as stored in the NexLet platform at time of export.\n`;
+}
+
+function _exportProperties(pid) {
+  const props = pid ? D.properties.filter(p => String(p.id) === String(pid)) : D.properties;
+  return props.map(p => ({
+    id: p.id,
+    address: p.address,
+    city: p.city,
+    postcode: p.postcode,
+    type: p.type,
+    bedrooms: p.beds,
+    bathrooms: p.bathrooms,
+    monthly_rent: p.rent,
+    status: p.status || 'active',
+    epc_rating: p.epc,
+    epc_expiry: _expFmt(p.epc_expiry),
+    licence_type: p.licence_type,
+    licence_expiry: _expFmt(p.licence_expiry),
+    council_tax_band: p.council_tax_band,
+    notes: p.notes,
+    vacant_since: _expFmt(p.vacant_since)
+  }));
+}
+
+function _exportTenants(pid) {
+  const tenants = pid ? D.tenants.filter(t => String(t.prop_id) === String(pid)) : D.tenants;
+  return tenants.map(t => {
+    const prop = P(t.prop_id);
+    return {
+      id: t.id,
+      property: prop ? prop.address : t.prop_id,
+      name: t.name,
+      email: t.email,
+      phone: t.phone,
+      status: t.status,
+      tenancy_start: _expFmt(t.start || t.start_date),
+      tenancy_end: _expFmt(t.end || t.end_date),
+      monthly_rent: t.rent,
+      deposit_amount: t.deposit,
+      deposit_scheme: t.scheme,
+      right_to_rent_expiry: _expFmt(t.rtr_expiry),
+      is_lead_tenant: t.is_lead,
+      notes: t.notes
+    };
+  });
+}
+
+function _exportCerts(pid) {
+  const certs = pid ? D.certs.filter(c => String(c.prop_id) === String(pid)) : D.certs;
+  return certs.map(c => {
+    const prop = P(c.prop_id);
+    return {
+      id: c.id,
+      property: prop ? prop.address : c.prop_id,
+      type: c.type,
+      status: c.status,
+      issue_date: _expFmt(c.issue_date),
+      expiry_date: _expFmt(c.expiry),
+      uploaded_at: _expFmt(c.created_at),
+      engineer_name: c.engineer,
+      notes: c.notes,
+      file_url: c.url || c.file_url || c.document_url || ''
+    };
+  });
+}
+
+function _exportMaintenance(pid) {
+  const items = pid ? D.maintenance.filter(m => String(m.prop_id) === String(pid)) : D.maintenance;
+  return items.map(m => {
+    const prop = P(m.prop_id);
+    return {
+      id: m.id,
+      property: prop ? prop.address : m.prop_id,
+      title: m.title,
+      description: m.desc || m.description,
+      category: m.category,
+      priority: m.priority,
+      status: m.status,
+      awaab_law_flagged: m.awaab ? 'Yes' : 'No',
+      reported_date: _expFmt(m.date || m.issue_date),
+      resolved_date: _expFmt(m.resolved_at),
+      contractor: m.contractor,
+      cost: m.cost,
+      notes: m.notes
+    };
+  });
+}
+
+function _exportRent(pid) {
+  const records = pid ? D.rent.filter(r => String(r.prop_id) === String(pid)) : D.rent;
+  return records.map(r => {
+    const prop = P(r.prop_id);
+    const tenant = D.tenants.find(t => String(t.prop_id) === String(r.prop_id) && t.status === 'Active');
+    return {
+      id: r.id,
+      property: prop ? prop.address : r.prop_id,
+      tenant: tenant?.name || '',
+      month: r.month,
+      amount_due: r.amount,
+      amount_paid: r.paid_amount,
+      status: r.status,
+      due_date: _expFmt(r.due_date),
+      paid_date: _expFmt(r.paid_date),
+      payment_method: r.method,
+      notes: r.notes
+    };
+  });
+}
+
+function _exportInsurance(pid) {
+  const items = pid ? D.insurance.filter(i => String(i.prop_id) === String(pid)) : D.insurance;
+  return items.map(i => {
+    const prop = P(i.prop_id);
+    return {
+      id: i.id,
+      property: prop ? prop.address : i.prop_id,
+      type: i.type,
+      provider: i.provider,
+      policy_number: i.policy_number || i.policy,
+      annual_premium: i.premium,
+      start_date: _expFmt(i.start_date),
+      expiry_date: _expFmt(i.expiry),
+      status: i.status,
+      notes: i.notes
+    };
+  });
+}
+
+function _exportEmailLog(pid) {
+  const logs = pid ? (D.emailLog||[]).filter(e => String(e.prop_id) === String(pid)) : (D.emailLog||[]);
+  return logs.map(e => {
+    const prop = P(e.prop_id);
+    return {
+      id: e.id,
+      property: prop ? prop.address : (e.prop_id || ''),
+      recipient_email: e.to || e.recipient_email,
+      recipient_name: e.recipient_name,
+      template: e.template_id,
+      subject: e.subject,
+      status: e.status,
+      sent_at: _expFmt(e.sent_at || e.created_at)
+    };
+  });
+}
+
+function _exportContractors() {
+  return (D.contractors||[]).map(c => ({
+    id: c.id,
+    name: c.name,
+    trade: c.trade,
+    phone: c.phone,
+    email: c.email,
+    company: c.company,
+    notes: c.notes
+  }));
+}
+
+function _exportEsign(pid) {
+  const items = pid ? (D.esignReq||[]).filter(r => String(r.property_id) === String(pid)) : (D.esignReq||[]);
+  return items.map(r => {
+    const prop = P(r.property_id || r.prop_id);
+    return {
+      id: r.id,
+      property: prop ? prop.address : (r.property_id || ''),
+      document_type: r.document_type,
+      tenant_name: r.tenant_name,
+      tenant_email: r.tenant_email,
+      status: r.status,
+      requested_at: _expFmt(r.created_at),
+      signed_at: _expFmt(r.signed_at),
+      expires_at: _expFmt(r.expires_at)
+    };
+  });
+}
+
+async function exportData(pid) {
+  try {
+    toast('Preparing export…');
+    if (typeof JSZip === 'undefined') {
+      toast('Export library not loaded — please refresh and try again', true);
+      return;
+    }
+    const zip = new JSZip();
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const prefix = pid ? 'nexlet-property-export-' : 'nexlet-export-';
+    const filename = prefix + dateStr;
+    zip.file('properties.csv', _toCSV(_exportProperties(pid)));
+    zip.file('tenants.csv', _toCSV(_exportTenants(pid)));
+    zip.file('certificates.csv', _toCSV(_exportCerts(pid)));
+    zip.file('maintenance.csv', _toCSV(_exportMaintenance(pid)));
+    zip.file('rent.csv', _toCSV(_exportRent(pid)));
+    zip.file('insurance.csv', _toCSV(_exportInsurance(pid)));
+    zip.file('email-log.csv', _toCSV(_exportEmailLog(pid)));
+    if (!pid) {
+      zip.file('contractors.csv', _toCSV(_exportContractors()));
+      zip.file('esign.csv', _toCSV(_exportEsign()));
+    } else {
+      zip.file('esign.csv', _toCSV(_exportEsign(pid)));
+    }
+    zip.file('README.txt', _exportReadme());
+    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename + '.zip';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    toast('✓ Export downloaded — ' + filename + '.zip');
+  } catch(err) {
+    console.error('exportData error:', err);
+    toast('Export failed — please try again', true);
+  }
 }
 
 // ── START ──
