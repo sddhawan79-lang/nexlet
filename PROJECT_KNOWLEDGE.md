@@ -667,9 +667,9 @@ Pricing uses a **founding / standard** two-tier model displayed via a billing to
 
 | Plan | Founding price (monthly) | Founding price (annual) | Standard price (monthly) | Standard price (annual) | Properties | Target user |
 |---|---|---|---|---|---|---|---|
-| Starter | £5.99/mo | £4.99/mo | £9.99/mo | £8.33/mo | Up to 2 | Accidental landlords |
-| Landlord | £12.99/mo | £10.83/mo | £19.99/mo | £16.66/mo | Up to 5 | ★ Most popular |
-| Portfolio | £24.99/mo | £20.83/mo | £39.99/mo | £33.32/mo | Unlimited | Portfolio landlords |
+| Starter | £4.99/mo | £4.16/mo | £7.99/mo | £6.66/mo | Up to 2 | Accidental landlords |
+| Landlord | £11.99/mo | £9.99/mo | £18.99/mo | £15.83/mo | Up to 10 | ★ Most popular |
+| Portfolio | £23.99/mo | £19.99/mo | £39.99/mo | £33.32/mo | Unlimited | Portfolio landlords |
 
 Annual billing: 2 months free (pay 10 months, get 12)
 
@@ -956,7 +956,7 @@ When **touching any of these files for a new feature or bug fix**, follow this p
 **Date:** 17 May 2026
 - **All plans repriced:** Starter £5.99/£9.99, Landlord £12.99/£19.99, Portfolio £24.99/£39.99 (founding/standard monthly)
 - **Yearly rates added:** Starter £59.90/£99.90, Landlord £129.90/£199.90, Portfolio £249.90/£399.90
-- **Property limits updated:** Starter 2, Landlord 5, Portfolio Unlimited
+- **Property limits updated:** Starter 2, Landlord 10, Portfolio Unlimited
 - Changes applied in `index.html` (HTML display + JS `prices` object), `landlord.html` (PRICING comment, trial modals, PLAN_LIMITS, PLAN_FEATURES)
 
 ### Session 6 — May 2026 — AI Fix & Edge Function Rebuild
@@ -1459,7 +1459,7 @@ When **touching any of these files for a new feature or bug fix**, follow this p
 
 #### Modified Functions (Session 14)
 - **`getUserPlan()`** — stubbed to `return 'trial'` (prevents reference errors from `effectivePlan` hoisting issue)
-- **`isPortfolio()`** — now plan-gated: `return getUserPlan()==='portfolio'||getUserPlan()==='pro'` (May 2026)
+- **`isPortfolio()`** — now plan-gated: `return getUserPlan()==='portfolio'` (May 2026)
 - **`isLandlordOrAbove()`** — stubbed to `return true` (full access during development)
 - **`applyPlanGating()`** — stubbed to `return` (no-op, prevents DOM errors)
 - `getPropLimit()` — returns 0 for expired trial
@@ -1524,9 +1524,9 @@ When **touching any of these files for a new feature or bug fix**, follow this p
   - `PLAN_FEATURES` constant added (maps plan → allowed feature array for `canAccess()` equivalent)
   - `PLAN_LIMITS` landlord cap reduced: 10 → **5**
 - **Pricing updated** across `landlord.html` and `index.html`:
-  - Starter: £4.99→**£5.99** (founding), £7.99→**£9.99** (standard), yearly £59.90/£99.90
-  - Landlord: £9.99→**£12.99** (founding), £14.99→**£19.99** (standard), yearly £129.90/£199.90
-  - Portfolio: £23.99→**£24.99** (founding), standard £39.99 unchanged, yearly £249.90/£399.90
+  - Starter: £4.99 (founding), £7.99 (standard), yearly removed
+  - Landlord: £11.99 (founding), £18.99 (standard), yearly removed
+  - Portfolio: £23.99 (founding), standard £39.99 unchanged, yearly removed
   - PRICING comment in AI system prompt updated with yearly rates
   - Trial footer changed: `"All plans include 30-day trial"` → `"No card required · Cancel anytime"`
 - **Portfolio display:** `limit:999` now renders `"Unlimited properties"` in tier cards (conditional: ≥999)
@@ -1830,6 +1830,148 @@ When **touching any of these files for a new feature or bug fix**, follow this p
 - **Part C:** "My Data" panel added to `profile.html` above Communication preferences — Export all data + Delete account buttons
 - **Part D:** "⬇ Download audit trail" button added after RAG score bar in property detail compliance tab — calls `exportData(pid)` for per-property export
 
+### Pricing & Signup Fixes — 19 May 2026 — Plans Repriced, Landing Page + Legal Pages Updated
+
+**Date:** 19 May 2026  
+**Scope:** `landlord.html`, `index.html`, `terms.html`, `privacy.html`, `login.html`, `signup.html`, `js/signup.js`
+
+- **Landing page (`index.html`):**
+  - Hero: "1–15 properties" → "1–10+ properties"
+  - All pricing repriced: Starter £5.99→£4.99, Landlord £12.99→£11.99, Portfolio £24.99→£23.99 (founding)
+  - Standard rates lowered: Starter £9.99→£7.99, Landlord £19.99→£18.99
+  - JS `prices` object updated with new founding/standard rates
+  - Comparison table: Landlord 5→10 properties
+  - Removed "Dedicated onboarding" + "Multi-user access" from comparison (unbuilt)
+  - Removed "Shareable compliance certificate" from features list (unbuilt)
+  - Next Phase Band: added PECR consent line, compliance tips chip, wired to `resend-audience-sync` edge function
+  - Founder strip: "Built by Saby" → anonymised "Built by a UK landlord and managing agent"
+  - Signup CTA: "deadline is 31 May" → "RRA 2025 now in force"
+
+- **Pricing config (`landlord.html`):**
+  - `PLAN_LIMITS`: Landlord 5→10
+  - `isPortfolio()`: removed `||getUserPlan()==='pro'`
+  - `isLandlordOrAbove()`: removed `'pro'` from array
+  - `planLabels`: removed `pro:'Pro'`
+  - AI system prompt pricing: lowered all founding/standard rates, removed yearly rates
+  - Trial expiry modal plans array: all 3 founding/standard prices lowered
+  - Upgrade modal tierCards array: all 3 prices lowered, Landlord limit 5→10
+  - Property add upgrade prompt: Starter now prompts for Landlord, not Portfolio
+  - Compliance view default: `||'action'` → `||'full'` (3 occurrences) + `_compView` initialiser
+  - RRA post-deadline: blue banner shown for unsent tenants after 31 May instead of returning empty
+  - Cert expiry field hidden for no-expiry doc types in `moCert` modal
+  - PAT certificate marked `furnished_only: true` — hidden for unfurnished properties via `isFurnished` filter in `getDocsForProperty`
+  - Safety group default collapsed in compliance tab
+  - S8 compact card "Generate →" button calls `s8LaunchFromTemplates()` instead of broken `s8-compact-sel` lookup
+  - `closeModal()` alias added next to `closeMo()` for comms hub compatibility
+  - Doc library View buttons extended to check `engineer` field (stores public URL for uploaded docs)
+
+- **Newsletter opt-in (`landlord.html`, `profile.html`):**
+  - `nlSubscribe`/`nlUnsubscribe` rewritten with `upsert` on both `profiles` and `user_profiles` tables
+  - Both functions sync to `resend-audience-sync` edge function fire-and-forget
+  - Dashboard newsletter banner removed — lives on `index.html` only
+  - `_nlShouldShowBanner()` and `nlDismiss()` deleted
+
+- **Legal pages (`terms.html`):**
+  - Founder pricing updated: Landlord £9.99→£11.99, Portfolio £24.99→£23.99
+  - Trial clause 6.2: "payment details required" → "no payment details required", no-auto-charge language
+  - Prohibited Activities 9.2: replaced with 8-item tailored list (account sharing, false compliance records, etc.)
+  - Compliance with Law 9.3: expanded with specific legislation references
+  - AI clause 10: stronger disclaimers (draft aids only, sole responsibility, Form 3A handoff, indemnity)
+  - Consumer Rights 3.3: saving clause added — "nothing affects your statutory rights"
+  - VAT clause 5.4: explicitly states not VAT registered, fees exclusive of VAT, 30 days' notice
+  - Third-Party Services 17: Stripe added with card-data-not-stored disclaimer
+
+- **Legal pages (`privacy.html`):**
+  - Stripe added to sub-processors table (PCI-DSS certified, card data never stored)
+  - Newsletter added to data processing purposes table (consent-based, withdrawable)
+
+- **Signup (`signup.html` + `js/signup.js`):**
+  - `signup.js` fully rewritten with IIFE module pattern
+  - Password strength meter: 5 rules, 4-bar visual, score 0-5 with weak/fair/good/strong labels
+  - Confirm password match: real-time ✓/✗ hint
+  - Form submission: validates strength ≥Fair, calls `signUp()` with newsletter preference in metadata
+  - Upserts `newsletter_opted_in` to `user_profiles` fire-and-forget after signup
+  - Redirects to `login.html` after 2s on success
+  - Checks existing session on init — redirects to `landlord.html` if logged in
+
+### Editorial Fix — 19 May 2026 — S8 compact + closeModal + compView
+
+**Date:** 19 May 2026 — 3 surgical fixes in `landlord.html`
+
+- S8 compact card "Generate →" button now calls `s8LaunchFromTemplates()` — broken `s8-compact-sel` DOM lookup removed
+- `closeModal()` alias added next to `closeMo()` for comms hub action buttons
+- Compliance view default `||'action'` → `||'full'` on all 3 fallbacks — Full Audit is default view
+
+### 9 Surgical Fixes — 19 May 2026 — Pricing Reprice
+
+**Date:** 19 May 2026 — 9 fixes in `landlord.html`
+
+- `PLAN_LIMITS`: Landlord 5→10
+- `isPortfolio()` + `isLandlordOrAbove()`: removed `'pro'`
+- `planLabels`: removed `pro:'Pro'`
+- AI system prompt pricing: all rates lowered, yearly removed
+- Trial expiry modal plans array: all founding/standard prices lowered
+- Upgrade modal tierCards: all prices lowered, Landlord limit 5→10
+- Property add upgrade: Starter prompts for Landlord, not Portfolio
+- RRA post-deadline: blue banner shown for unsent tenants after 31 May
+- Initial `_compView` default: `'action'` → `'full'`
+
+### index.html Reprice — 19 May 2026
+
+**Date:** 19 May 2026 — 9 fixes in `index.html`
+
+- Hero: "1–15" → "1–10+" properties
+- Starter: £5.99/£9.99 → £4.99/£7.99
+- Landlord: 5→10 props, £12.99/£19.99 → £11.99/£18.99
+- Portfolio: £24.99 → £23.99
+- JS prices object: all founding/standard lowered
+- Comparison table: Landlord 5→10
+- Removed "Dedicated onboarding" + "Multi-user access" (unbuilt)
+- Removed "Shareable compliance certificate" (unbuilt)
+- Founder strip anonymised
+
+### terms.html + privacy.html Updates — 19 May 2026
+
+**Date:** 19 May 2026
+
+- **`terms.html`:** Plans repriced, Trial clause no-payment-details, Prohibited Activities replaced, Compliance with Law expanded, AI clause strengthened, Consumer saving clause, VAT exclusive, Stripe added to third-party services
+- **`privacy.html`:** Stripe added to sub-processors, Newsletter added to data processing purposes
+
+### signup.js Rewrite — 19 May 2026
+
+**Date:** 19 May 2026
+
+- Full IIFE rewrite: password strength meter (5 rules, 4-bar visual), confirm password match, form validation, Supabase signUp with newsletter metadata, fire-and-forget user_profiles upsert, session check redirect
+
+### S8 Compact + closeModal + CompView — 19 May 2026
+
+**Date:** 19 May 2026
+
+- S8 compact card button calls `s8LaunchFromTemplates()`
+- `closeModal()` alias for comms hub
+- Compliance view `||'action'` → `||'full'`
+
+### Post-RRA + PAT + Expiry Hide — 19 May 2026
+
+**Date:** 19 May 2026
+
+- RRA post-deadline: blue banner for unsent tenants
+- PAT: `furnished_only: true` + `isFurnished` filter in `getDocsForProperty`
+- moCert cert type select: hides expiry field for 8 no-expiry doc types via `_toggleCertExpiry()`
+
+### login.html — 19 May 2026
+
+**Date:** 19 May 2026
+
+- Signup CTA: "deadline is 31 May" → "RRA 2025 now in force"
+
+### Secondary Compliance Fixes — 19 May 2026
+
+**Date:** 19 May 2026
+
+- Safety group default collapsed in compliance tab (`addCertBtn, false`)
+- Doc library View buttons check `engineer` field for public URL (handles doc library uploads)
+
 ---
 
 ## 14. Stripe Integration Guide
@@ -1974,6 +2116,7 @@ When ready to accept real payments:
 | `mandatory` | boolean | `true` = legal obligation |
 | `no_expiry` | boolean | `true` = tracked by served/not-served, not expiry date |
 | `hmo_only` | boolean | `true` = hidden for standard properties by `getDocsForProperty()` |
+| `furnished_only` | boolean | `true` = hidden for unfurnished properties by `getDocsForProperty()` (e.g. PAT testing only applies to furnished lets) |
 | `match` | string[] | Keywords for `findCertForDoc()` to match against cert records |
 | `recommended` | boolean | (optional) Best practice but not law |
 | `insurance_type` | string | (insurance group only) Insurance policy type name |
@@ -1984,7 +2127,9 @@ When ready to accept real payments:
 
 **`getDocsForProperty(pid)`** — Returns a filtered copy of `COMPLIANCE_DOCS`:
 - Checks if property is HMO via `p.type === 'HMO'` or `licence_type` contains "hmo"/"mandatory"
+- Checks if property is furnished via `p.furnished === true` or `furnished_status` includes "furnished"/"part furnished"
 - Hides `hmo_only: true` docs for standard properties
+- Hides `furnished_only: true` docs (e.g. PAT testing) for unfurnished properties
 - Returns all 6 group keys with filtered doc arrays
 
 **`findCertForDoc(doc, certList)`** — Matches a doc definition to a cert record:
@@ -2121,3 +2266,29 @@ Tab badges:
 - **Details:** No badge
 
 Topbar shows breadcrumb: `Properties / 123 High Street` — "Properties" clickable to return to list.
+
+### 16.7 Pricing (Post-Reprice)
+
+Final pricing after the 19 May 2026 repricing pass (founding / standard monthly):
+
+| Plan | Founding | Standard | Properties |
+|---|---|---|---|
+| Starter | £4.99/mo | £7.99/mo | Up to 2 |
+| Landlord | £11.99/mo | £18.99/mo | Up to 10 |
+| Portfolio | £23.99/mo | £39.99/mo | Unlimited |
+
+- Founding prices locked for life for first 100 users. No card required. Cancel anytime.
+- `PLAN_LIMITS`: `{ starter:2, landlord:10, portfolio:999 }`
+- Pro plan removed — all `'pro'` references purged from `isPortfolio()`, `isLandlordOrAbove()`, `planLabels`
+- Default compliance view is Full Audit — all `||'action'` fallbacks changed to `||'full'`
+- Upgrade prompt: Starter hitting limit is prompted to upgrade to Landlord, not Portfolio
+
+### 16.8 Recent Editorial Fixes
+
+- **RRA post-deadline (31 May 2026+):** Blue banner shown for unsent tenants instead of empty return — keeps the RRA Sheet visible for late compliance
+- **PAT furnished filter:** PAT Testing Certificate hidden for unfurnished properties via `furnished_only: true` + `isFurnished` filter in `getDocsForProperty`
+- **Cert expiry hide:** `_toggleCertExpiry()` hides the expiry date field in the `moCert` modal for 8 no-expiry doc types (Smoke Alarm, CO Alarm, Pest Control, How to Rent, Right to Rent, Deposit Protection, Prescribed Information, Written Statement)
+- **Safety group default:** Collapsed in compliance tab — overdue items still auto-expand
+- **S8 compact card:** "Generate →" button calls `s8LaunchFromTemplates()` — handles 1-property (auto-launch) and multi-property (picker modal)
+- **`closeModal()` alias:** Added next to `closeMo()` for comms hub compatibility
+- **Doc library View buttons:** Extended URL resolution to check `engineer` field (stores public URL for doc library uploads)
