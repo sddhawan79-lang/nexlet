@@ -5601,7 +5601,7 @@ function pdTabContent(pid, tab) {
         const _certRec = findCertForDoc(doc, certList);
         const _certUrl = _certRec ? (_certRec.url || _certRec.file_url || _certRec.document_url || (_certRec.engineer && String(_certRec.engineer).startsWith('http') ? _certRec.engineer : null) || null) : null;
 
-        const _viewBtn = _certUrl ? `<button onclick="dvoOpen('${_certUrl}','${doc.label.replace(/'/g,"\\'")}','${p ? p.address : ''}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:600">👁 View</button>` : '';
+        const _viewBtn = _certUrl ? `<button onclick="event.stopPropagation();dvoOpen('${_certUrl}','${doc.label.replace(/'/g,"\\'")}','${p ? p.address : ''}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:600">👁 View</button>` : '';
 
         if (st.action === 'insurance') {
           rowAction = `<button onclick="nav('insurance')"
@@ -5623,11 +5623,11 @@ function pdTabContent(pid, tab) {
           rowAction = _viewBtn;
         }
 
+        const _escLabel = doc.label.replace(/'/g,"\\'");
+        const _escAddr = (p ? p.address : '').replace(/'/g,"\\'");
+        const _rowClick = _certUrl ? `onclick="dvoOpen('${_certUrl}','${_escLabel}','${_escAddr}')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:${st.bg};border:1px solid ${st.bdr};border-radius:8px;gap:8px"` : `style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:${st.bg};border:1px solid ${st.bdr};border-radius:8px;gap:8px"`;
         return `
-          <div style="display:flex;align-items:center;
-            justify-content:space-between;padding:9px 12px;
-            background:${st.bg};border:1px solid ${st.bdr};
-            border-radius:8px;gap:8px">
+          <div ${_rowClick}>
             <div style="flex:1;min-width:0">
               <div style="font-size:12.5px;font-weight:500;
                 color:var(--txt)">${doc.label}</div>
@@ -6544,12 +6544,13 @@ function pgCompliance(){
                 ?`${Math.abs(st.days)}d overdue`
                 :`${st.days}d left`)
               : '';
+            const _cr = findCertForDoc(doc, certList);
+            const _cu = _cr ? (_cr.url || _cr.file_url || _cr.document_url || (_cr.engineer && String(_cr.engineer).startsWith('http') ? _cr.engineer : null) || null) : null;
+            const _escLab = doc.label.replace(/'/g,"\\'");
+            const _escAd = selProp.address.replace(/'/g,"\\'");
+            const _rowClick = _cu ? `onclick="dvoOpen('${_cu}','${_escLab}','${_escAd}')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:${st.bg};border:1px solid ${st.bdr};border-radius:8px;gap:8px"` : `style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:${st.bg};border:1px solid ${st.bdr};border-radius:8px;gap:8px"`;
             return `
-              <div style="display:flex;align-items:center;
-                justify-content:space-between;
-                padding:9px 12px;background:${st.bg};
-                border:1px solid ${st.bdr};
-                border-radius:8px;gap:8px">
+              <div ${_rowClick}>
                 <div style="flex:1;min-width:0">
                   <div style="font-size:12.5px;
                     font-weight:500;color:var(--txt)">
@@ -6568,9 +6569,7 @@ function pgCompliance(){
                     font-weight:700;color:${st.col};
                     white-space:nowrap">${st.lbl}</span>
                   ${(() => {
-                    const _cr = findCertForDoc(doc, certList);
-                    const _cu = _cr ? (_cr.url || _cr.file_url || _cr.document_url || (_cr.engineer && String(_cr.engineer).startsWith('http') ? _cr.engineer : null) || null) : null;
-                    const _vb = _cu ? `<button onclick="dvoOpen('${_cu}','${doc.label.replace(/'/g,"\\'")}','${selProp.address}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:600">👁 View</button>` : '';
+                    const _vb = _cu ? `<button onclick="event.stopPropagation();dvoOpen('${_cu}','${_escLab}','${_escAd}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:600">👁 View</button>` : '';
                     if (st.action==='insurance') {
                       return `<button onclick="nav('insurance')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font)">Manage →</button>`;
                     }
