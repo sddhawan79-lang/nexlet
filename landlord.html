@@ -5602,6 +5602,7 @@ function pdTabContent(pid, tab) {
         const _certUrl = _certRec ? (_certRec.url || _certRec.file_url || _certRec.document_url || (_certRec.engineer && String(_certRec.engineer).startsWith('http') ? _certRec.engineer : null) || null) : null;
 
         const _viewBtn = _certUrl ? `<button onclick="event.stopPropagation();dvoOpen('${_certUrl}','${doc.label.replace(/'/g,"\\'")}','${p ? p.address : ''}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:600">👁 View</button>` : '';
+        const _deleteBtn = _certRec ? `<button onclick="event.stopPropagation();dlDelete('${_certRec.id}','prop-detail')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid rgba(229,62,62,0.3);background:rgba(229,62,62,0.05);color:var(--red);cursor:pointer;font-family:var(--font)">✕</button>` : '';
 
         if (st.action === 'insurance') {
           rowAction = `<button onclick="nav('insurance')"
@@ -5611,7 +5612,7 @@ function pdTabContent(pid, tab) {
             cursor:pointer;font-family:var(--font);
             white-space:nowrap">Manage →</button>`;
         } else if (st.overdue) {
-          rowAction = `${_viewBtn}
+          rowAction = `${_viewBtn}${_deleteBtn}
             <button onclick="moCert('${pid}')"
             style="font-size:10px;padding:3px 8px;
             border-radius:5px;border:1px solid var(--red);
@@ -5620,7 +5621,7 @@ function pdTabContent(pid, tab) {
             white-space:nowrap;font-weight:600">
             + Upload</button>`;
         } else {
-          rowAction = _viewBtn;
+          rowAction = `${_viewBtn}${_deleteBtn}`;
         }
 
         const _escLabel = doc.label.replace(/'/g,"\\'");
@@ -6570,13 +6571,14 @@ function pgCompliance(){
                     white-space:nowrap">${st.lbl}</span>
                   ${(() => {
                     const _vb = _cu ? `<button onclick="event.stopPropagation();dvoOpen('${_cu}','${_escLab}','${_escAd}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:600">👁 View</button>` : '';
+                    const _db = _cr ? `<button onclick="event.stopPropagation();dlDelete('${_cr.id}','compliance')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid rgba(229,62,62,0.3);background:rgba(229,62,62,0.05);color:var(--red);cursor:pointer;font-family:var(--font);white-space:nowrap">✕</button>` : '';
                     if (st.action==='insurance') {
                       return `<button onclick="nav('insurance')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font)">Manage →</button>`;
                     }
                     if (st.overdue) {
-                      return _vb + `<button onclick="moCert('${selPid}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--red);background:rgba(229,62,62,0.07);color:var(--red);cursor:pointer;font-family:var(--font);font-weight:600">+ Upload</button>`;
+                      return _vb + _db + `<button onclick="moCert('${selPid}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--red);background:rgba(229,62,62,0.07);color:var(--red);cursor:pointer;font-family:var(--font);font-weight:600">+ Upload</button>`;
                     }
-                    return _vb;
+                    return `${_vb}${_db}`;
                   })()}
                 </div>
               </div>`;
@@ -9973,13 +9975,15 @@ async function dlUpload(){
   nav('doclibrary');
 }
 
-async function dlDelete(id){
-  if(!confirm('Delete this document?'))return;
+async function dlDelete(id, returnPage){
+  if(!confirm('Delete this document? This action is timestamped in your audit log.'))return;
+  const cert = D.certs.find(c=>String(c.id)===String(id));
   const{error}=await sb.from('certificates').delete().eq('id',id);
   if(error){toast('Delete failed',true);return;}
-  D.certs=D.certs.filter(c=>c.id!==id);
-  toast('Document deleted');
-  nav('doclibrary');
+  D.certs=D.certs.filter(c=>String(c.id)!==String(id));
+  await logAudit('DELETE_CERT','certificates',id,`Deleted: ${cert?.type||'document'} · ${cert?.expiry||'no expiry'}`);
+  toast('Document deleted — logged to audit trail');
+  nav(returnPage||'doclibrary');
 }
 
 function pgMTD() {
