@@ -6014,27 +6014,12 @@ function pdTabContent(pid, tab) {
         </div>
       </div>
 
-      <!-- Per-property export -->
+      <!-- Legal Evidence Pack -->
       <div style="display:flex;
         justify-content:flex-end;
         margin-bottom:14px">
-        <button
-          onclick="exportData('${pid}')"
-          style="font-size:11px;
-          padding:5px 12px;
-          border-radius:7px;
-          border:1px solid var(--border);
-          background:var(--white);
-          color:var(--muted);
-          font-family:var(--font);
-          cursor:pointer;
-          display:flex;align-items:center;
-          gap:5px"
-          onmouseenter="this.style.background=
-            'var(--off)'"
-          onmouseleave="this.style.background=
-            'var(--white)'">
-          ⬇ Download audit trail
+        <button onclick="moLegalPack('${pid}')" style="font-size:12px;padding:6px 14px;border-radius:7px;border:1px solid var(--navy);background:var(--navy);color:#fff;cursor:pointer;font-family:var(--font);font-weight:600;display:flex;align-items:center;gap:5px">
+          📋 Legal Evidence Pack
         </button>
       </div>
 
@@ -14652,6 +14637,297 @@ async function exportData(pid) {
   } catch(err) {
     console.error('exportData error:', err);
     toast('Export failed — please try again', true);
+  }
+}
+
+function moLegalPack(pid) {
+  const p = P(pid); if (!p) return;
+  const tenants = D.tenants.filter(t => String(t.prop_id) === String(pid));
+  const activeTenant = tenants.find(t => t.status === 'Active') || tenants[0];
+
+  openMo('📋 Legal Evidence Pack', `${p.address} — court-ready PDF`, `
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div style="background:rgba(59,111,232,0.06);border:1px solid rgba(59,111,232,0.15);border-radius:8px;padding:12px 14px;font-size:13px;color:var(--txt);line-height:1.6">
+        Generates a structured PDF with cover page, chain of custody statement, and all selected records. Suitable for solicitors, deposit disputes, and court submissions.
+      </div>
+
+      <div>
+        <label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--muted);margin-bottom:8px;display:block">Select tenant</label>
+        <select id="lep-tenant" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-family:var(--font);font-size:13px;background:var(--white);box-sizing:border-box">
+          ${tenants.length ? tenants.map(t=>`<option value="${t.id}">${t.name} ${t.status==='Ended'?'(Ended)':'(Active)'}</option>`).join('') : '<option value="">No tenants on record</option>'}
+        </select>
+      </div>
+
+      <div>
+        <label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--muted);margin-bottom:8px;display:block">Date range</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div>
+            <label style="font-size:11px;color:var(--muted);margin-bottom:4px;display:block">From</label>
+            <input type="date" id="lep-from" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-family:var(--font);font-size:13px;box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--muted);margin-bottom:4px;display:block">To</label>
+            <input type="date" id="lep-to" value="${new Date().toISOString().slice(0,10)}" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-family:var(--font);font-size:13px;box-sizing:border-box">
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--muted);margin-bottom:8px;display:block">Include sections</label>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          ${[
+            ['lep-certs',       '📄 Compliance certificates (type, expiry, upload date)'],
+            ['lep-comms',       '✉ Communications log (all emails sent via NexLet)'],
+            ['lep-maintenance', '🔧 Maintenance records (issues, status, Awaab Law flags)'],
+            ['lep-rent',        '💷 Rent payment history'],
+            ['lep-audit',       '🔍 Full audit log (all platform actions with timestamps)'],
+          ].map(([id,label])=>`
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px">
+              <input type="checkbox" id="${id}" checked style="width:15px;height:15px;accent-color:var(--navy)">
+              ${label}
+            </label>`).join('')}
+        </div>
+      </div>
+
+      <div style="background:var(--off);border:1px solid var(--border);border-radius:7px;padding:10px 14px;font-size:12px;color:var(--muted);line-height:1.6">
+        PDF includes a signed cover page with generation timestamp, platform reference, and chain of custody statement. File is named <strong>NexLet_LegalPack_[address]_[date].pdf</strong>
+      </div>
+    </div>
+  `, `<button class="btn" onclick="closeMo()">Cancel</button>
+     <button class="btn btn-navy" id="lep-btn" onclick="generateLegalPack('${pid}')">📋 Generate PDF</button>`);
+}
+
+async function generateLegalPack(pid) {
+  const btn = document.getElementById('lep-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Building PDF…';
+
+  const p = P(pid);
+  const tid = document.getElementById('lep-tenant')?.value;
+  const t = D.tenants.find(x => String(x.id) === String(tid));
+  const fromDate = document.getElementById('lep-from')?.value ? new Date(document.getElementById('lep-from').value) : null;
+  const toDate   = document.getElementById('lep-to')?.value   ? new Date(document.getElementById('lep-to').value)   : new Date();
+
+  const incCerts       = document.getElementById('lep-certs')?.checked;
+  const incComms       = document.getElementById('lep-comms')?.checked;
+  const incMaintenance = document.getElementById('lep-maintenance')?.checked;
+  const incRent        = document.getElementById('lep-rent')?.checked;
+  const incAudit       = document.getElementById('lep-audit')?.checked;
+
+  const dateFilter = arr => arr.filter(r => {
+    const d = new Date(r.created_at || r.sent_at || r.uploaded_at || r.date || r.issued || 0);
+    if (fromDate && d < fromDate) return false;
+    if (d > toDate) return false;
+    return true;
+  });
+
+  let auditRows = [];
+  if (incAudit) {
+    const { data } = await sb.from('audit_log')
+      .select('*')
+      .eq('user_id', currentUser.id)
+      .order('created_at', { ascending: false })
+      .limit(500);
+    auditRows = dateFilter(data || []).filter(r =>
+      !pid || String(r.record_id) === String(pid) ||
+      D.tenants.some(tn => String(tn.prop_id)===String(pid) && String(r.record_id)===String(tn.id))
+    );
+  }
+
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const W = 210; const margin = 18;
+    const contentW = W - margin * 2;
+    let y = 0;
+
+    const navy  = [11, 30, 61];
+    const white = [255, 255, 255];
+    const grey  = [120, 130, 145];
+    const light = [245, 247, 250];
+
+    const fmt = d => d ? new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+    const fmtTs = d => d ? new Date(d).toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '—';
+    const genRef = `NXL-${Date.now().toString(36).toUpperCase()}`;
+    const genTs  = fmtTs(new Date());
+
+    const addPage = () => { doc.addPage(); y = margin; };
+
+    const sectionHeader = (title, icon='') => {
+      if (y > 250) addPage();
+      y += 6;
+      doc.setFillColor(...navy);
+      doc.roundedRect(margin, y, contentW, 9, 1, 1, 'F');
+      doc.setTextColor(...white);
+      doc.setFontSize(9); doc.setFont('helvetica','bold');
+      doc.text(`${icon}  ${title}`, margin + 4, y + 6);
+      doc.setTextColor(0,0,0);
+      y += 14;
+    };
+
+    const tableRow = (cols, widths, isHeader=false, shade=false) => {
+      if (y > 270) addPage();
+      const rowH = 7;
+      if (isHeader) {
+        doc.setFillColor(...navy);
+        doc.rect(margin, y, contentW, rowH, 'F');
+        doc.setTextColor(...white);
+        doc.setFontSize(7.5); doc.setFont('helvetica','bold');
+      } else {
+        if (shade) { doc.setFillColor(...light); doc.rect(margin, y, contentW, rowH, 'F'); }
+        doc.setTextColor(30,40,55);
+        doc.setFontSize(7.5); doc.setFont('helvetica','normal');
+      }
+      let x = margin + 2;
+      cols.forEach((col, i) => {
+        const maxW = widths[i] - 3;
+        const lines = doc.splitTextToSize(String(col||'—'), maxW);
+        doc.text(lines[0], x, y + 5);
+        x += widths[i];
+      });
+      doc.setDrawColor(220,224,230);
+      doc.line(margin, y + rowH, margin + contentW, y + rowH);
+      doc.setTextColor(0,0,0);
+      y += rowH;
+    };
+
+    // ── COVER PAGE ──
+    doc.setFillColor(...navy);
+    doc.rect(0, 0, W, 60, 'F');
+    doc.setTextColor(...white);
+    doc.setFontSize(22); doc.setFont('helvetica','bold');
+    doc.text('NexLet', margin, 28);
+    doc.setFontSize(11); doc.setFont('helvetica','normal');
+    doc.text('Legal Evidence Pack', margin, 38);
+    doc.setFontSize(9);
+    doc.text('UK Landlord Compliance Platform  ·  nexlet.co.uk', margin, 48);
+
+    y = 72;
+    doc.setTextColor(...navy);
+    doc.setFontSize(14); doc.setFont('helvetica','bold');
+    doc.text(p?.address || '—', margin, y); y += 7;
+    if (p?.city || p?.postcode) {
+      doc.setFontSize(10); doc.setFont('helvetica','normal'); doc.setTextColor(...grey);
+      doc.text([p.city, p.postcode].filter(Boolean).join(', '), margin, y); y += 10;
+    }
+
+    doc.setFillColor(...light);
+    doc.roundedRect(margin, y, contentW, 38, 2, 2, 'F');
+    doc.setTextColor(30,40,55); doc.setFontSize(8.5); doc.setFont('helvetica','normal');
+    const metaLines = [
+      ['Property',   `${p?.address||'—'}, ${p?.city||''} ${p?.postcode||''}`],
+      ['Tenant',     t ? `${t.name}  ·  ${t.email||'—'}` : 'No tenant selected'],
+      ['Generated',  genTs],
+      ['Reference',  genRef],
+      ['Prepared by',currentUser?.email || '—'],
+    ];
+    metaLines.forEach(([label, val], i) => {
+      doc.setFont('helvetica','bold'); doc.text(label + ':', margin + 4, y + 8 + i * 6.5);
+      doc.setFont('helvetica','normal'); doc.text(val, margin + 32, y + 8 + i * 6.5);
+    });
+    y += 44;
+
+    doc.setFillColor(240,255,250); doc.setDrawColor(0,168,122);
+    doc.roundedRect(margin, y, contentW, 26, 2, 2, 'FD');
+    doc.setTextColor(0,90,60); doc.setFontSize(8); doc.setFont('helvetica','bold');
+    doc.text('CHAIN OF CUSTODY STATEMENT', margin + 4, y + 7);
+    doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
+    const custody = `This document was generated automatically by the NexLet compliance platform on ${genTs}. All records contained herein are extracted directly from the NexLet database and reflect data as stored at time of generation. Timestamps are in GMT/BST. This document has not been manually edited. Reference: ${genRef}.`;
+    const custodyLines = doc.splitTextToSize(custody, contentW - 8);
+    doc.text(custodyLines, margin + 4, y + 13);
+    y += 32;
+
+    doc.setFontSize(7.5); doc.setTextColor(...grey); doc.setFont('helvetica','italic');
+    doc.text('For reference only — not legal advice. Always verify with a qualified solicitor before use in proceedings.', margin, y);
+    y += 12;
+
+    // ── SECTION 1: COMPLIANCE CERTIFICATES ──
+    if (incCerts) {
+      sectionHeader('Compliance Certificates', '1.');
+      tableRow(['Certificate Type','Issue Date','Expiry Date','Upload Date','Status'],[46,30,30,30,38], true);
+      const certs = D.certs.filter(c => String(c.prop_id) === String(pid));
+      if (certs.length) {
+        certs.forEach((c,i) => {
+          const expired = c.expiry && new Date(c.expiry) < new Date();
+          tableRow([c.type||'—', fmt(c.issued), c.expiry ? fmt(c.expiry) : 'No expiry', fmt(c.uploaded_at||c.created_at), expired?'EXPIRED':'Valid'], [46,30,30,30,38], false, i%2===0);
+        });
+      } else {
+        tableRow(['No certificates on record','','','',''], [46,30,30,30,38]);
+      }
+      y += 4;
+    }
+
+    // ── SECTION 2: COMMUNICATIONS LOG ──
+    if (incComms) {
+      sectionHeader('Communications Log', '2.');
+      tableRow(['Timestamp','Document / Event','Sent To','Status'],[50,60,50,14], true);
+      const comms = dateFilter(D.emailLog.filter(e => String(e.prop_id)===String(pid) || String(e.tenant_id)===String(tid)));
+      if (comms.length) {
+        comms.forEach((e,i) => tableRow([fmtTs(e.sent_at), e.template_name||e.template_id||'—', e.sent_to||'—', e.status||'Sent'],[50,60,50,14], false, i%2===0));
+      } else {
+        tableRow(['No communications logged','','',''], [50,60,50,14]);
+      }
+      y += 4;
+    }
+
+    // ── SECTION 3: MAINTENANCE RECORDS ──
+    if (incMaintenance) {
+      sectionHeader('Maintenance Records', '3.');
+      tableRow(['Issue','Priority','Status','Reported','Awaab Flag'],[50,22,25,30,47], true);
+      const maint = dateFilter(D.maintenance.filter(m => String(m.prop_id)===String(pid)));
+      if (maint.length) {
+        maint.forEach((m,i) => tableRow([m.title||'—', m.priority||'—', m.status||'—', fmt(m.created_at), m.awaab_flag?'YES — Awaab Law':'No'],[50,22,25,30,47], false, i%2===0));
+      } else {
+        tableRow(['No maintenance records','','','',''], [50,22,25,30,47]);
+      }
+      y += 4;
+    }
+
+    // ── SECTION 4: RENT PAYMENT HISTORY ──
+    if (incRent) {
+      sectionHeader('Rent Payment History', '4.');
+      tableRow(['Month','Amount Due','Amount Paid','Status','Payment Date'],[38,32,32,28,44], true);
+      const rent = dateFilter(D.rent.filter(r => String(r.prop_id)===String(pid)));
+      if (rent.length) {
+        rent.forEach((r,i) => tableRow([r.month||'—', r.amount_due ? `£${r.amount_due}` : '—', r.amount_paid ? `£${r.amount_paid}` : '—', r.status||'—', fmt(r.payment_date)],[38,32,32,28,44], false, i%2===0));
+      } else {
+        tableRow(['No rent records','','','',''], [38,32,32,28,44]);
+      }
+      y += 4;
+    }
+
+    // ── SECTION 5: AUDIT LOG ──
+    if (incAudit && auditRows.length) {
+      sectionHeader('Platform Audit Log', '5.');
+      tableRow(['Timestamp','Action','Detail'],[45,40,89], true);
+      auditRows.forEach((r,i) => tableRow([fmtTs(r.created_at), r.action||'—', (r.details||'').slice(0,80)],[45,40,89], false, i%2===0));
+      y += 4;
+    }
+
+    // ── FOOTER ON ALL PAGES ──
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFillColor(...navy);
+      doc.rect(0, 287, W, 10, 'F');
+      doc.setTextColor(...white); doc.setFontSize(7); doc.setFont('helvetica','normal');
+      doc.text(`NexLet Legal Evidence Pack  ·  ${genRef}  ·  Generated ${genTs}`, margin, 293);
+      doc.text(`Page ${i} of ${pageCount}`, W - margin - 20, 293);
+    }
+
+    const safeName = (p?.address||'property').replace(/[^a-zA-Z0-9]/g,'_').slice(0,30);
+    const fileName = `NexLet_LegalPack_${safeName}_${new Date().toISOString().slice(0,10)}.pdf`;
+    doc.save(fileName);
+
+    await logAudit('LEGAL_PACK_GENERATED', 'properties', pid,
+      `Legal evidence pack generated · Ref: ${genRef} · Tenant: ${t?.name||'—'} · Sections: ${[incCerts?'certs':'',incComms?'comms':'',incMaintenance?'maintenance':'',incRent?'rent':'',incAudit?'audit':''].filter(Boolean).join(', ')}`);
+
+    closeMo();
+    toast('✓ Legal evidence pack downloaded');
+
+  } catch(e) {
+    toast('PDF generation failed: ' + e.message, true);
+    btn.disabled = false; btn.innerHTML = '📋 Generate PDF';
+    console.error('Legal pack error:', e);
   }
 }
 
