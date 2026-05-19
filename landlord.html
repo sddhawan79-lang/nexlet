@@ -364,11 +364,11 @@ tr:hover td{background:rgba(246,248,251,.8)}
       <span class="sb-label">Dashboard</span>
     </button>
 
-    <!-- My Properties group -->
-    <div class="sb-group-hdr" onclick="toggleSbGroup('properties')">
-      <span>My Properties</span><span class="sb-chev" id="sbchev-properties">▾</span>
+    <!-- My Portfolio -->
+    <div class="sb-group-hdr" onclick="toggleSbGroup('portfolio')">
+      <span>My Portfolio</span><span class="sb-chev" id="sbchev-portfolio">▾</span>
     </div>
-    <div class="sb-group-body" id="sbgb-properties">
+    <div class="sb-group-body" id="sbgb-portfolio">
       <button class="sb-item" data-page="properties">
         <svg class="sb-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14V7L8 2l6 5v7"/><path d="M6 14v-4h4v4"/></svg>
         <span class="sb-label">Properties</span>
@@ -378,99 +378,48 @@ tr:hover td{background:rgba(246,248,251,.8)}
         <svg class="sb-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3 2.7-5 6-5s6 2 6 5"/></svg>
         <span class="sb-label">Tenants</span>
       </button>
-      <button class="sb-item" data-page="contractors">
-        <svg class="sb-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10.5 2.5a3 3 0 00-4 4L2 11a1.5 1.5 0 002 2l4.5-4.5a3 3 0 004-4l-2 2-1.5-1.5 2-2z"/></svg>
-        <span class="sb-label">Contractors</span>
-      </button>
     </div>
 
-    <!-- Compliance group -->
-    <div class="sb-group-hdr" onclick="toggleSbGroup('compliance')">
-      <span>Compliance</span><span class="sb-chev" id="sbchev-compliance">▾</span>
+    <!-- Staying Legal -->
+    <div class="sb-group-hdr" onclick="toggleSbGroup('legal')">
+      <span>Staying Legal</span><span class="sb-chev" id="sbchev-legal">▾</span>
     </div>
-    <div class="sb-group-body" id="sbgb-compliance">
+    <div class="sb-group-body" id="sbgb-legal">
       <button class="sb-item" data-page="compliance">
         <svg class="sb-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5L2 4v4c0 3.5 2.5 6 6 7 3.5-1 6-3.5 6-7V4L8 1.5z"/><path d="M5.5 8l2 2 3-3"/></svg>
         <span class="sb-label">Compliance</span>
         <span id="nav-badge-compliance" class="sb-badge" style="display:none"></span>
       </button>
-      <button class="sb-item" data-page="insurance">
-        <svg class="sb-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="1.5" width="10" height="13" rx="1.5"/><path d="M5 5.5h6M5 8h6M5 10.5h3"/><circle cx="12.5" cy="12.5" r="3" fill="var(--white)" stroke="currentColor"/><path d="M11.2 12.5l1 1 1.8-1.8"/></svg>
-        <span class="sb-label">Insurance</span>
-      </button>
-      <button class="sb-item" data-page="inspections">
-        <svg class="sb-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="2.5" width="10" height="12" rx="1.5"/><path d="M4.5 6h4M4.5 8.5h5M4.5 11h3"/><circle cx="13" cy="4" r="2.5"/><path d="M14.8 5.8L12.2 3.2"/></svg>
-        <span class="sb-label">Inspections</span>
-      </button>
-      <button class="sb-item" data-page="inventory-reports">
-        <svg class="sb-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="2" width="10" height="12" rx="1.5"/><path d="M4.5 5.5h5M4.5 8h5M4.5 10.5h3"/><path d="M11.5 1v3M13 2.5h-3"/></svg>
-        <span class="sb-label">Inventory Reports</span>
-      </button>
-    </div>
-
-    <!-- Activity group -->
-    <div class="sb-group-hdr" onclick="toggleSbGroup('activity')">
-      <span>Activity</span><span class="sb-chev" id="sbchev-activity">▾</span>
-    </div>
-    <div class="sb-group-body" id="sbgb-activity">
       <button class="sb-item" data-page="maintenance">
         <svg class="sb-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10.5 2.5a3 3 0 00-4 4L2 11a1.5 1.5 0 002 2l4.5-4.5a3 3 0 004-4l-2 2-1.5-1.5 2-2z"/></svg>
         <span class="sb-label">Maintenance</span>
         <span id="nav-badge-maintenance" class="sb-badge" style="display:none"></span>
       </button>
-      <button class="sb-item" data-page="calendar">
-        <svg class="sb-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="3" width="13" height="10" rx="1.5"/><path d="M5 7h2M9 7h2M5 10h2M9 10h2"/><path d="M5 1.5v3M11 1.5v3"/></svg>
-        <span class="sb-label">Calendar</span>
-      </button>
     </div>
 
-    <!-- Finance & Tax group -->
-    <div class="sb-group-hdr" onclick="toggleSbGroup('finance')">
-      <span>Finance &amp; Tax</span><span class="sb-chev" id="sbchev-finance">▾</span>
+    <!-- Money & Records -->
+    <div class="sb-group-hdr" onclick="toggleSbGroup('records')">
+      <span>Money &amp; Records</span><span class="sb-chev" id="sbchev-records">▾</span>
     </div>
-    <div class="sb-group-body" id="sbgb-finance">
-      <button class="sb-item" data-page="financials">
-        <svg class="sb-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 12V4l4 3 3-4 3 3 2-2v8H2z"/></svg>
-        <span class="sb-label">Finance</span>
-      </button>
-      <button class="sb-item" data-page="rent">
+    <div class="sb-group-body" id="sbgb-records">
+      <button class="sb-item" data-page="rent-finance">
         <svg class="sb-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5v13M5 4.5h4.5a2 2 0 010 4H6a2 2 0 000 4H11"/></svg>
-        <span class="sb-label">Rent Tracker</span>
+        <span class="sb-label">Rent &amp; Finance</span>
         <span id="nav-badge-rent" class="sb-badge" style="display:none"></span>
       </button>
-      <button class="sb-item" data-page="mtd" id="sb-mtd">
-        <svg class="sb-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="3" width="13" height="10" rx="1.5"/><path d="M5 7h6M5 9.5h4"/><path d="M11.5 1.5v3M4.5 1.5v3"/></svg>
-        <span class="sb-label" id="sb-mtd-label">MTD Tax</span>
-      </button>
-    </div>
-
-    <!-- Documents group -->
-    <div class="sb-group-hdr" onclick="toggleSbGroup('docs')">
-      <span>Documents</span><span class="sb-chev" id="sbchev-docs">▾</span>
-    </div>
-    <div class="sb-group-body" id="sbgb-docs">
-      <button class="sb-item" data-page="templates">
-        <svg class="sb-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="1" width="9" height="12" rx="1.5"/><path d="M5 4h5M5 7h5M5 10h3"/><path d="M11 9l3 3-1.5 1.5L9 10.5"/></svg>
-        <span class="sb-label">Templates</span>
-      </button>
-      <button class="sb-item" data-page="doclibrary">
+      <button class="sb-item" data-page="documents">
         <svg class="sb-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 2h7l3 3v9H3z"/><path d="M10 2v3h3"/><path d="M6 7h5M6 9.5h5M6 12h3"/></svg>
-        <span class="sb-label">Document Library</span>
+        <span class="sb-label">Documents</span>
       </button>
     </div>
 
-    <div class="sb-divider"></div>
-
-    <button class="sb-item" data-page="assistant">
-      <svg class="sb-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5c3.5 0 6 2 6 4.5 0 1.5-1 2.8-2.5 3.5L13 12l-3-1.5c-.6.1-1.3.2-2 .2-3.5 0-6-2-6-4.5S4.5 1.5 8 1.5z"/><path d="M5.5 6h5M5.5 8.5h3"/></svg>
-      <span class="sb-label">AI Assistant</span>
-    </button>
-
-    <button class="sb-item" data-page="feedback" onclick="window.location.href='feedback.html'">
-      <svg class="sb-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12v7H6.5L4 13V11H2z"/><path d="M6 7h5M6 9.5h3"/></svg>
-      <span class="sb-label">Feedback</span>
-    </button>
   </nav>
+
+  <!-- AI Assistant card -->
+  <div class="sb-ai-card" id="sb-ai-card" onclick="showAssistant()" style="margin:8px 10px;background:rgba(0,200,150,0.1);border:1px solid rgba(0,200,150,0.2);border-radius:10px;padding:12px 14px;color:var(--green);font-size:13px;display:flex;align-items:center;gap:9px;cursor:pointer;transition:all .15s" onmouseenter="this.style.background='rgba(0,200,150,0.16)';this.style.borderColor='var(--green)'" onmouseleave="this.style.background='rgba(0,200,150,0.1)';this.style.borderColor='rgba(0,200,150,0.2)'">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" width="16" height="16"><path d="M8 1.5c3.5 0 6 2 6 4.5 0 1.5-1 2.8-2.5 3.5L13 12l-3-1.5c-.6.1-1.3.2-2 .2-3.5 0-6-2-6-4.5S4.5 1.5 8 1.5z"/><path d="M5.5 6h5M5.5 8.5h3"/></svg>
+    Ask AI Assistant
+  </div>
 
   <div class="sb-footer">
     <div class="sb-user">
@@ -483,6 +432,7 @@ tr:hover td{background:rgba(246,248,251,.8)}
     </div>
   </div>
   <div id="sb-trial-chip" style="display:none"></div>
+  <div class="sb-feedback-link" style="text-align:center;padding:6px 10px 12px;font-size:10px;color:rgba(255,255,255,0.25);cursor:pointer" onclick="window.location.href='feedback.html'">Send feedback</div>
 </aside>
 
 <!-- MAIN CONTENT -->
@@ -9751,24 +9701,80 @@ const PAGES={
   dashboard:()=>pgDashboard(),
   properties:()=>pgProperties(),
   tenants:()=>pgTenants(),
-  rent:()=>pgRent(),
   compliance:()=>pgCompliance(),
   maintenance:()=>pgMaintenance(),
-  insurance:()=>pgInsurance(),
-  inspections:()=>pgInspections(),
-  assistant:()=>pgAssistant(),
-  calendar:()=>pgCalendar(),
-  reminders:()=>pgReminders(),
+  'rent-finance':()=>pgRentFinance(),
+  documents:()=>pgDocuments(),
+  // Sub-pages (accessed via PAGES directly, not sidebar)
   'prop-detail':(id)=>pgPropDetail(id),
   'tenant-detail':(id)=>pgTenantDetail(id),
-  financials:()=>pgFinancials(),
-  templates:()=>pgTemplates(),
-  contractors:()=>pgContractors(),
-  mtd:()=>pgMTD(),
-  doclibrary:()=>pgDocLibrary(),
+  // Old page names → redirect to merged pages (backward compat for nav() calls)
+  insurance:()=>pgCompliance(),
+  inspections:()=>pgCompliance(),
+  'inventory-reports':()=>pgCompliance(),
   'inventory-report':(id)=>pgInventoryReport(id),
-  'inventory-reports':()=>pgInventoryReports(),
+  contractors:()=>pgMaintenance(),
+  calendar:()=>pgMaintenance(),
+  financials:()=>pgRentFinance(),
+  rent:()=>pgRentFinance(),
+  mtd:()=>pgRentFinance(),
+  templates:()=>pgDocuments(),
+  doclibrary:()=>pgDocuments(),
+  assistant:()=>pgAssistant(),
+  reminders:()=>pgReminders(),
 };
+
+function pgRentFinance(){
+  const isPort = isPortfolio();
+  const isLand = isLandlordOrAbove();
+  return `<div class="pg">
+    <h1>Rent &amp; Finance</h1>
+    <div style="display:flex;gap:8px;margin:16px 0 20px">
+      <button class="btn btn-sm ${window._rfTab==='finance'?'btn-navy':''}" onclick="window._rfTab='finance';nav('rent-finance')">Finance</button>
+      <button class="btn btn-sm ${window._rfTab==='mtd'?'btn-navy':''}" onclick="window._rfTab='mtd';nav('rent-finance')">MTD Tax</button>
+    </div>
+    ${(()=>{
+      if(window._rfTab==='finance') return pgFinancials();
+      if(window._rfTab==='mtd'){
+        if(!isPort) return '<div class="panel"><div class="ph2"><h2>MTD Tax Reporting</h2><p>Available on Portfolio plan</p></div><div style="padding:20px;text-align:center"><button class="btn btn-navy" onclick="redirectToCheckout(\'portfolio\')">Upgrade to Portfolio</button></div></div>';
+        return pgMTD();
+      }
+      // Default: rent view
+      if(isStarter()) return '<div class="panel"><div class="ph2"><h2>Rent Tracker</h2><p>Available on Landlord plan and above</p></div><div style="padding:20px;text-align:center"><button class="btn btn-navy" onclick="redirectToCheckout(\'landlord\')">Upgrade to Landlord</button></div></div>';
+      return pgRent();
+    })()}
+  </div>`;
+}
+if(!window._rfTab) window._rfTab = 'rent';
+
+function pgDocuments(){
+  return `<div class="pg">
+    <h1>Documents</h1>
+    <div style="display:flex;gap:8px;margin:16px 0 20px">
+      <button class="btn btn-sm ${!window._docTab||window._docTab==='templates'?'btn-navy':''}" onclick="window._docTab='templates';nav('documents')">Templates</button>
+      <button class="btn btn-sm ${window._docTab==='library'?'btn-navy':''}" onclick="window._docTab='library';nav('documents')">Document Library</button>
+      <button class="btn btn-sm ${window._docTab==='contractors'?'btn-navy':''}" onclick="window._docTab='contractors';nav('documents')">Contractors</button>
+    </div>
+    ${(()=>{
+      if(window._docTab==='library') return pgDocLibrary();
+      if(window._docTab==='contractors'){
+        if(isStarter()) return '<div class="panel"><div class="ph2"><h2>Contractor Book</h2><p>Available on Landlord plan and above</p></div><div style="padding:20px;text-align:center"><button class="btn btn-navy" onclick="redirectToCheckout(\'landlord\')">Upgrade to Landlord</button></div></div>';
+        return pgContractors();
+      }
+      return pgTemplates();
+    })()}
+  </div>`;
+}
+if(!window._docTab) window._docTab = 'templates';
+
+function showAssistant(){
+  if(window.innerWidth<768){closeMobSidebar();}
+  main.innerHTML=pgAssistant();
+  document.querySelectorAll('.sb-item[data-page]').forEach(el=>el.classList.remove('active'));
+  const aiCard=document.getElementById('sb-ai-card');
+  if(aiCard)aiCard.style.background='rgba(0,200,150,0.2)';
+  setTimeout(()=>{if(aiCard)aiCard.style.background='rgba(0,200,150,0.1)';},1200);
+}
 
 // ── FINANCE HELPERS ──
 function getMaintCostTotal(pid){
@@ -10579,7 +10585,7 @@ function toggleSbGroup(id){
   if(chev)chev.classList.toggle('closed',open);
 }
 function initSbGroups(){
-  ['properties','compliance','activity','finance','docs'].forEach(id=>{
+  ['portfolio','legal','records'].forEach(id=>{
     const body=document.getElementById('sbgb-'+id);
     if(body)body.style.maxHeight=body.scrollHeight+'px';
   });
@@ -10684,7 +10690,7 @@ async function loadSetupBanner() {
 function nav(page, param){
   // Trial expiry — soft lock: allow browsing, block write pages
   if (isExpired()) {
-    const allowedPages = ['dashboard','properties','tenants','compliance','maintenance','insurance','inspections','rent','financials','calendar','doclibrary','contractors','prop-detail'];
+    const allowedPages = ['dashboard','properties','tenants','compliance','maintenance','rent-finance','documents','prop-detail'];
     if (page === 'profile' || page === 'billing') {
       // always allow billing
     } else if (!allowedPages.includes(page)) {
@@ -10692,20 +10698,25 @@ function nav(page, param){
       return;
     }
   }
-  // Plan gating — intercept restricted pages
-  if(page==='mtd' && !isPortfolio()){ upgradePrompt('MTD Tax Reporting','portfolio'); return; }
-  if((page==='financials'||page==='rent'||page==='insurance') && isStarter()){ upgradePrompt('Rent Tracking & Insurance','landlord'); return; }
-  if(page==='contractors' && isStarter()){ upgradePrompt('Contractor Book','landlord'); return; }
-  if(page==='inventory-reports' && !isPortfolio()){ upgradePrompt('AI Inventory Reports','portfolio'); return; }
+  // Plan gating — handled inside page renderers (pgRentFinance, pgDocuments)
+  // No top-level intercept needed for sidebar pages
   const pageMap = {
-    'prop-detail': 'properties',
-    'tenant-detail': 'tenants',
-    'tenants': 'tenants',
-    'rent': 'financials',
-    'insurance': 'financials',
-    'calendar': 'dashboard',
-    'doclibrary': 'doclibrary',
-    'inventory-report': 'inventory-reports',
+    'prop-detail':       'properties',
+    'tenant-detail':     'tenants',
+    'tenants':           'tenants',
+    // Old → new redirects for sidebar active highlight
+    'insurance':         'compliance',
+    'inspections':       'compliance',
+    'inventory-reports': 'compliance',
+    'inventory-report':  'compliance',
+    'contractors':       'maintenance',
+    'calendar':          'maintenance',
+    'financials':        'rent-finance',
+    'rent':              'rent-finance',
+    'mtd':               'rent-finance',
+    'templates':         'documents',
+    'doclibrary':        'documents',
+    'assistant':         'dashboard',
   };
   const activeTab = pageMap[page] || page;
   document.querySelectorAll('.sb-item[data-page]').forEach(el=>{
