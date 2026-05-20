@@ -7802,10 +7802,18 @@ function pgTenantDetail(tid) {
             ${!hasDocs ? `<div style="font-size:11px;color:var(--red);margin-top:2px">Not uploaded</div>` : ''}
           </div>
           <div style="flex-shrink:0">
-            <label class="btn btn-sm btn-navy" style="cursor:pointer;margin:0;font-size:11px">
-              ${hasDocs ? '+ Add another' : 'Upload'}
-              <input type="file" style="display:none" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onchange="uploadTenantDoc('${tid}','${s.slot}',this)">
-            </label>
+            ${hasDocs
+              ? `<!-- RULE: KYC upload — AI scan fires automatically via uploadTenantDoc → scanTenantDoc. Do NOT remove or simplify this slot. -->
+                 <label class="btn btn-sm btn-navy" style="cursor:pointer;margin:0;font-size:11px">+ Add another
+                   <input type="file" style="display:none" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onchange="uploadTenantDoc('${tid}','${s.slot}',this)">
+                 </label>`
+              : `<!-- RULE: KYC upload — AI badge MUST show in empty state. AI scan fires automatically on upload via uploadTenantDoc → scanTenantDoc. Do NOT revert to plain <label> button. -->
+                 <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+                   <label class="btn btn-sm btn-navy" style="cursor:pointer;margin:0;font-size:11px">Upload
+                     <input type="file" style="display:none" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onchange="uploadTenantDoc('${tid}','${s.slot}',this)">
+                   </label>
+                   <div style="font-size:10px;color:var(--blue);font-weight:600;white-space:nowrap">✦ AI auto-scan</div>
+                 </div>`}
           </div>
         </div>
         ${hasDocs ? slotDocs.map((d,i) => renderDocCard(d, i === slotDocs.length - 1)).join('') : ''}
