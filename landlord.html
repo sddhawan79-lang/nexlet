@@ -1665,7 +1665,7 @@ async function markServed(certId){
   if(error){toast('Error: '+error.message,true);return;}
   c.served=newVal;
   toast(newVal?'✓ Marked as served':'Marked as not served');
-  nav('compliance');
+  nav(window._currentPage, window._currentParam);
 }
 
 // ── UPLOAD & SCAN EXISTING CERT ──
@@ -1685,7 +1685,7 @@ async function uploadScanCert(certId, input){
       const c=D.certs.find(x=>x.id===certId);
       if(c) Object.assign(c,updates,{file:true});
       toast('✓ Scanned & saved — expiry and engineer auto-filled!');
-      nav('compliance');
+      nav(window._currentPage, window._currentParam);
     });
   }catch(e){
     if(lbl) lbl.textContent='⚠️ Scan failed';
@@ -1794,7 +1794,7 @@ async function saveCertToDB() {
       if (e2) { toast('Error: ' + e2.message, true); return; }
       D.certs.push({...d2, file: true});
       await logAudit('ADD_CERT', 'certificates', d2.id, `Added ${certType}`);
-      closeMo(); toast('✓ Certificate saved!'); nav('compliance'); return;
+      closeMo(); toast('✓ Certificate saved!'); nav(window._currentPage, window._currentParam); return;
     }
     toast('Error: ' + error.message, true); return;
   }
@@ -1803,7 +1803,7 @@ async function saveCertToDB() {
   await logAudit('ADD_CERT', 'certificates', data.id, `Added ${certType}`);
   closeMo();
   toast('✓ Certificate saved!');
-  nav('compliance');
+  nav(window._currentPage, window._currentParam);
 }
 
 // ── SAVE: TENANT (legacy stub — use _saveTenantSetupToDB via moTenant wizard) ──
@@ -1847,7 +1847,7 @@ async function saveIssueToDB() {
   await logAudit('ADD_MAINTENANCE', 'maintenance', data.id, `Logged: ${issue.title}`);
   closeMo();
   toast('✓ Issue logged!');
-  nav('maintenance');
+  nav(window._currentPage, window._currentParam);
 }
 
 // ── SAVE: EDIT PROPERTY ──
@@ -3228,7 +3228,7 @@ async function saveBulkResults() {
 
   closeMo();
   toast(`✓ ${saved} certificate${saved!==1?'s':''} saved from bulk scan`);
-  nav('compliance');
+  nav(window._currentPage, window._currentParam);
 }
 // ── MODAL: INSPECTION ──
 function moInspection(pid){
@@ -7439,7 +7439,7 @@ function toggleReminder(id) {
   const prefs = getReminderPrefs();
   prefs[id] = !isReminderEnabled(id);
   saveReminderPrefs(prefs);
-  nav('reminders');
+  nav(window._currentPage, window._currentParam);
   toast(isReminderEnabled(id) ? `✓ ${id} reminders enabled` : `${id} reminders disabled`);
 }
 
@@ -8428,7 +8428,7 @@ async function markRentPaid(idOrPid, dueDate) {
       else { D.rent.unshift(data); }
     }
     toast('✓ Payment recorded');
-    nav('rent');
+    nav(window._currentPage, window._currentParam);
   } catch(e) { _logError('markRentPaid', e); toast('Error — please try again', true); }
 }
 function moAddPayment(prefPropId, editId) {
@@ -8494,7 +8494,7 @@ async function savePayment(editId) {
   if (btn) btn.textContent = '✓ Payment recorded';
   toast('✓ Payment saved');
   closeMo();
-  nav('rent');
+  nav(window._currentPage, window._currentParam);
 
   // Send receipt in background — never blocks save
   if (sendReceipt && status === 'Paid') {
@@ -8557,7 +8557,7 @@ async function deletePayment(id) {
   const {error} = await sb.from('rent_payments').delete().eq('id',id);
   if (error) { toast('Delete failed',true); return; }
   D.rent = D.rent.filter(r=>String(r.id)!==String(id));
-  closeMo(); toast('Payment deleted'); nav('rent');
+  closeMo(); toast('Payment deleted'); nav(window._currentPage, window._currentParam);
 }
 
 // ── PAGE: INSPECTIONS ──
@@ -8699,7 +8699,7 @@ async function saveInspection(pid) {
   p.inspections = inspections;
   await logAudit('ADD_INSPECTION','properties',propId,`${type} inspection on ${date}${outcome?' — '+outcome:''}`);
   closeMo(); toast('✓ Inspection logged');
-  nav('inspections');
+  nav(window._currentPage, window._currentParam);
 }
 
 // ── PAGE: INVENTORY REPORTS (full-page view) ──
@@ -9188,7 +9188,7 @@ async function moveStage(id,stage){
   }
 
   toast(`✓ Moved to ${stage}`);
-  nav('maintenance');
+  nav(window._currentPage, window._currentParam);
 }
 
 function moIssueDetail(id){
@@ -9232,7 +9232,7 @@ async function updateIssueStatus(id,status){
   if(m){m.status=status;m.stage=stageMap[status]||m.stage;}
   await logAudit('UPDATE_MAINTENANCE','maintenance',id,`Status → ${status}`);
   toast(`✓ Marked as ${status}`);
-  nav('maintenance');
+  nav(window._currentPage, window._currentParam);
 }
 
 // ── PAGE: INSURANCE ──
@@ -9349,7 +9349,7 @@ async function saveInsurance(insId) {
   }
   closeMo();
   toast('✓ Insurance policy saved');
-  nav('insurance');
+  nav(window._currentPage, window._currentParam);
 }
 
 async function deleteInsurance(insId) {
@@ -9359,7 +9359,7 @@ async function deleteInsurance(insId) {
   D.insurance = D.insurance.filter(i=>String(i.id)!==String(insId));
   closeMo();
   toast('Policy deleted');
-  nav('insurance');
+  nav(window._currentPage, window._currentParam);
 }
 
 // ── PAGE: AI ASSISTANT ──
@@ -10282,7 +10282,7 @@ async function saveEditCert(id) {
   await logAudit('EDIT_CERT','certificates',id,`Edited: ${updates.type||'document'} · expiry ${updates.expiry||'none'}`);
   closeMo();
   toast('✓ Certificate updated');
-  nav('doclibrary');
+  nav(window._currentPage, window._currentParam);
 }
 
 function pgMTD() {
@@ -10536,7 +10536,7 @@ function moMTDProfile() {
   `, `<button class="btn" onclick="closeMo()">Cancel</button>
   <button class="btn btn-navy" onclick="
     saveMTDProfile({taxBand:document.getElementById('mtd-band').value,interestPct:document.getElementById('mtd-int').value,otherExpenses:document.getElementById('mtd-other').value});
-    closeMo();nav('mtd');toast('✓ Tax profile saved');
+    closeMo();nav(window._currentPage, window._currentParam);toast('✓ Tax profile saved');
   ">Save</button>`);
 }
 
@@ -10704,6 +10704,8 @@ async function loadSetupBanner() {
 }
 
 function nav(page, param){
+  window._currentPage = page;
+  window._currentParam = param || null;
   // Trial expiry — soft lock: allow browsing, block write pages
   if (isExpired()) {
     const allowedPages = ['dashboard','properties','tenants','compliance','maintenance','rent-finance','documents','prop-detail'];
