@@ -9251,12 +9251,20 @@ function pgInsurance(){
   ].map(c=>`<div class="mc"><div class="mc-top"><span class="mc-label">${c.label}</span><div class="mc-icon">${c.icon}</div></div><div class="mc-val" style="color:${c.col}">${c.val}</div></div>`).join('');
   const cards = D.properties.map(p=>{
     const pIns = D.insurance.filter(i=>String(i.prop_id)===String(p.id));
+    const pCerts = D.certs.filter(c=>String(c.prop_id)===String(p.id));
     const slots = INS_TYPES.map(type=>{
       const ins = pIns.find(i=>i.type===type);
       if (ins) {
         const d=Math.round((new Date(ins.expiry||'9999')-new Date())/864e5);
         const col=ins.expiry?(d<0?'var(--red)':d<60?'var(--amber)':'var(--green-dark)'):'var(--muted)';
         const label=ins.expiry?(d<0?'Expired':`${d}d`):'No expiry';
+        const certKw = type==='Buildings Insurance' ? ['buildings insurance','building insurance','structure insurance']
+          : type==='Landlord Contents Insurance' ? ['contents insurance']
+          : type==='Rent Guarantee Insurance' ? ['rent guarantee','rgi','rent protection']
+          : [];
+        const cert = pCerts.find(c => certKw.some(k => (c.type||'').toLowerCase().includes(k)));
+        const certUrl = cert?.engineer?.startsWith('http') ? cert.engineer : (cert?.has_file ? null : null);
+        const viewBtn = certUrl ? `<button onclick="event.stopPropagation();dvoOpen('${certUrl}','${type} Schedule','${ins.provider||'Insurance'} · ${ins.policy||''}')" style="font-size:11px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:none;cursor:pointer;color:var(--navy);font-family:var(--font);font-weight:600">👁 View</button>` : '';
         return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
           <div style="display:flex;align-items:center;gap:10px">
             <span style="font-size:18px">${INS_ICONS[type]}</span>
@@ -9267,6 +9275,7 @@ function pgInsurance(){
           </div>
           <div style="display:flex;align-items:center;gap:8px">
             <span style="font-size:11px;font-weight:600;color:${col}">${label}</span>
+            ${viewBtn}
             <button onclick="moAddInsurance(${ins.id})" style="font-size:11px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:none;cursor:pointer;color:var(--txt);font-family:var(--font)">Edit</button>
           </div>
         </div>`;
