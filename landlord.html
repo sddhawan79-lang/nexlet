@@ -1724,13 +1724,21 @@ async function uploadScanCert(certId, input){
     await scanAndFill(file, async (parsed)=>{
       const updates={has_file:true};
       if(parsed.expiry) updates.expiry=parsed.expiry;
-      if(parsed.engineer) updates.engineer=parsed.engineer;
       if(parsed.expiry) updates.status=new Date(parsed.expiry)<new Date()?'Expired':'Valid';
+      try {
+        const ext = file.name.split('.').pop() || 'pdf';
+        const fpath = 'certs/'+currentUser.id+'/'+certId+'.'+ext;
+        const { error: upErr } = await sb.storage.from('documents').upload(fpath, file, { contentType: file.type, upsert: true });
+        if (!upErr) {
+          const { data: urlData } = sb.storage.from('documents').getPublicUrl(fpath);
+          if (urlData?.publicUrl) updates.engineer = urlData.publicUrl;
+        } else if (parsed.engineer) { updates.engineer = parsed.engineer; }
+      } catch(ue) { if(parsed.engineer) updates.engineer = parsed.engineer; }
       const{error}=await sb.from('certificates').update(updates).eq('id',certId);
       if(error){toast('Error: '+error.message,true);return;}
       const c=D.certs.find(x=>x.id===certId);
       if(c) Object.assign(c,updates,{file:true});
-      toast('✓ Scanned & saved — expiry and engineer auto-filled!');
+      toast('✓ Scanned & saved — file uploaded, expiry auto-filled!');
       nav(window._currentPage, window._currentParam);
     });
   }catch(e){
@@ -1862,6 +1870,7 @@ async function saveCertToDB() {
       const { data: d2, error: e2 } = await sb.from('certificates').insert(safeCert).select().single();
       if (e2) { toast('Error: ' + e2.message, true); return; }
       D.certs.push({...d2, file: true});
+      await _certUploadFile(d2.id, certType, engineer);
       await logAudit('ADD_CERT', 'certificates', d2.id, `Added ${certType}`);
       closeMo(); toast('✓ Certificate saved!'); nav(window._currentPage, window._currentParam); return;
     }
@@ -1869,10 +1878,35 @@ async function saveCertToDB() {
   }
 
   D.certs.push({...data, file: true});
+  await _certUploadFile(data.id, certType, engineer);
   await logAudit('ADD_CERT', 'certificates', data.id, `Added ${certType}`);
   closeMo();
   toast('✓ Certificate saved!');
   nav(window._currentPage, window._currentParam);
+}
+
+// Upload scanned cert file to storage and store URL on the cert record
+async function _certUploadFile(certId, certType, engineerText) {
+  const file = window._lastScanFile;
+  if (!file) return;
+  try {
+    const ext = file.name.split('.').pop() || 'pdf';
+    const path = `certs/${currentUser.id}/${certId}.${ext}`;
+    const { error: upErr } = await sb.storage.from('documents').upload(path, file, { contentType: file.type, upsert: true });
+    if (upErr) { console.warn('Cert file upload error:', upErr.message); return; }
+    const { data: urlData } = sb.storage.from('documents').getPublicUrl(path);
+    if (!urlData?.publicUrl) return;
+    const fileUrl = urlData.publicUrl;
+    // Store URL; keep engineer text if it's a name (not a URL)
+    const engVal = (engineerText && !engineerText.startsWith('http')) ? engineerText : null;
+    // Try updating with file_url first, fall back to engineer field
+    const { error: updErr } = await sb.from('certificates').update({ engineer: engVal || fileUrl, has_file: true }).eq('id', certId);
+    if (!updErr) {
+      const c = D.certs.find(x => x.id === certId || x.id === String(certId));
+      if (c) { c.engineer = engVal || fileUrl; c.file_url = fileUrl; }
+    }
+    window._lastScanFile = null;
+  } catch(e) { console.warn('_certUploadFile error:', e); }
 }
 
 // ── SAVE: TENANT (legacy stub — use _saveTenantSetupToDB via moTenant wizard) ──
