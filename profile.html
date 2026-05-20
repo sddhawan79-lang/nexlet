@@ -402,6 +402,7 @@ html,body{min-height:100%;font-family:var(--font);color:var(--txt);background:va
           <div class="current-plan-label">Current plan</div>
           <div class="current-plan-name" id="current-plan-name"></div>
           <div class="current-plan-detail" id="current-plan-detail"></div>
+          <button id="cancel-sub-btn" onclick="cancelSubscription()" style="margin-top:12px;padding:8px 16px;border:1px solid var(--red);border-radius:7px;background:transparent;color:var(--red);font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">Cancel subscription</button>
         </div>
       </div>
 
@@ -413,8 +414,8 @@ html,body{min-height:100%;font-family:var(--font);color:var(--txt);background:va
         <!-- Starter -->
         <div class="plan-card" id="plan-starter">
           <div class="plan-name">Starter</div>
-          <div class="plan-price">£9.99<span>/mo</span></div>
-          <div class="plan-desc">Up to 3 properties</div>
+           <div class="plan-price">£4.99<span>/mo</span></div>
+          <div class="plan-desc">Up to 2 properties</div>
           <ul class="plan-features">
             <li>Compliance tracking</li>
             <li>Maintenance management</li>
@@ -428,8 +429,8 @@ html,body{min-height:100%;font-family:var(--font);color:var(--txt);background:va
         <div class="plan-card plan-featured" id="plan-landlord">
           <div class="plan-popular">Most popular</div>
           <div class="plan-name">Landlord</div>
-          <div class="plan-price">£19.99<span>/mo</span></div>
-          <div class="plan-desc">Up to 5 properties</div>
+           <div class="plan-price">£11.99<span>/mo</span></div>
+          <div class="plan-desc">Up to 10 properties</div>
           <ul class="plan-features">
             <li>Everything in Starter</li>
             <li>Legal document generation</li>
@@ -442,7 +443,7 @@ html,body{min-height:100%;font-family:var(--font);color:var(--txt);background:va
         <!-- Portfolio -->
         <div class="plan-card" id="plan-portfolio">
           <div class="plan-name">Portfolio</div>
-          <div class="plan-price">£39.99<span>/mo</span></div>
+           <div class="plan-price">£23.99<span>/mo</span></div>
           <div class="plan-desc">Unlimited properties</div>
           <ul class="plan-features">
             <li>Everything in Landlord</li>
@@ -456,11 +457,7 @@ html,body{min-height:100%;font-family:var(--font);color:var(--txt);background:va
       </div><!-- /plan-grid -->
 
       <p class="billing-note">Annual billing available — pay 10 months, get 12 (2 months free).</p>
-      <p class="manage-note">
-        To change or cancel your subscription, email
-        <a href="mailto:documents@nexlet.co.uk">documents@nexlet.co.uk</a>
-        — Stripe Customer Portal coming soon.
-      </p>
+      <p class="manage-note">Questions? <a href="mailto:documents@nexlet.co.uk">documents@nexlet.co.uk</a></p>
     </div>
   </section>
 
@@ -510,6 +507,26 @@ html,body{min-height:100%;font-family:var(--font);color:var(--txt);background:va
 <!-- Page script -->
 <script src="js/profile.js" defer></script>
 <script>
+async function cancelSubscription() {
+  const btn = document.getElementById('cancel-sub-btn');
+  if (!confirm('Are you sure you want to cancel your subscription? You will keep access until the end of your billing period.')) return;
+  btn.disabled = true; btn.textContent = 'Cancelling...';
+  try {
+    const session = await window.RSA.Auth.getSession();
+    const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/stripe-cancel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` }
+    });
+    const { error } = await res.json();
+    if (error) throw new Error(error);
+    btn.textContent = '✓ Cancelled';
+    document.getElementById('current-plan-detail').textContent = 'Cancels at end of billing period';
+    document.getElementById('current-plan-detail').className = 'current-plan-detail canceling';
+  } catch(e) {
+    btn.disabled = false; btn.textContent = 'Cancel subscription';
+    alert('Could not cancel — please email documents@nexlet.co.uk');
+  }
+}
 (function(){
   var uid = null;
   var optedIn = null;
