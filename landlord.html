@@ -10862,10 +10862,10 @@ function pgTemplates() {
               ${cat.badge ? `<span class="badge b-amber" style="font-size:10px">${cat.badge}</span>` : ''}
             </div>
             <div class="coll-r">
-              <span class="coll-arr op" id="ca-tmpl-${cat.id}">▼</span>
+              <span class="coll-arr" id="ca-tmpl-${cat.id}">▼</span>
             </div>
           </div>
-          <div class="coll-body" id="cb-tmpl-${cat.id}">
+          <div class="coll-body hidden" id="cb-tmpl-${cat.id}">
             <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">
               ${cat.templates.map(t => `
                 <div style="background:var(--white);border:1px solid ${t.urgent ? 'var(--amber)' : 'var(--border)'};border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:8px">
@@ -10899,10 +10899,10 @@ function pgTemplates() {
             </div>
             <div class="coll-r">
               <button class="btn btn-sm" onclick="event.stopPropagation();moUploadTemplate()">+ Add</button>
-              <span class="coll-arr op" id="ca-tmpl-custom">▼</span>
+              <span class="coll-arr" id="ca-tmpl-custom">▼</span>
             </div>
           </div>
-          <div class="coll-body" id="cb-tmpl-custom">
+          <div class="coll-body hidden" id="cb-tmpl-custom">
             <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">
               ${D.customTemplates.map(t => `
                 <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:8px">
