@@ -2024,6 +2024,24 @@ async function scanDoc(input){
   const sb2=document.getElementById('sb-scan');
   sb2.innerHTML=`<div class="scan-ic">⏳</div><div class="scan-t">Scanning document…</div><div class="scan-s">AI is reading your certificate</div>`;
   try{
+    const certTypeVal = (document.getElementById('ct')?.value || '').toLowerCase();
+    let docPrompt;
+    if (certTypeVal.includes('gas') || certTypeVal.includes('cp12') || certTypeVal.includes('gsc'))
+      docPrompt = 'UK Gas Safety Certificate (CP12/GSC). Extract: engineer full name, Gas Safe register number, company name, issue date (YYYY-MM-DD), expiry date (YYYY-MM-DD — exactly 1 year after issue), certificate reference number, full property address, appliances checked (comma separated list). Return JSON only, keys: engineer, ref, issued, expiry, issuing_authority, address, amount, appliances.';
+    else if (certTypeVal.includes('eicr') || certTypeVal.includes('electric'))
+      docPrompt = 'UK Electrical Installation Condition Report (EICR). Extract: electrician full name, NICEIC or NAPIT or ECA certificate/registration number, company name, issue date (YYYY-MM-DD), next inspection due date (YYYY-MM-DD), report reference number, overall outcome (Satisfactory or Unsatisfactory), full property address. Return JSON only, keys: engineer, ref, issued, expiry, issuing_authority, address, amount, outcome.';
+    else if (certTypeVal.includes('epc') || certTypeVal.includes('energy performance'))
+      docPrompt = 'UK Energy Performance Certificate (EPC). Extract: energy efficiency rating (single letter A-G), environmental impact rating (single letter A-G), valid until date (YYYY-MM-DD), RRN reference number (20 digits), assessor full name, assessor accreditation number, full property address including postcode. Return JSON only, keys: type, ref, expiry, engineer, issuing_authority, address.';
+    else if (certTypeVal.includes('fire'))
+      docPrompt = 'UK fire alarm service or fire risk assessment certificate. Extract: engineer or assessor full name, company name, certificate or report reference number, service or assessment date (YYYY-MM-DD), next service due date (YYYY-MM-DD), outcome or risk level, full property address. Return JSON only, keys: engineer, ref, issued, expiry, issuing_authority, address, amount.';
+    else if (certTypeVal.includes('legionella') || certTypeVal.includes('water'))
+      docPrompt = 'UK legionella risk assessment or water hygiene certificate. Extract: assessor full name, company name, reference number, assessment date (YYYY-MM-DD), next review due date (YYYY-MM-DD), risk level (Low/Medium/High), full property address. Return JSON only, keys: engineer, ref, issued, expiry, issuing_authority, address, amount.';
+    else if (certTypeVal.includes('pat') || certTypeVal.includes('portable appliance'))
+      docPrompt = 'UK PAT (Portable Appliance Testing) certificate. Extract: engineer full name, company name, certificate reference number, test date (YYYY-MM-DD), next test due date (YYYY-MM-DD), number of items tested, full property address. Return JSON only, keys: engineer, ref, issued, expiry, issuing_authority, address, amount.';
+    else if (certTypeVal.includes('boiler') || certTypeVal.includes('heating'))
+      docPrompt = 'UK boiler service or heating system certificate. Extract: engineer full name, Gas Safe register number if present, company name, service date (YYYY-MM-DD), next service due date (YYYY-MM-DD), reference number, full property address. Return JSON only, keys: engineer, ref, issued, expiry, issuing_authority, address, amount.';
+    else
+      docPrompt = 'UK property compliance certificate or document. Extract: certificate type, reference number, issue date (YYYY-MM-DD), expiry date (YYYY-MM-DD), engineer or provider full name and registration number if present, issuing company or authority, full property address, cost in GBP if present. Return JSON only, keys: type, ref, issued, expiry, engineer, issuing_authority, address, amount.';
     await scanAndFill(file, (parsed)=>{
       if(parsed.type)document.getElementById('ct').value=parsed.type;
       if(parsed.issued)document.getElementById('ci').value=parsed.issued;
@@ -2036,7 +2054,7 @@ async function scanDoc(input){
       document.getElementById('arg').innerHTML=warnHtml+[['Type',parsed.type],['Issue date',parsed.issued],['Expiry',parsed.expiry],['Engineer',parsed.engineer],['Reference',parsed.reference||parsed.ref||parsed.cert_number],['Amount',parsed.amount||parsed.premium||parsed.cost],['Address',parsed.address]].map(([l,v])=>`<div class="ai-res-f"><span>${l}</span><strong style="color:${v&&v!=='Not detected'?'var(--txt)':'var(--amber)'}">${v||'Not detected'}</strong></div>`).join('');
       document.getElementById('ar').style.display='block';
       sb2.innerHTML=`<div style="font-size:13px;color:var(--green-dark);font-weight:600">✓ Scanned — fields filled below</div><div style="font-size:12px;color:var(--muted);margin-top:4px">${file.name}</div>`;
-    }, 'UK property compliance certificate or document. Extract: certificate type, certificate/reference number, issue date (YYYY-MM-DD), expiry date (YYYY-MM-DD), engineer/provider name, amount/cost in GBP if present (number only), property address. Return JSON only, keys: type, ref, issued, expiry, engineer, amount, address.');
+    }, docPrompt);
   }catch(e){sb2.innerHTML=`<div style="font-size:13px;color:var(--amber);font-weight:500">Could not scan — please fill in manually</div>`;}
 }
 
@@ -2904,6 +2922,7 @@ function scanSetupLicence(input) {
       const el = document.getElementById('s-lic-expiry');
       if (el) { el.value = parsed.expiry; window._psetup.licExpiry = parsed.expiry; }
     }
+    if (parsed.council) { const el = document.getElementById('s-lic-council'); if (el) el.value = parsed.council; }
     if (parsed.type) {
       const lt = parsed.type.toLowerCase();
       const sel = document.getElementById('s-lic-type');
@@ -2916,7 +2935,7 @@ function scanSetupLicence(input) {
     if (result) result.style.display = 'block';
     if (box) box.innerHTML = `<div style="font-size:13px;color:var(--green-dark);font-weight:600">✓ Licence scanned — fields filled below</div><div style="font-size:11px;color:var(--muted);margin-top:3px">${file.name}</div>`;
     toast('✓ Licence scanned — check the fields below');
-  });
+  }, 'UK property licence document (Selective, Mandatory HMO, Additional HMO, Article 4, or Short-term Let licence). Extract: licence type, licence reference or application number, expiry date (YYYY-MM-DD), issuing council or local authority full name, full property address, licence holder name. Return JSON only, keys: type, ref, expiry, council, address, holder.');
 }
 
 function scanSetupCert(certType, input) {
@@ -2925,7 +2944,13 @@ function scanSetupCert(certType, input) {
   const box = document.getElementById(`${certType}-scan-box`);
   if (box) box.innerHTML = `<div style="font-size:12px;font-weight:600;color:var(--muted)">⏳ Scanning…</div>`;
 
+  const certPrompts = {
+    gas:  'UK Gas Safety Certificate (CP12). Extract: engineer full name, Gas Safe register number, company name, issue date (YYYY-MM-DD), expiry date (YYYY-MM-DD, 1 year after issue), certificate reference number, full property address. Return JSON only, keys: engineer, ref, issued, expiry, issuing_authority, address.',
+    eicr: 'UK Electrical Installation Condition Report (EICR). Extract: electrician full name, NICEIC/NAPIT registration number, company name, issue date (YYYY-MM-DD), next inspection due date (YYYY-MM-DD), report reference number, outcome (Satisfactory/Unsatisfactory), full property address. Return JSON only, keys: engineer, ref, issued, expiry, issuing_authority, address, outcome.',
+    epc:  'UK Energy Performance Certificate (EPC). Extract: energy efficiency rating (single letter A-G), valid until date (YYYY-MM-DD), RRN reference number, assessor full name, assessor accreditation number, full property address. Return JSON only, keys: type, ref, expiry, engineer, issuing_authority, address.',
+  };
   scanAndFill(file, (parsed) => {
+    if (parsed.ref) { const el = document.getElementById('s-' + certType + '-ref'); if (el) el.value = parsed.ref; }
     if (certType === 'gas') {
       if (parsed.expiry) { const e = document.getElementById('s-gas-expiry'); if(e) e.value = parsed.expiry; window._psetup.gasExpiry = parsed.expiry; }
       if (parsed.engineer) { const e = document.getElementById('s-gas-eng'); if(e) e.value = parsed.engineer; window._psetup.gasEngineer = parsed.engineer; }
@@ -2941,7 +2966,7 @@ function scanSetupCert(certType, input) {
     }
     if (box) box.innerHTML = `<div style="font-size:12px;font-weight:600;color:var(--green-dark)">✓ Scanned — fields filled below</div><div style="font-size:11px;color:var(--muted);margin-top:2px">${file.name}</div>`;
     toast('✓ Certificate scanned — check fields below');
-  });
+  }, certPrompts[certType]);
 }
 
 // ── ID DOCUMENT SCAN ──
@@ -8058,12 +8083,13 @@ async function moTenantDocsScan(tid, slot) {
     if (!url) { toast('Document file not found', true); return; }
     const EDGE = 'https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy';
     const prompts = {
-      passport: 'Extract: full_name, doc_number, expiry (YYYY-MM-DD), nationality, date_of_birth (YYYY-MM-DD), issuing_authority, doc_type_extracted. Return JSON.',
-      right_to_rent: 'Extract: full_name, share_code, share_code_expiry, doc_type_extracted. Return JSON.',
-      address_1: 'Extract: full_name, address, issuing_authority, doc_type_extracted. Return JSON.',
-      address_2: 'Extract: full_name, address, issuing_authority, doc_type_extracted. Return JSON.',
-      reference: 'Extract: full_name, issuing_authority, doc_type_extracted. Return JSON.',
-      other: 'Extract: full_name, issuing_authority, doc_number, expiry, doc_type_extracted. Return JSON.',
+      passport: 'This is a passport or photo ID. Extract: full_name (as printed), doc_number (passport number), date_of_birth (YYYY-MM-DD), expiry (YYYY-MM-DD or null), nationality (country name), issuing_authority (issuing country or HMPO/DVLA/UKVI), doc_type_extracted (e.g. Passport, Driving Licence, BRP, National ID Card). Return JSON only, no other text.',
+      right_to_rent: 'This is a UK Right to Rent document. Extract: full_name (as printed), doc_type_extracted (Passport/BRP/Share Code/eVisa/Driving Licence), doc_number (passport, BRP or licence number), share_code (if present, format: 9 characters), share_code_expiry (YYYY-MM-DD or null), expiry (YYYY-MM-DD or null), nationality, issuing_authority (Home Office/UKVI/DVLA or issuing country). Return JSON only, no other text.',
+      address_1: 'This is an address proof document. Extract: full_name (account holder name), address (full address as single string including postcode), issuing_authority (company or organisation name e.g. British Gas, Barclays, HMRC), doc_type_extracted (e.g. Utility Bill, Bank Statement, Council Tax Bill, HMRC Letter), doc_date (YYYY-MM-DD or null). Return JSON only, no other text.',
+      address_2: 'This is an address proof document. Extract: full_name (account holder name), address (full address as single string including postcode), issuing_authority (company or organisation name), doc_type_extracted (e.g. Utility Bill, Bank Statement, Council Tax Bill), doc_date (YYYY-MM-DD or null). Return JSON only, no other text.',
+      reference: 'This is a tenant reference or credit check report. Extract: full_name (applicant name), outcome (Pass/Fail/Conditional/Refer — pick closest), issuing_authority (referencing agency or company name e.g. Homelet, Rent4Sure, OpenRent), doc_type_extracted (e.g. Reference Report, Credit Check, Employment Reference), reference_date (YYYY-MM-DD or null). Return JSON only, no other text.',
+      guarantor: 'This is a guarantor document or ID. Extract: full_name (guarantor name), address (full address as single string), doc_type_extracted (e.g. Guarantor Agreement, Passport, Driving Licence), expiry (YYYY-MM-DD or null), issuing_authority (issuer name). Return JSON only, no other text.',
+      other: 'Extract all key information from this document. Include: full_name if present, doc_number if present, expiry (YYYY-MM-DD or null), address if present, issuing_authority (issuing organisation), doc_type_extracted (describe the document type). Return JSON only, no other text.',
     };
     const prompt = prompts[slot] || prompts.other;
     const res = await fetch(EDGE, {
