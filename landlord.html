@@ -2021,6 +2021,7 @@ function moCert(pid){
 async function scanDoc(input){
   if(!input.files[0])return;
   const file=input.files[0];
+  window._lastScanFile = file;
   const sb2=document.getElementById('sb-scan');
   sb2.innerHTML=`<div class="scan-ic">⏳</div><div class="scan-t">Scanning document…</div><div class="scan-s">AI is reading your certificate</div>`;
   try{
@@ -2053,7 +2054,7 @@ async function scanDoc(input){
       const warnHtml=warnings.length?`<div style="background:var(--amber-bg);border:1px solid rgba(217,119,6,0.25);border-radius:6px;padding:8px 10px;margin-bottom:8px;font-size:11px;color:var(--amber)">⚠ Could not determine: ${warnings.join(', ')} — please review</div>`:'';
       document.getElementById('arg').innerHTML=warnHtml+[['Type',parsed.type],['Issue date',parsed.issued],['Expiry',parsed.expiry],['Engineer',parsed.engineer],['Reference',parsed.reference||parsed.ref||parsed.cert_number],['Amount',parsed.amount||parsed.premium||parsed.cost],['Address',parsed.address]].map(([l,v])=>`<div class="ai-res-f"><span>${l}</span><strong style="color:${v&&v!=='Not detected'?'var(--txt)':'var(--amber)'}">${v||'Not detected'}</strong></div>`).join('');
       document.getElementById('ar').style.display='block';
-      sb2.innerHTML=`<div style="font-size:13px;color:var(--green-dark);font-weight:600">✓ Scanned — fields filled below</div><div style="font-size:12px;color:var(--muted);margin-top:4px">${file.name}</div>`;
+      sb2.innerHTML=`<div style="font-size:13px;color:var(--green-dark);font-weight:600">✓ Scanned — fields filled below</div><div style="font-size:12px;color:var(--muted);margin-top:4px">${file.name}</div><button onclick="if(window._lastScanFile)dvoOpen(URL.createObjectURL(window._lastScanFile),window._lastScanFile.name,'AI-scanned document')" style="margin-top:8px;background:var(--white);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;color:var(--navy);cursor:pointer;font-family:var(--font)">👁 View</button>`;
     }, docPrompt);
   }catch(e){sb2.innerHTML=`<div style="font-size:13px;color:var(--amber);font-weight:500">Could not scan — please fill in manually</div>`;}
 }
@@ -5534,7 +5535,7 @@ function pgPropDetail(pid) {
   const signed = (D.esignReq||[]).filter(r => String(r.property_id) === String(pid) && r.status === 'signed');
   const signedPanel = signed.length ? `<div class="panel" style="margin-bottom:16px">
     <div class="ph2"><div><h2>📄 Signed Documents</h2><p>Completed e-signatures for this property</p></div></div>
-    <div style="padding:8px 18px 14px">${signed.map(r => '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);gap:10px"><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:var(--txt)">'+(r.document_type==='written_statement'?'Written Statement':'Uploaded PDF')+'</div><div style="font-size:10px;color:var(--muted)">Signed '+new Date(r.signed_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})+' · '+(r.tenant_name||'Tenant')+'</div></div>'+(r.signed_pdf_url?'<a href="'+r.signed_pdf_url+'" target="_blank" class="btn btn-sm" style="font-size:11px;text-decoration:none;flex-shrink:0">⬇ Download</a>':'<span style="font-size:10px;color:var(--muted)">No file</span>')+'</div>').join('')}</div>
+    <div style="padding:8px 18px 14px">${signed.map(r => '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);gap:10px"><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:var(--txt)">'+(r.document_type==='written_statement'?'Written Statement':'Uploaded PDF')+'</div><div style="font-size:10px;color:var(--muted)">Signed '+new Date(r.signed_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})+' · '+(r.tenant_name||'Tenant')+'</div></div><span style="display:flex;gap:6px;flex-shrink:0">'+(r.signed_pdf_url?'<button onclick="event.stopPropagation();dvoOpen(\''+r.signed_pdf_url+'\',\''+(r.document_type==='written_statement'?'Signed Written Statement':'Signed E-Sign Document')+'\',\'Signed by '+(r.tenant_name||'Tenant')+'\')" class="btn btn-sm" style="font-size:11px;font-family:var(--font)">👁 View</button><a href="'+r.signed_pdf_url+'" download class="btn btn-sm" style="font-size:11px;text-decoration:none;font-family:var(--font)">⬇ Download</a>':'<span style="font-size:10px;color:var(--muted)">No file</span>')+'</span></div>').join('')}</div>
   </div>` : '';
 
   return `<div class="topbar">
@@ -8586,7 +8587,7 @@ function pgInspections() {
           <div>
             <div style="font-size:12px;font-weight:600">${FMS(i.date)} · <span style="color:var(--muted)">${i.type||'Routine'}</span></div>
             <div style="font-size:11px;color:var(--muted)">${i.inspector?'Inspector: '+i.inspector:''} ${i.notes?'· '+i.notes.slice(0,50)+(i.notes.length>50?'…':''):''}</div>
-            ${i.photos&&i.photos.length?`<div style="display:flex;gap:4px;margin-top:5px;flex-wrap:wrap">${i.photos.map(url=>`<img src="${url}" style="width:36px;height:36px;object-fit:cover;border-radius:5px;border:1px solid var(--border);cursor:pointer" onclick="window.open('${url}','_blank')" title="View photo">`).join('')}</div>`:''}
+            ${i.photos&&i.photos.length?`<div style="display:flex;gap:4px;margin-top:5px;flex-wrap:wrap">${i.photos.map(url=>`<img src="${url}" style="width:36px;height:36px;object-fit:cover;border-radius:5px;border:1px solid var(--border);cursor:pointer" onclick="event.stopPropagation();dvoOpen('${url}','Inspection Photo')" title="View photo">`).join('')}</div>`:''}
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:8px">
@@ -11110,6 +11111,7 @@ function moGenerate(templateId, customContent = null) {
       <div id="gen-placeholder-warn" style="display:none;background:var(--blue-bg);border:1px solid rgba(59,111,232,0.2);border-radius:7px;padding:8px 12px;font-size:12px;color:var(--blue);margin-top:8px"></div>
       <div id="gen-actions" style="display:flex;gap:8px;margin-top:10px">
         <button class="btn btn-sm" onclick="copyTemplate()">📋 Copy</button>
+        <button class="btn btn-sm" onclick="viewGeneratedDoc()">👁 View</button>
         <button class="btn btn-sm" onclick="downloadAsPDF()">↓ Download PDF</button>
         <button class="btn btn-sm btn-navy" onclick="moSendToTenant()">✉ Send to Tenant</button>
       </div>
@@ -11398,6 +11400,15 @@ function copyTemplate() {
     navigator.clipboard.writeText(text);
     toast('✓ Copied to clipboard!');
   }
+}
+
+function viewGeneratedDoc() {
+  const el = document.getElementById('gen-text');
+  const text = el?.dataset?.raw || el?.textContent || el?.innerText || '';
+  if (!text) { toast('Nothing to view', true); return; }
+  const docType = document.getElementById('mo-t')?.textContent || 'Generated Document';
+  const blob = new Blob([text], { type: 'text/html' });
+  dvoOpen(URL.createObjectURL(blob), docType, 'AI-generated · preview');
 }
 
 function moUploadTemplate(templateId, templateName) {
