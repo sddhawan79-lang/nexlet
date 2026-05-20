@@ -1656,6 +1656,17 @@ async function scanAndFill(file, onResult, customPrompt){
   }
 }
 
+// RULE: All upload slots must include AI scanner — do not remove
+function renderScanSlot(id, onchangeFn, label, hint) {
+  return `<div class="scan-box" id="${id}">
+    <input type="file" accept=".pdf,.jpg,.jpeg,.png" onchange="${onchangeFn}">
+    <div class="scan-ic">📄</div>
+    <div class="scan-t">${label || 'Upload document'}</div>
+    ${hint ? `<div class="scan-s">${hint}</div>` : ''}
+    <div class="scan-badge">✦ AI auto-extraction</div>
+  </div>`;
+}
+
 // ── MARK CERT SERVED ──
 async function markServed(certId){
   const c=D.certs.find(x=>x.id===certId);
@@ -1757,6 +1768,29 @@ async function scanInsDoc(insKey, input) {
   } catch (e) {
     if (result) result.innerHTML = '<span style="color:var(--red);font-size:11px">Scan failed — enter manually</span>';
     if (box) box.innerHTML = '<div class="scan-box" style="padding:8px;margin-bottom:0"><input type="file" accept="image/*,.pdf" onchange="scanInsDoc(\'' + insKey + '\',this)"><div style="font-size:11px;color:var(--muted)">📎 Retry upload</div></div>';
+  }
+}
+
+// RULE: All upload slots must include AI scanner — do not remove
+async function scanSetupInsDoc(insKey, input) {
+  if (!input.files[0]) return;
+  const file = input.files[0];
+  const box = document.getElementById('s-' + insKey + '-scan');
+  if (box) box.innerHTML = '<div style="font-size:11px;color:var(--blue);font-weight:600">⏳ Scanning policy…</div>';
+  try {
+    await scanAndFill(file, (parsed) => {
+      const prov = parsed.provider || parsed.engineer || parsed.issuing_authority || '';
+      const provEl = document.getElementById('s-' + insKey + '-prov');
+      if (provEl && !provEl.value && prov) provEl.value = prov;
+      const refEl = document.getElementById('s-' + insKey + '-ref');
+      const pol = parsed.policy_number || parsed.policy || parsed.reference || '';
+      if (refEl && !refEl.value && pol) refEl.value = pol;
+      const expEl = document.getElementById('s-' + insKey + '-expiry');
+      if (expEl && !expEl.value && parsed.expiry) expEl.value = parsed.expiry;
+      if (box) box.innerHTML = '<div style="font-size:11px;color:var(--green-dark);font-weight:600">✅ Scanned — review above</div>';
+    }, 'UK landlord insurance policy document. Extract: provider (insurer name), policy number, expiry date (YYYY-MM-DD), annual premium in GBP (number only). Return JSON only, keys: provider, policy_number, expiry, premium.');
+  } catch (e) {
+    if (box) box.innerHTML = '<div style="font-size:11px;color:var(--red);font-weight:600">⚠ Scan failed — enter manually</div><input type="file" accept="image/*,.pdf" onchange="scanSetupInsDoc(\'' + insKey + '\',this)" style="margin-top:6px;font-size:11px">';
   }
 }
 
@@ -2710,6 +2744,7 @@ function _setupStepHtml(n) {
         <div class="fg"><label>Policy reference</label><input type="text" id="s-bld-ref" value="${s.bldPolicyRef}" placeholder="Policy number"></div>
       </div>
       <div class="fg" style="margin-bottom:0"><label>Renewal date</label><input type="date" id="s-bld-expiry" value="${s.bldExpiry}"></div>
+      <div style="margin-top:10px">${renderScanSlot('s-bld-scan',"scanSetupInsDoc('bld',this)",'Upload Buildings Insurance Schedule','PDF or image of policy schedule')}</div>
     </div>
 
     <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
@@ -2722,6 +2757,7 @@ function _setupStepHtml(n) {
         <div class="fg"><label>Policy reference</label><input type="text" id="s-ll-ref" value="${s.llPolicyRef}" placeholder="Policy number"></div>
       </div>
       <div class="fg" style="margin-bottom:0"><label>Renewal date</label><input type="date" id="s-ll-expiry" value="${s.llExpiry}"></div>
+      <div style="margin-top:10px">${renderScanSlot('s-ll-scan',"scanSetupInsDoc('ll',this)",'Upload Contents Insurance Schedule','PDF or image of policy schedule')}</div>
     </div>
 
     <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:14px">
@@ -2735,6 +2771,7 @@ function _setupStepHtml(n) {
         <div class="fg"><label>Provider</label><input type="text" id="s-rg-prov" value="${s.rgProvider}" placeholder="e.g. HomeLet"></div>
         <div class="fg"><label>Renewal date</label><input type="date" id="s-rg-expiry" value="${s.rgExpiry}"></div>
       </div>
+      <div style="margin-top:10px">${renderScanSlot('s-rg-scan',"scanSetupInsDoc('rg',this)",'Upload Rent Guarantee Insurance Schedule','PDF or image of policy schedule')}</div>
     </div>`;
 
   // ── STEP 4: BOILER ──
@@ -3324,6 +3361,7 @@ function moTenant(pid) {
       <div class="fg"><label>Deposit (£)</label>
         <input id="ts-deposit" class="fi" type="number" placeholder="0" min="0" style="width:100%" oninput="window._tsetup.deposit=this.value">
       </div>
+      <div style="margin-top:4px">${renderScanSlot('ts-dep-scan-box',"scanDepositCert(this)",'Upload Deposit Protection Certificate','DPS, TDS, MyDeposits — AI auto-fills')}</div>
       <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12px;cursor:pointer">
         <input type="checkbox" id="ts-send-invite" checked onchange="window._tsetup.sendInvite=this.checked">
         <span>Send tenant portal invite by email</span>
