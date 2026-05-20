@@ -2048,6 +2048,12 @@ When **touching any of these files for a new feature or bug fix**, follow this p
 - **Compliance tab:** Inventory Reports section added at bottom (Portfolio-only, `D.inventoryReports` filtered by property)
 - **Archived properties:** "📋 View History" + "🧹 Prepare to Re-let" buttons
 
+### Session 20 — 20 May 2026 — Syntax Fix
+
+- **Bug:** `Uncaught SyntaxError: Unexpected end of input` — `pdTabContent()` was missing `return ''; }` at end of function
+- **Root cause:** When removing the old Property tab block (`if (tab === 'property')`), the function's closing `return '';` and `}` were also removed
+- **Fix:** Added `return ''; }` between maintenance tab closing and `buildCertStatusGrid` at line ~6125
+
 ---
 
 ## 14. Stripe Integration Guide
