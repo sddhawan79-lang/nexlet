@@ -1043,6 +1043,41 @@ const COMPLIANCE_DOCS = {
   }
 };
 
+const CERT_EDIT_FIELDS = {
+  gas:                { fields: ['ref','issued','expiry','engineer'], labels: { ref:'Certificate Reference', issued:'Issue Date', expiry:'Expiry Date', engineer:'Gas Safe Engineer' } },
+  eicr:               { fields: ['ref','issued','expiry','engineer'], labels: { ref:'Report Reference', issued:'Inspection Date', expiry:'Next Inspection Due', engineer:'Electrician / Contractor' } },
+  epc:                { fields: ['ref','issued','expiry','issuing_authority'], labels: { ref:'RRN Reference Number', issued:'Assessment Date', expiry:'Valid Until', issuing_authority:'Assessor / Accreditation' } },
+  smoke:              { fields: ['issued','engineer'], labels: { issued:'Test Date', engineer:'Tested By' } },
+  co:                 { fields: ['issued','engineer'], labels: { issued:'Test Date', engineer:'Tested By' } },
+  legionella:         { fields: ['ref','issued','expiry','engineer'], labels: { ref:'Report Reference', issued:'Assessment Date', expiry:'Next Review Due', engineer:'Assessor' } },
+  hmo_licence:        { fields: ['ref','issued','expiry','issuing_authority'], labels: { ref:'Licence Reference', issued:'Issue Date', expiry:'Expiry Date', issuing_authority:'Issuing Council' } },
+  selective_licence:  { fields: ['ref','issued','expiry','issuing_authority'], labels: { ref:'Licence Reference', issued:'Issue Date', expiry:'Expiry Date', issuing_authority:'Issuing Council' } },
+  planning:           { fields: ['ref','issued','issuing_authority'], labels: { ref:'Application Reference', issued:'Decision Date', issuing_authority:'Planning Authority' } },
+  fire_risk:          { fields: ['ref','issued','expiry','engineer'], labels: { ref:'Report Reference', issued:'Assessment Date', expiry:'Next Review Due', engineer:'Assessor' } },
+  fire_extinguisher:  { fields: ['issued','expiry','engineer'], labels: { issued:'Service Date', expiry:'Next Service Due', engineer:'Engineer / Company' } },
+  emergency_lighting: { fields: ['issued','expiry','engineer'], labels: { issued:'Test Date', expiry:'Next Test Due', engineer:'Engineer / Company' } },
+  rra_sheet:          { fields: ['issued'], labels: { issued:'Sheet Version Date' } },
+  how_to_rent:        { fields: ['issued'], labels: { issued:'Guide Version Date' } },
+  written_statement:  { fields: ['issued'], labels: { issued:'Agreement Date' } },
+  right_to_rent:      { fields: ['ref','issued','expiry'], labels: { ref:'Document Reference', issued:'Check Date', expiry:'RTR Expiry' } },
+  s48:                { fields: ['issued'], labels: { issued:'Served Date' } },
+  deposit_cert:       { fields: ['ref','issued'], labels: { ref:'Certificate / Reference', issued:'Protection Date' } },
+  prescribed_info:    { fields: ['issued'], labels: { issued:'Provided Date' } },
+  movein_gas:         { fields: ['ref','issued','expiry','engineer'], labels: { ref:'Certificate Reference', issued:'Issue Date', expiry:'Expiry Date', engineer:'Gas Safe Engineer' } },
+  movein_eicr:        { fields: ['ref','issued','expiry','engineer'], labels: { ref:'Report Reference', issued:'Inspection Date', expiry:'Next Inspection Due', engineer:'Electrician / Contractor' } },
+  movein_epc:         { fields: ['ref','issued','expiry','issuing_authority'], labels: { ref:'RRN Reference', issued:'Assessment Date', expiry:'Valid Until', issuing_authority:'Assessor' } },
+  inventory:          { fields: ['ref','issued','engineer'], labels: { ref:'Report Reference', issued:'Report Date', engineer:'Completed By' } },
+  alarm_test:         { fields: ['issued','engineer'], labels: { issued:'Test Date', engineer:'Tested By' } },
+  deposit_info:       { fields: ['issued'], labels: { issued:'Provided Date' } },
+  buildings_ins:      { fields: ['ref','issued','expiry','issuing_authority'], labels: { ref:'Policy Number', issued:'Policy Start', expiry:'Renewal Date', issuing_authority:'Insurer' } },
+  contents_ins:       { fields: ['ref','issued','expiry','issuing_authority'], labels: { ref:'Policy Number', issued:'Policy Start', expiry:'Renewal Date', issuing_authority:'Insurer' } },
+  rgi:                { fields: ['ref','issued','expiry','issuing_authority'], labels: { ref:'Policy Number', issued:'Policy Start', expiry:'Renewal Date', issuing_authority:'Insurer' } },
+  boiler:             { fields: ['issued','expiry','engineer'], labels: { issued:'Service Date', expiry:'Next Service Due', engineer:'Gas Safe Engineer' } },
+  pat:                { fields: ['issued','expiry','engineer'], labels: { issued:'Test Date', expiry:'Next Test Due', engineer:'Engineer / Company' } },
+  asbestos:           { fields: ['ref','issued','expiry','engineer'], labels: { ref:'Report Reference', issued:'Survey Date', expiry:'Next Review Due', engineer:'Surveyor' } },
+  pest:               { fields: ['issued','expiry','engineer'], labels: { issued:'Inspection Date', expiry:'Next Inspection Due', engineer:'Inspector / Company' } },
+};
+
 function getDocsForProperty(pid) {
   const p = P(pid);
   const isHMO = p ? (
@@ -10268,32 +10303,37 @@ async function dlDelete(id, returnPage){
 async function moEditCert(id) {
   const cert = D.certs.find(c => String(c.id) === String(id));
   if (!cert) { toast('Certificate not found', true); return; }
-  openMo('Edit Certificate', 'Update certificate details below',`
+
+  const ct = (cert.type||'').toLowerCase();
+  let docId = null, docLabel = cert.type;
+  for (const [gk, grp] of Object.entries(COMPLIANCE_DOCS)) {
+    for (const d of grp.docs) {
+      if (d.match.some(k => ct.includes(k))) { docId = d.id; docLabel = d.label; break; }
+    }
+    if (docId) break;
+  }
+  const cfg = CERT_EDIT_FIELDS[docId] || { fields: ['ref','issued','expiry','engineer','issuing_authority'], labels: {} };
+  const flbl = (key, def) => cfg.labels[key] || def;
+
+  const renderInput = (key, type, val, label, hint) => {
+    if (!cfg.fields.includes(key)) return '';
+    const inputType = type || 'text';
+    const attrs = type === 'date' ? `type="date"` : '';
+    return `<div><label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--muted);margin-bottom:5px;display:block">${label}${hint?` <span style="font-size:10px;color:var(--muted);font-weight:400">${hint}</span>`:''}</label><input id="ec-${key}" ${attrs} value="${val||''}" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-family:var(--font);font-size:13px;box-sizing:border-box"></div>`;
+  };
+
+  const fieldsHtml = [
+    renderInput('type', 'text', cert.type||'', 'Certificate Type'),
+    renderInput('ref', 'text', cert.ref||cert.reference||'', flbl('ref','Reference Number')),
+    renderInput('issued', 'date', cert.issued||'', flbl('issued','Issue Date')),
+    renderInput('expiry', 'date', cert.expiry||'', flbl('expiry','Expiry Date'), '(leave blank if no expiry)'),
+    renderInput('engineer', 'text', cert.engineer||'', flbl('engineer','Engineer / Provider')),
+    renderInput('issuing_authority', 'text', cert.issuing_authority||'', flbl('issuing_authority','Issuing Authority')),
+  ].filter(Boolean).join('');
+
+  openMo('Edit — ' + docLabel, cert.type||'Certificate',`
     <div style="display:flex;flex-direction:column;gap:14px">
-      <div>
-        <label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--muted);margin-bottom:5px;display:block">Certificate Type</label>
-        <input id="ec-type" value="${cert.type||''}" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-family:var(--font);font-size:13px;box-sizing:border-box">
-      </div>
-      <div>
-        <label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--muted);margin-bottom:5px;display:block">Reference Number</label>
-        <input id="ec-ref" value="${cert.ref||cert.reference||''}" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-family:var(--font);font-size:13px;box-sizing:border-box">
-      </div>
-      <div>
-        <label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--muted);margin-bottom:5px;display:block">Issue Date</label>
-        <input type="date" id="ec-issued" value="${cert.issued||''}" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-family:var(--font);font-size:13px;box-sizing:border-box">
-      </div>
-      <div>
-        <label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--muted);margin-bottom:5px;display:block">Expiry Date <span style="font-size:10px;color:var(--muted);font-weight:400">(leave blank if no expiry)</span></label>
-        <input type="date" id="ec-expiry" value="${cert.expiry||''}" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-family:var(--font);font-size:13px;box-sizing:border-box">
-      </div>
-      <div>
-        <label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--muted);margin-bottom:5px;display:block">Engineer / Provider</label>
-        <input id="ec-engineer" value="${cert.engineer||''}" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-family:var(--font);font-size:13px;box-sizing:border-box">
-      </div>
-      <div>
-        <label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--muted);margin-bottom:5px;display:block">Issuing Authority</label>
-        <input id="ec-authority" value="${cert.issuing_authority||''}" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-family:var(--font);font-size:13px;box-sizing:border-box">
-      </div>
+      ${fieldsHtml}
       <div style="background:rgba(59,111,232,0.06);border:1px solid rgba(59,111,232,0.15);border-radius:7px;padding:9px 12px;font-size:12px;color:var(--blue)">
         ✦ Editing details does not replace the uploaded file. To replace the file, delete and re-upload.
       </div>
@@ -10311,7 +10351,7 @@ async function saveEditCert(id) {
     issued:            document.getElementById('ec-issued')?.value||null,
     expiry:            document.getElementById('ec-expiry')?.value||null,
     engineer:          document.getElementById('ec-engineer')?.value.trim()||null,
-    issuing_authority: document.getElementById('ec-authority')?.value.trim()||null,
+    issuing_authority: document.getElementById('ec-issuing_authority')?.value.trim()||null,
   };
   const { error } = await sb.from('certificates').update(updates).eq('id', id);
   if (error) { toast('Save failed: '+error.message, true); btn.disabled=false; btn.innerHTML='Save changes'; return; }
