@@ -8129,12 +8129,15 @@ function moTenantDocs(tenantId, propId) {
         <div style="font-size:13px;font-weight:600">${s.label}</div>
         ${docCards}
       </div>
-      <div style="flex-shrink:0;display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+      <!-- RULE: Upload + AI badge MUST always show together — empty and filled states. AI scan auto-triggers on upload via moTenantDocsUpload. Do NOT hide badge or move scan button behind a condition. -->
+      <div style="flex-shrink:0;display:flex;flex-direction:column;gap:4px;align-items:flex-end">
         <label class="btn btn-navy btn-sm" style="cursor:pointer;font-size:11px;margin:0">
           📤 Upload
           <input type="file" style="display:none" accept=".pdf,.jpg,.jpeg,.png" onchange="moTenantDocsUpload('${tenantId}','${s.slot}',this)">
         </label>
-        ${slotDocs.length ? `<button class="btn btn-sm" style="font-size:11px" onclick="moTenantDocsScan('${tenantId}','${s.slot}')">✦ AI Scan</button>` : ''}
+        ${slotDocs.length
+          ? `<button class="btn btn-sm" style="font-size:11px" onclick="moTenantDocsScan('${tenantId}','${s.slot}')">✦ Re-scan</button>`
+          : `<div style="font-size:10px;color:var(--blue);font-weight:600;white-space:nowrap">✦ AI auto-scan</div>`}
       </div>
     </div>`;
   }).join('');
