@@ -1088,6 +1088,10 @@ function getDocsForProperty(pid) {
 
   const result = {};
   Object.entries(COMPLIANCE_DOCS).forEach(([groupKey, group]) => {
+    if (groupKey === 'licensing' && p && p.licence_bypassed === true) {
+      result[groupKey] = { ...group, docs: [] };
+      return;
+    }
     const isFurnished = p ? (p.furnished === true || (p.furnished_status||'').toLowerCase() === 'furnished' || (p.furnished_status||'').toLowerCase() === 'part furnished') : false;
     result[groupKey] = {
       ...group,
@@ -1099,6 +1103,14 @@ function getDocsForProperty(pid) {
     };
   });
   return result;
+}
+
+async function bypassLicensing(pid) {
+  const p = P(pid); if (!p) return;
+  p.licence_bypassed = true;
+  try { await sb.from('properties').update({ licence_bypassed: true }).eq('id', pid); } catch(e) {}
+  await logAudit('BYPASS_LICENSING', 'properties', pid, 'Licensing checks marked as not applicable');
+  nav(window._currentPage, window._currentParam);
 }
 
 function findCertForDoc(doc, certList) {
@@ -5995,6 +6007,7 @@ function pdTabContent(pid, tab) {
                 gap:6px">
                 <h2>${group.icon} ${group.label}</h2>
                 ${hdrBadge}
+                ${groupKey==='licensing'&&overdueCount>0?`<button onclick="event.stopPropagation();bypassLicensing('${pid}')" style="font-size:9px;padding:2px 8px;border-radius:100px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font);font-weight:600;white-space:nowrap" title="Mark all licensing checks as not applicable for this property">N/A</button>`:''}
               </div>
               <p style="font-size:11px;color:var(--muted);
                 margin-top:2px">${group.description}</p>
@@ -6743,7 +6756,8 @@ function pgCompliance(){
                       font-weight:700;color:#fff;
                       background:#E53E3E;padding:2px 6px;
                       border-radius:100px">
-                      ${gOverdue} action</span>`
+                      ${gOverdue} action</span>
+                      ${gk==='licensing'?`<button onclick="event.stopPropagation();bypassLicensing('${p.id}')" style="font-size:9px;padding:2px 7px;border-radius:100px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font);font-weight:600;white-space:nowrap;margin-left:4px" title="Mark all licensing checks as not applicable for this property">N/A</button>`:''}`
                   : `<span style="font-size:10px;
                       color:#00A87A;font-weight:600">
                       ✓</span>`}
@@ -6890,7 +6904,8 @@ function pgCompliance(){
                           font-weight:700;color:#fff;
                           background:#E53E3E;padding:2px 7px;
                           border-radius:100px;margin-left:4px">
-                          ${gOverdue} action</span>`
+                          ${gOverdue} action</span>
+                          ${gk==='licensing'?`<button onclick="event.stopPropagation();bypassLicensing('${selPid}')" style="font-size:9px;padding:2px 7px;border-radius:100px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font);font-weight:600;white-space:nowrap;margin-left:4px" title="Mark all licensing checks as not applicable for this property">N/A</button>`:''}`
                       : `<span style="font-size:10px;
                           font-weight:700;color:#00A87A;
                           background:var(--green-bg);
