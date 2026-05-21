@@ -1201,6 +1201,46 @@ async function markServed(certId){
   nav('compliance');
 }
 
+// ── UPLOAD A SERVED-TYPE DOC (no_expiry docs — How to Rent, Written Statement etc) ──
+async function uploadServedDoc(pid, docType, input) {
+  if (!input.files[0]) return;
+  const file = input.files[0];
+  toast('⏳ Uploading…');
+  try {
+    const ext = file.name.split('.').pop() || 'pdf';
+    const safeName = docType.replace(/[^a-zA-Z0-9]/g,'_').toLowerCase().slice(0,40);
+    const fpath = 'certs/' + currentUser.id + '/' + pid + '_' + safeName + '_' + Date.now() + '.' + ext;
+    const { error: upErr } = await sb.storage.from('documents').upload(fpath, file, { contentType: file.type, upsert: true });
+    let fileUrl = null;
+    if (!upErr) {
+      const { data: urlData } = sb.storage.from('documents').getPublicUrl(fpath);
+      fileUrl = urlData?.publicUrl || null;
+    }
+    // Check if cert record already exists for this type + property
+    const existing = D.certs.find(c => String(c.prop_id) === String(pid) &&
+      (c.type||'').toLowerCase().includes(docType.toLowerCase().slice(0,18)));
+    if (existing) {
+      const updates = { has_file: true, engineer: fileUrl || existing.engineer };
+      const { error } = await sb.from('certificates').update(updates).eq('id', existing.id);
+      if (error) { toast('Error: ' + error.message, true); return; }
+      Object.assign(existing, updates);
+    } else {
+      const newCert = {
+        prop_id: String(pid), type: docType,
+        expiry: null, engineer: fileUrl, status: 'Uploaded',
+        has_file: true, served: false, user_id: currentUser.id
+      };
+      const { data, error } = await sb.from('certificates').insert(newCert).select().single();
+      if (error) { toast('Error: ' + error.message, true); return; }
+      if (data) D.certs.push(data);
+    }
+    toast('✔ Uploaded — now click "Mark served" once you have given this to your tenant');
+    nav('compliance');
+  } catch(e) {
+    toast('Upload failed — please try again', true);
+  }
+}
+
 // ── UPLOAD & SCAN EXISTING CERT ──
 async function uploadScanCert(certId, input){
   if(!input.files[0]) return;
@@ -4497,29 +4537,44 @@ function pgCompliance(){
       if (lo.includes('section 48')) return t.includes('section 48')||t.includes('s48');
       return t.includes(lo.substring(0,8));
     });
-    if (!cert) return { lbl:'MISSING', bg:'#E4EAF1', col:'#7A8FA6', bdr:'transparent', days:null, overdue:true };
+    if (!cert) return { lbl:'MISSING', bg:'#E4EAF1', col:'#7A8FA6', bdr:'transparent', days:null, overdue:true, cert:null };
     if (cert.expiry) {
       const days = Math.round((new Date(cert.expiry)-today)/864e5);
-      if (days < 0)   return { lbl:'EXPIRED',      bg:'rgba(229,62,62,0.1)',   col:'#E53E3E', bdr:'rgba(229,62,62,0.25)',  days, overdue:true  };
-      if (days <= 14) return { lbl:'URGENT',        bg:'rgba(217,119,6,0.1)',   col:'#D97706', bdr:'rgba(217,119,6,0.25)',  days, overdue:false };
-      if (days <= 60) return { lbl:'EXPIRING SOON', bg:'rgba(59,111,232,0.08)', col:'#3B6FE8', bdr:'rgba(59,111,232,0.2)', days, overdue:false };
-      return               { lbl:'VALID',           bg:'rgba(0,200,150,0.08)',  col:'#00A87A', bdr:'rgba(0,200,150,0.2)',  days, overdue:false };
+      if (days < 0)   return { lbl:'EXPIRED',      bg:'rgba(229,62,62,0.1)',   col:'#E53E3E', bdr:'rgba(229,62,62,0.25)',  days, overdue:true,  cert };
+      if (days <= 14) return { lbl:'URGENT',        bg:'rgba(217,119,6,0.1)',   col:'#D97706', bdr:'rgba(217,119,6,0.25)',  days, overdue:false, cert };
+      if (days <= 60) return { lbl:'EXPIRING SOON', bg:'rgba(59,111,232,0.08)', col:'#3B6FE8', bdr:'rgba(59,111,232,0.2)', days, overdue:false, cert };
+      return               { lbl:'VALID',           bg:'rgba(0,200,150,0.08)',  col:'#00A87A', bdr:'rgba(0,200,150,0.2)',  days, overdue:false, cert };
     }
-    return { lbl:'NO DATE SET', bg:'rgba(229,62,62,0.07)', col:'#E53E3E', bdr:'rgba(229,62,62,0.2)', days:null, overdue:true };
+    // no_expiry / served docs — check served flag
+    if (cert.served) return { lbl:'✓ SERVED', bg:'rgba(0,200,150,0.08)', col:'#00A87A', bdr:'rgba(0,200,150,0.2)', days:null, overdue:false, cert };
+    return { lbl:'NOT SERVED', bg:'rgba(217,119,6,0.07)', col:'#D97706', bdr:'rgba(217,119,6,0.25)', days:null, overdue:true, cert };
   };
 
-  const _pgGroup = (gid, pc, icon, title, types, addBtn, expanded=false) => {
+  const _pgGroup = (gid, pc, icon, title, types, addBtn, expanded=false, pid=null, servedTypes=[]) => {
     const items = types.map(label => ({ label, st: _pgGetSt(pc, label) }));
     items.sort((a,b) => (b.st.overdue?1:0)-(a.st.overdue?1:0));
     const overdueCount = items.filter(i=>i.st.overdue).length;
     const rows = items.map(({label,st}) => {
       const dayStr = st.days!==null ? (st.days<0?`${Math.abs(st.days)}d overdue`:`${st.days}d left`) : '';
+      const isServedType = servedTypes.includes(label);
+      const certUrl = st.cert ? (st.cert.engineer && String(st.cert.engineer).startsWith('http') ? st.cert.engineer : (st.cert.url||st.cert.file_url||null)) : null;
+      const _docTypeEsc = label.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+      // View button — shown if file URL exists
+      const _viewBtn = certUrl ? `<button onclick="event.stopPropagation();dvoOpen('${certUrl}','${_docTypeEsc}','')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:600">👁 View</button>` : '';
+      // Upload + Mark Served — only for served-type docs
+      const _uploadBtn = isServedType && pid ? `<label onclick="event.stopPropagation()" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:500;display:inline-flex;align-items:center">↑ Upload<input type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="event.stopPropagation();uploadServedDoc('${pid}','${_docTypeEsc}',this)"></label>` : '';
+      const _markServedBtn = isServedType && pid && st.cert
+        ? `<button onclick="event.stopPropagation();markServed('${st.cert.id}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid ${st.cert.served?'#00A87A':'rgba(217,119,6,0.4)'};background:${st.cert.served?'rgba(0,200,150,0.08)':'rgba(217,119,6,0.07)'};color:${st.cert.served?'#00A87A':'#D97706'};cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:600">${st.cert.served?'✓ Served':'○ Mark served'}</button>`
+        : isServedType && pid
+          ? `<button onclick="event.stopPropagation();toast('Upload the document first, then mark as served',true)" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--off);color:var(--muted);cursor:pointer;font-family:var(--font);white-space:nowrap;opacity:0.55">○ Mark served</button>`
+          : '';
       return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 11px;background:${st.bg};border:1px solid ${st.bdr};border-radius:7px;gap:8px">
         <span style="font-size:12px;font-weight:500;color:var(--txt);flex:1;min-width:0">${label}</span>
-        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-          ${st.overdue?`<span style="font-size:10px;font-weight:700;color:#fff;background:#E53E3E;padding:2px 7px;border-radius:100px">Action required</span>`:''}
+        <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
+          ${st.overdue&&!isServedType?`<span style="font-size:10px;font-weight:700;color:#fff;background:#E53E3E;padding:2px 7px;border-radius:100px">Action required</span>`:''}
           ${dayStr?`<span style="font-size:10px;color:${st.col}">${dayStr}</span>`:''}
           <span style="font-size:10px;font-weight:700;color:${st.col};letter-spacing:.3px;white-space:nowrap">${st.lbl}</span>
+          ${_viewBtn}${_uploadBtn}${_markServedBtn}
         </div>
       </div>`;
     }).join('');
@@ -4567,9 +4622,9 @@ function pgCompliance(){
   const propDetail = _selProp ? `
     <button class="btn btn-sm" onclick="window._compPropId=null;nav('compliance')" style="margin-bottom:16px">↑ All properties</button>
     <div style="font-size:16px;font-weight:700;color:var(--txt);margin-bottom:16px">${_selProp.address}${_selProp.city?', '+_selProp.city:''}</div>
-    ${_pgGroup('det-'+_selPid+'-docs',_selPc,'🏤','Documents & Certificates',_pgGD,`<button class="btn btn-sm btn-navy" onclick="event.stopPropagation();moCert('${_selPid}')">+ Add</button>`,true)}
-    ${_pgGroup('det-'+_selPid+'-notices',_selPc,'🏠','Tenancy Notices',_pgGN,'',true)}
-    ${_pgGroup('det-'+_selPid+'-starter',_selPc,'🜇','Starter Kit',_pgGS,'',true)}
+    ${_pgGroup('det-'+_selPid+'-docs',_selPc,'🏤','Documents & Certificates',_pgGD,`<button class="btn btn-sm btn-navy" onclick="event.stopPropagation();moCert('${_selPid}')">+ Add</button>`,true,_selPid,[])}
+    ${_pgGroup('det-'+_selPid+'-notices',_selPc,'🏠','Tenancy Notices',_pgGN,'',true,_selPid,_pgGN)}
+    ${_pgGroup('det-'+_selPid+'-starter',_selPc,'🜇','Starter Kit',_pgGS,'',true,_selPid,_pgGS)}
   ` : '';
 
   return `<div class="topbar"><span class="tb-title">Compliance</span><div class="tb-right">
@@ -5904,7 +5959,7 @@ function pgRent(){
         const statusCol = r.status === 'Paid' ? 'var(--green-dark)'
           : (isLate || isDue) ? 'var(--red)' : 'var(--amber)';
         const actionBtn = r.status !== 'Paid'
-          ? `<button onclick="event.stopPropagation();markRentPaid('${r.id||r.prop_id}','${r.due_date||''}')" style="font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid var(--green-dark);background:var(--green-bg);color:var(--green-dark);cursor:pointer;font-family:var(--font);font-weight:600">Mark paid</button>`
+          ? `<button onclick="event.stopPropagation();markRentPaid('${r.id||r.prop_id}','${r.due_date||''}')" style="font-size:10px;padding:3px 10px;border-radius:6px;border:1px solid var(--green-dark);background:var(--green-bg);color:var(--green-dark);cursor:pointer;font-family:var(--font);font-weight:600">✔ Mark received</button>`
           : '';
         return `<tr style="border-bottom:1px solid var(--border)">
           <td style="font-size:11px">${monthLabel}</td>
@@ -10893,7 +10948,10 @@ function _s13StepHtml(n) {
     </div>`;
     return `
     <div style="font-size:15px;font-weight:600;margin-bottom:2px">Review & send</div>
-    <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Review the notice below then send to tenant</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:10px">Review the notice below then send to tenant</div>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+      <button onclick="s13DownloadPdf()" style="font-size:11px;padding:4px 12px;border-radius:6px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);font-weight:600;display:inline-flex;align-items:center;gap:5px">⬇ Download PDF</button>
+    </div>
     <div style="border:1px solid var(--border);border-radius:10px;padding:20px;max-height:50vh;overflow-y:auto;margin-bottom:14px;background:var(--white)">${window._s13.noticeHtml}</div>
     <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
       <div style="font-size:12px;font-weight:700;color:var(--txt);margin-bottom:10px">Delivery</div>
@@ -10974,6 +11032,23 @@ function s13Back() {
   window._s13.step--;
   _renderS13Step(window._s13.step);
   document.querySelector('.mo-box')?.scrollTo?.(0,0);
+}
+
+function s13DownloadPdf() {
+  const s = window._s13;
+  if (!s.noticeHtml) { toast('Notice not ready — complete step 2 first', true); return; }
+  const p = P(s.pid);
+  const propAddr = [p?.address,p?.city,p?.postcode].filter(Boolean).join(', ');
+  const fileName = 'S13_Notice_' + (p?.address||'Property').replace(/[^a-zA-Z0-9]/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.html';
+  const fullHtml = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Section 13 Notice — ${propAddr}</title>
+<style>body{font-family:Georgia,serif;font-size:13px;line-height:1.8;color:#1A2B45;max-width:700px;margin:40px auto;padding:20px}@media print{body{margin:0;padding:20px}}</style>
+</head><body>${s.noticeHtml}<script>window.onload=function(){window.print();}<\/script></body></html>`;
+  const blob = new Blob([fullHtml], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = fileName; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  toast('✔ Downloaded — open in browser then Print → Save as PDF');
 }
 
 async function _sendS13() {
