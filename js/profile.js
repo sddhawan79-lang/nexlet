@@ -52,7 +52,7 @@
 
     document.querySelectorAll('.plan-btn').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        _startCheckout(btn.dataset.plan);
+        _startCheckout(btn.dataset.price);
       });
     });
   });
@@ -184,10 +184,10 @@
    * NOTE: No Stripe.js SDK is needed for Hosted Checkout — we simply redirect
    * the browser to the URL returned by our Edge Function.
    *
-   * @param {string} plan  'starter' | 'landlord' | 'portfolio'
+   * @param {string} priceId  Stripe Price ID
    */
-  async function _startCheckout(plan) {
-    var btn   = document.querySelector('.plan-btn[data-plan="' + plan + '"]');
+  async function _startCheckout(priceId) {
+    var btn   = document.querySelector('.plan-btn[data-price="' + priceId + '"]');
     var errEl = document.getElementById('billing-error');
 
     window.RSA.UI.hideMessage(errEl);
@@ -198,7 +198,7 @@
 
       // supabase.functions.invoke() automatically includes the user's JWT
       var result = await sb.functions.invoke('stripe-checkout', {
-        body: { plan: plan },
+        body: { price_id: priceId },
       });
 
       if (result.error) {
@@ -209,8 +209,9 @@
       }
 
       if (result.data && result.data.url) {
-        // Redirect to Stripe-hosted checkout page
-        window.location.href = result.data.url;
+        // Open Stripe Checkout in a new tab
+        window.open(result.data.url, '_blank');
+        if (btn) window.RSA.UI.setLoading(btn, false, 'Subscribe');
       } else {
         window.RSA.UI.showError(errEl, 'Unexpected response from payment service. Please try again.');
         if (btn) window.RSA.UI.setLoading(btn, false, 'Subscribe');
