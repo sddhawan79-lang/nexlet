@@ -34,13 +34,6 @@ const SUPABASE_URL        = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const BASE_URL            = 'https://nexlet.co.uk';
 
-/** Maps plan slug → Stripe Price ID (set via Supabase secrets) */
-const PRICE_IDS: Record<string, string> = {
-  starter:   Deno.env.get('STRIPE_PRICE_STARTER')   ?? '',
-  landlord:  Deno.env.get('STRIPE_PRICE_LANDLORD')  ?? '',
-  portfolio: Deno.env.get('STRIPE_PRICE_PORTFOLIO') ?? '',
-};
-
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin':  '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -81,18 +74,12 @@ Deno.serve(async (req: Request) => {
       return _err(401, 'Invalid or expired session token');
     }
 
-    // ── Step 2: Validate the requested plan ──────────────────────────────────
+    // ── Step 2: Validate the price ID ──────────────────────────────────────
     const body = await req.json().catch(() => ({}));
-    const plan: string = body.plan ?? '';
+    const priceId: string = body.price_id ?? '';
 
-    if (!plan || !(plan in PRICE_IDS)) {
-      return _err(400, `Invalid plan "${plan}". Must be: starter | landlord | portfolio`);
-    }
-
-    const priceId = PRICE_IDS[plan];
     if (!priceId) {
-      return _err(500, `Price ID not configured for plan "${plan}". ` +
-        `Set STRIPE_PRICE_${plan.toUpperCase()} in Supabase Edge Function secrets.`);
+      return _err(400, 'Missing price_id in request body');
     }
 
     // ── Step 3: Retrieve or create Stripe Customer for this user ─────────────
@@ -124,10 +111,10 @@ Deno.serve(async (req: Request) => {
       payment_method_types: ['card'],
       mode: 'subscription',
       line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${BASE_URL}/profile.html?success=true&plan=${plan}`,
+      success_url: `${BASE_URL}/profile.html?success=true&price_id=${priceId}`,
       cancel_url:  `${BASE_URL}/profile.html?canceled=true`,
       metadata: {
-        plan,
+        price_id: priceId,
         user_id: user.id,   // critical — used by stripe-webhook to link to Supabase user
       },
       // Allow promotion codes so users can redeem discount codes at checkout

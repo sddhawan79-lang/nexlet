@@ -119,13 +119,6 @@ rentsafeai/
 ├── email-alerts-index.ts           Supabase Edge Function source (Sprint 10 → rebuilt Session 20)
 ├── stripe-checkout-index.ts        Supabase Edge Function source (Sprint 13)
 ├── stripe-webhook-index.ts         Supabase Edge Function source (Sprint 13)
-├── email-compliance-digest.html     Email preview — compliance digest template (Session 20)
-├── email-cert-expiry.html           Email preview — certificate expiry alert template (Session 20)
-├── email-welcome.html               Email preview — welcome / trial start template (Session 20)
-├── email-trial-expiry.html          Email preview — trial expiry warning template (Session 20)
-├── sidebar-hybrid-preview.html      UX preview — sidebar redesign comparison (Session 20)
-├── sidebar-hybrid-comparison.html   UX preview — old vs new sidebar side-by-side (Session 20)
-├── cron_setup.sql                   pg_cron jobs: weekly-digest, daily-expiry, daily-trial (Session 20)
 ├── mtd_tables.sql                  SQL migration: MTD tables
 ├── sprint10_step1_db.sql           SQL migration: Sprint 10 DB setup
 ├── sprint10_step1_fix.sql          SQL migration: Sprint 10 patch/fix
@@ -135,11 +128,9 @@ rentsafeai/
 ├── session10_multi_doc.sql          SQL migration: Session 10 (multi-doc KYC — drop slot unique, add columns)
 ├── session10_tenants_columns.sql    SQL migration: Session 10 (add missing tenants columns — rtr, rent_day, scheme_ref, etc.)
 ├── session10_esign_requests.sql     SQL migration: Session 10 (esign_requests table + RLS)
-├── session11_feedback_table.sql     SQL migration: Session 11 (user_feedback table)
 ├── session11_landlord_sig.sql       SQL migration: Session 11 (landlord signature columns on esign_requests)
-├── sprint11_feedback_table.sql      SQL migration: Sprint 11 (feedback table — alternate name)
-├── sprint13_db.sql                  SQL migration: Sprint 13 (user_profiles, stripe_subscriptions)
-├── session18_feedback_v2.sql        SQL migration: Session 18 (urgency + files columns on feedback table — replaced by session19_user_reports.sql)
+├── sprint11_feedback_table.sql      SQL migration: Sprint 11 (feedback table)
+├── session18_feedback_v2.sql        SQL migration: Session 18 (urgency + files columns on feedback — superseded by session19_user_reports.sql)
 ├── session19_user_reports.sql       SQL migration: Session 19 (user_reports table — standalone bug/feature reporting)
 ├── SPRINT10_DEPLOY.md              Sprint 10 deployment guide
 ├── PROJECT_KNOWLEDGE.md            THIS FILE — agent initialization reference
@@ -148,9 +139,9 @@ rentsafeai/
 └── fix.patch                       Git patch file
 ```
 
-> **`supabase/functions/ai-proxy/index.ts` now exists** (created Session 6).
-> Other edge function sources remain as loose `.ts` files at the repo root.
-> Deploy command: `npx supabase functions deploy <name> --project-ref mahtcfukgzbonwibtsxz`
+> **Session 20 files listed below** (`cron_setup.sql`, `email-*.html`, `sidebar-*.html`) are referenced in the change log but do not yet exist in the repo. Same for `session14_*.sql`, `session13_inventory_reports.sql`.
+
+> **`supabase/functions/ai-proxy/index.ts`** and **`supabase/functions/stripe-checkout/index.ts`** exist in repo.
 
 ### HTML File Responsibilities
 
@@ -330,7 +321,7 @@ Deduplication table for all outgoing alerts.
 | `esign_requests` | E-signature requests with `token` for tenant portal. **Requires `session10_esign_requests.sql` + `session11_landlord_sig.sql` migrations.** |
 | `tenant_documents` | Tenant KYC documents — passport, RTR, address proofs, references, guarantor. **Multiple docs per slot** (unique index removed Session 10). AI-scanned via Claude with `issuing_authority` + `doc_type_extracted` fields. **Requires `session7_tenant_documents.sql` + `session10_multi_doc.sql` migrations + `tenant-documents` Storage bucket.** |
 | `pretenancy_checks` | Session 18. Pre-tenancy checklist audit records: `prop_id`, `tenant_id` (nullable), `landlord_id`, `checks` (JSONB), `completed_at`, `bypassed`, `bypass_reason`. PDF audit trails stored in `pretenancy-audits` Storage bucket. |
-| `user_reports` | Session 19. Bug reports and feature suggestions: `user_id`, `type` (bug/feature), `title`, `description`, `urgency` (low/medium/high/critical), `files` (TEXT[]), `status` (open/reviewed/in_progress/completed/declined), `created_at`, `updated_at`. Files uploaded to `documents` Storage bucket. **Requires `session19_user_reports.sql` migration.** |
+| `user_reports` | Session 19. Bug reports and feature suggestions: `user_id`, `type` (bug/feature), `title`, `description`, `urgency` (low/medium/high/critical), `files` (TEXT[]), `status` (open/reviewed/in_progress/completed/declined), `created_at`, `updated_at`. Files uploaded to `user-feedback-documents` Storage bucket. **Requires `session19_user_reports.sql` migration.** |
 
 ### MTD Tables (from `mtd_tables.sql`)
 | Table | Purpose |
@@ -370,9 +361,14 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...';
 - All pages: call `supabase.auth.getSession()` on load, redirect to `login.html` if no session
 
 ### Storage
-- Bucket: `certificates`
-- Path pattern: `{prop_id}/{cert_id}`
-- Access: Signed URL downloads used in tenant portal
+- Bucket: `certificates` — path: `{prop_id}/{cert_id}`, signed URL downloads
+- Bucket: `tenant-documents` — tenant KYC docs, path: `{user_id}/{tenant_id}/{slot}_{timestamp}.{ext}`
+- Bucket: `documents` — general uploads (inspections, inventory photos, pre-tenancy audit PDFs)
+- Bucket: `user-feedback-documents` — feedback file uploads, path: `user-feedback-documents/{user_id}/{timestamp}_{index}.{ext}` (Session 19)
+- Bucket: `signed-documents` — completed e-sign PDFs
+- Bucket: `esign-documents` — e-sign document storage
+- Bucket: `pretenancy-audits` — pre-tenancy checklist audit PDFs
+- Access: Signed URL downloads used where needed; RLS policies control upload access
 
 ### Edge Function Secrets (set in Supabase Dashboard → Project Settings → Edge Functions → Secrets)
 | Secret | Purpose |
@@ -532,7 +528,8 @@ All migrations run manually in **Supabase → SQL Editor** (no automated migrati
 | `session10_multi_doc.sql` | Drops `tenant_documents_slot_unique` index; adds `issuing_authority`, `doc_type_extracted` columns | Already run |
 | `session10_tenants_columns.sql` | Adds 13 missing columns to `tenants`: `type`, `rent_day`, `scheme_ref`, `rtr_*` (6), `addr_proof_*` (2), `is_lead`, `invite_used` | Run now |
 | `session11_landlord_sig.sql` | Adds landlord signature columns to `esign_requests`: `landlord_name`, `landlord_signed_at`, `landlord_sig_png` | Independent |
-| `session11_feedback_table.sql` / `sprint11_feedback_table.sql` | Creates `user_feedback` table for in-app feedback | Independent |
+| `sprint11_feedback_table.sql` | Creates `feedback` table for in-app feedback | Independent |
+| `session19_user_reports.sql` | Creates `user_reports` table for bug reports and feature suggestions with full RLS | Independent |
 
 > **Note:** `session14_tenant_checklist.sql`, `session14_trial_fields.sql`, `session14_rent_payments.sql`, and `session13_inventory_reports.sql` are referenced in the change log below but do not yet exist as files in the repo. They must be created before the corresponding DB features can be deployed.
 
