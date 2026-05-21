@@ -1497,6 +1497,22 @@ const PROPERTY_STATUS = {
   archived:        { label:'Archived',        colour:'var(--muted)',  badge:'⚫' }
 };
 function _statusPillClr(s){ const m={vacant:'rgba(217,119,6,',active:'rgba(232,146,58,',refurbishment:'rgba(59,130,246,',archived:'rgba(107,122,122,'}; return m[s]||'rgba(107,122,122,'; }
+
+/** Returns properties excluding those permanently archived as Sold. */
+function activeProperties() {
+  return D.properties.filter(p => !(p.status === 'archived' && p.archive_reason === 'Sold'));
+}
+
+/** Reinstates an archived property back to vacant status. Not available for Sold properties. */
+async function reinstateProperty(pid) {
+  const p = P(pid); if (!p) return;
+  if (p.archive_reason === 'Sold') { toast('Sold properties cannot be reinstated', true); return; }
+  const { error } = await sb.from('properties').update({ status: 'vacant', archive_reason: null, archived_at: null, vacant_since: new Date().toISOString() }).eq('id', pid);
+  if (error) { toast('Error: ' + error.message, true); return; }
+  if (p) { p.status = 'vacant'; p.archive_reason = null; p.archived_at = null; p.vacant_since = new Date().toISOString(); }
+  await logAudit('REINSTATE_PROPERTY', 'properties', pid, 'Reinstated from archive');
+  toast('✓ Property reinstated as Vacant'); nav(window._currentPage, window._currentParam);
+}
 async function redirectToCheckout(plan) {
   try {
     const { data: { session } } = await sb.auth.getSession();
@@ -2066,7 +2082,7 @@ function _toggleCertExpiry() {
 
 function moCert(pid){
   if (_expiredGuard('Upload certificate')) return;
-  const opts=D.properties.map(p=>`<option value="${p.id}"${p.id==pid?' selected':''}>${p.address}, ${p.city}</option>`).join('');
+  const opts=activeProperties().map(p=>`<option value="${p.id}"${p.id==pid?' selected':''}>${p.address}, ${p.city}</option>`).join('');
   openMo('Add certificate','Upload document — AI will scan and fill details',`
     <div class="scan-box" id="sb-scan">
       <input type="file" accept=".pdf,.jpg,.jpeg,.png" onchange="scanDoc(this)">
@@ -3193,7 +3209,7 @@ function scanRTRDoc(input) {
 window._bulkScan = { files:[], results:[], pid:'' };
 
 function moBulkScan(pid) {
-  const propOpts = D.properties.map(p=>`<option value="${p.id}"${String(p.id)===String(pid||'')?' selected':''}>${p.address}, ${p.city}</option>`).join('');
+  const propOpts = activeProperties().map(p=>`<option value="${p.id}"${String(p.id)===String(pid||'')?' selected':''}>${p.address}, ${p.city}</option>`).join('');
   if (!D.properties.length) { toast('Add a property first', true); return; }
   window._bulkScan = { files:[], results:[], pid: pid||String(D.properties[0]?.id||'') };
 
@@ -4385,7 +4401,7 @@ async function sendWelcomeKit(pid) {
 // ── MODAL: MAINTENANCE ISSUE ──
 function moIssue(pid){
   if (_expiredGuard('Report issue')) return;
-  const opts=D.properties.map(p=>`<option value="${p.id}"${p.id==pid?' selected':''}>${p.address}, ${p.city}</option>`).join('');
+  const opts=activeProperties().map(p=>`<option value="${p.id}"${p.id==pid?' selected':''}>${p.address}, ${p.city}</option>`).join('');
   openMo('Report maintenance issue','Log a new job for this property',`
     <div class="fg"><label>Property <span class="req">*</span></label><select id="i-prop">${opts}</select></div>
     <div class="fg-row">
@@ -4869,7 +4885,9 @@ function pgProperties(){
       +'</div>'
       +'<div style="flex:1.5;min-width:0;display:flex;align-items:center;gap:6px">'
         +(isArchived
-          ?'<span class="badge b-gray">🔒 Read only</span>'
+          ? (p.archive_reason==='Sold'
+              ? '<span class="badge" style="background:rgba(229,62,62,0.08);color:var(--red)">🔒 Sold — locked</span>'
+              : '<span class="badge" style="background:rgba(217,119,6,0.08);color:var(--amber);cursor:pointer" onclick="event.stopPropagation();reinstateProperty(\''+p.id+'\')" title="Click to reinstate">⚫ Archived — ' + (p.archive_reason||'Other') + ' ↺</span>')
           :'<span style="font-size:11px;font-weight:600;color:'+ps.colour+';background:'+(_statusPillClr(p.status))+'0.1);padding:2px 8px;border-radius:100px;cursor:pointer" onclick="event.stopPropagation();moPropertyStatus(\''+p.id+'\')" title="Click to change status">'+ps.badge+' '+ps.label+'</span>'
         )
       +'</div>'
@@ -5690,7 +5708,11 @@ function pgPropDetail(pid) {
       if (sk === 'vacant')       btns = btn('Start Tenancy', 'btn-navy', `startTenancy('${pid}')`) + btn('🧹 Prepare to Re-let', '', `moPreparRelet('${pid}')`) + btn('Archive', '', `archiveProperty('${pid}')`);
       else if (sk === 'active')   btns = btn('✍️ E-sign Agreement', '', `moEsign('${pid}','${t?t.id:''}')`) + btn('End Tenancy', '', `endTenancy('${pid}')`) + btn('Archive', '', `archiveProperty('${pid}')`);
       else if (sk === 'refurbishment') btns = btn('Mark Ready', 'btn-navy', `markRefurbReady('${pid}')`) + btn('Archive', '', `archiveProperty('${pid}')`);
-      else if (sk === 'archived') btns = `<span style="font-size:12px;color:var(--muted);font-weight:500;padding:7px 0">📋 View History</span>` + btn('🧹 Prepare to Re-let', '', `moPreparRelet('${pid}')`);
+      else if (sk === 'archived') {
+        const isSold = p.archive_reason === 'Sold';
+        btns = `<span style="font-size:12px;color:var(--muted);font-weight:500;padding:7px 0">${isSold ? '🔒 Sold — read only' : '📋 Archived — ' + (p.archive_reason||'')}</span>`;
+        if (!isSold) btns += btn('🔄 Reinstate', 'btn-navy', `reinstateProperty('${pid}')`);
+      }
       return btns ? `<div style="display:flex;align-items:center;gap:8px;margin-bottom:18px">${btns}</div>` : '';
     })()}
 
@@ -8566,7 +8588,7 @@ async function markRentPaid(idOrPid, dueDate) {
 }
 function moAddPayment(prefPropId, editId) {
   const rec = editId ? D.rent.find(r=>String(r.id)===String(editId)) : null;
-  const propOpts = D.properties.map(p=>`<option value="${p.id}"${String(p.id)===(rec?String(rec.prop_id):String(prefPropId||''))?' selected':''}>${p.address}${p.city?', '+p.city:''}</option>`).join('');
+  const propOpts = activeProperties().map(p=>`<option value="${p.id}"${String(p.id)===(rec?String(rec.prop_id):String(prefPropId||''))?' selected':''}>${p.address}${p.city?', '+p.city:''}</option>`).join('');
   const today = new Date().toISOString().slice(0,10);
   const thisMonth = new Date().toISOString().slice(0,7);
   const tenantEmail = () => { const pid = rec?.prop_id||prefPropId; const t = D.tenants.find(t=>String(t.prop_id)===String(pid)&&t.status==='Active'); return t?.email||''; };
@@ -8705,7 +8727,7 @@ function pgInspections() {
     {label:'Overdue',val:overdue,icon:'⚠️',col:'var(--red)'},
     {label:'Properties covered',val:D.properties.filter(p=>(p.inspections||[]).length>0).length,icon:'✅',col:'var(--green-dark)'},
   ].map(c=>`<div class="mc"><div class="mc-top"><span class="mc-label">${c.label}</span><div class="mc-icon">${c.icon}</div></div><div class="mc-val" style="color:${c.col}">${c.val}</div></div>`).join('');
-  const cards = D.properties.map(p=>{
+  const cards = activeProperties().map(p=>{
     const inspList = (p.inspections||[]).slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
     const last = inspList[0];
     const nextDates = inspList.map(i=>i.next_inspection).filter(Boolean).sort().reverse();
@@ -8747,7 +8769,7 @@ function pgInspections() {
 }
 
 function moAddInspection(inspIdx, prefPropId) {
-  const propOpts = D.properties.map(p=>`<option value="${p.id}"${String(p.id)===String(prefPropId||'')?' selected':''}>${p.address}${p.city?', '+p.city:''}</option>`).join('');
+  const propOpts = activeProperties().map(p=>`<option value="${p.id}"${String(p.id)===String(prefPropId||'')?' selected':''}>${p.address}${p.city?', '+p.city:''}</option>`).join('');
   const today = new Date().toISOString().slice(0,10);
   openMo('Log Inspection','Record a property inspection',`
     <div class="fg"><label>Property <span class="req">*</span></label><select id="insp-prop">${propOpts}</select></div>
@@ -8838,7 +8860,7 @@ async function saveInspection(pid) {
 // ── PAGE: INVENTORY REPORTS (full-page view) ──
 function pgInventoryReports() {
   const reports = D._invReports || [];
-  const propOpts = `${D.properties.map(p=>`<option value="${p.id}">${p.address}${p.city?' · '+p.city:''}</option>`).join('')}`;
+  const propOpts = `${activeProperties().map(p=>`<option value="${p.id}">${p.address}${p.city?' · '+p.city:''}</option>`).join('')}`;
   return `<div class="topbar"><span class="tb-title">Inventory Reports</span><div class="tb-right">
     <button class="btn btn-navy" onclick="moInventoryReport()">+ New report</button>
   </div></div>
@@ -9123,7 +9145,7 @@ function pgMaintenance(){
 
   // Property filter options
   const propOpts = `<option value="">All properties</option>` +
-    D.properties.map(p=>`<option value="${p.id}"${String(p.id)===String(_mfilterProp)?' selected':''}>${p.address}</option>`).join('');
+    activeProperties().map(p=>`<option value="${p.id}"${String(p.id)===String(_mfilterProp)?' selected':''}>${p.address}</option>`).join('');
   const priOpts = ['','Urgent','High','Medium','Low'].map(v=>
     `<option value="${v}"${v===_mfilterPri?' selected':''}>${v||'All priorities'}</option>`).join('');
 
@@ -9382,7 +9404,7 @@ function pgInsurance(){
     {label:'Missing policies',val:missing,icon:'❌',col:'var(--muted)'},
     {label:'Active policies',val:D.insurance.filter(i=>i.status==='Active').length,icon:'✅',col:'var(--green-dark)'},
   ].map(c=>`<div class="mc"><div class="mc-top"><span class="mc-label">${c.label}</span><div class="mc-icon">${c.icon}</div></div><div class="mc-val" style="color:${c.col}">${c.val}</div></div>`).join('');
-  const cards = D.properties.map(p=>{
+  const cards = activeProperties().map(p=>{
     const pIns = D.insurance.filter(i=>String(i.prop_id)===String(p.id));
     const pCerts = D.certs.filter(c=>String(c.prop_id)===String(p.id));
     const slots = INS_TYPES.map(type=>{
@@ -9440,7 +9462,7 @@ function pgInsurance(){
 
 function moAddInsurance(insId, prefPropId, prefType) {
   const ins = insId ? D.insurance.find(i=>i.id===insId||String(i.id)===String(insId)) : null;
-  const propOpts = D.properties.map(p=>`<option value="${p.id}"${String(p.id)===(ins?String(ins.prop_id):String(prefPropId||''))?' selected':''}>${p.address}${p.city?', '+p.city:''}</option>`).join('');
+  const propOpts = activeProperties().map(p=>`<option value="${p.id}"${String(p.id)===(ins?String(ins.prop_id):String(prefPropId||''))?' selected':''}>${p.address}${p.city?', '+p.city:''}</option>`).join('');
   const INS_TYPES = ['Buildings Insurance','Landlord Contents Insurance','Rent Guarantee Insurance','Other'];
   const typeOpts = INS_TYPES.map(t=>`<option value="${t}"${(ins?.type||prefType||'Buildings Insurance')===t?' selected':''}>${t}</option>`).join('');
   openMo(ins?'Edit Insurance Policy':'Add Insurance Policy',ins?ins.type:'New policy',`
@@ -9704,7 +9726,7 @@ function pgCalendar(){
   </div>` : '';
 
   // Property filter options
-  const propOpts = `<option value="">All properties</option>`+D.properties.map(p=>`<option value="${p.id}"${String(p.id)===String(window.calProp)?' selected':''}>${p.address}</option>`).join('');
+  const propOpts = `<option value="">All properties</option>`+activeProperties().map(p=>`<option value="${p.id}"${String(p.id)===String(window.calProp)?' selected':''}>${p.address}</option>`).join('');
 
   // Event type filter chips
   const filterTypes=[
@@ -9992,7 +10014,7 @@ function pgFinancials(){
       <div class="ph2"><h2>Property breakdown</h2><p>Per property P&L — click Detail for monthly view</p></div>
       <div class="tw"><table>
         <thead><tr><th>Property</th><th>Monthly rent</th><th>Expenses</th><th>Net profit</th><th>Yield</th><th></th></tr></thead>
-        <tbody>${D.properties.map(p=>{
+        <tbody>${activeProperties().map(p=>{
           const ins=D.insurance.filter(ii=>String(ii.prop_id)===String(p.id)).reduce((s,ii)=>s+(ii.premium||0)/12,0);
           const mort=p.mortgage_monthly||0;
           const maint=getMaintCostMonthly(p.id);
@@ -10225,7 +10247,7 @@ function exportPortfolioPDF(){
   const totProfit=totRent-totMort-totIns-totMaint;
   const totYield=D.properties.length?((totRent*12)/(D.properties.reduce((s,p)=>s+(p.mortgage_outstanding||200000),0))*100).toFixed(1):0;
   const date=new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
-  const propRows=D.properties.map(p=>{
+  const propRows=activeProperties().map(p=>{
     const ins=D.insurance.filter(ii=>String(ii.prop_id)===String(p.id)).reduce((s,ii)=>s+(ii.premium||0)/12,0);
     const mort=p.mortgage_monthly||0;
     const maint=getMaintCostMonthly(p.id);
@@ -10702,7 +10724,7 @@ function mtdExportCSV() {
     ['Generated', new Date().toLocaleDateString('en-GB'),'',''],
     ['','','',''],
     ['Property','Monthly Rent','Annual Rent','Mortgage (monthly)'],
-    ...D.properties.map(p=>[p.address, p.rent||0, (p.rent||0)*12, p.mortgage_monthly||0]),
+    ...activeProperties().map(p=>[p.address, p.rent||0, (p.rent||0)*12, p.mortgage_monthly||0]),
     ['','','',''],
     ['ANNUAL SUMMARY','','',''],
     ['Total rental income', `£${totalAnnualRent.toLocaleString()}`,'',''],
@@ -11841,7 +11863,7 @@ function s8LaunchFromTemplates() {
   if (!D.properties.length) { toast('Add a property first', true); return; }
   if (D.properties.length === 1) { moSection8(D.properties[0].id); return; }
   openMo('Section 8 Generator', 'Select the property',
-    `<div class="fg"><label>Which property?</label><select id="s8-prop-sel">${D.properties.map(p=>`<option value="${p.id}">${p.address}, ${p.city}</option>`).join('')}</select></div>`,
+    `<div class="fg"><label>Which property?</label><select id="s8-prop-sel">${activeProperties().map(p=>`<option value="${p.id}">${p.address}, ${p.city}</option>`).join('')}</select></div>`,
     `<button class="btn" onclick="closeMo()">Cancel</button><button class="btn btn-navy" onclick="(function(){var v=document.getElementById('s8-prop-sel').value;closeMo();moSection8(v)})()">Start →</button>`
   );
 }
@@ -12886,7 +12908,7 @@ function updateNavBadges() {
 
 // ── AI INVENTORY REPORT ──
 function moInventoryReport(pid){
-  const propOpts=D.properties.map(p=>`<option value="${p.id}"${String(p.id)===String(pid)?' selected':''}>${p.address}, ${p.city}</option>`).join('');
+  const propOpts=activeProperties().map(p=>`<option value="${p.id}"${String(p.id)===String(pid)?' selected':''}>${p.address}, ${p.city}</option>`).join('');
   openMo('AI Inventory Report','Upload room photos — AI generates a written condition report',`
     <div style="background:linear-gradient(135deg,#0B1E3D,#1a3a6b);border-radius:10px;padding:14px 16px;margin-bottom:16px">
       <div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">✦ Save £150–300 per inspection</div>
@@ -13601,7 +13623,7 @@ function _renderS13Step(n) {
 function _s13StepHtml(n) {
   const s = window._s13;
   if (n === 1) {
-    const propOpts = D.properties.map(p=>`<option value="${p.id}"${String(p.id)===s.pid?' selected':''}>${p.address}, ${p.city}</option>`).join('');
+    const propOpts = activeProperties().map(p=>`<option value="${p.id}"${String(p.id)===s.pid?' selected':''}>${p.address}, ${p.city}</option>`).join('');
     const tenOpts  = D.tenants.filter(t=>t.status==='Active').map(t=>`<option value="${t.id}"${String(t.id)===s.tenantId?' selected':''}>${t.name}</option>`).join('') || '<option value="">No active tenants</option>';
     const p = P(s.pid);
     const tenant = D.tenants.find(t=>String(t.id)===s.tenantId);
