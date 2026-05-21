@@ -1742,6 +1742,47 @@ async function markServed(certId){
   nav(window._currentPage, window._currentParam);
 }
 
+// ── UPLOAD A SERVED-TYPE DOC (no_expiry) ──
+async function uploadServedDoc(pid, docType, input) {
+  if (!input.files[0]) return;
+  const file = input.files[0];
+  toast('⏳ Uploading…');
+  try {
+    // Upload file to storage
+    const ext = file.name.split('.').pop() || 'pdf';
+    const safeName = docType.replace(/[^a-zA-Z0-9]/g,'_').toLowerCase();
+    const fpath = 'certs/' + currentUser.id + '/' + pid + '_' + safeName + '_' + Date.now() + '.' + ext;
+    const { error: upErr } = await sb.storage.from('documents').upload(fpath, file, { contentType: file.type, upsert: true });
+    let fileUrl = null;
+    if (!upErr) {
+      const { data: urlData } = sb.storage.from('documents').getPublicUrl(fpath);
+      fileUrl = urlData?.publicUrl || null;
+    }
+    // Check if cert record already exists for this type + property
+    const existing = D.certs.find(c => String(c.prop_id) === String(pid) && (c.type||'').toLowerCase().includes(docType.toLowerCase().slice(0,20)));
+    if (existing) {
+      const updates = { has_file: true, engineer: fileUrl || existing.engineer };
+      const { error } = await sb.from('certificates').update(updates).eq('id', existing.id);
+      if (error) { toast('Error: ' + error.message, true); return; }
+      Object.assign(existing, updates);
+    } else {
+      // Create new cert record
+      const newCert = {
+        prop_id: String(pid), type: docType,
+        expiry: null, engineer: fileUrl, status: 'Uploaded',
+        has_file: true, served: false, user_id: currentUser.id
+      };
+      const { data, error } = await sb.from('certificates').insert(newCert).select().single();
+      if (error) { toast('Error: ' + error.message, true); return; }
+      D.certs.push(data);
+    }
+    toast('✓ Uploaded — now mark as served when you have given this to your tenant');
+    nav(window._currentPage, window._currentParam);
+  } catch(e) {
+    toast('Upload failed — please try again', true);
+  }
+}
+
 // ── UPLOAD & SCAN EXISTING CERT ──
 async function uploadScanCert(certId, input){
   if(!input.files[0]) return;
@@ -5954,6 +5995,16 @@ function pdTabContent(pid, tab) {
             background:var(--white);color:var(--muted);
             cursor:pointer;font-family:var(--font);
             white-space:nowrap">Manage →</button>`;
+        } else if (doc.no_expiry) {
+          // Served-type docs: separate Upload + Mark Served buttons
+          const _docTypeEsc = doc.label.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+          const _uploadServedBtn = `<label onclick="event.stopPropagation()" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:500">
+            ↑ Upload<input type="file" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="event.stopPropagation();uploadServedDoc('${pid}','${_docTypeEsc}',this)">
+          </label>`;
+          const _markServedBtn = _certRec
+            ? `<button onclick="event.stopPropagation();markServed('${_certRec.id}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid ${_certRec.served ? 'var(--green-dark)' : 'rgba(217,119,6,0.4)'};background:${_certRec.served ? 'var(--green-bg)' : 'rgba(217,119,6,0.07)'};color:${_certRec.served ? 'var(--green-dark)' : '#D97706'};cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:600">${_certRec.served ? '✓ Served' : '○ Mark served'}</button>`
+            : `<button onclick="event.stopPropagation();toast('Upload the document first, then mark as served',true)" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--off);color:var(--muted);cursor:pointer;font-family:var(--font);white-space:nowrap;opacity:0.6">○ Mark served</button>`;
+          rowAction = `${_viewBtn}${_deleteBtn}${_uploadServedBtn}${_markServedBtn}`;
         } else if (st.overdue) {
           rowAction = `${_editBtn}${_viewBtn}${_deleteBtn}
             <button onclick="moCert('${pid}')"
@@ -8549,11 +8600,16 @@ function pgRent(){
     </div>
     ${D.rent.length?`<div class="panel"><div class="tw"><table>
       <thead><tr><th>Property</th><th>Month</th><th>Amount</th><th>Due</th><th>Paid</th><th>Status</th><th></th></tr></thead>
-      <tbody>${D.rent.map(r=>{const p=P(r.prop_id)||{address:'—',city:''};return`<tr>
+      <tbody>${D.rent.map(r=>{const p=P(r.prop_id)||{address:'—',city:''};
+        const _isDue = r.status==='Due'||r.status==='Late';
+        const _markBtn = _isDue
+          ? `<button onclick="markRentReceived('${r.prop_id}','${r.month}','${r.due_date||r.due}',${r.amount||0})" style="font-size:11px;padding:3px 10px;border-radius:6px;border:1px solid var(--green-dark);background:var(--green-bg);color:var(--green-dark);cursor:pointer;font-family:var(--font);font-weight:600">✓ Mark received</button>`
+          : `<button onclick="moAddPayment('${r.prop_id}',${r.id})" style="font-size:11px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:none;cursor:pointer;font-family:var(--font)">Edit</button>`;
+        return`<tr>
         <td class="td-bold">${p.address}</td><td>${r.month}</td>
         <td>£${(r.amount||0).toLocaleString()}</td><td>${FMS(r.due||r.due_date)}</td>
         <td>${r.paid||r.paid_date?FMS(r.paid||r.paid_date):'—'}</td><td>${B(r.status)}</td>
-        <td><button onclick="moAddPayment('${r.prop_id}',${r.id})" style="font-size:11px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:none;cursor:pointer;font-family:var(--font)">Edit</button></td>
+        <td style="text-align:right">${_markBtn}</td>
       </tr>`}).join('')}</tbody>
     </table></div></div>`:'<div class="empty"><div class="empty-ic">💷</div><div class="empty-t">No rent records yet</div></div>'}
   </div>`;
@@ -13702,8 +13758,11 @@ function _s13StepHtml(n) {
     </div>`;
     return `
     <div style="font-size:15px;font-weight:600;margin-bottom:2px">Review & send</div>
-    <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Review the notice below then send to tenant</div>
-    <div style="border:1px solid var(--border);border-radius:10px;padding:20px;max-height:50vh;overflow-y:auto;margin-bottom:14px;background:var(--white)">${window._s13.noticeHtml}</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:10px">Review the notice below then send to tenant</div>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+      <button onclick="s13DownloadPdf()" style="font-size:11px;padding:4px 12px;border-radius:6px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);font-weight:600;display:flex;align-items:center;gap:5px">⬇ Download PDF</button>
+    </div>
+    <div id="s13-preview-wrap" style="border:1px solid var(--border);border-radius:10px;padding:20px;max-height:50vh;overflow-y:auto;margin-bottom:14px;background:var(--white)">${window._s13.noticeHtml}</div>
     <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
       <div style="font-size:12px;font-weight:700;color:var(--txt);margin-bottom:10px">Delivery</div>
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px">
@@ -13783,6 +13842,27 @@ function s13Back() {
   window._s13.step--;
   _renderS13Step(window._s13.step);
   document.querySelector('.mo-box')?.scrollTo?.(0,0);
+}
+
+function s13DownloadPdf() {
+  const s = window._s13;
+  if (!s.noticeHtml) { toast('Notice not ready — please complete step 2 first', true); return; }
+  const p = P(s.pid);
+  const tenant = D.tenants.find(t => String(t.id) === s.tenantId);
+  const propAddr = [p?.address, p?.city, p?.postcode].filter(Boolean).join(', ');
+  const fileName = 'S13_Notice_' + (p?.address||'Property').replace(/[^a-zA-Z0-9]/g,'_') + '_' + new Date().toISOString().slice(0,10) + '.html';
+  const fullHtml = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Section 13 Notice — ${propAddr}</title>
+  <style>body{font-family:Georgia,serif;font-size:13px;line-height:1.8;color:#1A2B45;max-width:700px;margin:40px auto;padding:20px}
+  @media print{body{margin:0;padding:20px}button{display:none!important}}</style></head>
+  <body>${s.noticeHtml}
+  <script>window.onload=function(){window.print();}<\/script>
+  </body></html>`;
+  const blob = new Blob([fullHtml], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = fileName; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  toast('✓ Downloaded — open in browser and use Print → Save as PDF');
 }
 
 async function _sendS13() {
