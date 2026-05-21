@@ -39,6 +39,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 const STRIPE_SECRET_KEY    = Deno.env.get('STRIPE_SECRET_KEY')!;
 const STRIPE_WEBHOOK_SECRET = Deno.env.get('STRIPE_WEBHOOK_SECRET')!;
 
+/** Maps Stripe Price IDs to plan names for the stripe_subscriptions table. */
+const PRICE_TO_PLAN: Record<string, string> = {
+  'price_1TYw3tICNn8XxxhbIhMQ47XE': 'starter',
+  'price_1TYwEuICNn8XxxhbXpY1bl1O': 'landlord',
+  'price_1TYwIHICNn8Xxxhbw76LS7h5': 'portfolio',
+};
+
 // ── CLIENTS ──────────────────────────────────────────────────────────────────
 
 const stripe = new Stripe(STRIPE_SECRET_KEY, {
@@ -94,13 +101,16 @@ Deno.serve(async (req: Request) => {
           session.subscription as string,
         );
 
+        const priceId = subscription.items.data[0].price.id;
+        const planName = PRICE_TO_PLAN[priceId] ?? 'unknown';
+
         const { error } = await sb.from('stripe_subscriptions').upsert(
           {
             user_id:                userId,
             stripe_customer_id:     session.customer as string,
             stripe_subscription_id: subscription.id,
-            stripe_price_id:        subscription.items.data[0].price.id,
-            plan_name:              session.metadata?.plan ?? 'unknown',
+            stripe_price_id:        priceId,
+            plan_name:              planName,
             status:                 subscription.status,
             current_period_start:   _ts(subscription.current_period_start),
             current_period_end:     _ts(subscription.current_period_end),
@@ -113,7 +123,7 @@ Deno.serve(async (req: Request) => {
         if (error) {
           console.error('[stripe-webhook] DB upsert error (checkout.session.completed):', error);
         } else {
-          console.log('[stripe-webhook] Subscription created for user', userId, '— plan:', session.metadata?.plan);
+          console.log('[stripe-webhook] Subscription created for user', userId, '— plan:', planName);
         }
         break;
       }
