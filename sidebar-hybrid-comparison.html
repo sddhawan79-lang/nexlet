@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sidebar — OLD vs NEW Comparison</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#0B1E3D;--navy-mid:#132847;--green:#00C896;--green-dark:#009970;
+  --white:#fff;--off:#F6F8FB;--border:#E4EAF1;--txt:#1A2B45;
+  --muted:#7A8FA6;--red:#E53E3E;--amber:#D97706;--blue:#3B6FE8;
+  --font:'DM Sans',system-ui,sans-serif;--disp:'DM Serif Display',Georgia,serif;
+}
+body{font-family:var(--font);background:#dce2ea;padding:30px 0}
+h2.section{font-family:var(--disp);font-size:20px;text-align:center;margin:24px 0 16px;color:var(--txt)}
+.compare{display:flex;gap:32px;justify-content:center;flex-wrap:wrap;padding:0 20px 60px}
+.col{display:flex;flex-direction:column;align-items:center}
+.col-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:12px;padding:4px 14px;border-radius:100px;background:var(--white)}
+.col-label.old{border:1px solid #ccc}
+.col-label.new{background:var(--green);color:#fff}
+
+/* shared sidebar styles */
+.sb{width:240px;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.12);height:fit-content}
+.sb-old{background:#0a1a30}
+.sb-new{background:var(--navy)}
+.sb-logo{font-family:var(--disp);font-size:20px;color:#fff;padding:18px 20px 14px;display:block;text-decoration:none}
+.sb-logo span{color:var(--green)}
+.sb-nav{padding:0 10px 10px}
+.sb-gh{display:flex;align-items:center;gap:6px;padding:10px 10px 6px;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,0.25);cursor:pointer;user-select:none;margin-top:2px}
+.sb-gh .chev{font-size:8px;transition:transform .2s;margin-right:2px}
+.sb-gh .gbadge{font-size:9px;font-weight:700;color:#fff;background:var(--red);padding:1px 7px;border-radius:100px;margin-left:auto}
+.sb-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;color:rgba(255,255,255,0.55);font-size:13px;cursor:pointer;transition:all .15s;text-decoration:none}
+.sb-item:hover{background:rgba(255,255,255,0.06);color:#fff}
+.sb-item.active{background:rgba(255,255,255,0.1);color:#fff;font-weight:600}
+.sb-item svg{width:15px;height:15px;opacity:.6;flex-shrink:0}
+.sb-item.active svg{opacity:1}
+.sb-item .pill{font-size:9px;font-weight:700;color:#fff;background:var(--red);padding:1px 7px;border-radius:100px;margin-left:auto}
+.sb-item .pill.amber{background:var(--amber)}
+.sb-gb{padding:0 0 4px 6px}
+.sb-gb.collapsed{display:none}
+.sb-secondary .sb-item{font-size:12px;opacity:.75}
+.sb-div{border-top:1px solid rgba(255,255,255,0.08);margin:8px 10px}
+.sb-ai{background:rgba(0,200,150,0.08);border:1px solid rgba(0,200,150,0.2);border-radius:10px;padding:12px 14px;margin:8px 10px 0;color:var(--green);font-size:13px;display:flex;align-items:center;gap:8px;cursor:pointer}
+.sb-ai svg{width:16px;height:16px;flex-shrink:0}
+.sb-footer{display:flex;align-items:center;gap:10px;padding:12px 16px;border-top:1px solid rgba(255,255,255,0.08)}
+.sb-avatar{width:30px;height:30px;border-radius:50%;background:var(--green);color:var(--navy);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex-shrink:0}
+.sb-user{flex:1;min-width:0}
+.sb-user .name{font-size:12px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-user .plan{font-size:10px;color:var(--green)}
+.sb-feedback{font-size:10px;color:rgba(255,255,255,0.3);cursor:pointer;text-align:center;padding:6px 10px 12px}
+/* inline SVG helper */
+.s-icon{width:15px;height:15px;flex-shrink:0;opacity:.6}
+</style>
+</head>
+<body>
+
+<h2 class="section">CURRENT SIDEBAR &nbsp;vs&nbsp; PROPOSED HYBRID</h2>
+<div class="compare">
+
+<!-- ════════ OLD / CURRENT SIDEBAR ════════ -->
+<div class="col">
+  <div class="col-label old">Current (17 visible items, 5 groups)</div>
+  <div class="sb sb-old">
+    <a class="sb-logo">Nex<span>Let</span></a>
+    <div class="sb-nav">
+      <div class="sb-item active">
+        <svg class="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Dashboard
+      </div>
+      <div class="sb-gh"><span class="chev">▾</span>My Properties</div>
+      <div class="sb-gb">
+        <div class="sb-item"><svg class="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>Properties <span class="pill amber">2</span></div>
+        <div class="sb-item"><svg class="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M6 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/></svg>Tenants</div>
+        <div class="sb-item"><svg class="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.5 2.5a3 3 0 00-4 4L2 11a1.5 1.5 0 002 2l4.5-4.5a3 3 0 004-4l-2 2-1.5-1.5 2-2z"/></svg>Contractors</div>
+      </div>
+      <div class="sb-gh"><span class="chev">▾</span>Compliance</div>
+      <div class="sb-gb">
+        <div class="sb-item"><svg class="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Compliance <span class="pill">2</span></div>
+        <div class="sb-item"><svg class="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/></svg>Insurance</div>
+        <div class="sb-item"><svg class="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/></svg>Inspections</div>
+        <div class="sb-item"><svg class="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Inventory Reports</div>
+      </div>
+      <div class="sb-gh"><span class="chev">▾</span>Activity</div>
+      <div class="sb-gb">
+        <div class="sb-item"><svg class="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.5 2.5a3 3 0 00-4 4L2 11a1.5 1.5 0 002 2l4.5-4.5a3 3 0 004-4l-2 2-1.5-1.5 2-2z"/></svg>Maintenance <span class="pill">1</span></div>
+        <div class="sb-item"><svg class="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/></svg>Calendar</div>
+      </div>
+      <div class="sb-gh"><span class="chev">▾</span>Finance & Tax</div>
+      <div class="sb-gb">
+        <div class="sb-item"><svg class="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/></svg>Finance</div>
+        <div class="sb-item"><svg class="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/></svg>Rent Tracker</div>
+        <div class="sb-item"><svg class="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/></svg>MTD Tax</div>
+      </div>
+      <div class="sb-gh"><span class="chev">▾</span>Documents</div>
+      <div class="sb-gb">
+        <div class="sb-item"><svg class="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/></svg>Templates</div>
+        <div class="sb-item"><svg class="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>Document Library</div>
+      </div>
+      <div class="sb-div"></div>
+      <div class="sb-item" style="color:var(--green)"><svg class="s-icon" style="opacity:.8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>AI Assistant</div>
+      <div class="sb-item"><svg class="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/></svg>Feedback</div>
+    </div>
+    <div class="sb-footer">
+      <div class="sb-avatar">JD</div>
+      <div class="sb-user"><div class="name">James Donovan</div><div class="plan">Landlord plan</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════ NEW / HYBRID SIDEBAR ════════ -->
+<div class="col">
+  <div class="col-label new">Hybrid (9 visible, 6 collapsed, 3 groups)</div>
+  <div class="sb sb-new">
+    <a class="sb-logo">Nex<span>Let</span></a>
+    <div class="sb-nav">
+      <div class="sb-gh"><span class="chev">▾</span>My Portfolio <span class="gbadge" style="background:var(--amber)">1</span></div>
+      <div class="sb-gb">
+        <div class="sb-item active"><svg class="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</div>
+        <div class="sb-item"><svg class="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>Properties <span class="pill amber">2</span></div>
+        <div class="sb-item"><svg class="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M6 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/></svg>Tenants</div>
+      </div>
+      <div class="sb-gh"><span class="chev">▾</span>Staying Legal <span class="gbadge">3</span></div>
+      <div class="sb-gb">
+        <div class="sb-item"><svg class="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Compliance <span class="pill">2</span></div>
+        <div class="sb-item"><svg class="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Maintenance <span class="pill">1</span></div>
+        <div class="sb-item"><svg class="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/></svg>Calendar</div>
+      </div>
+      <div class="sb-gh"><span class="chev">▾</span>Money</div>
+      <div class="sb-gb">
+        <div class="sb-item"><svg class="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/></svg>Rent Tracker</div>
+        <div class="sb-item"><svg class="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/></svg>Finance</div>
+        <div class="sb-item"><svg class="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/></svg>MTD Tax</div>
+      </div>
+      <div class="sb-gh"><span class="chev">▸</span>Tools & Records</div>
+      <div class="sb-gb collapsed sb-secondary">
+        <div class="sb-item"><svg class="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/></svg>Templates</div>
+        <div class="sb-item"><svg class="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>Document Library</div>
+        <div class="sb-item"><svg class="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/></svg>Contractors</div>
+        <div class="sb-item"><svg class="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>Insurance</div>
+        <div class="sb-item"><svg class="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/></svg>Inspections</div>
+        <div class="sb-item"><svg class="s-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Inventory Reports</div>
+      </div>
+    </div>
+    <div class="sb-ai">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"/><path d="M16 12H8M12 8v8"/></svg>
+      Ask AI Assistant
+    </div>
+    <div class="sb-footer">
+      <div class="sb-avatar">JD</div>
+      <div class="sb-user"><div class="name">James Donovan</div><div class="plan">Landlord plan</div></div>
+    </div>
+    <div class="sb-feedback">Send feedback</div>
+  </div>
+</div>
+
+</div>
+
+<h2 class="section" style="margin-top:8px">Changes mapped 1:1</h2>
+<table style="margin:0 auto 60px;border-collapse:collapse;font-size:13px;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.06)">
+<thead><tr style="background:var(--navy);color:#fff">
+  <th style="padding:10px 20px;text-align:left;font-weight:600">Current item</th>
+  <th style="padding:10px 20px;text-align:left;font-weight:600">Hybrid placement</th>
+  <th style="padding:10px 20px;text-align:left;font-weight:600">Reason</th>
+</tr></thead>
+<tbody style="color:var(--txt)">
+<tr style="background:#f8fafc"><td style="padding:8px 20px">Dashboard (standalone)</td><td style="padding:8px 20px">My Portfolio group</td><td style="padding:8px 20px;font-size:12px;color:var(--muted)">Dashboard IS your portfolio overview</td></tr>
+<tr><td style="padding:8px 20px">Properties</td><td style="padding:8px 20px">My Portfolio</td><td style="padding:8px 20px;font-size:12px;color:var(--muted)">Unchanged</td></tr>
+<tr style="background:#f8fafc"><td style="padding:8px 20px">Tenants</td><td style="padding:8px 20px">My Portfolio</td><td style="padding:8px 20px;font-size:12px;color:var(--muted)">Unchanged</td></tr>
+<tr><td style="padding:8px 20px">Compliance</td><td style="padding:8px 20px">Staying Legal</td><td style="padding:8px 20px;font-size:12px;color:var(--muted)">Renamed group</td></tr>
+<tr style="background:#f8fafc"><td style="padding:8px 20px">Maintenance</td><td style="padding:8px 20px">Staying Legal</td><td style="padding:8px 20px;font-size:12px;color:var(--muted)">Awaab's Law = maintenance IS compliance</td></tr>
+<tr><td style="padding:8px 20px">Calendar</td><td style="padding:8px 20px">Staying Legal</td><td style="padding:8px 20px;font-size:12px;color:var(--muted)">Cert expiry dates + inspection scheduling</td></tr>
+<tr style="background:#f8fafc"><td style="padding:8px 20px">Rent Tracker</td><td style="padding:8px 20px">Money</td><td style="padding:8px 20px;font-size:12px;color:var(--muted)">Renamed group, reordered (rent first)</td></tr>
+<tr><td style="padding:8px 20px">Finance</td><td style="padding:8px 20px">Money</td><td style="padding:8px 20px;font-size:12px;color:var(--muted)">Renamed group</td></tr>
+<tr style="background:#f8fafc"><td style="padding:8px 20px">MTD Tax</td><td style="padding:8px 20px">Money</td><td style="padding:8px 20px;font-size:12px;color:var(--muted)">Unchanged</td></tr>
+<tr><td style="padding:8px 20px">Insurance</td><td style="padding:8px 20px">Tools & Records (collapsed)</td><td style="padding:8px 20px;font-size:12px;color:var(--muted)">Low frequency — renew once a year</td></tr>
+<tr style="background:#f8fafc"><td style="padding:8px 20px">Inspections</td><td style="padding:8px 20px">Tools & Records (collapsed)</td><td style="padding:8px 20px;font-size:12px;color:var(--muted)">Occasional use</td></tr>
+<tr><td style="padding:8px 20px">Inventory Reports</td><td style="padding:8px 20px">Tools & Records (collapsed)</td><td style="padding:8px 20px;font-size:12px;color:var(--muted)">Move-in/move-out only</td></tr>
+<tr style="background:#f8fafc"><td style="padding:8px 20px">Contractors</td><td style="padding:8px 20px">Tools & Records (collapsed)</td><td style="padding:8px 20px;font-size:12px;color:var(--muted)">Rarely browsed — assigned from jobs</td></tr>
+<tr><td style="padding:8px 20px">Templates</td><td style="padding:8px 20px">Tools & Records (collapsed)</td><td style="padding:8px 20px;font-size:12px;color:var(--muted)">Occasional document generation</td></tr>
+<tr style="background:#f8fafc"><td style="padding:8px 20px">Document Library</td><td style="padding:8px 20px">Tools & Records (collapsed)</td><td style="padding:8px 20px;font-size:12px;color:var(--muted)">Archive — not daily</td></tr>
+<tr><td style="padding:8px 20px">AI Assistant (below divider)</td><td style="padding:8px 20px">Standalone card below groups</td><td style="padding:8px 20px;font-size:12px;color:var(--muted)">More prominent, not buried as nav item</td></tr>
+<tr style="background:#f8fafc"><td style="padding:8px 20px">Feedback (nav item)</td><td style="padding:8px 20px">Tiny link in footer</td><td style="padding:8px 20px;font-size:12px;color:var(--muted)">Not a feature — just a link</td></tr>
+</tbody>
+</table>
+
+</body>
+</html>

@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sidebar Redesign Preview — NexLet</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#0B1E3D;--navy-mid:#132847;--green:#00C896;--green-dark:#009970;
+  --white:#fff;--off:#F6F8FB;--border:#E4EAF1;--txt:#1A2B45;
+  --muted:#7A8FA6;--red:#E53E3E;--amber:#D97706;--blue:#3B6FE8;
+  --font:'DM Sans',system-ui,sans-serif;--disp:'DM Serif Display',Georgia,serif;
+}
+body{font-family:var(--font);background:#E8ECF1;display:flex;justify-content:center;align-items:flex-start;padding:40px 20px;min-height:100vh}
+.wrapper{display:flex;gap:24px;max-width:1100px;width:100%}
+/* ── SIDEBAR ── */
+.sidebar{width:240px;background:var(--navy);border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.12);height:fit-content;position:sticky;top:40px}
+.sb-logo{font-family:var(--disp);font-size:20px;color:#fff;padding:18px 20px 14px;display:block;text-decoration:none}
+.sb-logo span{color:var(--green)}
+.sb-nav{padding:0 10px 10px;max-height:calc(100vh - 280px);overflow-y:auto}
+/* group header */
+.sb-gh{display:flex;align-items:center;gap:6px;padding:10px 10px 6px;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,0.25);cursor:pointer;user-select:none;margin-top:2px}
+.sb-gh .chev{font-size:8px;transition:transform .2s;margin-right:2px}
+.sb-gh .badge{gap:0px;margin-left:auto;font-size:9px;font-weight:700;color:#fff;background:var(--red);padding:1px 7px;border-radius:100px;display:none}
+.sb-gh .badge.show{display:inline-block}
+/* nav items */
+.sb-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;color:rgba(255,255,255,0.55);font-size:13px;cursor:pointer;transition:all .15s;text-decoration:none;position:relative}
+.sb-item:hover{background:rgba(255,255,255,0.06);color:#fff}
+.sb-item.active{background:rgba(255,255,255,0.1);color:#fff;font-weight:600}
+.sb-item svg{width:16px;height:16px;opacity:.6;flex-shrink:0}
+.sb-item.active svg{opacity:1}
+.sb-item .pill{font-size:9px;font-weight:700;color:#fff;background:var(--red);padding:1px 7px;border-radius:100px;margin-left:auto;display:none}
+.sb-item .pill.amber{background:var(--amber)}
+.sb-item .pill.show{display:inline-block}
+/* group body */
+.sb-gb{padding:0 0 4px 6px}
+.sb-gb.collapsed{display:none}
+/* secondary / Tools group — muted */
+.sb-secondary .sb-item{font-size:12px;opacity:.75}
+.sb-secondary .sb-item:hover{opacity:1}
+/* AI assistant — special card */
+.sb-ai{background:rgba(0,200,150,0.08);border:1px solid rgba(0,200,150,0.2);border-radius:10px;padding:12px 14px;margin:8px 10px 0;color:var(--green);font-size:13px;display:flex;align-items:center;gap:8px;cursor:pointer;transition:all .15s}
+.sb-ai:hover{background:rgba(0,200,150,0.14);border-color:var(--green)}
+.sb-ai svg{width:16px;height:16px;flex-shrink:0}
+/* divider */
+.sb-div{border-top:1px solid rgba(255,255,255,0.08);margin:8px 10px}
+/* footer */
+.sb-footer{display:flex;align-items:center;gap:10px;padding:12px 16px;border-top:1px solid rgba(255,255,255,0.08)}
+.sb-avatar{width:30px;height:30px;border-radius:50%;background:var(--green);color:var(--navy);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex-shrink:0}
+.sb-user{flex:1;min-width:0}
+.sb-user .name{font-size:12px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-user .plan{font-size:10px;color:var(--green)}
+.sb-feedback{font-size:10px;color:rgba(255,255,255,0.3);cursor:pointer;text-align:center;padding:6px 10px 12px}
+.sb-feedback:hover{color:var(--green)}
+/* ── MAIN CONTENT PLACEHOLDER ── */
+.main{flex:1;background:#fff;border-radius:12px;padding:32px;box-shadow:0 4px 24px rgba(0,0,0,0.06);min-height:600px}
+.main h2{font-family:var(--disp);color:var(--txt);margin-bottom:8px}
+.main p{color:var(--muted);font-size:14px;line-height:1.7}
+/* ── COMPARISON: OLD SIDEBAR ── */
+.sidebar.old{background:#0a1a30}
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+<!-- ═══════════════ NEW HYBRID SIDEBAR ═══════════════ -->
+<div class="sidebar" style="background:var(--navy)">
+  <a class="sb-logo">Nex<span>Let</span></a>
+
+  <div class="sb-nav">
+
+    <!-- group 1 — My Portfolio (always open) -->
+    <div class="sb-gh" onclick="this.nextElementSibling.classList.toggle('collapsed');this.querySelector('.chev').textContent=this.nextElementSibling.classList.contains('collapsed')?'▸':'▾'">
+      <span class="chev">▾</span>My Portfolio
+      <span class="badge show" style="background:var(--amber)">1</span>
+    </div>
+    <div class="sb-gb">
+      <div class="sb-item active">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Dashboard
+      </div>
+      <div class="sb-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        Properties
+        <span class="pill amber show">2</span>
+      </div>
+      <div class="sb-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M6 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/></svg>
+        Tenants
+      </div>
+    </div>
+
+    <!-- group 2 — Staying Legal (always open) -->
+    <div class="sb-gh" onclick="this.nextElementSibling.classList.toggle('collapsed');this.querySelector('.chev').textContent=this.nextElementSibling.classList.contains('collapsed')?'▸':'▾'">
+      <span class="chev">▾</span>Staying Legal
+      <span class="badge show">3</span>
+    </div>
+    <div class="sb-gb">
+      <div class="sb-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        Compliance
+        <span class="pill show">2</span>
+      </div>
+      <div class="sb-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        Maintenance
+        <span class="pill show">1</span>
+      </div>
+      <div class="sb-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Calendar
+      </div>
+    </div>
+
+    <!-- group 3 — Money (always open) -->
+    <div class="sb-gh" onclick="this.nextElementSibling.classList.toggle('collapsed');this.querySelector('.chev').textContent=this.nextElementSibling.classList.contains('collapsed')?'▸':'▾'">
+      <span class="chev">▾</span>Money
+    </div>
+    <div class="sb-gb">
+      <div class="sb-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+        Rent Tracker
+      </div>
+      <div class="sb-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        Finance
+      </div>
+      <div class="sb-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        MTD Tax
+      </div>
+    </div>
+
+    <!-- group 4 — Tools (collapsed by default) -->
+    <div class="sb-gh" onclick="this.nextElementSibling.classList.toggle('collapsed');this.querySelector('.chev').textContent=this.nextElementSibling.classList.contains('collapsed')?'▸':'▾'">
+      <span class="chev">▸</span>Tools & Records
+    </div>
+    <div class="sb-gb collapsed sb-secondary">
+      <div class="sb-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Templates
+      </div>
+      <div class="sb-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+        Document Library
+      </div>
+      <div class="sb-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+        Contractors
+      </div>
+      <div class="sb-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+        Insurance
+      </div>
+      <div class="sb-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Inspections
+      </div>
+      <div class="sb-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        Inventory Reports
+      </div>
+    </div>
+
+  </div>
+
+  <!-- AI Assistant card (replaces nav item) -->
+  <div class="sb-ai">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"/><path d="M16 12H8M12 8v8"/></svg>
+    Ask AI Assistant
+  </div>
+
+  <!-- Footer -->
+  <div class="sb-footer">
+    <div class="sb-avatar">JD</div>
+    <div class="sb-user">
+      <div class="name">James Donovan</div>
+      <div class="plan">Landlord plan</div>
+    </div>
+  </div>
+  <div class="sb-feedback">Send feedback</div>
+</div>
+
+<!-- ═══════════════ MAIN CONTENT ═══════════════ -->
+<div class="main">
+  <h2>Dashboard</h2>
+  <p>This is a preview of the hybrid sidebar design for NexLet.</p>
+  <p style="margin-top:12px"><strong>What changed from current:</strong></p>
+  <ul style="color:var(--muted);font-size:13px;line-height:2;padding-left:20px;margin-top:8px">
+    <li><strong>3 primary groups</strong> (Portfolio, Staying Legal, Money) — always expanded</li>
+    <li><strong>1 collapsed "Tools & Records"</strong> — contains 6 low-frequency items (Templates, Docs, Contractors, Insurance, Inspections, Inventory Reports)</li>
+    <li><strong>Dashboard moved into Portfolio</strong> group — not floating orphan at top</li>
+    <li><strong>Calendar moved into Staying Legal</strong> — cert expiry dates, inspection scheduling, maintenance deadlines all live together</li>
+    <li><strong>Maintenance + Compliance merged</strong> under "Staying Legal" — Awaab's Law makes maintenance a compliance concern</li>
+    <li><strong>AI Assistant</strong> extracted from nav items — now a standalone card below groups (always visible, not buried)</li>
+    <li><strong>Feedback</strong> moved to footer — tiny link, not a nav item with an icon</li>
+    <li><strong>Badge counts on group headers</strong> — see "Staying Legal ⚠ 3" at a glance without expanding</li>
+    <li><strong>Tools group collapsed by default</strong> — 6 items hidden until needed</li>
+    <li><strong>15 items → 9 visible, 6 collapsed</strong> — cleaner first impression</li>
+  </ul>
+</div>
+
+</div>
+</body>
+</html>
