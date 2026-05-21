@@ -52,7 +52,8 @@
 
     document.querySelectorAll('.plan-btn').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        _startCheckout(btn.dataset.price);
+        var link = btn.dataset.link;
+        if (link) window.open(link, '_blank');
       });
     });
   });
