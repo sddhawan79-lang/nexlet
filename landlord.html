@@ -1131,8 +1131,8 @@ function getDocStatus(doc, certList, insuranceList) {
     if (ins.expiry) {
       const days = Math.round((new Date(ins.expiry) - today) / 864e5);
       if (days < 0) return { lbl:'EXPIRED', bg:'rgba(229,62,62,0.1)', col:'#E53E3E', bdr:'rgba(229,62,62,0.25)', days, overdue:true, action:'insurance' };
-      if (days <= 14) return { lbl:'URGENT', bg:'rgba(217,119,6,0.1)', col:'#D97706', bdr:'rgba(217,119,6,0.25)', days, overdue:false, action:'insurance' };
-      if (days <= 60) return { lbl:'EXPIRING SOON', bg:'rgba(59,111,232,0.08)', col:'#3B6FE8', bdr:'rgba(59,111,232,0.2)', days, overdue:false, action:'insurance' };
+      if (days <= 14) return { lbl:'URGENT', bg:'rgba(217,119,6,0.1)', col:'#D97706', bdr:'rgba(217,119,6,0.25)', days, overdue:true, action:'insurance' };
+      if (days <= 60) return { lbl:'EXPIRING SOON', bg:'rgba(59,111,232,0.08)', col:'#3B6FE8', bdr:'rgba(59,111,232,0.2)', days, overdue:true, action:'insurance' };
       return { lbl:'VALID', bg:'var(--green-bg)', col:'#00A87A', bdr:'var(--green-bg)', days, overdue:false, action:'insurance' };
     }
     return { lbl:'VALID', bg:'var(--green-bg)', col:'#00A87A', bdr:'var(--green-bg)', days:null, overdue:false, action:'insurance' };
@@ -1155,8 +1155,8 @@ function getDocStatus(doc, certList, insuranceList) {
   if (cert.expiry) {
     const days = Math.round((new Date(cert.expiry) - today) / 864e5);
     if (days < 0) return { lbl:'EXPIRED', bg:'rgba(229,62,62,0.1)', col:'#E53E3E', bdr:'rgba(229,62,62,0.25)', days, overdue:true };
-    if (days <= 14) return { lbl:'URGENT', bg:'rgba(217,119,6,0.1)', col:'#D97706', bdr:'rgba(217,119,6,0.25)', days, overdue:false };
-    if (days <= 60) return { lbl:'EXPIRING SOON', bg:'rgba(59,111,232,0.08)', col:'#3B6FE8', bdr:'rgba(59,111,232,0.2)', days, overdue:false };
+    if (days <= 14) return { lbl:'URGENT', bg:'rgba(217,119,6,0.1)', col:'#D97706', bdr:'rgba(217,119,6,0.25)', days, overdue:true };
+    if (days <= 60) return { lbl:'EXPIRING SOON', bg:'rgba(59,111,232,0.08)', col:'#3B6FE8', bdr:'rgba(59,111,232,0.2)', days, overdue:true };
     return { lbl:'VALID', bg:'var(--green-bg)', col:'#00A87A', bdr:'var(--green-bg)', days, overdue:false };
   }
   return { lbl:'VALID', bg:'var(--green-bg)', col:'#00A87A', bdr:'var(--green-bg)', days:null, overdue:false };
@@ -1287,31 +1287,37 @@ async function sbLoadMeters(pid) {
 
 // ── COMPLIANCE RAG SCORE ──
 function calcRAG(pid) {
-  const certs = CF(pid);
-  if (!certs.length) return { rag: 'red', label: 'No documents', score: 0 };
+  const certList = CF(pid);
+  const propDocs = getDocsForProperty(pid);
+  const insList = D.insurance.filter(i => String(i.prop_id) === String(pid));
 
-  // Critical cert types that must be present and valid
-  const criticalTypes = ['gas', 'eicr', 'electrical', 'epc', 'energy', 'deposit'];
-  const hasCritical = type => certs.some(c => c.type && c.type.toLowerCase().includes(type));
-  const criticalMissing = criticalTypes.filter(t => !hasCritical(t)).length;
+  let total = 0, ok = 0;
+  ['safety','licensing','tenancy','movein'].forEach(gk => {
+    const group = propDocs[gk];
+    if (!group) return;
+    group.docs.forEach(doc => {
+      if (!doc.mandatory) return;
+      total++;
+      const st = getDocStatus(doc, certList, insList);
+      if (!st.overdue) ok++;
+    });
+  });
 
-  // Count by status
-  const valid   = certs.filter(c => c.status === 'Valid').length;
-  const expired = certs.filter(c => c.status === 'Expired').length;
-  const missing = certs.filter(c => c.status === 'Missing').length;
-  const due     = certs.filter(c => c.status === 'Due').length;
-  const total   = certs.length || 1;
+  if (!total) {
+    // Fallback: no COMPLIANCE_DOCS slots means no certs either
+    if (!certList.length) return { rag: 'red', label: 'No documents', score: 0 };
+    const valid = certList.filter(c => c.status === 'Valid').length;
+    const score = Math.round((valid / certList.length) * 100);
+    const rag = score >= 80 ? 'green' : score >= 50 ? 'amber' : 'red';
+    const label = score >= 80 ? 'Compliant' : score >= 50 ? 'Action needed' : 'At risk';
+    return { rag, label, score };
+  }
 
-  // Score: start at 100, deduct for problems
-  let score = Math.round((valid / total) * 100);
-  score = Math.max(0, score - (expired * 15) - (missing * 10) - (due * 5) - (criticalMissing * 10));
-  score = Math.min(100, Math.max(0, score));
-
+  const score = Math.min(100, Math.max(0, Math.round((ok / total) * 100)));
   let rag, label;
   if (score >= 80) { rag = 'green'; label = 'Compliant'; }
   else if (score >= 50) { rag = 'amber'; label = 'Action needed'; }
   else { rag = 'red'; label = 'At risk'; }
-
   return { rag, label, score };
 }
 
@@ -3595,11 +3601,12 @@ async function _saveTenantSetupToDB() {
       invite_used:  false,
       landlord_email: currentUser.email,
       compliance_checklist: {
-        rtr:       { ra: 'red',   status:'Incomplete',  detail:'', date:'' },
-        id_docs:   { ra: 'red',   status:'Incomplete',  detail:'', date:'' },
-        agreement: { ra: 'red',   status:'Incomplete',  detail:'', date:'' },
-        rent_guarantee: { ra: 'red', status:'Unprotected', detail:'', date:'' },
-        insurance: { ra: 'red',   status:'Unprotected', detail:'', date:'' }
+        rtr:                { ra: 'red',   status:'Incomplete',  detail:'', date:'' },
+        id_docs:            { ra: 'red',   status:'Incomplete',  detail:'', date:'' },
+        agreement:          { ra: 'red',   status:'Incomplete',  detail:'', date:'' },
+        deposit_protection: { ra: 'red',   status:'Unprotected', detail:'', date:'' },
+        rent_guarantee:     { ra: 'red',   status:'Unprotected', detail:'', date:'' },
+        insurance:          { ra: 'red',   status:'Unprotected', detail:'', date:'' }
       }
     };
 
@@ -3703,6 +3710,24 @@ function _checklistRAG(tenant, key) {
     if (tenant?.scheme) return { ra:'amber', status:'Partial', detail:'Scheme set but no reference number', date:'' };
     if (!tenant?.deposit || parseFloat(tenant.deposit) === 0) return { ra:'green', status:'N/A', detail:'No deposit taken', date:'' };
   }
+  if (key === 'insurance') {
+    const propIns = D.insurance.filter(i => String(i.prop_id) === String(tenant?.prop_id));
+    const buildings = propIns.find(i => (i.type||'').toLowerCase().includes('buildings'));
+    if (buildings) {
+      const today = new Date(); today.setHours(0,0,0,0);
+      if (buildings.expiry && new Date(buildings.expiry) < today) return { ra:'red', status:'Expired', detail:'Buildings insurance expired', date: buildings.expiry };
+      return { ra:'green', status:'Active', detail:`Buildings insurance · ${buildings.expiry ? 'Renews '+FMS(buildings.expiry) : 'No expiry set'}`, date: buildings.expiry || '' };
+    }
+  }
+  if (key === 'rent_guarantee') {
+    const propIns = D.insurance.filter(i => String(i.prop_id) === String(tenant?.prop_id));
+    const rgi = propIns.find(i => (i.type||'').toLowerCase().includes('rent guarantee') || (i.type||'').toLowerCase().includes('rgi'));
+    if (rgi) {
+      const today = new Date(); today.setHours(0,0,0,0);
+      if (rgi.expiry && new Date(rgi.expiry) < today) return { ra:'red', status:'Expired', detail:'Rent guarantee insurance expired', date: rgi.expiry };
+      return { ra:'green', status:'Active', detail:`Rent guarantee insurance · ${rgi.expiry ? 'Renews '+FMS(rgi.expiry) : 'No expiry set'}`, date: rgi.expiry || '' };
+    }
+  }
   return item;
 }
 
@@ -3730,7 +3755,7 @@ function _checklistRowHtml(tenant, itemDef) {
         <option value="green" ${item.ra==='green'?'selected':''}>🟢 Complete</option>
       </select>
     </div>
-    <div style="margin-bottom:4px"><input id="cl-detail-${tid}-${itemDef.key}" class="fi" placeholder="Add details…" value="${detailText.replace(/"/g,'&quot;')}" style="width:100%;font-size:11px;padding:4px 6px" onchange="_onChecklistDetailChange('${tid}','${itemDef.key}',this.value)"></div>
+    <div style="margin-bottom:4px"><input id="cl-inp-${tid}-${itemDef.key}" class="fi" placeholder="Add details…" value="${detailText.replace(/"/g,'&quot;')}" style="width:100%;font-size:11px;padding:4px 6px" onchange="_onChecklistDetailChange('${tid}','${itemDef.key}',this.value)"></div>
     <div style="display:flex;align-items:center;gap:8px">
       <span>Date:</span><input type="date" id="cl-date-${tid}-${itemDef.key}" value="${item.date||''}" style="font-size:11px;padding:2px 6px;border-radius:4px;border:1px solid var(--border);font-family:var(--font)" onchange="_onChecklistDateChange('${tid}','${itemDef.key}',this.value)">
     </div>
