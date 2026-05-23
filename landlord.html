@@ -13411,8 +13411,17 @@ function moEsign(pid, tid) {
   _esignSigReady = false;
   _esignLandlordPad = null;
 
-  openMo('Send Document for Signing', `${t.name} · ${p.address}`, `
+  // Gather all active tenants for this property (lead + co-tenants)
+  const _esignAllTenants = D.tenants.filter(x => String(x.prop_id) === String(pid) && x.status === 'Active');
+  const _esignTenantNames = _esignAllTenants.map(x => x.name).join(', ') || t.name;
+  const _esignCoTenants = _esignAllTenants.filter(x => String(x.id) !== String(tid));
+  const _coTenantsNote = _esignCoTenants.length
+    ? `<div style="font-size:11px;color:var(--blue);background:rgba(59,111,232,0.07);border:1px solid rgba(59,111,232,0.2);border-radius:6px;padding:6px 10px;margin-bottom:14px">👥 Joint tenancy — ${_esignAllTenants.length} tenants: <strong>${_esignTenantNames}</strong>. All names will appear on the contract.</div>`
+    : '';
+
+  openMo('Send Document for Signing', `${_esignTenantNames} · ${p.address}`, `
     <div id="esign-chooser">
+      ${_coTenantsNote}
       <p style="font-size:13px;color:var(--muted);margin-bottom:18px">Choose how you want to send the document to your tenant for e-signature.</p>
       <div style="display:grid;gap:10px">
         <div onclick="esignShowOptionA()" style="border:2px solid var(--border);border-radius:10px;padding:16px 18px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--border)'">
@@ -13430,7 +13439,7 @@ function moEsign(pid, tid) {
       <button onclick="document.getElementById('esign-chooser').style.display='block';document.getElementById('esign-form-a').style.display='none'" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;padding:0 0 14px 0;display:block">← Back</button>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div class="fg"><label>Property address</label><input type="text" id="esign-address" value="${p.address}, ${p.city}" readonly style="background:var(--off);color:var(--muted)"></div>
-        <div class="fg"><label>Tenant full name</label><input type="text" id="esign-tname" value="${t.name||''}" readonly style="background:var(--off);color:var(--muted)"></div>
+        <div class="fg"><label>Tenant(s) full name(s)</label><input type="text" id="esign-tname" value="${_esignTenantNames}" readonly style="background:var(--off);color:var(--muted)"></div>
         <div class="fg"><label>Tenancy start date</label><input type="date" id="esign-start" value="${t.start_date||''}"></div>
         <div class="fg"><label>Monthly rent (£)</label><input type="number" id="esign-rent" value="${t.rent||p.rent||''}"></div>
         <div class="fg"><label>Deposit amount (£)</label><input type="number" id="esign-deposit" value="${t.deposit||''}"></div>
@@ -13561,7 +13570,7 @@ async function esignGenerateDoc(pid, tid) {
         max_tokens: 4000,
         messages: [{
           role: 'user',
-          content: `Generate a fully compliant UK Assured Periodic Tenancy Written Statement under the Renters Rights Act 2025. Use these details:\nProperty: ${address}\nTenant: ${tenantName}\nLandlord: ${landlordName}\nStart date: ${startDate}\nMonthly rent: £${rent} payable monthly in advance\nDeposit: £${deposit} protected with ${scheme}\nBills included: ${bills}\nPets: ${pets}\nSpecial terms: ${terms||'None'}\n\nInclude all mandatory RRA 2025 terms: periodic tenancy (no fixed end date), 2 months landlord notice via Section 8 only, rent increases via Section 13 max once per year with 2 months notice, tenant 2 months notice to quit, landlord repair obligations under s11 Landlord and Tenant Act 1985, right of entry with 24hrs notice, deposit protection obligations.\n\nFormat as clean HTML with proper headings and sections. Professional and legally precise. Return only the HTML document content, no preamble.`
+          content: `Generate a fully compliant UK Assured Periodic Tenancy Written Statement under the Renters Rights Act 2025. Use these details:\nProperty: ${address}\nTenant(s): ${tenantName}\nLandlord: ${landlordName}\nStart date: ${startDate}\nMonthly rent: £${rent} payable monthly in advance\nDeposit: £${deposit} protected with ${scheme}\nBills included: ${bills}\nPets: ${pets}\nSpecial terms: ${terms||'None'}\n\nInclude all mandatory RRA 2025 terms: periodic tenancy (no fixed end date), 2 months landlord notice via Section 8 only, rent increases via Section 13 max once per year with 2 months notice, tenant 2 months notice to quit, landlord repair obligations under s11 Landlord and Tenant Act 1985, right of entry with 24hrs notice, deposit protection obligations.\n\nFormat as clean HTML with proper headings and sections. Professional and legally precise. Return only the HTML document content, no preamble.`
         }]
       })
     });
