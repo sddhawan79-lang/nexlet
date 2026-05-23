@@ -7964,6 +7964,9 @@ function pgTenantDetail(tid) {
     { icon:'🏷', label:'EPC served to tenant',
       done: propCerts.some(c=>c.type&&(c.type.toLowerCase().includes('epc')||c.type.toLowerCase().includes('energy'))),
       action:`moBulkScan('${t.prop_id}')`, btnLabel:'Upload EPC' },
+    { icon:'✍️', label:'Written Statement e-signed',
+      done: propLog.some(e=>e.template_id?.includes('esign')||e.template_id?.includes('sign'))||tenantLog2.some(e=>e.template_id?.includes('esign')||e.template_id?.includes('sign')),
+      action:`moEsign('${t.prop_id}','${t.id}')`, btnLabel:'Send for signing' },
     { icon:'🔗', label:'Portal invite sent',
       done: !!(t.invite_used||propLog.some(e=>e.template_id?.includes('portal')||e.template_id?.includes('invite'))||tenantLog2.some(e=>e.template_id?.includes('portal')||e.template_id?.includes('invite'))),
       action:`sendPortalInvite('${t.id}')`, btnLabel:'Send Invite' },
@@ -7974,9 +7977,6 @@ function pgTenantDetail(tid) {
 
   const day30Due = t.start_date ? new Date(new Date(t.start_date).getTime()+30*864e5).toLocaleDateString('en-GB',{day:'numeric',month:'short'}) : '—';
   const day30Items = [
-    { icon:'✍️', label:'Tenancy agreement signed',
-      done: propLog.some(e=>e.template_id?.includes('esign')||e.template_id?.includes('sign'))||tenantLog2.some(e=>e.template_id?.includes('esign')||e.template_id?.includes('sign')),
-      action:`moEsign('${t.prop_id}','${t.id}')`, btnLabel:'Send for signing' },
     { icon:'🏦', label:'Deposit prescribed info served',
       done: propLog.some(e=>e.template_id==='prescribed'||e.template_id?.includes('prescribed'))||tenantLog2.some(e=>e.template_id?.includes('prescribed')),
       action:`moCommunicationsHub('${tid}')`, btnLabel:'Send now' },
