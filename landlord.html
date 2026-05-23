@@ -2550,9 +2550,12 @@ function startTenancy(pid) {
   initPropChecklist('ob', pid, 'onboard');
 }
 function endTenancy(pid) {
-  const t = D.tenants.find(x => String(x.prop_id) === String(pid) && x.status === 'Active');
-  if (!t) { toast('No active tenant found for this property.', true); return; }
-  moEndTenancy(t.id);
+  const activeTenants = D.tenants.filter(x => String(x.prop_id) === String(pid) && x.status === 'Active');
+  if (!activeTenants.length) { toast('No active tenant found for this property.', true); return; }
+  // Pass the lead tenant's ID for the modal, but store all active IDs for bulk end
+  const lead = activeTenants.find(t => t.is_lead) || activeTenants[0];
+  window._endTenancyAllIds = activeTenants.map(t => t.id);
+  moEndTenancy(lead.id);
 }
 function markRefurbReady(pid) {
   openMo('Mark property as ready?', '',
@@ -3457,7 +3460,7 @@ function toggleTenantType(type) {
 function moTenant(pid) {
   if (_expiredGuard('Add tenant')) return;
   const propOpts = D.properties.map(pr => `<option value="${pr.id}"${String(pr.id)===String(pid)?' selected':''}>${pr.address}${pr.city?', '+pr.city:''}</option>`).join('');
-  window._tsetup = { pid: pid ? String(pid) : (D.properties[0]?.id ? String(D.properties[0].id) : ''), tenantType: 'lead' };
+  window._tsetup = { pid: pid ? String(pid) : (D.properties[0]?.id ? String(D.properties[0].id) : ''), tenantType: 'lead', rentDay: 1 };
 
   document.getElementById('mo-t').textContent = 'Add tenant';
   document.getElementById('mo-s').textContent = 'Quick setup — fill in the basics';
@@ -3494,6 +3497,11 @@ function moTenant(pid) {
       <div class="fg"><label>Deposit (£)</label>
         <input id="ts-deposit" class="fi" type="number" placeholder="0" min="0" style="width:100%" oninput="window._tsetup.deposit=this.value">
       </div>
+      <div class="fg"><label>Rent due day</label>
+        <select id="ts-rentday" class="fi" style="width:100%" onchange="window._tsetup.rentDay=parseInt(this.value)">
+          ${[1,5,10,15,20,25,28].map(d=>`<option value="${d}">${d}${['','st','nd','rd'][d]||'th'} of month</option>`).join('')}
+        </select>
+      </div>
       <div style="margin-top:4px">${renderScanSlot('ts-dep-scan-box',"scanDepositCert(this)",'Upload Deposit Protection Certificate','DPS, TDS, MyDeposits — AI auto-fills')}</div>
       <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12px;cursor:pointer">
         <input type="checkbox" id="ts-send-invite" checked onchange="window._tsetup.sendInvite=this.checked">
@@ -3521,6 +3529,8 @@ async function _saveTenantSetupToDB() {
   s.rent    = s.rent    || document.getElementById('ts-rent')?.value || '';
   s.deposit = s.deposit || document.getElementById('ts-deposit')?.value || '';
   s.sendInvite = document.getElementById('ts-send-invite')?.checked ?? true;
+  s.scheme   = s.scheme   || document.getElementById('ts-dep-scheme')?.value.trim() || '';
+  s.schemeRef= s.schemeRef|| document.getElementById('ts-dep-ref')?.value.trim() || '';
 
   if (!s.name)      { toast('Tenant name is required', true); return; }
   if (!isCoTenant) {
@@ -3554,8 +3564,10 @@ async function _saveTenantSetupToDB() {
       start_date:   s.startDate || null,
       end_date:     null,
       rent:         isCoTenant ? 0 : (parseFloat(s.rent) || 0),
-      rent_day:     isCoTenant ? null : 1,
+      rent_day:     isCoTenant ? null : (parseInt(s.rentDay) || parseInt(document.getElementById('ts-rentday')?.value) || 1),
       deposit:      isCoTenant ? 0 : (parseFloat(s.deposit) || 0),
+      scheme:       isCoTenant ? null : (s.scheme || null),
+      scheme_ref:   isCoTenant ? null : (s.schemeRef || null),
       status:       'Active',
       is_lead:      isLead,
       user_id:      currentUser.id,
@@ -3599,10 +3611,12 @@ async function _saveTenantSetupToDB() {
         <p style="font-size:13px;color:#7A8FA6;margin-bottom:20px">Hi ${s.name}, your landlord has set up your tenant portal. Use the link below to report maintenance issues, view your certificates and sign documents.</p>
         <div style="text-align:center;margin:24px 0"><a href="${inviteUrl}" style="background:#0B1E3D;color:#fff;padding:13px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;display:inline-block">Access your portal →</a></div>
         <p style="font-size:11px;color:#999;text-align:center;margin-top:16px">This link is unique to you and works every time. Save it or bookmark it.</p></div>`;
-      fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ type:'send_email', to: s.email, subject:`Your tenant portal — ${propAddr}`, html: inviteHtml })
-      }).catch(()=>{});
+      try {
+        await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ type:'send_email', to: s.email, subject:`Your tenant portal — ${propAddr}`, html: inviteHtml })
+        });
+      } catch(_e) { console.warn('Portal invite email failed silently', _e); }
     }
 
     closeMo();
@@ -3801,6 +3815,19 @@ async function _endTenancy(tid) {
 
     await logAudit('END_TENANCY', 'tenants', tid, `Ended: ${reason}`);
 
+    // End all co-tenants for this property too
+    const allIds = window._endTenancyAllIds || [tid];
+    const otherIds = allIds.filter(id => String(id) !== String(tid));
+    if (otherIds.length) {
+      await sb.from('tenants').update({ status: 'Ended', archived: true, archived_at: now, end_reason: reason, end_date: endDate }).in('id', otherIds);
+      otherIds.forEach(oid => {
+        const ot = D.tenants.find(x => String(x.id) === String(oid));
+        if (ot) { ot.status = 'Ended'; ot.archived = true; ot.archived_at = now; ot.end_reason = reason; ot.end_date = endDate; }
+      });
+      await logAudit('END_TENANCY', 'tenants', otherIds.join(','), `Co-tenants ended with lead: ${reason}`);
+    }
+    window._endTenancyAllIds = null;
+
     // Reset property to vacant
     const propId = t.prop_id;
     const today = new Date().toISOString().slice(0, 10);
@@ -3809,9 +3836,27 @@ async function _endTenancy(tid) {
     if (prop) { prop.status = 'vacant'; prop.vacant_since = today; }
     await logAudit('PROPERTY_STATUS_CHANGE', 'properties', propId, 'Property reset to vacant after tenancy end');
 
+    const totalTenants = allIds.length;
+    const depositAmt = t.deposit ? `£${t.deposit.toLocaleString()}` : null;
     closeMo();
-    toast('✓ Tenancy ended — data archived for disputes');
-    nav('prop-detail', String(propId));
+
+    // Deposit return nudge — legally must be dealt with within 10 days
+    openMo('✓ Tenancy Ended', totalTenants > 1 ? `${totalTenants} tenants archived` : 'Data archived for disputes',
+      `<div style="text-align:center;padding:8px 0 4px">
+        <div style="font-size:36px;margin-bottom:10px">📦</div>
+        <div style="font-size:15px;font-weight:700;margin-bottom:6px">Tenancy ended successfully</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.5">All records preserved for dispute resolution.</div>
+        ${depositAmt ? `<div style="background:rgba(217,119,6,0.08);border:1px solid rgba(217,119,6,0.3);border-radius:8px;padding:12px 14px;margin-bottom:16px;text-align:left">
+          <div style="font-size:13px;font-weight:600;color:#92400e;margin-bottom:4px">⚠️ Deposit Return Required</div>
+          <div style="font-size:12px;color:var(--txt);line-height:1.6">Deposit of <strong>${depositAmt}</strong> must be returned (or deductions agreed) within <strong>10 days</strong> of the tenancy end date. Failure to do so may result in penalties.</div>
+        </div>` : ''}
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <button class="btn btn-navy" onclick="closeMo();nav('prop-detail','${propId}')" style="font-size:13px;padding:11px 16px">View Property</button>
+          <button class="btn" onclick="closeMo();nav('tenants')" style="font-size:12px;color:var(--muted);border-color:var(--border)">Back to Tenants</button>
+        </div>
+      </div>`,
+      ''
+    );
   } catch (e) {
     _logError('_endTenancy', e);
     toast('Error ending tenancy. Try again.', true);
@@ -8027,10 +8072,10 @@ function pgTenantDetail(tid) {
     const col = item.done ? 'var(--green-dark)' : 'var(--muted)';
     const bg  = item.done ? 'var(--green-bg)'   : 'var(--off)';
     return `
-      <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);${!item.done?'cursor:pointer':''}" ${!item.done?`onclick="${item.action}"`:''}">
         <span style="width:22px;height:22px;border-radius:50%;background:${bg};color:${col};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">${item.done?'✓':'○'}</span>
         <span style="font-size:12px;flex:1;${item.done?'text-decoration:line-through;opacity:0.6':''}">${item.icon} ${item.label}</span>
-        ${!item.done?`<button class="btn btn-sm" style="font-size:11px;padding:2px 9px" onclick="${item.action}">${item.btnLabel}</button>`:''}
+        ${!item.done?`<button class="btn btn-sm btn-navy" style="font-size:11px;padding:2px 9px;flex-shrink:0" onclick="event.stopPropagation();${item.action}">${item.btnLabel}</button>`:''}
       </div>`;
   };
 
@@ -12793,31 +12838,78 @@ function moTenantDetail(tid) {
   if (!t) return;
   const p = P(t.prop_id) || { address: '—', city: '' };
 
-  const rows = [
-    ['Full name', t.name],
-    ['Email', t.email || '—'],
-    ['Phone', t.phone || '—'],
-    ['Property', `${p.address}, ${p.city}`],
-    ['Tenancy start', FMS(t.start_date)],
-    ['Tenancy end', t.end_date ? FMS(t.end_date) : 'Periodic (ongoing)'],
-    ['Monthly rent', t.rent ? `£${t.rent.toLocaleString()}` : '—'],
-    ['Deposit amount', t.deposit ? `£${t.deposit.toLocaleString()}` : '—'],
-    ['Deposit scheme', t.scheme || 'Not set'],
-    ['Scheme reference', t.scheme_ref || '—'],
-    ['Tenancy type', t.type === 'AST' ? 'AST (converts to APT 1 May 2026)' : t.type || 'APT'],
-    ['Rent due day', t.rent_day ? `${t.rent_day}${['','st','nd','rd'][t.rent_day]||'th'} of month` : '—'],
-    ['Status', t.status || 'Active'],
-  ].map(([l,v]) => `<div class="t-det-row"><span class="lbl">${l}</span><span style="font-weight:500;text-align:right">${v}</span></div>`).join('');
+  const rentDayOpts = [1,5,10,15,20,25,28].map(d =>
+    `<option value="${d}"${(t.rent_day||1)===d?' selected':''}>${d}${['','st','nd','rd'][d]||'th'} of month</option>`).join('');
+  const schemeOpts = ['','DPS','TDS','MyDeposits'].map(s =>
+    `<option value="${s}"${(t.scheme||'')===s?' selected':''}>${s||'— Not set —'}</option>`).join('');
 
-  openMo(`${t.name}`, `Tenant at ${p.address}`,
-    `<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:4px 14px;margin-bottom:14px">${rows}</div>
-     <div style="display:flex;gap:8px;flex-wrap:wrap">
-       ${t.email ? `<a href="mailto:${t.email}" class="btn btn-sm">✉ Email tenant</a>` : ''}
-       ${t.phone ? `<a href="tel:${t.phone}" class="btn btn-sm">📞 Call</a>` : ''}
-       <button class="btn btn-sm" onclick="closeMo();moSection8('${t.prop_id}')">⚖️ Generate Section 8</button>
-     </div>`,
-    `<button class="btn" onclick="closeMo()">Close</button><button class="btn btn-navy" onclick="closeMo();moTenant('${t.prop_id}')">✎ Edit tenant</button>`
+  openMo(`Edit — ${t.name}`, `Tenant at ${p.address}`,
+    `<div style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="fg"><label>Full name <span style="color:var(--red)">*</span></label>
+          <input id="te-name" class="fi" value="${t.name||''}" style="width:100%"></div>
+        <div class="fg"><label>Email</label>
+          <input id="te-email" class="fi" type="email" value="${t.email||''}" style="width:100%"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="fg"><label>Phone</label>
+          <input id="te-phone" class="fi" type="tel" value="${t.phone||''}" style="width:100%"></div>
+        <div class="fg"><label>Monthly rent (£)</label>
+          <input id="te-rent" class="fi" type="number" min="0" value="${t.rent||''}" style="width:100%"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="fg"><label>Deposit (£)</label>
+          <input id="te-deposit" class="fi" type="number" min="0" value="${t.deposit||''}" style="width:100%"></div>
+        <div class="fg"><label>Rent due day</label>
+          <select id="te-rentday" class="fi" style="width:100%">${rentDayOpts}</select></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="fg"><label>Deposit scheme</label>
+          <select id="te-scheme" class="fi" style="width:100%">${schemeOpts}</select></div>
+        <div class="fg"><label>Scheme reference</label>
+          <input id="te-schemeref" class="fi" value="${t.scheme_ref||''}" placeholder="e.g. DPS12345678" style="width:100%"></div>
+      </div>
+      ${t.email ? `<div style="display:flex;gap:8px;flex-wrap:wrap;padding-top:4px">
+        <a href="mailto:${t.email}" class="btn btn-sm">✉ Email tenant</a>
+        ${t.phone ? `<a href="tel:${t.phone}" class="btn btn-sm">📞 Call</a>` : ''}
+        <button class="btn btn-sm" onclick="closeMo();moSection8('${t.prop_id}')">⚖️ Generate Section 8</button>
+      </div>` : ''}
+    </div>`,
+    `<button class="btn" onclick="closeMo()">Cancel</button>
+     <button class="btn btn-navy" id="te-save-btn" onclick="_saveTenantEdit('${t.id}')">Save changes ✓</button>`
   );
+}
+
+async function _saveTenantEdit(tid) {
+  const t = D.tenants.find(x => String(x.id) === String(tid));
+  if (!t) return;
+  const btn = document.getElementById('te-save-btn');
+  const name = document.getElementById('te-name')?.value.trim();
+  if (!name) { toast('Name is required', true); return; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Saving…'; }
+  try {
+    const updates = {
+      name,
+      email: document.getElementById('te-email')?.value.trim() || null,
+      phone: document.getElementById('te-phone')?.value.trim() || null,
+      rent: parseFloat(document.getElementById('te-rent')?.value) || t.rent,
+      deposit: parseFloat(document.getElementById('te-deposit')?.value) || t.deposit,
+      rent_day: parseInt(document.getElementById('te-rentday')?.value) || 1,
+      scheme: document.getElementById('te-scheme')?.value || null,
+      scheme_ref: document.getElementById('te-schemeref')?.value.trim() || null,
+    };
+    const { error } = await sb.from('tenants').update(updates).eq('id', tid);
+    if (error) throw new Error(error.message);
+    Object.assign(t, updates);
+    await logAudit('EDIT_TENANT', 'tenants', tid, `Edited tenant: ${name}`);
+    closeMo();
+    toast('✓ Tenant updated');
+    // Refresh detail page if currently on it
+    if (window._currentPage === 'tenant-detail') nav('tenant-detail', String(tid));
+  } catch(err) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Save changes ✓'; }
+    toast('Error saving: ' + err.message, true);
+  }
 }
 
 // ── RRA 2025 PDF (base64 embedded) ──
