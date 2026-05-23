@@ -5141,7 +5141,10 @@ function renderPropChecklist(prefix, pid, mode, saved, meters){
   html+='<p style="font-size:10px;color:var(--muted);margin-top:10px;line-height:1.5">⚠️ Guide only — not legal advice. Consult a qualified solicitor for your circumstances.</p>';
   // Upload reminder — onboard mode only
   if (mode === 'onboard') {
-    html+='<div style="background:rgba(59,111,232,0.07);border:1px solid rgba(59,111,232,0.25);border-radius:8px;padding:10px 14px;margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:12px"><div style="font-size:12px;color:var(--blue);flex:1">📄 <strong>Right to Rent &amp; ID docs required.</strong> Upload passport, right to rent proof and address documents — AI Scan will auto-fill details.</div><button class="btn btn-sm btn-navy" onclick="nav(\'tenants\',\''+(pid||'')+\')" style="font-size:11px;white-space:nowrap;flex-shrink:0">📄 Upload Docs →</button></div>';
+    html+='<div style="background:rgba(59,111,232,0.07);border:1px solid rgba(59,111,232,0.25);border-radius:8px;padding:10px 14px;margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:12px">' +
+      '<div style="font-size:12px;color:var(--blue);flex:1">&#x1F4C4; <strong>Right to Rent &amp; ID docs required.</strong> Upload passport, right to rent proof and address documents.</div>' +
+      '<button class="btn btn-sm btn-navy" onclick="nav(\'tenants\',\'' + (pid||'') + '\')" style="font-size:11px;white-space:nowrap;flex-shrink:0">&#x1F4C4; Upload Docs &#x2192;</button>' +
+      '</div>';
   }
   // "Add Tenant" button — enabled only when all items checked (onboard only)
   if (mode === 'onboard') {
