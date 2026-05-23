@@ -3570,12 +3570,25 @@ async function _saveTenantSetupToDB() {
     }
 
     closeMo();
-    toast('✓ Tenant added!');
-    if (window._addPropOrigin === 'property-detail' && s.pid) {
-      nav('prop-detail', String(s.pid));
-    } else {
-      nav('tenants');
-    }
+    toast('\u2713 Tenant added!');
+    // Post-add CTA modal
+    const _newTid = String(td?.id || '');
+    const _newTname = (s.name || 'Tenant').replace(/'/g, '&#39;');
+    const _newPid = String(s.pid || '');
+    const _skipDest = (window._addPropOrigin === 'property-detail' && _newPid) ? 'prop-detail' : 'tenants';
+    const _skipParam = (window._addPropOrigin === 'property-detail' && _newPid) ? _newPid : '';
+    openMo('Next steps', '',
+      '<div style="text-align:center;padding:8px 0 4px">' +
+      '<div style="font-size:36px;margin-bottom:10px">&#x1F389;</div>' +
+      '<div style="font-size:16px;font-weight:700;color:var(--txt);margin-bottom:6px">' + _newTname + ' added!</div>' +
+      '<div style="font-size:13px;color:var(--muted);margin-bottom:20px;line-height:1.5">What would you like to do next?</div>' +
+      '<div style="display:flex;flex-direction:column;gap:10px">' +
+      '<button class="btn btn-navy" onclick="closeMo();moWelcomeKit(\'' + _newPid + '\')" style="font-size:13px;padding:11px 16px">&#x1F4E6; Send Welcome Kit</button>' +
+      '<button class="btn" onclick="closeMo();nav(\'tenants\',\'' + _newTid + '\')" style="font-size:13px;padding:11px 16px">&#x1F4C4; Upload Documents &amp; RTR</button>' +
+      '<button class="btn" onclick="closeMo();nav(\'' + _skipDest + '\',\'' + _skipParam + '\')" style="font-size:12px;color:var(--muted);border-color:var(--border)">Skip for now</button>' +
+      '</div></div>',
+      ''
+    );
   } catch(err) {
     if (btn) { btn.disabled = false; btn.textContent = 'Add tenant ✓'; }
     toast('Error saving tenant: ' + err.message, true);
@@ -5128,7 +5141,7 @@ function renderPropChecklist(prefix, pid, mode, saved, meters){
   html+='<p style="font-size:10px;color:var(--muted);margin-top:10px;line-height:1.5">⚠️ Guide only — not legal advice. Consult a qualified solicitor for your circumstances.</p>';
   // Upload reminder — onboard mode only
   if (mode === 'onboard') {
-    html+='<div style="background:rgba(59,111,232,0.07);border:1px solid rgba(59,111,232,0.25);border-radius:8px;padding:10px 14px;margin-top:12px;font-size:12px;color:var(--blue)">📄 <strong>Important:</strong> After adding your tenant, upload their KYC documents (passport, right to rent, address proofs) using the <strong>📄 Upload Docs</strong> button next to Edit on the tenant\'s detail page. Use AI Scan to auto-fill details.</div>';
+    html+='<div style="background:rgba(59,111,232,0.07);border:1px solid rgba(59,111,232,0.25);border-radius:8px;padding:10px 14px;margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:12px"><div style="font-size:12px;color:var(--blue);flex:1">📄 <strong>Right to Rent &amp; ID docs required.</strong> Upload passport, right to rent proof and address documents — AI Scan will auto-fill details.</div><button class="btn btn-sm btn-navy" onclick="nav(\'tenants\',\''+(pid||'')+\')" style="font-size:11px;white-space:nowrap;flex-shrink:0">📄 Upload Docs →</button></div>';
   }
   // "Add Tenant" button — enabled only when all items checked (onboard only)
   if (mode === 'onboard') {
@@ -6891,8 +6904,14 @@ function pgCompliance(){
                     if (st.action==='insurance') {
                       return `<button onclick="moCert('${selPid}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font)">Manage →</button>`;
                     }
+                    if (st.lbl==='NOT SERVED' && _cr) {
+                      return _eb + _vb + _db + `<button onclick="event.stopPropagation();markServed('${_cr.id}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid #00A87A;background:rgba(0,168,122,0.08);color:#00A87A;cursor:pointer;font-family:var(--font);font-weight:600;white-space:nowrap">✓ Mark Served</button>`;
+                    }
+                    if (st.lbl==='NOT UPLOADED' || (!_cr && st.overdue)) {
+                      return `<button onclick="event.stopPropagation();moCert('${selPid}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--red);background:rgba(229,62,62,0.07);color:var(--red);cursor:pointer;font-family:var(--font);font-weight:600;white-space:nowrap">+ Upload</button>`;
+                    }
                     if (st.overdue) {
-                      return _eb + _vb + _db + `<button onclick="moCert('${selPid}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--red);background:rgba(229,62,62,0.07);color:var(--red);cursor:pointer;font-family:var(--font);font-weight:600">+ Upload</button>`;
+                      return _eb + _vb + _db + `<button onclick="event.stopPropagation();moCert('${selPid}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--red);background:rgba(229,62,62,0.07);color:var(--red);cursor:pointer;font-family:var(--font);font-weight:600">+ Upload</button>`;
                     }
                     return `${_eb}${_vb}${_db}`;
                   })()}
