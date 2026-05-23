@@ -7196,6 +7196,7 @@ const REMINDER_TYPES = [
   { id:'rra',       icon:'⚠️', label:'RRA sheet deadline',        desc:'31 May 2026 — send to all existing tenants',     milestones:[30,14,7],  unit:'days',    action:'moRRASheet()',      mandatory:true  },
   { id:'compliance_digest', icon:'📊', label:'Compliance score digest', desc:'Weekly email with your portfolio health score and action items', milestones:[7], unit:'days', action:'nav(\'compliance\')', mandatory:false },
   { id:'inspection', icon:'🔍', label:'Inspection due',             desc:'Scheduled property inspection approaching',       milestones:[7,1],    unit:'days', action:'nav(\'inspections\')', mandatory:false },
+  { id:'deposit_protect', icon:'🏦', label:'Deposit protection deadline', desc:'30-day deadline to register deposit — fires at day 25 and day 28', milestones:[5,2], unit:'days', action:'nav(\'tenants\')', mandatory:true },
 ];
 
 function getReminderPrefs() {
@@ -7523,6 +7524,33 @@ async function checkAllReminders() {
         await sendReminder(`🔍 Inspection due in ${d}d — ${prop.address}`, html, 'REMINDER_INSPECTION', prop.id, `insp_${ms}d`);
       }
     }
+  }
+
+  // ── 13. Deposit protection — 30-day deadline ──
+  for (const t of D.tenants.filter(t2 => t2.status === 'Active' && t2.start_date && t2.deposit > 0)) {
+    const depositProtected = !!(t.scheme && t.scheme !== 'None' && t.scheme !== '' && t.scheme_ref);
+    if (depositProtected) continue;
+    const start = new Date(t.start_date); start.setHours(0,0,0,0);
+    const daysIn = Math.round((today - start) / 864e5);
+    const daysLeft = 30 - daysIn;
+    if (daysLeft !== 5 && daysLeft !== 2) continue; // fire at 5 days and 2 days before deadline
+    const prop = P(t.prop_id) || { address: 'your property' };
+    if (await alreadySent('REMINDER_DEPOSIT_PROTECT', t.id, `dep_${daysLeft}d`)) continue;
+    const urgCol = daysLeft <= 2 ? '#E53E3E' : '#D97706';
+    const html = emailWrap(
+      `⚠️ Deposit protection deadline in ${daysLeft} day${daysLeft !== 1 ? 's' : ''} — ${prop.address}`,
+      'Deposit protection reminder',
+      `<p style="font-size:13px">The deposit for <strong>${t.name}</strong> at <strong>${prop.address}</strong> must be registered with an approved scheme (DPS, MyDeposits or TDS) within <strong>30 days</strong> of receipt.</p>
+      <div style="background:rgba(229,62,62,0.07);border:1px solid rgba(229,62,62,0.25);border-radius:8px;padding:12px 16px;margin:14px 0">
+        <div style="font-size:13px;font-weight:700;color:${urgCol}">⏰ ${daysLeft} day${daysLeft !== 1 ? 's' : ''} remaining — deadline: ${new Date(start.getTime()+30*864e5).toLocaleDateString('en-GB')}</div>
+        <div style="font-size:12px;color:#7A8FA6;margin-top:4px">Deposit amount: £${t.deposit || '—'} · Penalty for missing deadline: up to 3× the deposit amount</div>
+      </div>
+      <p style="font-size:13px">Log in to NexLet and update the tenant record with the scheme name and reference number to clear this alert.</p>`
+    );
+    await sendReminder(
+      `⚠️ Deposit protection due in ${daysLeft}d — ${t.name} · ${prop.address}`,
+      html, 'REMINDER_DEPOSIT_PROTECT', t.id, `dep_${daysLeft}d`
+    );
   }
 }
 
@@ -7937,6 +7965,9 @@ function pgTenantDetail(tid) {
     { icon:'🔗', label:'Portal invite sent',
       done: !!(t.invite_used||propLog.some(e=>e.template_id?.includes('portal')||e.template_id?.includes('invite'))||tenantLog2.some(e=>e.template_id?.includes('portal')||e.template_id?.includes('invite'))),
       action:`sendPortalInvite('${t.id}')`, btnLabel:'Send Invite' },
+    { icon:'📋', label:'Inventory / schedule of condition',
+      done: propCerts.some(c=>c.type&&(c.type.toLowerCase().includes('inventory')||c.type.toLowerCase().includes('schedule of condition'))),
+      action:`nav('inventory-reports')`, btnLabel:'Create Inventory' },
   ];
 
   const day30Due = t.start_date ? new Date(new Date(t.start_date).getTime()+30*864e5).toLocaleDateString('en-GB',{day:'numeric',month:'short'}) : '—';
