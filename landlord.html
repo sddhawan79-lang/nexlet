@@ -1396,7 +1396,7 @@ async function loadData() {
   if ((!D.userProfile || D.userProfile.newsletter_opted_in === null || D.userProfile.newsletter_opted_in === undefined) && currentUser?.user_metadata?.newsletter_opted_in !== undefined) {
     const nlVal = currentUser.user_metadata.newsletter_opted_in;
     const now = new Date().toISOString();
-    sb.from('user_profiles').upsert({ id: currentUser.id, newsletter_opted_in: nlVal, newsletter_opted_at: now }, { onConflict: 'id' }).then(() => {});
+    sb.from('user_profiles').upsert({ id: currentUser.id, newsletter_opted_in: nlVal, newsletter_opted_at: now }, { onConflict: 'id' }).then(() => {}).catch(() => {});
     if (!D.userProfile) D.userProfile = {};
     D.userProfile.newsletter_opted_in = nlVal;
     D.userProfile.newsletter_opted_at = now;
