@@ -1626,6 +1626,7 @@ async function initApp() {
 
   try {
     nav('dashboard');
+    setTimeout(renderNewUserStepper, 50);
   } catch(err) {
     document.getElementById('main').innerHTML = '<div style="padding:32px;font-family:sans-serif"><h2 style="color:#E53E3E">Dashboard Error</h2><pre style="background:#fff5f5;padding:16px;border-radius:8px;font-size:12px;overflow:auto">'+err.stack+'</pre><p style="margin-top:12px;color:#666">Please share this error with the developer.</p></div>';
     _logError('Dashboard', err);
@@ -4578,6 +4579,7 @@ function pgDashboard(){
     </div>
   </div></div>
   <div class="content">
+    <div id="new-user-stepper-slot"></div>
     <div id="setup-banner-slot"></div>
 
     <div style="margin-bottom:16px">
@@ -10914,6 +10916,60 @@ async function loadSetupBanner() {
         <button onclick="(${dismiss.toString()})()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:18px;line-height:1;padding:0;flex-shrink:0" title="Dismiss">✕</button>
       </div>
     </div>`;
+}
+
+// ── NEW USER ONBOARDING STEPPER ──
+function renderNewUserStepper() {
+  const slot = document.getElementById('new-user-stepper-slot');
+  if (!slot) return;
+
+  // Only show when user has no properties
+  if (D.properties.length > 0) { slot.innerHTML = ''; return; }
+
+  const LS_KEY = 'nexlet_onboard_stepper_v1';
+  try {
+    const stored = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
+    if (stored?.dismissed) { slot.innerHTML = ''; return; }
+  } catch(e) {}
+
+  const dismiss = () => {
+    try { localStorage.setItem(LS_KEY, JSON.stringify({ dismissed: true, ts: Date.now() })); } catch(e) {}
+    const s = document.getElementById('new-user-stepper-slot');
+    if (s) { s.style.transition = 'opacity .25s'; s.style.opacity = '0'; setTimeout(() => { s.innerHTML = ''; }, 260); }
+  };
+
+  const steps = [
+    { n:1, icon:'🏠', title:'Add your first property', desc:'Enter the address, type and rent amount.', done: false, action:'moAddProp()', btnLabel:'Add property' },
+    { n:2, icon:'📋', title:'Upload compliance certificates', desc:'Gas Safety, EICR, EPC — AI scans and fills details automatically.', done: false, action:'moCert()', btnLabel:'Upload certs' },
+    { n:3, icon:'👤', title:'Add your tenant', desc:'Name, email and move-in date. Portal invite sent automatically.', done: false, action:'moTenant()', btnLabel:'Add tenant' },
+    { n:4, icon:'📦', title:'Send the welcome kit', desc:'RRA sheet, How to Rent guide, certificates — all in one email.', done: false, action:"nav('tenants')", btnLabel:'Go to tenants' },
+  ];
+
+  const stepsHtml = steps.map((s, i) => {
+    const isFirst = i === 0;
+    const lineColor = s.done ? 'var(--green)' : 'var(--border)';
+    return '<div style="display:flex;gap:14px;align-items:flex-start' + (i < steps.length - 1 ? ';padding-bottom:16px;border-left:2px solid ' + lineColor + ';margin-left:16px;padding-left:14px' : ';margin-left:16px;padding-left:14px') + '">' +
+      '<div style="width:32px;height:32px;border-radius:50%;background:' + (s.done ? 'var(--green)' : isFirst ? 'var(--navy)' : 'var(--off)') + ';border:2px solid ' + (s.done ? 'var(--green)' : isFirst ? 'var(--navy)' : 'var(--border)') + ';display:flex;align-items:center;justify-content:center;font-size:' + (s.done ? '14px' : '12px') + ';font-weight:700;color:' + (s.done || isFirst ? '#fff' : 'var(--muted)') + ';flex-shrink:0;margin-left:-30px">' + (s.done ? '✓' : s.n) + '</div>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="font-size:13px;font-weight:700;color:' + (s.done ? 'var(--muted)' : 'var(--txt)') + ';' + (s.done ? 'text-decoration:line-through;opacity:0.5' : '') + '">' + s.icon + ' ' + s.title + '</div>' +
+        '<div style="font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.4">' + s.desc + '</div>' +
+        (!s.done ? '<button class="btn btn-sm' + (isFirst ? ' btn-navy' : '') + '" onclick="' + s.action + '" style="margin-top:8px;font-size:11px">' + s.btnLabel + ' →</button>' : '') +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  slot.innerHTML =
+    '<div style="background:linear-gradient(135deg,rgba(11,30,61,0.04) 0%,rgba(59,111,232,0.06) 100%);border:1.5px solid rgba(59,111,232,0.2);border-radius:14px;padding:20px 22px;margin-bottom:16px;position:relative">' +
+      '<button onclick="(' + dismiss.toString() + ')()" style="position:absolute;top:12px;right:14px;background:none;border:none;cursor:pointer;color:var(--muted);font-size:18px;line-height:1;padding:0" title="Dismiss">✕</button>' +
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">' +
+        '<span style="font-size:20px">🚀</span>' +
+        '<div>' +
+          '<div style="font-size:14px;font-weight:700;color:var(--txt)">Welcome to NexLet — get set up in 4 steps</div>' +
+          '<div style="font-size:12px;color:var(--muted);margin-top:2px">RRA-ready in under 10 minutes</div>' +
+        '</div>' +
+      '</div>' +
+      '<div>' + stepsHtml + '</div>' +
+    '</div>';
 }
 
 function nav(page, param){
