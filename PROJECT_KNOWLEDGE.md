@@ -658,6 +658,9 @@ Session 8 introduced a 3-checkbox pre-generation consent gate for 4 legal docume
 | 8 | No offline/error recovery states | General | Technical debt |
 | 9 | MX record missing for `nexlet.co.uk` | DNS / Email | Post-launch |
 | 10 | Supabase credentials hardcoded in HTML files | Security hygiene | Acceptable — anon key is public-safe |
+| 51 | `user_profiles` missing `plan` + `newsletter_opted_in` columns | Database | **FIXED 23 May 2026** — ALTER TABLE run in SQL Editor |
+| 52 | `inventory_reports` table missing | Database | **FIXED 23 May 2026** — CREATE TABLE + RLS run in SQL Editor |
+| 53 | No favicon.ico | Static files | Pending — add to repo root |
 | 11 | `parseInt()` on UUID `prop_id`/`tenant_id` values — produces NaN | Data integrity | **FIXED Session 7** — replaced with `String()` (22 locations) |
 | 12 | `tenant_documents` table missing from DB — KYC scanning fails silently | Database | **SQL created** — run `session7_tenant_documents.sql` in Supabase SQL Editor |
 | 13 | `tenant-documents` Storage bucket RLS — uploads fail with "row-level security policy" | Storage | **FIXED** — INSERT + SELECT policies added via SQL Editor |
@@ -2389,3 +2392,66 @@ Final pricing after the 19 May 2026 repricing pass (founding / standard monthly)
 - **S8 compact card:** "Generate →" button calls `s8LaunchFromTemplates()` — handles 1-property (auto-launch) and multi-property (picker modal)
 - **`closeModal()` alias:** Added next to `closeMo()` for comms hub compatibility
 - **Doc library View buttons:** Extended URL resolution to check `engineer` field (stores public URL for doc library uploads)
+
+### Session 21 — 23 May 2026 — Bug Fixes, Onboarding Stepper & Journey Card Updates
+
+**Date:** 23 May 2026
+**File modified:** `landlord.html` (15,288 → 15,297 lines)
+
+#### Supabase Schema Fixes
+
+- **`user_profiles` 400 error fixed:** Missing `plan` (text, default 'trial') and `newsletter_opted_in` (boolean, default false) columns added via SQL:
+  ```sql
+  ALTER TABLE user_profiles
+  ADD COLUMN IF NOT EXISTS plan text DEFAULT 'trial',
+  ADD COLUMN IF NOT EXISTS newsletter_opted_in boolean DEFAULT false;
+  ```
+- **`inventory_reports` 404 fixed:** Table created (was missing) — full schema with RLS policy:
+  ```sql
+  CREATE TABLE IF NOT EXISTS inventory_reports (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
+    prop_id text, type text, notes text, file_url text,
+    created_at timestamptz DEFAULT now()
+  );
+  ALTER TABLE inventory_reports ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY "Users manage own inventory reports" ON inventory_reports
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+  ```
+
+#### Bug Fixes (Priority Gap List — all 10 resolved)
+
+| # | Fix | Details |
+|---|-----|---------|
+| 1 | **Mark Served / upload button** | Compliance detail view cert rows now show green `✓ Mark Served` button (calls `markServed(certId)`) when status is NOT SERVED. NOT UPLOADED rows show red `+ Upload` button. |
+| 2 | **Post-tenant-add CTA modal** | After `_saveTenantSetupToDB()` saves, instead of silent nav, shows "Next steps 🎉" modal with: Send Welcome Kit → `moWelcomeKit()`, Upload Documents & RTR → `nav('tenants', tid)`, Skip for now → original nav. String concatenation used (not template literals) to avoid nesting syntax errors. |
+| 3 | **E-sign repositioned as Day 1 step** | "✍️ Written Statement e-signed" moved from Day 30 Pack to Day 1 Pack. Day 30 now contains deposit-only items: Prescribed info served, Deposit scheme protected, Smoke & CO alarm tested. |
+| 4 | **Deposit protection reminder** | `checkAllReminders()` now fires at day 25 and day 28 after tenancy start for any tenant with `deposit > 0` and no `scheme`/`scheme_ref`. Email includes deadline date + 3× deposit penalty warning. Added to `REMINDER_TYPES` as mandatory (`id: 'deposit_protect'`). |
+| 5 | **Inventory in Day 1 journey card** | "📋 Inventory / schedule of condition" added as last item in Day 1 Pack. Done check: cert type includes 'inventory' or 'schedule of condition'. Action: `nav('inventory-reports')`. |
+| 6 | **New user onboarding stepper** | `renderNewUserStepper()` function added (line ~10922). Renders a 4-step card on dashboard when `D.properties.length === 0`: (1) Add property, (2) Upload certs, (3) Add tenant, (4) Send welcome kit. Step 1 highlighted navy. Dismissable (localStorage `nexlet_onboard_stepper_v1`). Auto-hides once properties exist. Slot added to `pgDashboard()` as `<div id="new-user-stepper-slot">` above setup-banner-slot. Called via `setTimeout(renderNewUserStepper, 50)` after `nav('dashboard')` in `initApp`. |
+| 7 | **RTR/ID upload prompt actionable** | Passive blue info banner in pre-tenancy checklist (onboard mode) replaced with flex row + `📄 Upload Docs →` button calling `nav('tenants', pid)`. |
+| 8 | **Co-tenants grouped on contract** | `moEsign()` now gathers all active tenants for property via `_esignAllTenants`. Blue info banner shown for joint tenancies. Modal subtitle + `esign-tname` field show all tenant names comma-separated. AI prompt updated from `Tenant:` to `Tenant(s):`. |
+| 9 | Legionella missing from compliance | Already present in `COMPLIANCE_DOCS` as mandatory — no change needed. |
+| 10 | Deposit protection date not verified | Covered by deposit protection reminder (Fix #4) + existing deposit scheme check in compliance. |
+
+#### Syntax Errors Fixed
+
+- **Fix 2 (post-tenant CTA):** Original used nested template literals with `${_skipNav}` inside onclick inside outer backtick string — caused `SyntaxError: Invalid or unexpected token`. Rewritten as plain string concatenation.
+- **Fix 3 (RTR banner):** `+(pid||'')+` embedded inside single-quoted string broke string boundary. Rewritten as multi-part string concatenation with `+` operators outside quotes. Em dash replaced with HTML entity `&#x2014;`.
+
+#### Post-Launch Backlog Added
+
+- **In-app workflow guidance** (contextual "?" tooltips or help modal) — parked post-launch. Option A = modal (quick), Option B = inline tooltips.
+
+#### Key Function Locations (updated)
+
+| Function | Line ~ | Notes |
+|---|---|---|
+| `renderNewUserStepper()` | 10922 | New user 4-step onboarding stepper |
+| `_saveTenantSetupToDB()` | 3475 | Now shows post-add CTA modal instead of silent nav |
+| `moEsign(pid, tid)` | 13405 | Now co-tenant aware — shows all tenant names |
+| Day 1 journey items | 7921 | Now includes e-sign + inventory |
+| Day 30 journey items | 7979 | Now deposit-only (3 items) |
+| Deposit protect reminder | ~7530 | New block in `checkAllReminders()` |
+| Mark Served button | ~6908 | In compliance detail cert row button IIFE |
+
