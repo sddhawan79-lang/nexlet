@@ -3446,14 +3446,28 @@ function toggleTenantType(type) {
   var leadBtn = document.getElementById('ts-lead-btn');
   var coBtn = document.getElementById('ts-co-btn');
   var fullFields = document.getElementById('ts-full-fields');
+  var coFields = document.getElementById('ts-co-fields');
   if (type === 'lead') {
     if (leadBtn) { leadBtn.style.background = 'var(--navy)'; leadBtn.style.color = '#fff'; }
     if (coBtn) { coBtn.style.background = 'var(--white)'; coBtn.style.color = 'var(--txt)'; }
     if (fullFields) fullFields.style.display = '';
+    if (coFields) coFields.style.display = 'none';
   } else {
     if (coBtn) { coBtn.style.background = 'var(--navy)'; coBtn.style.color = '#fff'; }
     if (leadBtn) { leadBtn.style.background = 'var(--white)'; leadBtn.style.color = 'var(--txt)'; }
     if (fullFields) fullFields.style.display = 'none';
+    // Build co-tenant property picker — only properties with an active lead
+    const propsWithLead = D.properties.filter(pr => D.tenants.some(t => String(t.prop_id)===String(pr.id) && t.is_lead && t.status==='Active'));
+    if (coFields) {
+      coFields.style.display = '';
+      const sel = document.getElementById('ts-co-prop');
+      if (sel) {
+        sel.innerHTML = propsWithLead.length
+          ? propsWithLead.map(pr=>`<option value="${pr.id}">${pr.address}${pr.city?', '+pr.city:''}</option>`).join('')
+          : '<option value="">No properties with active tenants</option>';
+        window._tsetup.pid = sel.value;
+      }
+    }
   }
 }
 
@@ -3507,6 +3521,12 @@ function moTenant(pid) {
         <input type="checkbox" id="ts-send-invite" checked onchange="window._tsetup.sendInvite=this.checked">
         <span>Send tenant portal invite by email</span>
       </label>
+    </div>
+    <div id="ts-co-fields" style="display:none">
+      <div class="fg"><label>Linked property <span style="color:var(--red)">*</span></label>
+        <select id="ts-co-prop" class="fi" style="width:100%" onchange="window._tsetup.pid=this.value"></select>
+      </div>
+      <p style="font-size:11px;color:var(--muted);margin:6px 0 0">Co-tenant will share the lead tenant's move-in date and deposit record.</p>
     </div>`;
 
   document.getElementById('mo-f').innerHTML = `
@@ -3647,11 +3667,12 @@ async function _saveTenantSetupToDB() {
 
 // ── COMPLIANCE CHECKLIST ──
 const CHECKLIST_ITEMS = [
-  { key:'rtr',            label:'Right to Rent check',    icon:'🔍' },
-  { key:'id_docs',        label:'ID documents (2 required)', icon:'🪪' },
-  { key:'agreement',      label:'Tenancy agreement',      icon:'📝' },
-  { key:'rent_guarantee', label:'Rent Guarantee Insurance', icon:'🛡️' },
-  { key:'insurance',      label:'Buildings/Contents Insurance', icon:'🏠' },
+  { key:'rtr',                label:'Right to Rent check',       icon:'🔍' },
+  { key:'id_docs',            label:'ID documents (2 required)', icon:'🪪' },
+  { key:'agreement',          label:'Tenancy agreement',         icon:'📝' },
+  { key:'deposit_protection', label:'Deposit protected',         icon:'🏦' },
+  { key:'rent_guarantee',     label:'Rent Guarantee Insurance',  icon:'🛡️' },
+  { key:'insurance',          label:'Buildings/Contents Insurance', icon:'🏠' },
 ];
 const RAG_COLORS = { red:'#E53E3E', amber:'#D97706', green:'var(--green)' };
 const RAG_LABELS = { red:'red', amber:'amber', green:'green' };
@@ -3670,9 +3691,17 @@ function _checklistRAG(tenant, key) {
     if (tenant?.rtr_skipped)   return { ra:'amber', status:'Deferred',  detail:'RTR check skipped', date:'' };
   }
   if (key === 'id_docs') {
-    const count = D.tenantDocs?.filter(d => String(d.tenant_id) === String(tenant?.id) && (d.slot === 'passport' || d.slot === 'right_to_rent')).length || 0;
-    if (count >= 2) return { ra:'green', status:'Verified', detail:`${count} document(s) uploaded`, date:'' };
-    if (count === 1) return { ra:'amber', status:'Partial', detail:'1 of 2 documents uploaded', date:'' };
+    const mandatorySlots = ['passport', 'right_to_rent', 'address_1', 'address_2', 'reference'];
+    const uploaded = D.tenantDocs?.filter(d => String(d.tenant_id) === String(tenant?.id) && mandatorySlots.includes(d.slot)).length || 0;
+    const total = mandatorySlots.length;
+    if (uploaded >= total) return { ra:'green', status:'Verified', detail:`All ${total} documents uploaded`, date:'' };
+    if (uploaded >= 2)     return { ra:'amber', status:'Partial',  detail:`${uploaded} of ${total} documents uploaded`, date:'' };
+    if (uploaded === 1)    return { ra:'amber', status:'Started',  detail:'1 document uploaded', date:'' };
+  }
+  if (key === 'deposit_protection') {
+    if (tenant?.scheme && tenant?.scheme_ref) return { ra:'green', status:'Protected', detail:`${tenant.scheme} · Ref: ${tenant.scheme_ref}`, date:'' };
+    if (tenant?.scheme) return { ra:'amber', status:'Partial', detail:'Scheme set but no reference number', date:'' };
+    if (!tenant?.deposit || parseFloat(tenant.deposit) === 0) return { ra:'green', status:'N/A', detail:'No deposit taken', date:'' };
   }
   return item;
 }
@@ -7747,19 +7776,8 @@ function openTenantPanel(tid) {
   const today = new Date(); today.setHours(0,0,0,0);
   const expiring = certs.filter(c => c.expiry && new Date(c.expiry) > today && new Date(c.expiry) - today <= 60*864e5);
 
-  // RAG calculation (simplified)
-  var ragScore = 100; var ragLabel = 'green';
-  const hasGSC = certs.some(c => (c.type||'').toLowerCase().includes('gas') && (!c.expiry || new Date(c.expiry) > today));
-  const hasEICR = certs.some(c => (c.type||'').toLowerCase().includes('eicr') && (!c.expiry || new Date(c.expiry) > today));
-  const hasEPC = certs.some(c => (c.type||'').toLowerCase().includes('epc') && (!c.expiry || new Date(c.expiry) > today));
-  const hasDep = t.scheme && t.scheme_ref;
-  if (!hasGSC) ragScore -= 30;
-  if (!hasEICR) ragScore -= 25;
-  if (!hasEPC) ragScore -= 20;
-  if (!hasDep) ragScore -= 25;
-  if (ragScore < 50) ragLabel = 'red';
-  else if (ragScore < 80) ragLabel = 'amber';
-
+  // Use shared calcRAG for consistency across the whole app
+  const { rag: ragLabel, score: ragScore } = calcRAG(t.prop_id);
   const ragColors = { red: '#E53E3E', amber: '#D97706', green: 'var(--green)' };
 
   document.getElementById('tenant-slide-body').innerHTML = `
@@ -7818,7 +7836,7 @@ function pgTenants(){
 
   const rows = visibleList.length
     ? `<div class="panel"><div class="tw"><table>
-      <thead><tr><th>Name</th><th>Property</th><th>Start</th><th>Deposit</th><th>Compliance</th><th>Docs</th><th>Status</th></tr></thead>
+      <thead><tr><th>Name</th><th>Start</th><th>Deposit</th><th>Compliance</th><th>Docs</th><th>Status</th></tr></thead>
       <tbody>${visibleList.map(t=>{const p=P(t.prop_id)||{address:'—'};const isEnded=t.status==='Ended'||t.archived;
         const ragDots = CHECKLIST_ITEMS.map(item => {
           const cl = _checklistRAG(t, item.key);
@@ -7827,10 +7845,9 @@ function pgTenants(){
         const docCount = D.tenantDocs.filter(d => String(d.tenant_id) === String(t.id)).length;
         return`<tr style="cursor:pointer;${isEnded?'opacity:.65':''}" onclick="openTenantPanel('${t.id}')">
         <td><div style="display:flex;align-items:center;gap:10px"><div class="t-av">${INI(t.name)}</div><div><div class="td-bold">${t.name}${isEnded?endedBadge:''}</div><div style="font-size:11px;color:var(--muted)">${p.address}${p.city?', '+p.city:''}</div></div></div></td>
-        <td style="font-size:12px">${p.address}</td>
         <td>${FMS(t.start||t.start_date)}</td>
         <td>${t.scheme?B('Protected'):'<span style="color:var(--muted);font-size:12px">Not set</span>'}</td>
-        <td><span title="Compliance checklist">${ragDots}</span></td>
+        <td><div style="display:flex;gap:4px;align-items:center">${CHECKLIST_ITEMS.map(item=>{const cl=_checklistRAG(t,item.key);return`<span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:${RAG_COLORS[cl.ra]};cursor:help" title="${item.icon} ${item.label}: ${cl.status}"><span style="font-size:8px;color:#fff;font-weight:700">${cl.ra==='green'?'✓':cl.ra==='amber'?'!':'×'}</span></span>`;}).join('')}</div></td>
         <td><button class="btn btn-sm btn-navy" style="font-size:10px;padding:3px 8px" onclick="event.stopPropagation();moTenantDocs('${t.id}','${t.prop_id}')">📎 ${docCount||''}</button></td>
         <td>${isEnded?B('Ended'):B(t.status)}</td>
       </tr>`}).join('')}</tbody>
@@ -8036,13 +8053,13 @@ function pgTenantDetail(tid) {
       done: propLog.some(e=>e.template_id==='welcome_kit')||tenantLog2.some(e=>e.template_id==='welcome_kit'),
       action:`moWelcomeKit('${t.prop_id}')`, btnLabel:'Send Kit' },
     { icon:'🔥', label:'Gas Safety Certificate served',
-      done: propCerts.some(c=>c.type&&c.type.toLowerCase().includes('gas')),
+      done: propCerts.some(c=>c.type&&c.type.toLowerCase().includes('gas')&&(c.served_to_tenant||c.served)),
       action:`moBulkScan('${t.prop_id}')`, btnLabel:'Upload GSC' },
     { icon:'⚡', label:'EICR served to tenant',
-      done: propCerts.some(c=>c.type&&(c.type.toLowerCase().includes('eicr')||c.type.toLowerCase().includes('electrical'))),
+      done: propCerts.some(c=>c.type&&(c.type.toLowerCase().includes('eicr')||c.type.toLowerCase().includes('electrical'))&&(c.served_to_tenant||c.served)),
       action:`moBulkScan('${t.prop_id}')`, btnLabel:'Upload EICR' },
     { icon:'🏷', label:'EPC served to tenant',
-      done: propCerts.some(c=>c.type&&(c.type.toLowerCase().includes('epc')||c.type.toLowerCase().includes('energy'))),
+      done: propCerts.some(c=>c.type&&(c.type.toLowerCase().includes('epc')||c.type.toLowerCase().includes('energy'))&&(c.served_to_tenant||c.served)),
       action:`moBulkScan('${t.prop_id}')`, btnLabel:'Upload EPC' },
     { icon:'✍️', label:'Written Statement e-signed',
       done: propLog.some(e=>e.template_id?.includes('esign')||e.template_id?.includes('sign'))||tenantLog2.some(e=>e.template_id?.includes('esign')||e.template_id?.includes('sign')),
@@ -8316,18 +8333,30 @@ function moTenantDocs(tenantId, propId) {
     { slot: 'address_1',     icon: '📬', label: 'Proof of Address 1' },
     { slot: 'address_2',     icon: '📬', label: 'Proof of Address 2' },
     { slot: 'reference',     icon: '📋', label: 'References' },
+    { slot: 'guarantor',     icon: '🤝', label: 'Guarantor Document' },
     { slot: 'other',         icon: '📎', label: 'Other Document' },
   ];
 
   const slotRows = SLOTS.map(s => {
     const slotDocs = docs.filter(d => d.slot === s.slot);
-    const docCards = slotDocs.length ? slotDocs.map((d,i) => `
-      <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--off);border-radius:6px;margin-top:4px;font-size:11px">
-        <span>📎</span>
-        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.doc_label||d.file_name||'File'}</span>
-        ${d.doc_type_extracted ? `<span style="color:var(--green-dark);font-size:10px">✦ ${d.doc_type_extracted}</span>` : ''}
-        <a href="#" onclick="viewDocInline('${getDocUrl(d)}','${(d.doc_label||'File').replace(/'/g,"\\'")}');return false" style="font-size:10px;color:var(--blue)">View</a>
-      </div>`).join('') : '';
+    const docCards = slotDocs.length ? slotDocs.map((d) => {
+      const mismatch = d.name_mismatch;
+      const scanInfo = d.extracted_name
+        ? `<div style="margin-top:4px;padding:5px 8px;background:${mismatch?'rgba(229,62,62,0.05)':'var(--green-bg)'};border:1px solid ${mismatch?'rgba(229,62,62,0.2)':'rgba(0,0,0,0.05)'};border-radius:5px;font-size:10px">
+            ${d.doc_type_extracted?`<span style="color:var(--muted)">✦ ${d.doc_type_extracted}</span> · `:''}
+            <span style="color:${mismatch?'var(--red)':'var(--green-dark)'}">👤 ${d.extracted_name}</span>
+            ${mismatch?`<span style="color:var(--red);font-weight:600"> ⚠ name mismatch</span>`:''}
+            ${d.expiry?` · Exp ${new Date(d.expiry).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'})}`:''}
+           </div>`
+        : d.doc_type_extracted ? `<div style="margin-top:3px;font-size:10px;color:var(--green-dark)">✦ ${d.doc_type_extracted}</div>` : '';
+      return `<div style="display:flex;flex-direction:column;padding:6px 10px;background:var(--off);border-radius:6px;margin-top:4px">
+        <div style="display:flex;align-items:center;gap:8px;font-size:11px">
+          <span>📎</span>
+          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.doc_label||d.file_name||'File'}</span>
+          <a href="#" onclick="viewDocInline('${getDocUrl(d)}','${(d.doc_label||'File').replace(/'/g,"\\'")}');return false" style="font-size:10px;color:var(--blue);flex-shrink:0">View</a>
+        </div>${scanInfo}
+      </div>`;
+    }).join('') : '';
 
     return `<div style="padding:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;display:flex;align-items:flex-start;gap:12px">
       <span style="font-size:22px;flex-shrink:0">${s.icon}</span>
@@ -8349,7 +8378,7 @@ function moTenantDocs(tenantId, propId) {
   }).join('');
 
   openMo(`📎 Documents — ${t.name}`, `${t.email||'No email'} · ${slotRows.split('id="').length-1} slots`, `
-    <div style="max-height:55vh;overflow-y:auto;padding:0 2px">${slotRows}</div>
+    <div style="max-height:72vh;overflow-y:auto;padding:0 2px">${slotRows}</div>
   `, `<button class="btn" onclick="closeMo()">Close</button>`);
 }
 
@@ -10006,7 +10035,7 @@ function showCalDay(yr,mo,d){
 const PAGES={
   dashboard:()=>pgDashboard(),
   properties:()=>pgProperties(),
-  tenants:()=>pgTenants(),
+  tenants:(id)=>{ if (!id) window._tenantFilter = 'Active'; pgTenants(); },
   compliance:()=>pgCompliance(),
   maintenance:()=>pgMaintenance(),
   'rent-finance':()=>pgRentFinance(),
