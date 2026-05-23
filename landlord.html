@@ -1720,6 +1720,24 @@ async function scanAndFill(file, onResult, customPrompt){
   }
 }
 
+// ══════════════════════════════════════════════════════════════════
+// NEXLET DOCUMENT UPLOAD STANDARD — APPLIES TO ALL UPLOAD SECTIONS
+// Every document upload in the app MUST follow this pattern:
+//
+//  1. SCAN SLOT     — renderScanSlot() or equivalent scan-box with AI scanner badge
+//  2. AI EXTRACTION — scanAndFill() extracts: type, issued, expiry, engineer,
+//                     cert_ref (reference/serial number), amount, address
+//  3. FORM FIELDS   — ALL extracted fields populate editable inputs before save:
+//                     issued date, expiry date, engineer/provider, reference number, amount
+//  4. SAVE PAYLOAD  — ALL fields must be included in the DB insert/update:
+//                     issued, expiry, engineer, cert_ref, amount, status, has_file
+//  5. FILE STORAGE  — File URL stored in file_url column (not overwriting engineer)
+//  6. FALLBACK      — Graceful degradation if optional columns don't exist yet
+//  7. OTHER SLOT    — Every upload section must include an Other free-upload slot
+//
+// When adding new upload sections: audit against this checklist before committing.
+// When fixing existing sections: apply all 7 points, not just the immediate bug.
+// ══════════════════════════════════════════════════════════════════
 // RULE: All upload slots must include AI scanner — do not remove
 function renderScanSlot(id, onchangeFn, label, hint) {
   return `<div class="scan-box" id="${id}">
@@ -1752,22 +1770,29 @@ async function uploadScanCert(certId, input){
   try{
     await scanAndFill(file, async (parsed)=>{
       const updates={has_file:true};
-      if(parsed.expiry) updates.expiry=parsed.expiry;
-      if(parsed.expiry) updates.status=new Date(parsed.expiry)<new Date()?'Expired':'Valid';
+      if(parsed.expiry)  { updates.expiry=parsed.expiry; updates.status=new Date(parsed.expiry)<new Date()?'Expired':'Valid'; }
+      if(parsed.issued)    updates.issued    = parsed.issued;
+      if(parsed.ref||parsed.reference||parsed.cert_number) updates.cert_ref = parsed.ref||parsed.reference||parsed.cert_number;
+      if(parsed.engineer)  updates.engineer  = parsed.engineer;
       try {
         const ext = file.name.split('.').pop() || 'pdf';
         const fpath = 'certs/'+currentUser.id+'/'+certId+'.'+ext;
         const { error: upErr } = await sb.storage.from('documents').upload(fpath, file, { contentType: file.type, upsert: true });
         if (!upErr) {
           const { data: urlData } = sb.storage.from('documents').getPublicUrl(fpath);
-          if (urlData?.publicUrl) updates.engineer = urlData.publicUrl;
-        } else if (parsed.engineer) { updates.engineer = parsed.engineer; }
-      } catch(ue) { if(parsed.engineer) updates.engineer = parsed.engineer; }
+          // Store URL in dedicated field; keep engineer as the person/company name
+          if (urlData?.publicUrl) updates.file_url = urlData.publicUrl;
+        }
+      } catch(ue) { /* file upload failed — data fields still saved */ }
       const{error}=await sb.from('certificates').update(updates).eq('id',certId);
-      if(error){toast('Error: '+error.message,true);return;}
+      if(error){
+        // Graceful fallback if file_url or cert_ref column missing
+        const{file_url,cert_ref,issued,...safeUpdates}=updates;
+        await sb.from('certificates').update(safeUpdates).eq('id',certId);
+      }
       const c=D.certs.find(x=>x.id===certId);
       if(c) Object.assign(c,updates,{file:true});
-      toast('✓ Scanned & saved — file uploaded, expiry auto-filled!');
+      toast('✓ Scanned & saved — expiry, reference and engineer auto-filled!');
       nav(window._currentPage, window._currentParam);
     });
   }catch(e){
@@ -1874,6 +1899,7 @@ async function saveCertToDB() {
     if (!certType) { toast('Please enter a name for the document', true); return; }
   }
   const expiry = document.getElementById('ce')?.value || null;
+  const issued = document.getElementById('ci')?.value || null;
   const engineer = document.getElementById('ceng')?.value.trim() || null;
   const certRef = document.getElementById('cref')?.value.trim() || null;
   const certAmt = parseFloat(document.getElementById('camt')?.value) || null;
@@ -1884,7 +1910,7 @@ async function saveCertToDB() {
 
   const cert = {
     prop_id: String(propId), type: certType,
-    expiry: expiry || null, status,
+    expiry: expiry || null, issued: issued || null, status,
     has_file: true, served: false,
     engineer: engineer || null,
     cert_ref: certRef || null,
@@ -1894,8 +1920,8 @@ async function saveCertToDB() {
 
   const { data, error } = await sb.from('certificates').insert(cert).select().single();
   if (error) {
-    if (error.message.includes('amount') || error.message.includes('cert_ref')) {
-      const { amount, cert_ref, ...safeCert } = cert;
+    if (error.message.includes('amount') || error.message.includes('cert_ref') || error.message.includes('issued')) {
+      const { amount, cert_ref, issued: _iss, ...safeCert } = cert;
       const { data: d2, error: e2 } = await sb.from('certificates').insert(safeCert).select().single();
       if (e2) { toast('Error: ' + e2.message, true); return; }
       D.certs.push({...d2, file: true});
@@ -3010,15 +3036,24 @@ async function _savePropertySetupToDB() {
       if (!pe) { const p = P(pid); if (p) Object.assign(p, propUpdates); }
     }
 
-    // ② Certificates
+    // ② Certificates — upsert by matching existing cert type for this property to avoid duplicates on re-run
     const mkStatus = exp => exp ? (new Date(exp) < new Date() ? 'Expired' : 'Valid') : 'Valid';
-    const certsToInsert = [];
-    if (s.gasExpiry || s.gasEngineer)   certsToInsert.push({ prop_id:String(pid), type:'Gas Safety Certificate (GSC)',                    expiry:s.gasExpiry||null,  engineer:s.gasEngineer||null,  status:mkStatus(s.gasExpiry),  has_file:false, served:false, user_id:currentUser.id });
-    if (s.eicrExpiry || s.eicrEngineer) certsToInsert.push({ prop_id:String(pid), type:'Electrical Installation Condition Report (EICR)', expiry:s.eicrExpiry||null, engineer:s.eicrEngineer||null, status:mkStatus(s.eicrExpiry), has_file:false, served:false, user_id:currentUser.id });
-    if (s.epcRating || s.epcExpiry)     certsToInsert.push({ prop_id:String(pid), type:'Energy Performance Certificate (EPC)',             expiry:s.epcExpiry||null,  engineer:null,                 status:mkStatus(s.epcExpiry),  has_file:false, served:false, user_id:currentUser.id });
-    if (certsToInsert.length) {
-      const { data: cd } = await sb.from('certificates').insert(certsToInsert).select();
-      if (cd) D.certs.push(...cd.map(c=>({...c,file:false})));
+    const existingCerts = D.certs.filter(c => String(c.prop_id) === String(pid));
+    const findExistingCert = (typeFragment) => existingCerts.find(c => (c.type||'').toLowerCase().includes(typeFragment));
+    const certsToProcess = [];
+    if (s.gasExpiry || s.gasEngineer)   certsToProcess.push({ existing: findExistingCert('gas'),  row: { prop_id:String(pid), type:'Gas Safety Certificate (GSC)',                    expiry:s.gasExpiry||null,  engineer:s.gasEngineer||null,  status:mkStatus(s.gasExpiry),  has_file:false, served:false, user_id:currentUser.id } });
+    if (s.eicrExpiry || s.eicrEngineer) certsToProcess.push({ existing: findExistingCert('eicr'), row: { prop_id:String(pid), type:'Electrical Installation Condition Report (EICR)', expiry:s.eicrExpiry||null, engineer:s.eicrEngineer||null, status:mkStatus(s.eicrExpiry), has_file:false, served:false, user_id:currentUser.id } });
+    if (s.epcRating || s.epcExpiry)     certsToProcess.push({ existing: findExistingCert('epc'),  row: { prop_id:String(pid), type:'Energy Performance Certificate (EPC)',             expiry:s.epcExpiry||null,  engineer:null,                 status:mkStatus(s.epcExpiry),  has_file:false, served:false, user_id:currentUser.id } });
+    for (const { existing, row } of certsToProcess) {
+      if (existing) {
+        // Update existing cert in place
+        const { data: ud } = await sb.from('certificates').update({ expiry:row.expiry, engineer:row.engineer, status:row.status }).eq('id', existing.id).select().single();
+        if (ud) Object.assign(existing, ud);
+      } else {
+        // Insert new cert
+        const { data: cd } = await sb.from('certificates').insert(row).select().single();
+        if (cd) D.certs.push({...cd, file:false});
+      }
     }
 
     // ③ Insurance
@@ -5867,7 +5902,7 @@ function pdTabContent(pid, tab) {
       <div class="panel" style="margin-bottom:16px">
         <div class="ph2"><div><h2>🏠 Property details</h2></div><button class="btn btn-sm" onclick="moEditProp('${pid}')">✎ Edit</button></div>
         <div style="padding:14px 18px"><div class="det-grid">
-          ${[['Address',p.address],['City',p.city],['Postcode',p.postcode],['Type',p.type||'—'],['Bedrooms',p.beds||'—'],['Bathrooms',p.bathrooms||'—'],['Monthly rent',p.rent?'£'+p.rent.toLocaleString():'—'],['Council tax band',p.council_tax_band||'—'],['EPC rating',p.epc||'—'],['EPC expiry',FMS(p.epc_expiry)]].map(([l,v])=>`<div class="det-f"><label>${l}</label><span>${v}</span></div>`).join('')}
+          ${[['Address',p.address],['City',p.city],['Postcode',p.postcode],['Type',p.type||'—'],['Bedrooms',p.beds||'—'],['Bathrooms',p.bathrooms||'—'],['Monthly rent',p.rent?'£'+p.rent.toLocaleString():'—'],['Council tax band',p.council_tax_band||'—'],['EPC rating',p.epc_rating||'—'],['EPC expiry',FMS(p.epc_expiry)]].map(([l,v])=>`<div class="det-f"><label>${l}</label><span>${v}</span></div>`).join('')}
         </div></div>
       </div>
 
@@ -14755,7 +14790,7 @@ function _exportProperties(pid) {
     bathrooms: p.bathrooms,
     monthly_rent: p.rent,
     status: p.status || 'active',
-    epc_rating: p.epc,
+    epc_rating: p.epc_rating,
     epc_expiry: _expFmt(p.epc_expiry),
     licence_type: p.licence_type,
     licence_expiry: _expFmt(p.licence_expiry),
