@@ -188,6 +188,7 @@ rentsafeai/
 | `tenancy_started_at` | timestamptz | Session 18 |
 | `tenancy_ended_at` | timestamptz | Session 18 |
 | `vacant_since` | timestamptz | Session 18 |
+| `na_docs` | jsonb | Session 23: Array of doc IDs marked as N/A for this property (e.g. `["legionella","pat"]`). Default `[]`. Run: `ALTER TABLE properties ADD COLUMN IF NOT EXISTS na_docs jsonb DEFAULT '[]'::jsonb;` |
 
 #### `tenants`
 | Column | Type | Notes |
@@ -247,6 +248,8 @@ rentsafeai/
 | `amount` | numeric | |
 | `due_date`, `paid_date` | date | |
 | `status` | text | `paid`, `overdue`, `pending` |
+| `month` | text | Session 22 fix: month label e.g. `2026-05` — was missing from DB write |
+| `notes` | text | Session 22 fix: payment notes — was missing from DB write |
 
 #### `tenant_maintenance`
 Maintenance jobs submitted via the tenant portal (token-based, no auth).
@@ -2454,4 +2457,146 @@ Final pricing after the 19 May 2026 repricing pass (founding / standard monthly)
 | Day 30 journey items | 7979 | Now deposit-only (3 items) |
 | Deposit protect reminder | ~7530 | New block in `checkAllReminders()` |
 | Mark Served button | ~6908 | In compliance detail cert row button IIFE |
+
+
+---
+
+### Session 22 — 24 May 2026 — Rent Collection, Documents & E-Sign Full Audit
+
+**Date:** 24 May 2026
+**File modified:** `landlord.html`
+
+#### Bug Fixes — Rent Collection
+
+| # | Bug | Fix |
+|---|-----|-----|
+| 1 | **`savePaymentRecord` dropped `month` and `notes`** | `dp` payload now includes `month: month\|\|null` and `notes: notes\|\|null`. Both were passed in but never written to DB. Every payment saved without a month label. |
+| 2 | **`pgRent()` showed only raw DB records** | Replaced with `buildRentSchedule()` per property — now shows full schedule including auto-generated rows, matching property detail view. Orphan DB records (properties without active tenant) appended separately. "✓ Mark received" button on unrecorded overdue rows. |
+| 3 | **Nav badge missed auto-generated overdue rows** | Badge now also iterates `buildRentSchedule()` rows with no DB id and `Late`/`Due` status. No longer shows 0 when months are genuinely unpaid. |
+| 4 | **Overdue reminder suppressed by same-month payment from prior year** | Added `.getFullYear()===today.getFullYear()` to the paid check in `checkAllReminders()`. |
+| 5 | **Receipt checkbox stale after property dropdown change** | Added `onchange` handler to property dropdown in `moAddPayment` — refreshes checkbox state and label for the newly selected property's tenant. Added `id="pay-receipt-lbl"` to the label div. |
+| 6 | **`buildRentSchedule` never assigned `'Late'` status** | `cur < today` → `'Late'`, `cur.getTime() === today.getTime()` → `'Due'`. Auto-rows now correctly distinguish overdue from due-today. |
+
+#### Bug Fixes — Documents
+
+| # | Bug | Fix |
+|---|-----|-----|
+| 7 | **`dlUpload` used wrong storage bucket** | Changed from `esign-documents` to `documents` bucket — consistent with all other cert/doc uploads. |
+| 8 | **Doc Library showed `expiry` as "Uploaded" date** | Now uses `created_at` (fallback to `expiry`) for the upload date label. |
+
+#### Bug Fixes — E-Sign
+
+| # | Bug | Fix |
+|---|-----|-----|
+| 11 | **E-sign status mismatch** | `_sendEsignRequest` inserted `status: 'pending'` but tenant card queried `r.status === 'sent'`. Changed insert to `'sent'`. Pending e-sign badges now appear correctly. |
+| 12 | **`esignShowOptionA` function body split** | `_esignToggleEdit` was accidentally nested inside the opening of `esignShowOptionA`. Restructured as two properly separate top-level functions. |
+
+#### Key Function Changes
+
+| Function | Change |
+|---|---|
+| `savePaymentRecord(payload, editId)` | Now destructures and writes `month` + `notes` to `dp` |
+| `pgRent()` | Full rewrite — uses `buildRentSchedule()` across all properties |
+| `buildRentSchedule(pid)` | `cur < today` → `'Late'`; `cur === today` → `'Due'` |
+| `renderNewUserStepper()` (nav badge block) | Badge counts auto-generated overdue rows |
+| `checkAllReminders()` — rent overdue check | Year added to paid-check: `.getFullYear()===today.getFullYear()` |
+| `moAddPayment()` | Property dropdown has `onchange` to refresh receipt checkbox/label |
+| `dlUpload()` | Storage bucket: `esign-documents` → `documents` |
+| `pgDocLibrary()` | Upload date uses `created_at` not `expiry` |
+| `_sendEsignRequest()` | Insert `status` changed from `'pending'` to `'sent'` |
+| `esignShowOptionA()` / `_esignToggleEdit()` | Functions separated — were incorrectly interleaved |
+
+---
+
+### Session 23 — 24 May 2026 — W2 E-sign Placement, C2 Optional Doc Toggles, U3 Onboarding, Deposit Receipt Template
+
+**Date:** 24 May 2026
+**File modified:** `landlord.html`
+
+#### U3 — New User Onboarding Wizard
+
+`renderNewUserStepper()` fully rebuilt. Two-mode system:
+
+**Mode 1 — Full-screen wizard** (first login, zero properties):
+- Overlays entire screen with blurred navy backdrop (`onboard-wizard-overlay` div injected into `<body>`)
+- 4 steps with live progress bar, vertical stepper, connecting lines turn green as steps complete
+- Completed steps struck through. Next actionable step highlighted navy with CTA button
+- Dismissed via `nexlet_onboard_wizard_v1` localStorage key — never shows again once skipped
+- On close: calls `renderNewUserStepper()` again to render slot widget
+
+**Mode 2 — Dashboard slot widget** (after wizard dismissed, steps still incomplete):
+- Compact panel in `new-user-stepper-slot` on dashboard
+- Shows 4 rows with progress dots + "N of 4 complete" header with mini progress bar
+- Only next incomplete step gets CTA button
+- Dismissed via `nexlet_onboard_stepper_v1` key
+
+**Real progress detection** (was hardcoded `false` before):
+- Step 1: `D.properties.length > 0`
+- Step 2: active tenant exists
+- Step 3: any cert with `has_file` uploaded
+- Step 4: `welcome_kit` in email log
+
+**RTR/KYC nudge (Option B contextual):**
+- Step 2 (Add tenant) has a `note` field: amber pill `"⚠️ Right to Rent check required — verify ID, share code or visa before move-in"` with `Go to tenant →` link
+- Only appears when `hasTenant === true` (tenant just added — exactly the right moment)
+- Renders in both wizard and slot widget
+
+#### C2 — Optional Doc N/A Toggles
+
+**New functions:**
+- `bypassDoc(pid, docId)` — adds `docId` to `p.na_docs` array, saves to Supabase `properties.na_docs` (jsonb), logs to audit trail, re-navs
+- `unbypassDoc(pid, docId)` — removes `docId` from array, same persistence
+
+**`getDocStatus(doc, certList, insuranceList, naDocs)`:**
+- New optional 4th param `naDocs`
+- If `!doc.mandatory && naDocs.includes(doc.id)`: returns `{ lbl:'N/A', overdue:false, isNA:true }` immediately
+
+**`renderCompGroup(..., naDocs)`:**
+- New `naDocs` param passed to `getDocStatus` and `overdueCount` filter
+- `_naBtn` variable: pill-style `N/A` button on non-mandatory, non-insurance rows. When `st.isNA`: shows `↩ Undo N/A` instead
+- Row states: N/A rows → only Undo button. Overdue rows → Upload + N/A. Valid rows → edit/view/delete + N/A
+
+**Recommended block:** Same `_recNA` treatment — `getDocStatus` passes `pNaDocs`, `_recNA` button wired into output
+
+**All 5 `renderCompGroup` call sites** updated to pass `pNaDocs = Array.isArray(p?.na_docs) ? p.na_docs : []`
+
+**Supabase column required:**
+```sql
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS na_docs jsonb DEFAULT '[]'::jsonb;
+```
+
+#### W2 — E-sign Placement (Two New Entry Points)
+
+**Entry point 1 — Compliance tab, Written Statement row:**
+- `_esignTenant` = active tenant lookup for `pid`
+- `_esignBtn` green pill: `✍ Send for e-sign` + sub-label `AI generates & tenant signs online`
+- Appears on overdue rows (alongside Upload) and valid rows
+- Hidden if no active tenant or doc is N/A
+
+**Entry point 2 — Templates page, Written Statement card:**
+- E-sign button below "Generate with AI" on `writtenstatement` card only
+- Finds first active tenant across portfolio for `moEsign()` call
+- Toast `"Add a tenant first"` if no tenant exists
+- Sub-label: `AI generates & tenant signs online`
+
+#### Deposit Receipt Letter Template
+
+New template added to **Tenancy Documents** category (sits above Deposit Deduction — chronological order):
+
+| Field | Value |
+|---|---|
+| Template ID | `depositreceipt` |
+| Name | `Deposit Receipt Letter` |
+| Tag | `Deposit` |
+| Category | `LEGAL_DOC_TYPES` |
+
+**Form fields (`TEMPLATE_FIELDS.depositreceipt`):**
+- Deposit amount (£) — required
+- Protection scheme — dropdown: DPS / MyDeposits / TDS / Not yet protected
+- Scheme reference — optional text
+- Date deposit received — required
+
+**AI prompt:** Generates UK landlord deposit receipt letter covering: amount, date received, scheme + reference, 30-day legal protection deadline (Housing Act 2004), note that Prescribed Information follows separately. Professional tone, addressed to tenant by name.
+
+**Doc name map + LEGAL_DOC_TYPES:** Both updated with `depositreceipt`.
 
