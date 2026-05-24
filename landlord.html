@@ -4688,12 +4688,12 @@ function getTodayEventsHtml(){
       var d=new Date(e.date); d.setHours(0,0,0,0);
       return d.getTime()===t.getTime();
     });
-    if(!evs.length) return '<div class="empty"><div class="empty-ic">📅</div><div class="empty-t">No tasks today</div><div class="empty-s">Upcoming deadlines appear here</div></div>';
+    if(!evs.length) return '<div class="empty" style="cursor:pointer" onclick="nav(\'calendar\')"><div class="empty-ic">📅</div><div class="empty-t">No tasks today</div><div class="empty-s">View full calendar →</div></div>';
     return evs.map(function(e){
       var col=e.urg==='red'?'var(--red)':e.urg==='amber'?'var(--amber)':'var(--blue)';
       var bg=e.urg==='red'?'var(--red-bg)':e.urg==='amber'?'var(--amber-bg)':'var(--blue-bg)';
       var d=new Date(e.date);
-      var clickFn="nav('calendar');setTimeout(function(){showCalDay("+d.getFullYear()+","+d.getMonth()+","+d.getDate()+")},200)";
+      var clickFn="event.stopPropagation();nav('calendar');setTimeout(function(){showCalDay("+d.getFullYear()+","+d.getMonth()+","+d.getDate()+")},200)";
       return '<div class="ai-row" style="cursor:pointer" onclick="'+clickFn+'" onmouseenter="this.style.background=\'var(--off)\'" onmouseleave="this.style.background=\'transparent\'"><div style="font-size:16px;min-width:32px;text-align:center">'+e.icon+'</div><div class="ai-body"><div class="ai-title">'+e.label+'</div><div class="ai-sub">'+e.sub+'</div></div><span style="font-size:11px;font-weight:600;color:'+col+';background:'+bg+';padding:2px 8px;border-radius:100px">Today</span><span style="color:var(--navy);font-weight:600;font-size:13px;margin-left:4px">›</span></div>';
     }).join('');
   } catch(err) {
@@ -4972,8 +4972,11 @@ function pgDashboard(){
         <div class="ph2"><div><h2>Action items</h2><p>Sorted by urgency</p></div></div>
         ${acts.length?acts.map(a=>`<div class="ai-row" style="cursor:pointer" onclick="${a.link ? `nav('${a.link}')` : `nav('compliance')`}" onmouseenter="this.style.background='var(--off)'" onmouseleave="this.style.background='transparent'"><span class="badge b-${a.b}">${a.l}</span><div class="ai-body"><div class="ai-title">${a.t}</div><div class="ai-sub">${a.s}</div></div><span style="color:var(--navy);font-weight:600">›</span></div>`).join(''):'<div class="empty"><div class="empty-ic">✓</div><div class="empty-t">All clear</div></div>'}
       </div>
-      <div class="panel">
-        <div class="ph2"><div><h2>Today</h2><p>${today}</p></div></div>
+      <div class="panel" style="cursor:pointer" onclick="nav('calendar')">
+        <div class="ph2" style="cursor:pointer">
+          <div><h2>Today</h2><p>${today}</p></div>
+          <span style="font-size:13px;font-weight:600;color:var(--navy)">View calendar ›</span>
+        </div>
         ${getTodayEventsHtml()}
       </div>
     </div>
