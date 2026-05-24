@@ -148,12 +148,15 @@ tr:hover td{background:rgba(246,248,251,.8)}
 .cal-dh{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px}
 .cal-dn{text-align:center;font-size:10px;font-weight:600;text-transform:uppercase;color:var(--muted)}
 .cal-g{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
-.cc{aspect-ratio:1;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--muted);cursor:pointer;position:relative}
+.cc{min-height:58px;border-radius:7px;display:flex;flex-direction:column;align-items:center;padding:6px 2px 4px;font-size:13px;color:var(--muted);cursor:pointer;position:relative}
 .cc:hover{background:var(--off)}
 .cc.cm{color:var(--txt)}
 .cc.td{background:var(--navy);color:#fff;font-weight:600}
 .cc.hd::after{content:'';position:absolute;bottom:4px;width:4px;height:4px;border-radius:50%;background:var(--green)}
 .cc.td.hd::after{background:rgba(255,255,255,.7)}
+.cal-tip{position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;border-radius:8px;padding:8px 10px;min-width:160px;max-width:220px;z-index:9999;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+.cal-tip-row{display:flex;align-items:center;gap:6px;padding:2px 0;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-tip-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
 .detail-back{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;cursor:pointer;background:none;border:none;font-family:var(--font);margin-bottom:18px;padding:0}
 .detail-back:hover{color:var(--navy)}
 .coll{background:var(--white);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:12px}
@@ -1933,7 +1936,7 @@ async function saveCertToDB() {
       D.certs.push({...d2, file: true});
       await _certUploadFile(d2.id, certType, engineer);
       await logAudit('ADD_CERT', 'certificates', d2.id, `Added ${certType}`);
-      closeMo(); toast('✓ Certificate saved!'); nav(window._currentPage, window._currentParam); return;
+      closeMo(); toast('✓ Certificate saved' + (expiry ? ' · 📅 Expiry added to calendar' : '') + '!'); nav(window._currentPage, window._currentParam); return;
     }
     toast('Error: ' + error.message, true); return;
   }
@@ -1942,7 +1945,7 @@ async function saveCertToDB() {
   await _certUploadFile(data.id, certType, engineer);
   await logAudit('ADD_CERT', 'certificates', data.id, `Added ${certType}`);
   closeMo();
-  toast('✓ Certificate saved!');
+  toast('✓ Certificate saved' + (expiry ? ' · 📅 Expiry added to calendar' : '') + '!');
   nav(window._currentPage, window._currentParam);
 }
 
@@ -7350,6 +7353,7 @@ const REMINDER_TYPES = [
   { id:'compliance_digest', icon:'📊', label:'Compliance score digest', desc:'Weekly email with your portfolio health score and action items', milestones:[7], unit:'days', action:'nav(\'compliance\')', mandatory:false },
   { id:'inspection', icon:'🔍', label:'Inspection due',             desc:'Scheduled property inspection approaching',       milestones:[7,1],    unit:'days', action:'nav(\'inspections\')', mandatory:false },
   { id:'deposit_protect', icon:'🏦', label:'Deposit protection deadline', desc:'30-day deadline to register deposit — fires at day 25 and day 28', milestones:[5,2], unit:'days', action:'nav(\'tenants\')', mandatory:true },
+  { id:'monthly_calendar', icon:'📅', label:'Monthly calendar summary', desc:'Email on the 1st of each month listing all events — certs, rent, inspections, tenancy ends', milestones:[1], unit:'monthly', action:'nav(\'calendar\')', mandatory:false },
 ];
 
 function getReminderPrefs() {
@@ -7704,6 +7708,91 @@ async function checkAllReminders() {
       `⚠️ Deposit protection due in ${daysLeft}d — ${t.name} · ${prop.address}`,
       html, 'REMINDER_DEPOSIT_PROTECT', t.id, `dep_${daysLeft}d`
     );
+  }
+
+  // ── 14. Monthly calendar summary (fires on 1st of each month) ──
+  if (isReminderEnabled('cert') && today.getDate() === 1 && D.properties.length) {
+    const monthKey = today.toISOString().slice(0,7); // e.g. '2026-06'
+    const alreadySentMonthly = await alreadySent('REMINDER_MONTHLY_CALENDAR', 'portfolio', `monthly_${monthKey}`);
+    if (!alreadySentMonthly) {
+      const monthLabel = today.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+      const monthEnd = new Date(today.getFullYear(), today.getMonth()+1, 0);
+
+      // Get all events for this calendar month
+      const allEvs = getCalEvents();
+      const monthEvs = allEvs.filter(e => {
+        const d = new Date(e.date);
+        return d >= today && d <= monthEnd;
+      });
+
+      if (monthEvs.length) {
+        // Group by week
+        const weeks = [[], [], [], [], []];
+        monthEvs.forEach(e => {
+          const d = new Date(e.date);
+          const weekIdx = Math.min(Math.floor((d.getDate()-1)/7), 4);
+          weeks[weekIdx].push(e);
+        });
+
+        const weekHtml = weeks.map((wk, i) => {
+          if (!wk.length) return '';
+          const wStart = new Date(today.getFullYear(), today.getMonth(), i*7+1);
+          const wEnd   = new Date(today.getFullYear(), today.getMonth(), Math.min((i+1)*7, monthEnd.getDate()));
+          const wLabel = `${wStart.toLocaleDateString('en-GB',{day:'numeric',month:'short'})} – ${wEnd.toLocaleDateString('en-GB',{day:'numeric',month:'short'})}`;
+          const rows = wk.map(e => {
+            const col = e.urg==='red'?'#E53E3E':e.urg==='amber'?'#D97706':'#3B6FE8';
+            const evDate = new Date(e.date).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
+            return `<tr>
+              <td style="padding:7px 12px;border-bottom:1px solid #eee;font-size:12px;color:#7A8FA6;white-space:nowrap">${evDate}</td>
+              <td style="padding:7px 12px;border-bottom:1px solid #eee;font-size:13px">${e.icon} ${e.label}</td>
+              <td style="padding:7px 12px;border-bottom:1px solid #eee;font-size:12px;color:#7A8FA6">${e.sub.split('·')[0].trim()}</td>
+              <td style="padding:7px 12px;border-bottom:1px solid #eee;font-size:11px;font-weight:700;color:${col}">${e.urg==='red'?'Urgent':e.urg==='amber'?'Due soon':'Upcoming'}</td>
+            </tr>`;
+          }).join('');
+          return `<div style="margin-bottom:16px">
+            <div style="font-size:11px;font-weight:700;color:#7A8FA6;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">${wLabel}</div>
+            <table style="width:100%;border-collapse:collapse;border:1px solid #eee;border-radius:8px;overflow:hidden">
+              <thead><tr style="background:#F6F8FB">
+                <th style="padding:7px 12px;text-align:left;font-size:10px;font-weight:700;color:#7A8FA6;text-transform:uppercase">Date</th>
+                <th style="padding:7px 12px;text-align:left;font-size:10px;font-weight:700;color:#7A8FA6;text-transform:uppercase">Event</th>
+                <th style="padding:7px 12px;text-align:left;font-size:10px;font-weight:700;color:#7A8FA6;text-transform:uppercase">Property</th>
+                <th style="padding:7px 12px;text-align:left;font-size:10px;font-weight:700;color:#7A8FA6;text-transform:uppercase">Priority</th>
+              </tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>`;
+        }).join('');
+
+        const urgCount = monthEvs.filter(e=>e.urg==='red').length;
+        const urgBanner = urgCount ? `<div style="background:rgba(229,62,62,0.07);border:1px solid rgba(229,62,62,0.25);border-radius:8px;padding:12px 16px;margin-bottom:18px;display:flex;align-items:center;gap:12px">
+          <div style="font-size:24px">🔴</div>
+          <div><div style="font-size:13px;font-weight:700;color:#E53E3E">${urgCount} urgent item${urgCount!==1?'s':''} this month</div>
+          <div style="font-size:12px;color:#7A8FA6;margin-top:2px">These need attention early in ${monthLabel}</div></div>
+        </div>` : '';
+
+        const html = `<div style="font-family:DM Sans,Arial,sans-serif;color:#1A2B45;max-width:620px;margin:0 auto">
+          <div style="background:#0B1E3D;padding:20px 24px;border-radius:10px 10px 0 0">
+            <div style="font-size:17px;font-weight:700;color:#fff">NexLet</div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:3px">📅 Monthly calendar — ${monthLabel}</div>
+          </div>
+          <div style="background:#fff;border:1px solid #E4EAF1;border-top:none;border-radius:0 0 10px 10px;padding:24px">
+            <h2 style="font-size:16px;font-weight:700;margin:0 0 6px">Your ${monthLabel} calendar</h2>
+            <p style="font-size:13px;color:#7A8FA6;margin:0 0 18px">${monthEvs.length} event${monthEvs.length!==1?'s':''} across ${D.properties.length} propert${D.properties.length!==1?'ies':'y'}</p>
+            ${urgBanner}
+            ${weekHtml}
+            <div style="text-align:center;margin-top:20px">
+              <a href="https://nexlet.co.uk/landlord.html#calendar" style="background:#0B1E3D;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;display:inline-block">Open calendar →</a>
+            </div>
+            <p style="font-size:11px;color:#999;margin-top:16px;text-align:center;border-top:1px solid #eee;padding-top:12px">Sent monthly by NexLet · Manage reminders in Settings</p>
+          </div>
+        </div>`;
+
+        await sendReminder(
+          `📅 Your ${monthLabel} property calendar — ${monthEvs.length} event${monthEvs.length!==1?'s':''}`,
+          html, 'REMINDER_MONTHLY_CALENDAR', 'portfolio', `monthly_${monthKey}`
+        );
+      }
+    }
   }
 }
 
@@ -9866,6 +9955,18 @@ function getCalEvents(){
     }
   });
 
+  // ── Scheduled inspections ──
+  D.properties.forEach(p=>{
+    (p.inspections||[]).forEach(ins=>{
+      if(!ins.date) return;
+      const d=new Date(ins.date); d.setHours(0,0,0,0);
+      const days=Math.round((d-today)/864e5);
+      if(days<-1||days>365) return;
+      const urg=days<0?'red':days<=7?'amber':'blue';
+      events.push({date:ins.date,type:'inspection',label:`Inspection — ${p.address.split(',')[0]}`,sub:`${ins.type||'Routine'} · ${ins.inspector?'Inspector: '+ins.inspector+' · ':''}${p.address}`,urg,days,icon:'🔍',pid:p.id});
+    });
+  });
+
   return events.sort((a,b)=>new Date(a.date)-new Date(b.date));
 }
 
@@ -9913,10 +10014,21 @@ function pgCalendar(){
     const isToday=(yr===now.getFullYear()&&mo===now.getMonth()&&d===now.getDate());
     const dayEvs=evMap[d]||[];
     const dotColors=[...new Set(dayEvs.map(e=>e.urg==='red'?'#E53E3E':e.urg==='amber'?'#D97706':'#3B6FE8'))].slice(0,3);
-    const dots=dotColors.map(c=>`<div style="width:4px;height:4px;border-radius:50%;background:${c}"></div>`).join('');
-    cells+=`<div class="cc cm${isToday?' td':''}" onclick="${dayEvs.length?`showCalDay(${yr},${mo},${d})`:'void(0)'}" style="cursor:${dayEvs.length?'pointer':'default'}">
-      ${d}
-      <div style="display:flex;justify-content:center;gap:2px;margin-top:2px;min-height:6px">${dots}</div>
+    const dots=dotColors.map(c=>`<div style="width:4px;height:4px;border-radius:50%;background:${c};flex-shrink:0"></div>`).join('');
+    const firstEv = dayEvs[0];
+    const evLabel = firstEv ? `<div style="font-size:9px;line-height:1.2;text-align:center;padding:0 2px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${firstEv.urg==='red'?'#E53E3E':firstEv.urg==='amber'?'#D97706':'#3B6FE8'};font-weight:600;margin-top:2px">${firstEv.icon} ${firstEv.label.split('—')[0].trim()}</div>` : '';
+    const overflowDots = dayEvs.length > 1 ? `<div style="display:flex;justify-content:center;gap:2px;margin-top:2px;min-height:6px">${dots}</div>` : '<div style="min-height:8px"></div>';
+    const tipRows = dayEvs.slice(0,4).map(e=>{
+      const col=e.urg==='red'?'#E53E3E':e.urg==='amber'?'#D97706':'#3B6FE8';
+      return `<div class="cal-tip-row"><div class="cal-tip-dot" style="background:${col}"></div><span style="overflow:hidden;text-overflow:ellipsis">${e.icon} ${e.label}</span></div>`;
+    }).join('') + (dayEvs.length>4?`<div style="font-size:10px;color:rgba(255,255,255,.5);padding-top:2px">+${dayEvs.length-4} more</div>`:'');
+    const tipHtml = dayEvs.length ? `<div class="cal-tip" style="display:none">${tipRows}</div>` : '';
+    const hoverAttrs = dayEvs.length ? `onmouseenter="this.querySelector('.cal-tip')&&(this.querySelector('.cal-tip').style.display='block')" onmouseleave="this.querySelector('.cal-tip')&&(this.querySelector('.cal-tip').style.display='none')"` : '';
+    cells+=`<div class="cc cm${isToday?' td':''}" onclick="${dayEvs.length?`showCalDay(${yr},${mo},${d})`:'void(0)'}" style="cursor:${dayEvs.length?'pointer':'default'}" ${hoverAttrs}>
+      <span style="font-size:12px;font-weight:${isToday?'700':'400'}">${d}</span>
+      ${evLabel}
+      ${overflowDots}
+      ${tipHtml}
     </div>`;
   }
 
@@ -10007,14 +10119,52 @@ function pgCalendar(){
       <div>
         <div class="panel" style="margin-bottom:16px">
           <div class="cal-nav">
-            <button class="btn btn-sm" onclick="calNav(-1)">‹</button>
-            <h3>${mn}</h3>
-            <button class="btn btn-sm" onclick="calNav(1)">›</button>
+            <div style="display:flex;align-items:center;gap:4px;position:relative">
+              <button class="btn btn-sm" onclick="calNav(-1)" style="position:relative">‹${(()=>{const pm=new Date(yr,mo-1,1);const pmEvs=getCalEvents().filter(e=>{const d=new Date(e.date);return d.getFullYear()===pm.getFullYear()&&d.getMonth()===pm.getMonth()&&e.days<=7&&e.days>=-1;});return pmEvs.length?`<span style="position:absolute;top:-4px;right:-4px;background:#E53E3E;color:#fff;font-size:9px;font-weight:700;border-radius:100px;padding:0 4px;line-height:16px;min-width:14px;text-align:center">${pmEvs.length}</span>`:'';})()}</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <h3>${mn}</h3>
+              ${(yr!==now.getFullYear()||mo!==now.getMonth())?`<button class="btn btn-sm" onclick="calToday()" style="font-size:10px;padding:2px 8px;background:var(--navy);color:#fff;border-color:var(--navy)">Today</button>`:''}
+            </div>
+            <div style="display:flex;align-items:center;gap:4px">
+              <button class="btn btn-sm" onclick="calNav(1)" style="position:relative">›${(()=>{const nm=new Date(yr,mo+1,1);const nmEvs=getCalEvents().filter(e=>{const d=new Date(e.date);return d.getFullYear()===nm.getFullYear()&&d.getMonth()===nm.getMonth()&&e.days<=7&&e.days>=-1;});return nmEvs.length?`<span style="position:absolute;top:-4px;right:-4px;background:#E53E3E;color:#fff;font-size:9px;font-weight:700;border-radius:100px;padding:0 4px;line-height:16px;min-width:14px;text-align:center">${nmEvs.length}</span>`:'';})()}</button>
+            </div>
           </div>
           <div class="cal-wrap">
             <div class="cal-dh">${dn.map(d=>`<div class="cal-dn">${d}</div>`).join('')}</div>
             <div class="cal-g">${cells}</div>
           </div>
+          ${(()=>{
+            const agendaDays=[];
+            for(let i=0;i<7;i++){
+              const d=new Date(now); d.setDate(now.getDate()+i);
+              const dStr=d.toISOString().slice(0,10);
+              const dayEvs=allEvents.filter(e=>e.date===dStr);
+              agendaDays.push({d,dStr,dayEvs});
+            }
+            if(!agendaDays.some(a=>a.dayEvs.length)) return '';
+            return `<div style="padding:0 18px 14px">
+              <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Next 7 days</div>
+              <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">
+                ${agendaDays.map(({d,dayEvs})=>{
+                  const isT=d.getTime()===now.getTime();
+                  const dayLabel=d.toLocaleDateString('en-GB',{weekday:'short'});
+                  const dateNum=d.getDate();
+                  const chips=dayEvs.slice(0,2).map(e=>{
+                    const col=e.urg==='red'?'#E53E3E':e.urg==='amber'?'#D97706':'#3B6FE8';
+                    const bg=e.urg==='red'?'rgba(229,62,62,0.1)':e.urg==='amber'?'rgba(217,119,6,0.08)':'rgba(59,111,232,0.08)';
+                    return `<div onclick="showCalDay(${d.getFullYear()},${d.getMonth()},${d.getDate()})" style="font-size:9px;padding:2px 4px;border-radius:4px;background:${bg};color:${col};font-weight:600;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-left:2px solid ${col};margin-top:2px">${e.icon} ${e.label.split('—')[0].trim().slice(0,12)}</div>`;
+                  }).join('');
+                  const more=dayEvs.length>2?`<div style="font-size:9px;color:var(--muted);margin-top:1px">+${dayEvs.length-2}</div>`:'';
+                  return `<div style="text-align:center">
+                    <div style="font-size:9px;color:var(--muted);text-transform:uppercase;font-weight:600">${dayLabel}</div>
+                    <div style="font-size:11px;font-weight:${isT?'700':'400'};color:${isT?'var(--navy)':'var(--muted)'};margin-bottom:2px">${dateNum}</div>
+                    ${chips}${more}
+                  </div>`;
+                }).join('')}
+              </div>
+            </div>`;
+          })()}
         </div>
         <div class="panel" id="cal-day-detail" style="display:none">
           <div class="ph2"><h2 id="cal-day-title">Events</h2></div>
@@ -10042,6 +10192,12 @@ function calNav(dir){
   nav('calendar');
 }
 
+function calToday(){
+  window.calYear=new Date().getFullYear();
+  window.calMonth=new Date().getMonth();
+  nav('calendar');
+}
+
 function showCalDay(yr,mo,d){
   const allEvents=getCalEvents();
   const dayEvs=allEvents.filter(e=>{const ev=new Date(e.date);return ev.getFullYear()===yr&&ev.getMonth()===mo&&ev.getDate()===d;});
@@ -10062,9 +10218,26 @@ function showCalDay(yr,mo,d){
     const rentBtn = isPastRent && !alreadyPaid
       ? `<button onclick="markRentReceived('${e.pid}','${new Date(e.date).toLocaleString('en-GB',{month:'long',year:'numeric'})}','${e.date}',${e.rentAmt||0})" style="font-size:11px;padding:4px 11px;border-radius:6px;border:1px solid var(--green-dark);background:var(--green-bg);color:var(--green-dark);cursor:pointer;font-family:var(--font);font-weight:600;margin-top:4px">✓ Mark received</button>`
       : alreadyPaid ? `<span style="font-size:11px;color:var(--green-dark);font-weight:600">✓ Paid</span>` : '';
+    const actionBtn = e.type==='cert'
+      ? `<button onclick="nav('prop-detail','${e.pid}');setTimeout(()=>pdSetTab('${e.pid}','compliance'),100)" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);font-weight:600;margin-top:4px">View cert →</button>`
+      : e.type==='insurance'
+      ? `<button onclick="nav('prop-detail','${e.pid}');setTimeout(()=>pdSetTab('${e.pid}','compliance'),100)" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);font-weight:600;margin-top:4px">Manage →</button>`
+      : e.type==='tenancy'&&e.icon==='🔑'
+      ? `<button onclick="nav('prop-detail','${e.pid}');setTimeout(()=>pdSetTab('${e.pid}','tenant'),100)" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);font-weight:600;margin-top:4px">View tenant →</button>`
+      : e.type==='tenancy'&&e.icon==='📈'
+      ? `<button onclick="moSection13('${e.pid}')" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--blue);background:var(--blue-bg);color:var(--blue);cursor:pointer;font-family:var(--font);font-weight:600;margin-top:4px">S.13 notice →</button>`
+      : e.type==='compliance'&&e.icon==='⚠️'
+      ? `<button onclick="moRRASheet()" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--red);background:var(--red-bg);color:var(--red);cursor:pointer;font-family:var(--font);font-weight:600;margin-top:4px">Send now</button>`
+      : e.type==='maintenance'&&e.mid
+      ? `<button onclick="moIssueDetail('${e.mid}')" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--amber);background:var(--amber-bg);color:var(--amber);cursor:pointer;font-family:var(--font);font-weight:600;margin-top:4px">View job →</button>`
+      : e.type==='inspection'
+      ? `<button onclick="nav('prop-detail','${e.pid}');setTimeout(()=>pdSetTab('${e.pid}','compliance'),100)" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);font-weight:600;margin-top:4px">View property →</button>`
+      : e.type==='mortgage'
+      ? `<button onclick="nav('prop-detail','${e.pid}');setTimeout(()=>pdSetTab('${e.pid}','financials'),100)" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);font-weight:600;margin-top:4px">View financials →</button>`
+      : '';
     return `<div class="ai-row" style="flex-wrap:wrap">
       <div style="font-size:18px;min-width:36px;text-align:center">${e.icon}</div>
-      <div class="ai-body"><div class="ai-title">${e.label}</div><div class="ai-sub">${e.sub}</div>${rentBtn}</div>
+      <div class="ai-body"><div class="ai-title">${e.label}</div><div class="ai-sub">${e.sub}</div>${rentBtn}${actionBtn}</div>
       <span style="font-size:11px;font-weight:600;color:${col(e)};background:${bg(e)};padding:2px 8px;border-radius:100px;align-self:flex-start">${calDayLabel(e.days)}</span>
     </div>`;
   }).join('');
