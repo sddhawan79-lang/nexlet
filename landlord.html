@@ -8090,34 +8090,40 @@ function pgTenantDetail(tid) {
   const checklistHtml = CHECKLIST_ITEMS.map(item => _checklistRowHtml(t, item)).join('');
 
   // ── Portal invite status ──
-  const portalInviteLog = D.emailLog.find(e => String(e.tenant_id)===String(tid) && (e.template_id?.includes('portal')||e.template_id?.includes('invite')));
-  const portalSentAt = portalInviteLog?.sent_at;
-  const portalStatus = t.invite_used ? 'accessed'
-    : portalSentAt ? 'sent'
-    : t.invite_token ? 'link-ready'
-    : 'not-sent';
-  const portalStatusHtml = {
-    'accessed':   `<span style="font-size:11px;font-weight:700;background:var(--green-bg);color:var(--green-dark);padding:3px 10px;border-radius:100px">✓ Tenant has accessed portal</span>`,
-    'sent':       `<span style="font-size:11px;font-weight:700;background:var(--amber-bg);color:var(--amber);padding:3px 10px;border-radius:100px">📬 Invite sent — awaiting first login · ${FMS(portalSentAt)}</span>`,
-    'link-ready': `<span style="font-size:11px;font-weight:700;background:var(--off);color:var(--muted);padding:3px 10px;border-radius:100px">🔗 Link generated — not yet emailed</span>`,
-    'not-sent':   `<span style="font-size:11px;font-weight:700;background:rgba(229,62,62,0.08);color:var(--red);padding:3px 10px;border-radius:100px">⚠ No portal invite sent</span>`,
-  }[portalStatus];
-  const portalCard = t.status !== 'Ended' ? `
-    <div class="panel" style="margin-bottom:16px">
-      <div class="ph2">
-        <div><h2>🔗 Tenant Portal</h2><p>Magic link — no password needed</p></div>
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          ${portalStatusHtml}
-          <button class="btn btn-sm" id="invite-btn-${t.id}" onclick="sendPortalInvite('${t.id}')">
-            ${portalStatus==='accessed'?'↺ Resend':'🔗 Send portal invite'}
-          </button>
-          ${t.invite_token ? `<a href="https://nexlet.co.uk/tenant.html?token=${t.invite_token}" target="_blank" class="btn btn-sm" style="font-size:11px">↗ Open link</a>` : ''}
+  let portalCard = '';
+  try {
+    const portalInviteLog = D.emailLog.find(e => String(e.tenant_id)===String(tid) && (e.template_id?.includes('portal')||e.template_id?.includes('invite')));
+    const portalSentAt = portalInviteLog?.sent_at;
+    const portalStatus = t.invite_used ? 'accessed'
+      : portalSentAt ? 'sent'
+      : t.invite_token ? 'link-ready'
+      : 'not-sent';
+    const _portalStatusMap = {
+      'accessed':   `<span style="font-size:11px;font-weight:700;background:var(--green-bg);color:var(--green-dark);padding:3px 10px;border-radius:100px">✓ Tenant has accessed portal</span>`,
+      'sent':       `<span style="font-size:11px;font-weight:700;background:var(--amber-bg);color:var(--amber);padding:3px 10px;border-radius:100px">📬 Invite sent — awaiting first login · ${FMS(portalSentAt)}</span>`,
+      'link-ready': `<span style="font-size:11px;font-weight:700;background:var(--off);color:var(--muted);padding:3px 10px;border-radius:100px">🔗 Link generated — not yet emailed</span>`,
+      'not-sent':   `<span style="font-size:11px;font-weight:700;background:rgba(229,62,62,0.08);color:var(--red);padding:3px 10px;border-radius:100px">⚠ No portal invite sent</span>`,
+    };
+    const portalStatusHtml = _portalStatusMap[portalStatus] || _portalStatusMap['not-sent'];
+    if (t.status !== 'Ended') {
+      portalCard = `
+      <div class="panel" style="margin-bottom:16px">
+        <div class="ph2">
+          <div><h2>🔗 Tenant Portal</h2><p>Magic link — no password needed</p></div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            ${portalStatusHtml}
+            <button class="btn btn-sm" id="invite-btn-${t.id}" onclick="sendPortalInvite('${t.id}')">
+              ${portalStatus==='accessed'?'↺ Resend':'🔗 Send portal invite'}
+            </button>
+            ${t.invite_token ? `<a href="https://nexlet.co.uk/tenant.html?token=${t.invite_token}" target="_blank" class="btn btn-sm" style="font-size:11px">↗ Open link</a>` : ''}
+          </div>
         </div>
-      </div>
-      <div style="padding:10px 18px 14px;font-size:12px;color:var(--muted);line-height:1.6">
-        Tenant can report maintenance issues, view certificates, and receive updates via their portal. Link is unique to ${t.name} — never share with others.
-      </div>
-    </div>` : '';
+        <div style="padding:10px 18px 14px;font-size:12px;color:var(--muted);line-height:1.6">
+          Tenant can report maintenance issues, view certificates, and receive updates via their portal. Link is unique to ${t.name} — never share with others.
+        </div>
+      </div>`;
+    }
+  } catch(e) { portalCard = ''; }
 
   const checklistCard = `
     <div class="panel" style="margin-bottom:16px">
