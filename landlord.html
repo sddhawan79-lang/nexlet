@@ -6460,7 +6460,7 @@ function pdTabContent(pid, tab) {
               <tbody>${allM.map(m=>`<tr>
                 <td style="font-size:12px;white-space:nowrap">${FMT(m.date||m.issue_date)}</td>
                 <td style="max-width:220px;font-size:13px">${m.desc||m.description||'—'}</td>
-                <td>${B(m.priority)}</td>
+                <td>${B(m.priority||'Low')}</td>
                 <td>${m.awaab?'<span class="badge b-red">Awaab</span>':'—'}</td>
                 <td><div class="sf">
                   <button class="sf-btn${m.status==='Open'?' sf-on':''}" onclick="updateIssueStatus('${m.id}','Open')">Open</button>
@@ -7991,7 +7991,7 @@ function pgTenants(){
         <td>${t.scheme?B('Protected'):'<span style="color:var(--muted);font-size:12px">Not set</span>'}</td>
         <td><div style="display:flex;gap:4px;align-items:center">${CHECKLIST_ITEMS.map(item=>{const cl=_checklistRAG(t,item.key);return`<span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:${RAG_COLORS[cl.ra]};cursor:help" title="${item.icon} ${item.label}: ${cl.status}"><span style="font-size:8px;color:#fff;font-weight:700">${cl.ra==='green'?'✓':cl.ra==='amber'?'!':'×'}</span></span>`;}).join('')}</div></td>
         <td><button class="btn btn-sm btn-navy" style="font-size:10px;padding:3px 8px" onclick="event.stopPropagation();moTenantDocs('${t.id}','${t.prop_id}')">📎 ${docCount||''}</button></td>
-        <td>${isEnded?B('Ended'):B(t.status)}</td>
+        <td>${isEnded?B('Ended'):B(t.status||'Active')}</td>
       </tr>`}).join('')}</tbody>
     </table></div></div>`
     : `<div class="empty"><div class="empty-ic">${filter==='Ended'?'📦':'👤'}</div><div class="empty-t">${filter==='Ended'?'No ended tenancies':'No tenants yet'}</div><div class="empty-s">${filter==='Ended'?'Ended tenancies will appear here — their data is preserved for disputes':'Add your first tenant to get started'}</div>${filter==='Active'?'<div style="margin-top:16px"><button class="btn btn-navy" onclick="moTenant()">+ Add tenant</button></div>':''}</div>`;
