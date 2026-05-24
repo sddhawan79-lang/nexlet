@@ -8061,7 +8061,7 @@ function pgTenantDetail(tid) {
 
   // ── Tenancy info ──
   const infoFields = [
-    ['Property',      `${p.address}, ${p.city}`],
+    ['Property',      `${p.address}${p.city?', '+p.city:''}`],
     ['Start',         FMS(t.start_date)],
     ['End',           t.end_date ? FMS(t.end_date) : 'Periodic (APT)'],
     ['Rent',          t.rent ? `£${t.rent.toLocaleString()}` : '—'],
@@ -8314,14 +8314,6 @@ function pgTenantDetail(tid) {
           <span style="font-size:11px;padding:2px 8px;border-radius:100px;background:var(--green-bg);color:var(--green-dark);flex-shrink:0">Sent</span>
         </div>`).join('')
     : `<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">No emails sent yet</div>`;
-
-    // DEBUG — remove after fix confirmed
-    console.log('pgTenantDetail render check:', {
-      stickyCard: typeof stickyCard, checklistCard: typeof checklistCard,
-      portalCard: typeof portalCard, tenancyCard: typeof tenancyCard,
-      kycRows: typeof kycRows, journeyCards: typeof journeyCards, logRows: typeof logRows,
-      tName: t?.name, tStatus: t?.status, tid
-    });
 
   return `
     <div class="topbar"><span class="tb-title">Tenants</span><div class="tb-right">
