@@ -786,7 +786,7 @@ const COMPLIANCE_DOCS = {
         mandatory: true,
         no_expiry: true,
         hmo_only: false,
-        match: ['rra','renters rights','information sheet','rra 2025','rra 2026']
+        match: ['rra','renters rights','information sheet','rra 2025','rra 2026','rra 2025 information sheet']
       },
       {
         id: 'how_to_rent',
@@ -846,7 +846,7 @@ const COMPLIANCE_DOCS = {
         mandatory: true,
         no_expiry: true,
         hmo_only: false,
-        match: ['prescribed information','prescribed info','deposit information','deposit details']
+        match: ['prescribed information','prescribed info','deposit information','deposit details','prescribed information (deposit)']
       },
     ]
   },
@@ -873,7 +873,7 @@ const COMPLIANCE_DOCS = {
         hmo_only: false,
         ref_group: 'safety',
         ref_id: 'gas',
-        match: ['gas safety','cp12']
+        match: ['gas safety','cp12','gas safety certificate — copy served']
       },
       {
         id: 'movein_eicr',
@@ -885,7 +885,7 @@ const COMPLIANCE_DOCS = {
         hmo_only: false,
         ref_group: 'safety',
         ref_id: 'eicr',
-        match: ['eicr','electrical installation']
+        match: ['eicr','electrical installation','eicr — copy served']
       },
       {
         id: 'movein_epc',
@@ -897,7 +897,7 @@ const COMPLIANCE_DOCS = {
         hmo_only: false,
         ref_group: 'safety',
         ref_id: 'epc',
-        match: ['epc','energy performance']
+        match: ['epc','energy performance','epc — copy served']
       },
       {
         id: 'inventory',
@@ -918,7 +918,7 @@ const COMPLIANCE_DOCS = {
         mandatory: true,
         no_expiry: true,
         hmo_only: false,
-        match: ['alarm test','smoke test','co test','alarm record','alarm confirmation']
+        match: ['alarm test','smoke test','co test','alarm record','alarm confirmation','smoke & co alarm test record','smoke &amp; co alarm test record']
       },
       {
         id: 'deposit_info',
@@ -928,7 +928,7 @@ const COMPLIANCE_DOCS = {
         mandatory: true,
         no_expiry: true,
         hmo_only: false,
-        match: ['deposit protection','deposit details','prescribed information']
+        match: ['deposit protection','deposit details','prescribed information','deposit protection details']
       },
     ]
   },
@@ -1958,14 +1958,14 @@ async function _certUploadFile(certId, certType, engineerText) {
     const { data: urlData } = sb.storage.from('documents').getPublicUrl(path);
     if (!urlData?.publicUrl) return;
     const fileUrl = urlData.publicUrl;
-    // Store URL; keep engineer text if it's a name (not a URL)
-    const engVal = (engineerText && !engineerText.startsWith('http')) ? engineerText : null;
-    // Try updating with file_url first, fall back to engineer field
-    const { error: updErr } = await sb.from('certificates').update({ engineer: engVal || fileUrl, has_file: true }).eq('id', certId);
-    if (!updErr) {
-      const c = D.certs.find(x => x.id === certId || x.id === String(certId));
-      if (c) { c.engineer = engVal || fileUrl; c.file_url = fileUrl; }
+    // Try to update file_url column; fall back to has_file only if column missing
+    const { error: updErr } = await sb.from('certificates').update({ file_url: fileUrl, has_file: true }).eq('id', certId);
+    if (updErr && updErr.message && updErr.message.includes('file_url')) {
+      // file_url column doesn't exist yet — just mark has_file
+      await sb.from('certificates').update({ has_file: true }).eq('id', certId);
     }
+    const c = D.certs.find(x => x.id === certId || x.id === String(certId));
+    if (c) { c.file_url = fileUrl; c.has_file = true; }
     window._lastScanFile = null;
   } catch(e) { console.warn('_certUploadFile error:', e); }
 }
@@ -2129,37 +2129,48 @@ function moCert(pid){
     <div class="fg"><label>Property</label><select id="cp">${opts}</select></div>
     <div class="fg"><label>Document / certificate type</label>
       <select id="ct" onchange="document.getElementById('ct-other-row').style.display=this.value==='Other'?'block':'none';_toggleCertExpiry();">
-        <optgroup label="Mandatory">
+        <optgroup label="🛡 Safety Certificates — Mandatory">
           <option>Gas Safety Certificate (GSC)</option>
           <option>EICR (Electrical Installation)</option>
           <option>EPC (Energy Performance)</option>
-          <option>How to Rent Guide</option>
           <option>Smoke Alarm Test Record</option>
           <option>CO Alarm Check Record</option>
-          <option>Boiler Service Certificate</option>
-        </optgroup>
-        <optgroup label="Deposit & Tenancy">
-          <option>Deposit Protection Certificate</option>
-          <option>Written Statement of Terms</option>
-          <option>Right to Rent Record</option>
-        </optgroup>
-        <optgroup label="Required for some properties">
           <option>Legionella Risk Assessment</option>
-          <option>Fire Risk Assessment</option>
-          <option>Asbestos Survey</option>
-          <option>PAT Testing Certificate</option>
+        </optgroup>
+        <optgroup label="📋 Licensing — HMO &amp; Special">
           <option>HMO Licence</option>
           <option>Selective Licence</option>
           <option>Planning Permission / Article 4</option>
+          <option>Fire Risk Assessment</option>
           <option>Fire Extinguisher Service Record</option>
           <option>Emergency Lighting Test Record</option>
         </optgroup>
-        <optgroup label="Property documents">
+        <optgroup label="📄 Tenancy Documents — Mandatory">
+          <option>RRA 2025 Information Sheet</option>
+          <option>How to Rent Guide</option>
+          <option>Written Statement of Terms</option>
+          <option>Right to Rent Record</option>
+          <option>Section 48 Notice (Landlord Address)</option>
+          <option>Deposit Protection Certificate</option>
+          <option>Prescribed Information (Deposit)</option>
+        </optgroup>
+        <optgroup label="📦 Move-In Pack — Mandatory">
+          <option>Gas Safety Certificate — Copy Served</option>
+          <option>EICR — Copy Served</option>
+          <option>EPC — Copy Served</option>
+          <option>Smoke &amp; CO Alarm Test Record</option>
+          <option>Deposit Protection Details</option>
           <option>Inventory / Schedule of Condition</option>
+        </optgroup>
+        <optgroup label="🔒 Insurance">
           <option>Buildings Insurance Schedule</option>
           <option>Contents Insurance Schedule</option>
           <option>Rent Guarantee Insurance</option>
-          <option>Section 48 Notice (Landlord Address)</option>
+        </optgroup>
+        <optgroup label="💡 Recommended">
+          <option>Boiler Service Certificate</option>
+          <option>PAT Testing Certificate</option>
+          <option>Asbestos Survey</option>
           <option>Pest Control Report</option>
         </optgroup>
         <optgroup label="Other">
@@ -6220,6 +6231,11 @@ function pdTabContent(pid, tab) {
           ? `${Math.abs(st.days)}d overdue`
           : `${st.days}d left`)
         : '';
+      const _recCert = findCertForDoc(doc, pc);
+      const _recUrl = _recCert ? (_recCert.url || _recCert.file_url || (_recCert.engineer && String(_recCert.engineer).startsWith('http') ? _recCert.engineer : null) || null) : null;
+      const _recView = _recUrl ? `<button onclick="event.stopPropagation();dvoOpen('${_recUrl}','${doc.label.replace(/'/g,"\\'")}','')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:600">👁 View</button>` : '';
+      const _recEdit = _recCert ? `<button onclick="event.stopPropagation();moEditCert('${_recCert.id}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font)">✎</button>` : '';
+      const _recUpload = !_recCert ? `<button onclick="event.stopPropagation();moCert('${pid}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font);white-space:nowrap">+ Upload</button>` : '';
       return `
         <div style="display:flex;align-items:center;
           justify-content:space-between;padding:9px 12px;
@@ -6240,6 +6256,7 @@ function pdTabContent(pid, tab) {
             <span style="font-size:10px;font-weight:600;
               color:${st.col};white-space:nowrap">
               ${st.lbl}</span>
+            ${_recEdit}${_recView}${_recUpload}
           </div>
         </div>`;
     }).join('');
