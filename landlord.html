@@ -6152,6 +6152,18 @@ function pdTabContent(pid, tab) {
         const _deleteBtn = _certRec ? `<button onclick="event.stopPropagation();dlDelete('${_certRec.id}','prop-detail')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid rgba(229,62,62,0.3);background:rgba(229,62,62,0.05);color:var(--red);cursor:pointer;font-family:var(--font)">✕</button>` : '';
         const _editBtn = _certRec ? `<button onclick="event.stopPropagation();moEditCert('${_certRec.id}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);white-space:nowrap">✎</button>` : '';
 
+        // E-sign button — only for written_statement doc
+        const _esignTenant = D.tenants.find(t => String(t.prop_id) === String(pid) && t.status === 'Active');
+        const _esignBtn = (doc.id === 'written_statement' && _esignTenant && !st.isNA)
+          ? `<div style="display:flex;flex-direction:column;align-items:center;gap:1px">`
+            + `<button onclick="event.stopPropagation();moEsign('${pid}','${_esignTenant.id}')" `
+            + `style="font-size:10px;padding:3px 10px;border-radius:5px;border:1px solid var(--green-dark);`
+            + `background:var(--green-bg);color:var(--green-dark);cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:600">`
+            + `✍ Send for e-sign</button>`
+            + `<span style="font-size:9px;color:var(--muted);white-space:nowrap">AI generates &amp; tenant signs online</span>`
+            + `</div>`
+          : '';
+
         // N/A toggle button — only on non-mandatory, non-insurance docs
         const _naBtn = (!doc.mandatory && !doc.insurance_type)
           ? (st.isNA
@@ -6176,9 +6188,9 @@ function pdTabContent(pid, tab) {
             background:rgba(229,62,62,0.07);color:var(--red);
             cursor:pointer;font-family:var(--font);
             white-space:nowrap;font-weight:600">
-            + Upload</button>${_naBtn}`;
+            + Upload</button>${_esignBtn}${_naBtn}`;
         } else {
-          rowAction = `${_editBtn}${_viewBtn}${_deleteBtn}${_naBtn}`;
+          rowAction = `${_editBtn}${_viewBtn}${_deleteBtn}${_esignBtn}${_naBtn}`;
         }
 
         const _escLabel = doc.label.replace(/'/g,"\\'");
@@ -11601,6 +11613,7 @@ function pgTemplates() {
       badge: null,
       templates: [
         { id: 'endoftenancy', name: 'End of Tenancy Letter', desc: 'Formal letter confirming tenancy end date and next steps', tag: 'Tenancy end', ai: true },
+        { id: 'depositreceipt', name: 'Deposit Receipt Letter', desc: 'Confirm deposit received, amount, protection scheme and reference — send at tenancy start', tag: 'Deposit', ai: true },
         { id: 'depositdeduction', name: 'Deposit Deduction Letter', desc: 'Itemised letter explaining deposit deductions at end of tenancy', tag: 'Deposit', ai: true },
         { id: 'depositreturn', name: 'Deposit Return Letter', desc: 'Confirm full or partial deposit return to tenant', tag: 'Deposit', ai: true },
         { id: 'howtorent', name: 'How to Rent Checklist', desc: 'Government checklist — must be provided at tenancy start', tag: 'Required', ai: false },
@@ -11702,6 +11715,7 @@ function pgTemplates() {
                   <div style="font-size:12px;color:var(--muted);flex:1">${t.desc}</div>
                   <div style="display:flex;gap:6px;margin-top:4px">
                     ${t.s8 ? `<button class="btn btn-sm btn-navy" onclick="s8LaunchFromTemplates()">⚖️ Open Section 8 Generator</button>` : t.id === 'section13' ? `<button class="btn btn-sm btn-navy" onclick="moSection13()">📈 Open S.13 Generator</button>` : t.ai ? `<button class="btn btn-sm btn-navy" onclick="moGenerate('${t.id}')">✦ Generate with AI</button>` : `<button class="btn btn-sm btn-navy" onclick="moGenerate('${t.id}')">Generate</button>`}
+                    ${t.id === 'writtenstatement' ? `<div style="display:flex;flex-direction:column;gap:2px;flex:1"><button class="btn btn-sm" style="border-color:var(--green-dark);color:var(--green-dark);font-weight:600" onclick="(function(){const _t=D.tenants.find(x=>x.status==='Active');if(!_t){toast('Add a tenant first',true);return;}moEsign(_t.prop_id,_t.id);})()">✍ Send for e-sign</button><span style=\"font-size:10px;color:var(--muted);text-align:center;margin-top:1px\">AI generates &amp; tenant signs online</span></div>` : ''}
                     <button class="btn btn-sm" onclick="moUploadTemplate('${t.id}','${t.name}')">↑ Use my own</button>
                   </div>
                 </div>
@@ -11782,6 +11796,13 @@ const TEMPLATE_FIELDS = {
     { id:'tf_enddate',  label:'Tenancy end date',       type:'date', required:true },
     { id:'tf_depstatus',label:'Deposit status',         type:'select',
       options:['Full return expected','Deductions likely — to be assessed','Already agreed with tenant'] },
+  ],
+  depositreceipt: [
+    { id:'tf_depamt',   label:'Deposit amount (£)',     type:'number', required:true },
+    { id:'tf_depscheme',label:'Protection scheme',      type:'select',
+      options:['DPS (Deposit Protection Service)','MyDeposits','TDS (Tenancy Deposit Scheme)','Not yet protected — to be arranged within 30 days'] },
+    { id:'tf_depref',   label:'Scheme reference (if known)', type:'text', placeholder:'e.g. DPS123456' },
+    { id:'tf_depdate',  label:'Date deposit received',  type:'date', required:true },
   ],
   depositdeduction: [
     { id:'tf_totalded', label:'Total deduction (£)',    type:'number', required:true },
@@ -11865,6 +11886,7 @@ function moGenerate(templateId, customContent = null) {
     writtenstatement: 'Written Statement of Terms',
     petpermission: 'Pet Permission Response',
     endoftenancy: 'End of Tenancy Letter',
+    depositreceipt: 'Deposit Receipt Letter',
     depositdeduction: 'Deposit Deduction Letter',
     depositreturn: 'Deposit Return Letter',
     inspection: 'Property Inspection Report',
@@ -11939,7 +11961,7 @@ function toggleGenInputs() {
 // ── LEGAL DISCLAIMER GATE ──
 // For Section 13, Notice to Quit, Written Statement — shown before AI generation.
 // Section 8 has its own dedicated consent flow (s8ShowConsent).
-const LEGAL_DOC_TYPES = ['section13','noticetoquit','writtenstatement','rentarrears1','rentarrears2','depositdeduction','endoftenancy','movein','contractoraccess','petpermission','depositreturn','rentincrease','maintenanceack'];
+const LEGAL_DOC_TYPES = ['section13','noticetoquit','writtenstatement','rentarrears1','rentarrears2','depositreceipt','depositdeduction','endoftenancy','movein','contractoraccess','petpermission','depositreturn','rentincrease','maintenanceack'];
 
 // Saved form state so the gate can restore user selections after disclaimer accepted
 let _gateCtx = null;
@@ -12093,6 +12115,7 @@ ${notes ? '\nLandlord notes: ' + notes : ''}
     writtenstatement: `${PLACEHOLDER_RULE}Generate a Written Statement of Terms (replacement for AST under Renters' Rights Act 2025) using:\n${contextInfo}\n\nInclude all required sections: parties, property, rent amount & payment date, deposit details, periodic tenancy terms, repair obligations, pet policy, notice periods. End with disclaimer.`,
     petpermission: `${PLACEHOLDER_RULE}Generate a Pet Permission Response letter (approving the request) under the Renters' Rights Act 2025 using:\n${contextInfo}\n\nInclude: acknowledgement of request, approval with reasonable conditions (professional cleaning at end, damage liability), tenant obligations. End with disclaimer.`,
     endoftenancy: `${PLACEHOLDER_RULE}Generate an End of Tenancy Letter using:\n${contextInfo}\n\nInclude: confirmation of end date, key dates, requirements (cleaning, keys return, meter readings, forwarding address), deposit process timeline. End with disclaimer.`,
+    depositreceipt: `${PLACEHOLDER_RULE}Generate a Deposit Receipt Letter for a UK private landlord using:\n${contextInfo}\n\nInclude: confirmation that the deposit has been received, the exact amount, the date received, the protection scheme name and reference number (if provided), the 30-day legal deadline for protection under the Housing Act 2004, and a note that Prescribed Information will be served separately. Professional, clear tone. Address to the tenant. End with disclaimer that this is not legal advice.`,
     depositdeduction: `${PLACEHOLDER_RULE}Generate a Deposit Deduction Letter using:\n${contextInfo}\n\nInclude: itemised deductions table (use example items like cleaning, damage repair), remaining balance, timeline for return. Professional but clear tone. End with disclaimer.`,
     depositreturn: `${PLACEHOLDER_RULE}Generate a Deposit Return Letter confirming full return using:\n${contextInfo}\n\nInclude: confirmation property left in good condition, full deposit amount being returned, bank transfer timeline. End with disclaimer.`,
     inspection: `${PLACEHOLDER_RULE}Generate a Property Inspection Report using:\n${contextInfo}\n\nInclude: inspection date, inspector name, room-by-room condition table (kitchen, living room, bedrooms, bathroom, exterior), overall rating, any actions required. End with disclaimer.`,
