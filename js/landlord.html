@@ -148,15 +148,12 @@ tr:hover td{background:rgba(246,248,251,.8)}
 .cal-dh{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px}
 .cal-dn{text-align:center;font-size:10px;font-weight:600;text-transform:uppercase;color:var(--muted)}
 .cal-g{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
-.cc{min-height:58px;border-radius:7px;display:flex;flex-direction:column;align-items:center;padding:6px 2px 4px;font-size:13px;color:var(--muted);cursor:pointer;position:relative}
+.cc{aspect-ratio:1;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--muted);cursor:pointer;position:relative}
 .cc:hover{background:var(--off)}
 .cc.cm{color:var(--txt)}
 .cc.td{background:var(--navy);color:#fff;font-weight:600}
 .cc.hd::after{content:'';position:absolute;bottom:4px;width:4px;height:4px;border-radius:50%;background:var(--green)}
 .cc.td.hd::after{background:rgba(255,255,255,.7)}
-.cal-tip{position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;border-radius:8px;padding:8px 10px;min-width:160px;max-width:220px;z-index:9999;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.18)}
-.cal-tip-row{display:flex;align-items:center;gap:6px;padding:2px 0;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cal-tip-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
 .detail-back{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;cursor:pointer;background:none;border:none;font-family:var(--font);margin-bottom:18px;padding:0}
 .detail-back:hover{color:var(--navy)}
 .coll{background:var(--white);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:12px}
@@ -392,11 +389,6 @@ tr:hover td{background:rgba(246,248,251,.8)}
         <svg class="sb-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5L2 4v4c0 3.5 2.5 6 6 7 3.5-1 6-3.5 6-7V4L8 1.5z"/><path d="M5.5 8l2 2 3-3"/></svg>
         <span class="sb-label">Compliance</span>
         <span id="nav-badge-compliance" class="sb-badge" style="display:none"></span>
-      </button>
-      <button class="sb-item" data-page="calendar">
-        <svg class="sb-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="3" width="13" height="12" rx="2"/><path d="M1.5 7h13"/><path d="M5 1.5V4M11 1.5V4"/><circle cx="5" cy="10" r=".8" fill="currentColor"/><circle cx="8" cy="10" r=".8" fill="currentColor"/><circle cx="11" cy="10" r=".8" fill="currentColor"/></svg>
-        <span class="sb-label">Calendar</span>
-        <span id="nav-badge-calendar" class="sb-badge" style="display:none"></span>
       </button>
       <button class="sb-item" data-page="maintenance">
         <svg class="sb-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10.5 2.5a3 3 0 00-4 4L2 11a1.5 1.5 0 002 2l4.5-4.5a3 3 0 004-4l-2 2-1.5-1.5 2-2z"/></svg>
@@ -794,7 +786,7 @@ const COMPLIANCE_DOCS = {
         mandatory: true,
         no_expiry: true,
         hmo_only: false,
-        match: ['rra','renters rights','information sheet','rra 2025','rra 2026','rra 2025 information sheet']
+        match: ['rra','renters rights','information sheet','rra 2025','rra 2026']
       },
       {
         id: 'how_to_rent',
@@ -854,7 +846,7 @@ const COMPLIANCE_DOCS = {
         mandatory: true,
         no_expiry: true,
         hmo_only: false,
-        match: ['prescribed information','prescribed info','deposit information','deposit details','prescribed information (deposit)']
+        match: ['prescribed information','prescribed info','deposit information','deposit details']
       },
     ]
   },
@@ -881,7 +873,7 @@ const COMPLIANCE_DOCS = {
         hmo_only: false,
         ref_group: 'safety',
         ref_id: 'gas',
-        match: ['gas safety','cp12','gas safety certificate — copy served']
+        match: ['gas safety','cp12']
       },
       {
         id: 'movein_eicr',
@@ -893,7 +885,7 @@ const COMPLIANCE_DOCS = {
         hmo_only: false,
         ref_group: 'safety',
         ref_id: 'eicr',
-        match: ['eicr','electrical installation','eicr — copy served']
+        match: ['eicr','electrical installation']
       },
       {
         id: 'movein_epc',
@@ -905,7 +897,7 @@ const COMPLIANCE_DOCS = {
         hmo_only: false,
         ref_group: 'safety',
         ref_id: 'epc',
-        match: ['epc','energy performance','epc — copy served']
+        match: ['epc','energy performance']
       },
       {
         id: 'inventory',
@@ -926,7 +918,7 @@ const COMPLIANCE_DOCS = {
         mandatory: true,
         no_expiry: true,
         hmo_only: false,
-        match: ['alarm test','smoke test','co test','alarm record','alarm confirmation','smoke & co alarm test record','smoke &amp; co alarm test record']
+        match: ['alarm test','smoke test','co test','alarm record','alarm confirmation']
       },
       {
         id: 'deposit_info',
@@ -936,7 +928,7 @@ const COMPLIANCE_DOCS = {
         mandatory: true,
         no_expiry: true,
         hmo_only: false,
-        match: ['deposit protection','deposit details','prescribed information','deposit protection details']
+        match: ['deposit protection','deposit details','prescribed information']
       },
     ]
   },
@@ -1139,8 +1131,8 @@ function getDocStatus(doc, certList, insuranceList) {
     if (ins.expiry) {
       const days = Math.round((new Date(ins.expiry) - today) / 864e5);
       if (days < 0) return { lbl:'EXPIRED', bg:'rgba(229,62,62,0.1)', col:'#E53E3E', bdr:'rgba(229,62,62,0.25)', days, overdue:true, action:'insurance' };
-      if (days <= 14) return { lbl:'URGENT', bg:'rgba(217,119,6,0.1)', col:'#D97706', bdr:'rgba(217,119,6,0.25)', days, overdue:true, action:'insurance' };
-      if (days <= 60) return { lbl:'EXPIRING SOON', bg:'rgba(59,111,232,0.08)', col:'#3B6FE8', bdr:'rgba(59,111,232,0.2)', days, overdue:true, action:'insurance' };
+      if (days <= 14) return { lbl:'URGENT', bg:'rgba(217,119,6,0.1)', col:'#D97706', bdr:'rgba(217,119,6,0.25)', days, overdue:false, action:'insurance' };
+      if (days <= 60) return { lbl:'EXPIRING SOON', bg:'rgba(59,111,232,0.08)', col:'#3B6FE8', bdr:'rgba(59,111,232,0.2)', days, overdue:false, action:'insurance' };
       return { lbl:'VALID', bg:'var(--green-bg)', col:'#00A87A', bdr:'var(--green-bg)', days, overdue:false, action:'insurance' };
     }
     return { lbl:'VALID', bg:'var(--green-bg)', col:'#00A87A', bdr:'var(--green-bg)', days:null, overdue:false, action:'insurance' };
@@ -1163,8 +1155,8 @@ function getDocStatus(doc, certList, insuranceList) {
   if (cert.expiry) {
     const days = Math.round((new Date(cert.expiry) - today) / 864e5);
     if (days < 0) return { lbl:'EXPIRED', bg:'rgba(229,62,62,0.1)', col:'#E53E3E', bdr:'rgba(229,62,62,0.25)', days, overdue:true };
-    if (days <= 14) return { lbl:'URGENT', bg:'rgba(217,119,6,0.1)', col:'#D97706', bdr:'rgba(217,119,6,0.25)', days, overdue:true };
-    if (days <= 60) return { lbl:'EXPIRING SOON', bg:'rgba(59,111,232,0.08)', col:'#3B6FE8', bdr:'rgba(59,111,232,0.2)', days, overdue:true };
+    if (days <= 14) return { lbl:'URGENT', bg:'rgba(217,119,6,0.1)', col:'#D97706', bdr:'rgba(217,119,6,0.25)', days, overdue:false };
+    if (days <= 60) return { lbl:'EXPIRING SOON', bg:'rgba(59,111,232,0.08)', col:'#3B6FE8', bdr:'rgba(59,111,232,0.2)', days, overdue:false };
     return { lbl:'VALID', bg:'var(--green-bg)', col:'#00A87A', bdr:'var(--green-bg)', days, overdue:false };
   }
   return { lbl:'VALID', bg:'var(--green-bg)', col:'#00A87A', bdr:'var(--green-bg)', days:null, overdue:false };
@@ -1295,37 +1287,31 @@ async function sbLoadMeters(pid) {
 
 // ── COMPLIANCE RAG SCORE ──
 function calcRAG(pid) {
-  const certList = CF(pid);
-  const propDocs = getDocsForProperty(pid);
-  const insList = D.insurance.filter(i => String(i.prop_id) === String(pid));
+  const certs = CF(pid);
+  if (!certs.length) return { rag: 'red', label: 'No documents', score: 0 };
 
-  let total = 0, ok = 0;
-  ['safety','licensing','tenancy','movein'].forEach(gk => {
-    const group = propDocs[gk];
-    if (!group) return;
-    group.docs.forEach(doc => {
-      if (!doc.mandatory) return;
-      total++;
-      const st = getDocStatus(doc, certList, insList);
-      if (!st.overdue) ok++;
-    });
-  });
+  // Critical cert types that must be present and valid
+  const criticalTypes = ['gas', 'eicr', 'electrical', 'epc', 'energy', 'deposit'];
+  const hasCritical = type => certs.some(c => c.type && c.type.toLowerCase().includes(type));
+  const criticalMissing = criticalTypes.filter(t => !hasCritical(t)).length;
 
-  if (!total) {
-    // Fallback: no COMPLIANCE_DOCS slots means no certs either
-    if (!certList.length) return { rag: 'red', label: 'No documents', score: 0 };
-    const valid = certList.filter(c => c.status === 'Valid').length;
-    const score = Math.round((valid / certList.length) * 100);
-    const rag = score >= 80 ? 'green' : score >= 50 ? 'amber' : 'red';
-    const label = score >= 80 ? 'Compliant' : score >= 50 ? 'Action needed' : 'At risk';
-    return { rag, label, score };
-  }
+  // Count by status
+  const valid   = certs.filter(c => c.status === 'Valid').length;
+  const expired = certs.filter(c => c.status === 'Expired').length;
+  const missing = certs.filter(c => c.status === 'Missing').length;
+  const due     = certs.filter(c => c.status === 'Due').length;
+  const total   = certs.length || 1;
 
-  const score = Math.min(100, Math.max(0, Math.round((ok / total) * 100)));
+  // Score: start at 100, deduct for problems
+  let score = Math.round((valid / total) * 100);
+  score = Math.max(0, score - (expired * 15) - (missing * 10) - (due * 5) - (criticalMissing * 10));
+  score = Math.min(100, Math.max(0, score));
+
   let rag, label;
   if (score >= 80) { rag = 'green'; label = 'Compliant'; }
   else if (score >= 50) { rag = 'amber'; label = 'Action needed'; }
   else { rag = 'red'; label = 'At risk'; }
+
   return { rag, label, score };
 }
 
@@ -1941,7 +1927,7 @@ async function saveCertToDB() {
       D.certs.push({...d2, file: true});
       await _certUploadFile(d2.id, certType, engineer);
       await logAudit('ADD_CERT', 'certificates', d2.id, `Added ${certType}`);
-      closeMo(); toast('✓ Certificate saved' + (expiry ? ' · 📅 Expiry added to calendar' : '') + '!'); nav(window._currentPage, window._currentParam); return;
+      closeMo(); toast('✓ Certificate saved!'); nav(window._currentPage, window._currentParam); return;
     }
     toast('Error: ' + error.message, true); return;
   }
@@ -1950,7 +1936,7 @@ async function saveCertToDB() {
   await _certUploadFile(data.id, certType, engineer);
   await logAudit('ADD_CERT', 'certificates', data.id, `Added ${certType}`);
   closeMo();
-  toast('✓ Certificate saved' + (expiry ? ' · 📅 Expiry added to calendar' : '') + '!');
+  toast('✓ Certificate saved!');
   nav(window._currentPage, window._currentParam);
 }
 
@@ -1966,14 +1952,14 @@ async function _certUploadFile(certId, certType, engineerText) {
     const { data: urlData } = sb.storage.from('documents').getPublicUrl(path);
     if (!urlData?.publicUrl) return;
     const fileUrl = urlData.publicUrl;
-    // Try to update file_url column; fall back to has_file only if column missing
-    const { error: updErr } = await sb.from('certificates').update({ file_url: fileUrl, has_file: true }).eq('id', certId);
-    if (updErr && updErr.message && updErr.message.includes('file_url')) {
-      // file_url column doesn't exist yet — just mark has_file
-      await sb.from('certificates').update({ has_file: true }).eq('id', certId);
+    // Store URL; keep engineer text if it's a name (not a URL)
+    const engVal = (engineerText && !engineerText.startsWith('http')) ? engineerText : null;
+    // Try updating with file_url first, fall back to engineer field
+    const { error: updErr } = await sb.from('certificates').update({ engineer: engVal || fileUrl, has_file: true }).eq('id', certId);
+    if (!updErr) {
+      const c = D.certs.find(x => x.id === certId || x.id === String(certId));
+      if (c) { c.engineer = engVal || fileUrl; c.file_url = fileUrl; }
     }
-    const c = D.certs.find(x => x.id === certId || x.id === String(certId));
-    if (c) { c.file_url = fileUrl; c.has_file = true; }
     window._lastScanFile = null;
   } catch(e) { console.warn('_certUploadFile error:', e); }
 }
@@ -2137,48 +2123,37 @@ function moCert(pid){
     <div class="fg"><label>Property</label><select id="cp">${opts}</select></div>
     <div class="fg"><label>Document / certificate type</label>
       <select id="ct" onchange="document.getElementById('ct-other-row').style.display=this.value==='Other'?'block':'none';_toggleCertExpiry();">
-        <optgroup label="🛡 Safety Certificates — Mandatory">
+        <optgroup label="Mandatory">
           <option>Gas Safety Certificate (GSC)</option>
           <option>EICR (Electrical Installation)</option>
           <option>EPC (Energy Performance)</option>
+          <option>How to Rent Guide</option>
           <option>Smoke Alarm Test Record</option>
           <option>CO Alarm Check Record</option>
-          <option>Legionella Risk Assessment</option>
+          <option>Boiler Service Certificate</option>
         </optgroup>
-        <optgroup label="📋 Licensing — HMO &amp; Special">
+        <optgroup label="Deposit & Tenancy">
+          <option>Deposit Protection Certificate</option>
+          <option>Written Statement of Terms</option>
+          <option>Right to Rent Record</option>
+        </optgroup>
+        <optgroup label="Required for some properties">
+          <option>Legionella Risk Assessment</option>
+          <option>Fire Risk Assessment</option>
+          <option>Asbestos Survey</option>
+          <option>PAT Testing Certificate</option>
           <option>HMO Licence</option>
           <option>Selective Licence</option>
           <option>Planning Permission / Article 4</option>
-          <option>Fire Risk Assessment</option>
           <option>Fire Extinguisher Service Record</option>
           <option>Emergency Lighting Test Record</option>
         </optgroup>
-        <optgroup label="📄 Tenancy Documents — Mandatory">
-          <option>RRA 2025 Information Sheet</option>
-          <option>How to Rent Guide</option>
-          <option>Written Statement of Terms</option>
-          <option>Right to Rent Record</option>
-          <option>Section 48 Notice (Landlord Address)</option>
-          <option>Deposit Protection Certificate</option>
-          <option>Prescribed Information (Deposit)</option>
-        </optgroup>
-        <optgroup label="📦 Move-In Pack — Mandatory">
-          <option>Gas Safety Certificate — Copy Served</option>
-          <option>EICR — Copy Served</option>
-          <option>EPC — Copy Served</option>
-          <option>Smoke &amp; CO Alarm Test Record</option>
-          <option>Deposit Protection Details</option>
+        <optgroup label="Property documents">
           <option>Inventory / Schedule of Condition</option>
-        </optgroup>
-        <optgroup label="🔒 Insurance">
           <option>Buildings Insurance Schedule</option>
           <option>Contents Insurance Schedule</option>
           <option>Rent Guarantee Insurance</option>
-        </optgroup>
-        <optgroup label="💡 Recommended">
-          <option>Boiler Service Certificate</option>
-          <option>PAT Testing Certificate</option>
-          <option>Asbestos Survey</option>
+          <option>Section 48 Notice (Landlord Address)</option>
           <option>Pest Control Report</option>
         </optgroup>
         <optgroup label="Other">
@@ -3620,12 +3595,11 @@ async function _saveTenantSetupToDB() {
       invite_used:  false,
       landlord_email: currentUser.email,
       compliance_checklist: {
-        rtr:                { ra: 'red',   status:'Incomplete',  detail:'', date:'' },
-        id_docs:            { ra: 'red',   status:'Incomplete',  detail:'', date:'' },
-        agreement:          { ra: 'red',   status:'Incomplete',  detail:'', date:'' },
-        deposit_protection: { ra: 'red',   status:'Unprotected', detail:'', date:'' },
-        rent_guarantee:     { ra: 'red',   status:'Unprotected', detail:'', date:'' },
-        insurance:          { ra: 'red',   status:'Unprotected', detail:'', date:'' }
+        rtr:       { ra: 'red',   status:'Incomplete',  detail:'', date:'' },
+        id_docs:   { ra: 'red',   status:'Incomplete',  detail:'', date:'' },
+        agreement: { ra: 'red',   status:'Incomplete',  detail:'', date:'' },
+        rent_guarantee: { ra: 'red', status:'Unprotected', detail:'', date:'' },
+        insurance: { ra: 'red',   status:'Unprotected', detail:'', date:'' }
       }
     };
 
@@ -3729,24 +3703,6 @@ function _checklistRAG(tenant, key) {
     if (tenant?.scheme) return { ra:'amber', status:'Partial', detail:'Scheme set but no reference number', date:'' };
     if (!tenant?.deposit || parseFloat(tenant.deposit) === 0) return { ra:'green', status:'N/A', detail:'No deposit taken', date:'' };
   }
-  if (key === 'insurance') {
-    const propIns = D.insurance.filter(i => String(i.prop_id) === String(tenant?.prop_id));
-    const buildings = propIns.find(i => (i.type||'').toLowerCase().includes('buildings'));
-    if (buildings) {
-      const today = new Date(); today.setHours(0,0,0,0);
-      if (buildings.expiry && new Date(buildings.expiry) < today) return { ra:'red', status:'Expired', detail:'Buildings insurance expired', date: buildings.expiry };
-      return { ra:'green', status:'Active', detail:`Buildings insurance · ${buildings.expiry ? 'Renews '+FMS(buildings.expiry) : 'No expiry set'}`, date: buildings.expiry || '' };
-    }
-  }
-  if (key === 'rent_guarantee') {
-    const propIns = D.insurance.filter(i => String(i.prop_id) === String(tenant?.prop_id));
-    const rgi = propIns.find(i => (i.type||'').toLowerCase().includes('rent guarantee') || (i.type||'').toLowerCase().includes('rgi'));
-    if (rgi) {
-      const today = new Date(); today.setHours(0,0,0,0);
-      if (rgi.expiry && new Date(rgi.expiry) < today) return { ra:'red', status:'Expired', detail:'Rent guarantee insurance expired', date: rgi.expiry };
-      return { ra:'green', status:'Active', detail:`Rent guarantee insurance · ${rgi.expiry ? 'Renews '+FMS(rgi.expiry) : 'No expiry set'}`, date: rgi.expiry || '' };
-    }
-  }
   return item;
 }
 
@@ -3774,7 +3730,7 @@ function _checklistRowHtml(tenant, itemDef) {
         <option value="green" ${item.ra==='green'?'selected':''}>🟢 Complete</option>
       </select>
     </div>
-    <div style="margin-bottom:4px"><input id="cl-inp-${tid}-${itemDef.key}" class="fi" placeholder="Add details…" value="${detailText.replace(/"/g,'&quot;')}" style="width:100%;font-size:11px;padding:4px 6px" onchange="_onChecklistDetailChange('${tid}','${itemDef.key}',this.value)"></div>
+    <div style="margin-bottom:4px"><input id="cl-detail-${tid}-${itemDef.key}" class="fi" placeholder="Add details…" value="${detailText.replace(/"/g,'&quot;')}" style="width:100%;font-size:11px;padding:4px 6px" onchange="_onChecklistDetailChange('${tid}','${itemDef.key}',this.value)"></div>
     <div style="display:flex;align-items:center;gap:8px">
       <span>Date:</span><input type="date" id="cl-date-${tid}-${itemDef.key}" value="${item.date||''}" style="font-size:11px;padding:2px 6px;border-radius:4px;border:1px solid var(--border);font-family:var(--font)" onchange="_onChecklistDateChange('${tid}','${itemDef.key}',this.value)">
     </div>
@@ -4692,9 +4648,7 @@ function getTodayEventsHtml(){
     return evs.map(function(e){
       var col=e.urg==='red'?'var(--red)':e.urg==='amber'?'var(--amber)':'var(--blue)';
       var bg=e.urg==='red'?'var(--red-bg)':e.urg==='amber'?'var(--amber-bg)':'var(--blue-bg)';
-      var d=new Date(e.date);
-      var clickFn="nav('calendar');setTimeout(function(){showCalDay("+d.getFullYear()+","+d.getMonth()+","+d.getDate()+")},200)";
-      return '<div class="ai-row" style="cursor:pointer" onclick="'+clickFn+'" onmouseenter="this.style.background=\'var(--off)\'" onmouseleave="this.style.background=\'transparent\'"><div style="font-size:16px;min-width:32px;text-align:center">'+e.icon+'</div><div class="ai-body"><div class="ai-title">'+e.label+'</div><div class="ai-sub">'+e.sub+'</div></div><span style="font-size:11px;font-weight:600;color:'+col+';background:'+bg+';padding:2px 8px;border-radius:100px">Today</span><span style="color:var(--navy);font-weight:600;font-size:13px;margin-left:4px">›</span></div>';
+      return '<div class="ai-row"><div style="font-size:16px;min-width:32px;text-align:center">'+e.icon+'</div><div class="ai-body"><div class="ai-title">'+e.label+'</div><div class="ai-sub">'+e.sub+'</div></div><span style="font-size:11px;font-weight:600;color:'+col+';background:'+bg+';padding:2px 8px;border-radius:100px">Today</span></div>';
     }).join('');
   } catch(err) {
     return '<div class="empty"><div class="empty-ic">📅</div><div class="empty-t">No tasks today</div></div>';
@@ -6241,11 +6195,6 @@ function pdTabContent(pid, tab) {
           ? `${Math.abs(st.days)}d overdue`
           : `${st.days}d left`)
         : '';
-      const _recCert = findCertForDoc(doc, pc);
-      const _recUrl = _recCert ? (_recCert.url || _recCert.file_url || (_recCert.engineer && String(_recCert.engineer).startsWith('http') ? _recCert.engineer : null) || null) : null;
-      const _recView = _recUrl ? `<button onclick="event.stopPropagation();dvoOpen('${_recUrl}','${doc.label.replace(/'/g,"\\'")}','')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:600">👁 View</button>` : '';
-      const _recEdit = _recCert ? `<button onclick="event.stopPropagation();moEditCert('${_recCert.id}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font)">✎</button>` : '';
-      const _recUpload = !_recCert ? `<button onclick="event.stopPropagation();moCert('${pid}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font);white-space:nowrap">+ Upload</button>` : '';
       return `
         <div style="display:flex;align-items:center;
           justify-content:space-between;padding:9px 12px;
@@ -6266,7 +6215,6 @@ function pdTabContent(pid, tab) {
             <span style="font-size:10px;font-weight:600;
               color:${st.col};white-space:nowrap">
               ${st.lbl}</span>
-            ${_recEdit}${_recView}${_recUpload}
           </div>
         </div>`;
     }).join('');
@@ -7360,7 +7308,6 @@ const REMINDER_TYPES = [
   { id:'compliance_digest', icon:'📊', label:'Compliance score digest', desc:'Weekly email with your portfolio health score and action items', milestones:[7], unit:'days', action:'nav(\'compliance\')', mandatory:false },
   { id:'inspection', icon:'🔍', label:'Inspection due',             desc:'Scheduled property inspection approaching',       milestones:[7,1],    unit:'days', action:'nav(\'inspections\')', mandatory:false },
   { id:'deposit_protect', icon:'🏦', label:'Deposit protection deadline', desc:'30-day deadline to register deposit — fires at day 25 and day 28', milestones:[5,2], unit:'days', action:'nav(\'tenants\')', mandatory:true },
-  { id:'monthly_calendar', icon:'📅', label:'Monthly calendar summary', desc:'Email on the 1st of each month listing all events — certs, rent, inspections, tenancy ends', milestones:[1], unit:'monthly', action:'nav(\'calendar\')', mandatory:false },
 ];
 
 function getReminderPrefs() {
@@ -7715,91 +7662,6 @@ async function checkAllReminders() {
       `⚠️ Deposit protection due in ${daysLeft}d — ${t.name} · ${prop.address}`,
       html, 'REMINDER_DEPOSIT_PROTECT', t.id, `dep_${daysLeft}d`
     );
-  }
-
-  // ── 14. Monthly calendar summary (fires on 1st of each month) ──
-  if (isReminderEnabled('cert') && today.getDate() === 1 && D.properties.length) {
-    const monthKey = today.toISOString().slice(0,7); // e.g. '2026-06'
-    const alreadySentMonthly = await alreadySent('REMINDER_MONTHLY_CALENDAR', 'portfolio', `monthly_${monthKey}`);
-    if (!alreadySentMonthly) {
-      const monthLabel = today.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
-      const monthEnd = new Date(today.getFullYear(), today.getMonth()+1, 0);
-
-      // Get all events for this calendar month
-      const allEvs = getCalEvents();
-      const monthEvs = allEvs.filter(e => {
-        const d = new Date(e.date);
-        return d >= today && d <= monthEnd;
-      });
-
-      if (monthEvs.length) {
-        // Group by week
-        const weeks = [[], [], [], [], []];
-        monthEvs.forEach(e => {
-          const d = new Date(e.date);
-          const weekIdx = Math.min(Math.floor((d.getDate()-1)/7), 4);
-          weeks[weekIdx].push(e);
-        });
-
-        const weekHtml = weeks.map((wk, i) => {
-          if (!wk.length) return '';
-          const wStart = new Date(today.getFullYear(), today.getMonth(), i*7+1);
-          const wEnd   = new Date(today.getFullYear(), today.getMonth(), Math.min((i+1)*7, monthEnd.getDate()));
-          const wLabel = `${wStart.toLocaleDateString('en-GB',{day:'numeric',month:'short'})} – ${wEnd.toLocaleDateString('en-GB',{day:'numeric',month:'short'})}`;
-          const rows = wk.map(e => {
-            const col = e.urg==='red'?'#E53E3E':e.urg==='amber'?'#D97706':'#3B6FE8';
-            const evDate = new Date(e.date).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
-            return `<tr>
-              <td style="padding:7px 12px;border-bottom:1px solid #eee;font-size:12px;color:#7A8FA6;white-space:nowrap">${evDate}</td>
-              <td style="padding:7px 12px;border-bottom:1px solid #eee;font-size:13px">${e.icon} ${e.label}</td>
-              <td style="padding:7px 12px;border-bottom:1px solid #eee;font-size:12px;color:#7A8FA6">${e.sub.split('·')[0].trim()}</td>
-              <td style="padding:7px 12px;border-bottom:1px solid #eee;font-size:11px;font-weight:700;color:${col}">${e.urg==='red'?'Urgent':e.urg==='amber'?'Due soon':'Upcoming'}</td>
-            </tr>`;
-          }).join('');
-          return `<div style="margin-bottom:16px">
-            <div style="font-size:11px;font-weight:700;color:#7A8FA6;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">${wLabel}</div>
-            <table style="width:100%;border-collapse:collapse;border:1px solid #eee;border-radius:8px;overflow:hidden">
-              <thead><tr style="background:#F6F8FB">
-                <th style="padding:7px 12px;text-align:left;font-size:10px;font-weight:700;color:#7A8FA6;text-transform:uppercase">Date</th>
-                <th style="padding:7px 12px;text-align:left;font-size:10px;font-weight:700;color:#7A8FA6;text-transform:uppercase">Event</th>
-                <th style="padding:7px 12px;text-align:left;font-size:10px;font-weight:700;color:#7A8FA6;text-transform:uppercase">Property</th>
-                <th style="padding:7px 12px;text-align:left;font-size:10px;font-weight:700;color:#7A8FA6;text-transform:uppercase">Priority</th>
-              </tr></thead>
-              <tbody>${rows}</tbody>
-            </table>
-          </div>`;
-        }).join('');
-
-        const urgCount = monthEvs.filter(e=>e.urg==='red').length;
-        const urgBanner = urgCount ? `<div style="background:rgba(229,62,62,0.07);border:1px solid rgba(229,62,62,0.25);border-radius:8px;padding:12px 16px;margin-bottom:18px;display:flex;align-items:center;gap:12px">
-          <div style="font-size:24px">🔴</div>
-          <div><div style="font-size:13px;font-weight:700;color:#E53E3E">${urgCount} urgent item${urgCount!==1?'s':''} this month</div>
-          <div style="font-size:12px;color:#7A8FA6;margin-top:2px">These need attention early in ${monthLabel}</div></div>
-        </div>` : '';
-
-        const html = `<div style="font-family:DM Sans,Arial,sans-serif;color:#1A2B45;max-width:620px;margin:0 auto">
-          <div style="background:#0B1E3D;padding:20px 24px;border-radius:10px 10px 0 0">
-            <div style="font-size:17px;font-weight:700;color:#fff">NexLet</div>
-            <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:3px">📅 Monthly calendar — ${monthLabel}</div>
-          </div>
-          <div style="background:#fff;border:1px solid #E4EAF1;border-top:none;border-radius:0 0 10px 10px;padding:24px">
-            <h2 style="font-size:16px;font-weight:700;margin:0 0 6px">Your ${monthLabel} calendar</h2>
-            <p style="font-size:13px;color:#7A8FA6;margin:0 0 18px">${monthEvs.length} event${monthEvs.length!==1?'s':''} across ${D.properties.length} propert${D.properties.length!==1?'ies':'y'}</p>
-            ${urgBanner}
-            ${weekHtml}
-            <div style="text-align:center;margin-top:20px">
-              <a href="https://nexlet.co.uk/landlord.html#calendar" style="background:#0B1E3D;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;display:inline-block">Open calendar →</a>
-            </div>
-            <p style="font-size:11px;color:#999;margin-top:16px;text-align:center;border-top:1px solid #eee;padding-top:12px">Sent monthly by NexLet · Manage reminders in Settings</p>
-          </div>
-        </div>`;
-
-        await sendReminder(
-          `📅 Your ${monthLabel} property calendar — ${monthEvs.length} event${monthEvs.length!==1?'s':''}`,
-          html, 'REMINDER_MONTHLY_CALENDAR', 'portfolio', `monthly_${monthKey}`
-        );
-      }
-    }
   }
 }
 
@@ -9962,18 +9824,6 @@ function getCalEvents(){
     }
   });
 
-  // ── Scheduled inspections ──
-  D.properties.forEach(p=>{
-    (p.inspections||[]).forEach(ins=>{
-      if(!ins.date) return;
-      const d=new Date(ins.date); d.setHours(0,0,0,0);
-      const days=Math.round((d-today)/864e5);
-      if(days<-1||days>365) return;
-      const urg=days<0?'red':days<=7?'amber':'blue';
-      events.push({date:ins.date,type:'inspection',label:`Inspection — ${p.address.split(',')[0]}`,sub:`${ins.type||'Routine'} · ${ins.inspector?'Inspector: '+ins.inspector+' · ':''}${p.address}`,urg,days,icon:'🔍',pid:p.id});
-    });
-  });
-
   return events.sort((a,b)=>new Date(a.date)-new Date(b.date));
 }
 
@@ -10021,21 +9871,10 @@ function pgCalendar(){
     const isToday=(yr===now.getFullYear()&&mo===now.getMonth()&&d===now.getDate());
     const dayEvs=evMap[d]||[];
     const dotColors=[...new Set(dayEvs.map(e=>e.urg==='red'?'#E53E3E':e.urg==='amber'?'#D97706':'#3B6FE8'))].slice(0,3);
-    const dots=dotColors.map(c=>`<div style="width:4px;height:4px;border-radius:50%;background:${c};flex-shrink:0"></div>`).join('');
-    const firstEv = dayEvs[0];
-    const evLabel = firstEv ? `<div style="font-size:9px;line-height:1.2;text-align:center;padding:0 2px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${firstEv.urg==='red'?'#E53E3E':firstEv.urg==='amber'?'#D97706':'#3B6FE8'};font-weight:600;margin-top:2px">${firstEv.icon} ${firstEv.label.split('—')[0].trim()}</div>` : '';
-    const overflowDots = dayEvs.length > 1 ? `<div style="display:flex;justify-content:center;gap:2px;margin-top:2px;min-height:6px">${dots}</div>` : '<div style="min-height:8px"></div>';
-    const tipRows = dayEvs.slice(0,4).map(e=>{
-      const col=e.urg==='red'?'#E53E3E':e.urg==='amber'?'#D97706':'#3B6FE8';
-      return `<div class="cal-tip-row"><div class="cal-tip-dot" style="background:${col}"></div><span style="overflow:hidden;text-overflow:ellipsis">${e.icon} ${e.label}</span></div>`;
-    }).join('') + (dayEvs.length>4?`<div style="font-size:10px;color:rgba(255,255,255,.5);padding-top:2px">+${dayEvs.length-4} more</div>`:'');
-    const tipHtml = dayEvs.length ? `<div class="cal-tip" style="display:none">${tipRows}</div>` : '';
-    const hoverAttrs = dayEvs.length ? `onmouseenter="this.querySelector('.cal-tip')&&(this.querySelector('.cal-tip').style.display='block')" onmouseleave="this.querySelector('.cal-tip')&&(this.querySelector('.cal-tip').style.display='none')"` : '';
-    cells+=`<div class="cc cm${isToday?' td':''}" onclick="${dayEvs.length?`showCalDay(${yr},${mo},${d})`:'void(0)'}" style="cursor:${dayEvs.length?'pointer':'default'}" ${hoverAttrs}>
-      <span style="font-size:12px;font-weight:${isToday?'700':'400'}">${d}</span>
-      ${evLabel}
-      ${overflowDots}
-      ${tipHtml}
+    const dots=dotColors.map(c=>`<div style="width:4px;height:4px;border-radius:50%;background:${c}"></div>`).join('');
+    cells+=`<div class="cc cm${isToday?' td':''}" onclick="${dayEvs.length?`showCalDay(${yr},${mo},${d})`:'void(0)'}" style="cursor:${dayEvs.length?'pointer':'default'}">
+      ${d}
+      <div style="display:flex;justify-content:center;gap:2px;margin-top:2px;min-height:6px">${dots}</div>
     </div>`;
   }
 
@@ -10126,52 +9965,14 @@ function pgCalendar(){
       <div>
         <div class="panel" style="margin-bottom:16px">
           <div class="cal-nav">
-            <div style="display:flex;align-items:center;gap:4px;position:relative">
-              <button class="btn btn-sm" onclick="calNav(-1)" style="position:relative">‹${(()=>{const pm=new Date(yr,mo-1,1);const pmEvs=getCalEvents().filter(e=>{const d=new Date(e.date);return d.getFullYear()===pm.getFullYear()&&d.getMonth()===pm.getMonth()&&e.days<=7&&e.days>=-1;});return pmEvs.length?`<span style="position:absolute;top:-4px;right:-4px;background:#E53E3E;color:#fff;font-size:9px;font-weight:700;border-radius:100px;padding:0 4px;line-height:16px;min-width:14px;text-align:center">${pmEvs.length}</span>`:'';})()}</button>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px">
-              <h3>${mn}</h3>
-              ${(yr!==now.getFullYear()||mo!==now.getMonth())?`<button class="btn btn-sm" onclick="calToday()" style="font-size:10px;padding:2px 8px;background:var(--navy);color:#fff;border-color:var(--navy)">Today</button>`:''}
-            </div>
-            <div style="display:flex;align-items:center;gap:4px">
-              <button class="btn btn-sm" onclick="calNav(1)" style="position:relative">›${(()=>{const nm=new Date(yr,mo+1,1);const nmEvs=getCalEvents().filter(e=>{const d=new Date(e.date);return d.getFullYear()===nm.getFullYear()&&d.getMonth()===nm.getMonth()&&e.days<=7&&e.days>=-1;});return nmEvs.length?`<span style="position:absolute;top:-4px;right:-4px;background:#E53E3E;color:#fff;font-size:9px;font-weight:700;border-radius:100px;padding:0 4px;line-height:16px;min-width:14px;text-align:center">${nmEvs.length}</span>`:'';})()}</button>
-            </div>
+            <button class="btn btn-sm" onclick="calNav(-1)">‹</button>
+            <h3>${mn}</h3>
+            <button class="btn btn-sm" onclick="calNav(1)">›</button>
           </div>
           <div class="cal-wrap">
             <div class="cal-dh">${dn.map(d=>`<div class="cal-dn">${d}</div>`).join('')}</div>
             <div class="cal-g">${cells}</div>
           </div>
-          ${(()=>{
-            const agendaDays=[];
-            for(let i=0;i<7;i++){
-              const d=new Date(now); d.setDate(now.getDate()+i);
-              const dStr=d.toISOString().slice(0,10);
-              const dayEvs=allEvents.filter(e=>e.date===dStr);
-              agendaDays.push({d,dStr,dayEvs});
-            }
-            if(!agendaDays.some(a=>a.dayEvs.length)) return '';
-            return `<div style="padding:0 18px 14px">
-              <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Next 7 days</div>
-              <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">
-                ${agendaDays.map(({d,dayEvs})=>{
-                  const isT=d.getTime()===now.getTime();
-                  const dayLabel=d.toLocaleDateString('en-GB',{weekday:'short'});
-                  const dateNum=d.getDate();
-                  const chips=dayEvs.slice(0,2).map(e=>{
-                    const col=e.urg==='red'?'#E53E3E':e.urg==='amber'?'#D97706':'#3B6FE8';
-                    const bg=e.urg==='red'?'rgba(229,62,62,0.1)':e.urg==='amber'?'rgba(217,119,6,0.08)':'rgba(59,111,232,0.08)';
-                    return `<div onclick="showCalDay(${d.getFullYear()},${d.getMonth()},${d.getDate()})" style="font-size:9px;padding:2px 4px;border-radius:4px;background:${bg};color:${col};font-weight:600;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-left:2px solid ${col};margin-top:2px">${e.icon} ${e.label.split('—')[0].trim().slice(0,12)}</div>`;
-                  }).join('');
-                  const more=dayEvs.length>2?`<div style="font-size:9px;color:var(--muted);margin-top:1px">+${dayEvs.length-2}</div>`:'';
-                  return `<div style="text-align:center">
-                    <div style="font-size:9px;color:var(--muted);text-transform:uppercase;font-weight:600">${dayLabel}</div>
-                    <div style="font-size:11px;font-weight:${isT?'700':'400'};color:${isT?'var(--navy)':'var(--muted)'};margin-bottom:2px">${dateNum}</div>
-                    ${chips}${more}
-                  </div>`;
-                }).join('')}
-              </div>
-            </div>`;
-          })()}
         </div>
         <div class="panel" id="cal-day-detail" style="display:none">
           <div class="ph2"><h2 id="cal-day-title">Events</h2></div>
@@ -10199,12 +10000,6 @@ function calNav(dir){
   nav('calendar');
 }
 
-function calToday(){
-  window.calYear=new Date().getFullYear();
-  window.calMonth=new Date().getMonth();
-  nav('calendar');
-}
-
 function showCalDay(yr,mo,d){
   const allEvents=getCalEvents();
   const dayEvs=allEvents.filter(e=>{const ev=new Date(e.date);return ev.getFullYear()===yr&&ev.getMonth()===mo&&ev.getDate()===d;});
@@ -10225,26 +10020,9 @@ function showCalDay(yr,mo,d){
     const rentBtn = isPastRent && !alreadyPaid
       ? `<button onclick="markRentReceived('${e.pid}','${new Date(e.date).toLocaleString('en-GB',{month:'long',year:'numeric'})}','${e.date}',${e.rentAmt||0})" style="font-size:11px;padding:4px 11px;border-radius:6px;border:1px solid var(--green-dark);background:var(--green-bg);color:var(--green-dark);cursor:pointer;font-family:var(--font);font-weight:600;margin-top:4px">✓ Mark received</button>`
       : alreadyPaid ? `<span style="font-size:11px;color:var(--green-dark);font-weight:600">✓ Paid</span>` : '';
-    const actionBtn = e.type==='cert'
-      ? `<button onclick="nav('prop-detail','${e.pid}');setTimeout(()=>pdSetTab('${e.pid}','compliance'),100)" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);font-weight:600;margin-top:4px">View cert →</button>`
-      : e.type==='insurance'
-      ? `<button onclick="nav('prop-detail','${e.pid}');setTimeout(()=>pdSetTab('${e.pid}','compliance'),100)" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);font-weight:600;margin-top:4px">Manage →</button>`
-      : e.type==='tenancy'&&e.icon==='🔑'
-      ? `<button onclick="nav('prop-detail','${e.pid}');setTimeout(()=>pdSetTab('${e.pid}','tenant'),100)" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);font-weight:600;margin-top:4px">View tenant →</button>`
-      : e.type==='tenancy'&&e.icon==='📈'
-      ? `<button onclick="moSection13('${e.pid}')" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--blue);background:var(--blue-bg);color:var(--blue);cursor:pointer;font-family:var(--font);font-weight:600;margin-top:4px">S.13 notice →</button>`
-      : e.type==='compliance'&&e.icon==='⚠️'
-      ? `<button onclick="moRRASheet()" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--red);background:var(--red-bg);color:var(--red);cursor:pointer;font-family:var(--font);font-weight:600;margin-top:4px">Send now</button>`
-      : e.type==='maintenance'&&e.mid
-      ? `<button onclick="moIssueDetail('${e.mid}')" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--amber);background:var(--amber-bg);color:var(--amber);cursor:pointer;font-family:var(--font);font-weight:600;margin-top:4px">View job →</button>`
-      : e.type==='inspection'
-      ? `<button onclick="nav('prop-detail','${e.pid}');setTimeout(()=>pdSetTab('${e.pid}','compliance'),100)" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);font-weight:600;margin-top:4px">View property →</button>`
-      : e.type==='mortgage'
-      ? `<button onclick="nav('prop-detail','${e.pid}');setTimeout(()=>pdSetTab('${e.pid}','financials'),100)" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);font-weight:600;margin-top:4px">View financials →</button>`
-      : '';
     return `<div class="ai-row" style="flex-wrap:wrap">
       <div style="font-size:18px;min-width:36px;text-align:center">${e.icon}</div>
-      <div class="ai-body"><div class="ai-title">${e.label}</div><div class="ai-sub">${e.sub}</div>${rentBtn}${actionBtn}</div>
+      <div class="ai-body"><div class="ai-title">${e.label}</div><div class="ai-sub">${e.sub}</div>${rentBtn}</div>
       <span style="font-size:11px;font-weight:600;color:${col(e)};background:${bg(e)};padding:2px 8px;border-radius:100px;align-self:flex-start">${calDayLabel(e.days)}</span>
     </div>`;
   }).join('');
@@ -10271,7 +10049,7 @@ const PAGES={
   'inventory-reports':()=>pgCompliance(),
   'inventory-report':(id)=>pgInventoryReport(id),
   contractors:()=>pgMaintenance(),
-  calendar:()=>pgCalendar(),
+  calendar:()=>pgMaintenance(),
   financials:()=>pgRentFinance(),
   rent:()=>pgRentFinance(),
   mtd:()=>pgRentFinance(),
@@ -11328,7 +11106,7 @@ function nav(page, param){
     'inventory-reports': 'compliance',
     'inventory-report':  'compliance',
     'contractors':       'maintenance',
-    'calendar':          'calendar',
+    'calendar':          'maintenance',
     'financials':        'rent-finance',
     'rent':              'rent-finance',
     'mtd':               'rent-finance',
@@ -13390,15 +13168,6 @@ function updateNavBadges() {
     const overdue = D.rent.filter(r => r.status === 'Late' || r.status === 'Due').length;
     if (overdue > 0) { rentBadge.textContent = overdue; rentBadge.className = 'nav-badge red'; rentBadge.style.display = 'inline-flex'; }
     else rentBadge.style.display = 'none';
-  }
-  // Calendar — urgent events (overdue or within 7 days)
-  const calBadge = document.getElementById('nav-badge-calendar');
-  if (calBadge) {
-    try {
-      const urgentCal = getCalEvents().filter(e => e.days <= 7 && e.days >= -1 && e.urg === 'red').length;
-      if (urgentCal > 0) { calBadge.textContent = urgentCal; calBadge.className = 'nav-badge red'; calBadge.style.display = 'flex'; }
-      else calBadge.style.display = 'none';
-    } catch(e) { calBadge.style.display = 'none'; }
   }
 }
 
