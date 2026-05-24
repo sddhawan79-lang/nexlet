@@ -1122,6 +1122,27 @@ async function bypassLicensing(pid) {
   nav(window._currentPage, window._currentParam);
 }
 
+async function bypassDoc(pid, docId) {
+  const p = P(pid); if (!p) return;
+  const current = Array.isArray(p.na_docs) ? p.na_docs : [];
+  if (current.includes(docId)) return; // already set
+  const updated = [...current, docId];
+  p.na_docs = updated;
+  try { await sb.from('properties').update({ na_docs: updated }).eq('id', pid); } catch(e) {}
+  await logAudit('BYPASS_DOC', 'properties', pid, 'Doc marked N/A: ' + docId);
+  nav(window._currentPage, window._currentParam);
+}
+
+async function unbypassDoc(pid, docId) {
+  const p = P(pid); if (!p) return;
+  const current = Array.isArray(p.na_docs) ? p.na_docs : [];
+  const updated = current.filter(d => d !== docId);
+  p.na_docs = updated;
+  try { await sb.from('properties').update({ na_docs: updated }).eq('id', pid); } catch(e) {}
+  await logAudit('UNBYPASS_DOC', 'properties', pid, 'Doc N/A removed: ' + docId);
+  nav(window._currentPage, window._currentParam);
+}
+
 function findCertForDoc(doc, certList) {
   return certList.find(c => {
     const t = (c.type || '').toLowerCase();
@@ -1129,7 +1150,11 @@ function findCertForDoc(doc, certList) {
   });
 }
 
-function getDocStatus(doc, certList, insuranceList) {
+function getDocStatus(doc, certList, insuranceList, naDocs) {
+  // N/A override — user marked this doc as not applicable for this property
+  if (!doc.mandatory && naDocs && naDocs.includes(doc.id)) {
+    return { lbl:'N/A', bg:'#E4EAF1', col:'#7A8FA6', bdr:'transparent', days:null, overdue:false, isNA:true };
+  }
   const today = new Date(); today.setHours(0,0,0,0);
 
   if (doc.insurance_type) {
@@ -6097,17 +6122,18 @@ function pdTabContent(pid, tab) {
     const pi = D.insurance.filter(
       i => String(i.prop_id) === String(pid)
     );
+    const pNaDocs = Array.isArray(p?.na_docs) ? p.na_docs : [];
 
     // ── GROUP RENDERER ──
     function renderCompGroup(
       groupKey, group, certList, insuranceList,
-      addBtn, defaultOpen
+      addBtn, defaultOpen, naDocs
     ) {
       if (!group.docs.length) return '';
 
       const items = group.docs.map(doc => {
         const st = getDocStatus(
-          doc, certList, insuranceList
+          doc, certList, insuranceList, naDocs
         );
         const dayStr = st.days !== null
           ? (st.days < 0
@@ -6126,6 +6152,13 @@ function pdTabContent(pid, tab) {
         const _deleteBtn = _certRec ? `<button onclick="event.stopPropagation();dlDelete('${_certRec.id}','prop-detail')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid rgba(229,62,62,0.3);background:rgba(229,62,62,0.05);color:var(--red);cursor:pointer;font-family:var(--font)">✕</button>` : '';
         const _editBtn = _certRec ? `<button onclick="event.stopPropagation();moEditCert('${_certRec.id}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);white-space:nowrap">✎</button>` : '';
 
+        // N/A toggle button — only on non-mandatory, non-insurance docs
+        const _naBtn = (!doc.mandatory && !doc.insurance_type)
+          ? (st.isNA
+              ? `<button onclick="event.stopPropagation();unbypassDoc('${pid}','${doc.id}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font);white-space:nowrap" title="Remove N/A — mark as required">↩ Undo N/A</button>`
+              : `<button onclick="event.stopPropagation();bypassDoc('${pid}','${doc.id}')" style="font-size:10px;padding:3px 8px;border-radius:100px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:600" title="Mark as not applicable for this property">N/A</button>`)
+          : '';
+
         if (st.action === 'insurance') {
           rowAction = `<button onclick="moCert('${pid}')"
             style="font-size:10px;padding:3px 8px;
@@ -6133,6 +6166,8 @@ function pdTabContent(pid, tab) {
             background:var(--white);color:var(--muted);
             cursor:pointer;font-family:var(--font);
             white-space:nowrap">Manage →</button>`;
+        } else if (st.isNA) {
+          rowAction = `${_naBtn}`;
         } else if (st.overdue) {
           rowAction = `${_editBtn}${_viewBtn}${_deleteBtn}
             <button onclick="moCert('${pid}')"
@@ -6141,9 +6176,9 @@ function pdTabContent(pid, tab) {
             background:rgba(229,62,62,0.07);color:var(--red);
             cursor:pointer;font-family:var(--font);
             white-space:nowrap;font-weight:600">
-            + Upload</button>`;
+            + Upload</button>${_naBtn}`;
         } else {
-          rowAction = `${_editBtn}${_viewBtn}${_deleteBtn}`;
+          rowAction = `${_editBtn}${_viewBtn}${_deleteBtn}${_naBtn}`;
         }
 
         const _escLabel = doc.label.replace(/'/g,"\\'");
@@ -6174,7 +6209,7 @@ function pdTabContent(pid, tab) {
 
       const overdueCount = group.docs.filter(doc => {
         const st = getDocStatus(
-          doc, certList, insuranceList
+          doc, certList, insuranceList, naDocs
         );
         return st.overdue;
       }).length;
@@ -6241,7 +6276,7 @@ function pdTabContent(pid, tab) {
     // always collapsed by default
     const recGroup = propDocs.recommended;
     const recItems = recGroup.docs.map(doc => {
-      const st = getDocStatus(doc, pc, pi);
+      const st = getDocStatus(doc, pc, pi, pNaDocs);
       const dayStr = st.days !== null
         ? (st.days < 0
           ? `${Math.abs(st.days)}d overdue`
@@ -6252,6 +6287,9 @@ function pdTabContent(pid, tab) {
       const _recView = _recUrl ? `<button onclick="event.stopPropagation();dvoOpen('${_recUrl}','${doc.label.replace(/'/g,"\\'")}','')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:600">👁 View</button>` : '';
       const _recEdit = _recCert ? `<button onclick="event.stopPropagation();moEditCert('${_recCert.id}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font)">✎</button>` : '';
       const _recUpload = !_recCert ? `<button onclick="event.stopPropagation();moCert('${pid}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font);white-space:nowrap">+ Upload</button>` : '';
+      const _recNA = st.isNA
+        ? `<button onclick="event.stopPropagation();unbypassDoc('${pid}','${doc.id}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font);white-space:nowrap" title="Remove N/A">↩ Undo N/A</button>`
+        : `<button onclick="event.stopPropagation();bypassDoc('${pid}','${doc.id}')" style="font-size:10px;padding:3px 8px;border-radius:100px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:600" title="Not applicable for this property">N/A</button>`;
       return `
         <div style="display:flex;align-items:center;
           justify-content:space-between;padding:9px 12px;
@@ -6272,7 +6310,7 @@ function pdTabContent(pid, tab) {
             <span style="font-size:10px;font-weight:600;
               color:${st.col};white-space:nowrap">
               ${st.lbl}</span>
-            ${_recEdit}${_recView}${_recUpload}
+            ${st.isNA ? _recNA : `${_recEdit}${_recView}${_recUpload}${_recNA}`}
           </div>
         </div>`;
     }).join('');
@@ -6323,30 +6361,30 @@ function pdTabContent(pid, tab) {
 
       <!-- Group 1: Safety Certificates -->
       ${renderCompGroup(
-        'safety', propDocs.safety, pc, pi, addCertBtn, false
+        'safety', propDocs.safety, pc, pi, addCertBtn, false, pNaDocs
       )}
 
       <!-- Group 2: Licensing — only renders if HMO
            or has docs after filtering -->
       ${propDocs.licensing.docs.length
         ? renderCompGroup(
-            'licensing', propDocs.licensing, pc, pi, '', false
+            'licensing', propDocs.licensing, pc, pi, '', false, pNaDocs
           )
         : ''}
 
       <!-- Group 3: Tenancy Documents -->
       ${renderCompGroup(
-        'tenancy', propDocs.tenancy, pc, pi, '', false
+        'tenancy', propDocs.tenancy, pc, pi, '', false, pNaDocs
       )}
 
       <!-- Group 4: Move-In Pack -->
       ${renderCompGroup(
-        'movein', propDocs.movein, pc, pi, '', false
+        'movein', propDocs.movein, pc, pi, '', false, pNaDocs
       )}
 
       <!-- Group 5: Insurance -->
       ${renderCompGroup(
-        'insurance', propDocs.insurance, pc, pi, '', false
+        'insurance', propDocs.insurance, pc, pi, '', false, pNaDocs
       )}
 
       <!-- Recommended — neutral, always collapsed -->
