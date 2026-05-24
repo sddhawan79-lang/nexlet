@@ -8014,6 +8014,7 @@ function pgTenants(){
 
 // ── PAGE: TENANT DETAIL ──
 function pgTenantDetail(tid) {
+  try {
   const t = D.tenants.find(x => String(x.id) === String(tid));
   if (!t) return pgTenants();
   const p = P(t.prop_id) || { address: '—', city: '' };
@@ -8365,6 +8366,14 @@ function pgTenantDetail(tid) {
         <div>${logRows}</div>
       </div>
     </div>`;
+  } catch(pgErr) {
+    console.error('pgTenantDetail error:', pgErr);
+    return `<div class="content"><div style="padding:24px;background:rgba(229,62,62,0.06);border:1px solid rgba(229,62,62,0.2);border-radius:10px;margin:16px">
+      <div style="font-size:13px;font-weight:600;color:var(--red);margin-bottom:8px">Error loading tenant details</div>
+      <div style="font-size:12px;font-family:monospace;color:var(--muted);white-space:pre-wrap">${pgErr.message}\n\n${pgErr.stack||''}</div>
+      <div style="margin-top:12px"><button class="btn" onclick="nav('tenants')">← Back to tenants</button></div>
+    </div></div>`;
+  }
 }
 
 async function uploadTenantDoc(tid, slot, input) {
