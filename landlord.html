@@ -10314,7 +10314,7 @@ function showCalDay(yr,mo,d){
 const PAGES={
   dashboard:()=>pgDashboard(),
   properties:()=>pgProperties(),
-  tenants:(id)=>{ if (!id) window._tenantFilter = 'Active'; pgTenants(); },
+  tenants:(id)=>{ if (!id) window._tenantFilter = 'Active'; return pgTenants(); },
   compliance:()=>pgCompliance(),
   maintenance:()=>pgMaintenance(),
   'rent-finance':()=>pgRentFinance(),
