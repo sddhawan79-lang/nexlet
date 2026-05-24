@@ -3667,7 +3667,7 @@ async function _saveTenantSetupToDB() {
     }
 
     closeMo();
-    toast('\u2713 Tenant added!');
+    toast('✓ Tenant added!');
     // Post-add CTA modal
     const _newTid = String(td?.id || '');
     const _newTname = (s.name || 'Tenant').replace(/'/g, '&#39;');
@@ -5675,7 +5675,9 @@ function buildRentSchedule(pid) {
     let status;
     if (existing) {
       status = existing.status;
-    } else if (cur <= today) {
+    } else if (cur < today) {
+      status = 'Late';
+    } else if (cur.getTime() === today.getTime()) {
       status = 'Due';
     } else {
       status = 'Scheduled';
@@ -7524,7 +7526,7 @@ async function checkAllReminders() {
       const daysLate = Math.round((today-dueThis)/864e5);
       if (![1,3,7].includes(daysLate)) continue;
       // Check if paid
-      const paid = D.rent.some(r => String(r.prop_id)===String(t.prop_id) && r.status==='Paid' && new Date(r.due_date).getMonth()===today.getMonth());
+      const paid = D.rent.some(r => String(r.prop_id)===String(t.prop_id) && r.status==='Paid' && r.due_date && new Date(r.due_date).getMonth()===today.getMonth() && new Date(r.due_date).getFullYear()===today.getFullYear());
       if (paid) continue;
       const prop = P(t.prop_id)||{address:'—'};
       if (await alreadySent('REMINDER_RENT_LATE', t.id, `rent_${daysLate}d`)) continue;
@@ -8891,26 +8893,48 @@ async function exportEvidenceBundle(tid) {
 
 
 function pgRent(){
-  const tot=D.properties.reduce((s,p)=>s+(p.rent||0),0);
-  const paid=D.rent.filter(r=>r.status==='Paid').reduce((s,r)=>s+(r.amount||0),0);
-  const due=D.rent.filter(r=>r.status==='Due').reduce((s,r)=>s+(r.amount||0),0);
+  // Build full schedule across all properties (includes auto-generated rows)
+  const allRows = [];
+  activeProperties().forEach(p => {
+    const sched = buildRentSchedule(p.id);
+    sched.forEach(r => allRows.push({ ...r, prop_id: p.id, propAddress: p.address }));
+  });
+  // Also include any DB records not covered by buildRentSchedule (properties without active tenant/rent_day)
+  D.rent.forEach(r => {
+    const already = allRows.find(x => x.id && String(x.id) === String(r.id));
+    if (!already) allRows.push({ ...r, propAddress: (P(r.prop_id)||{address:'—'}).address });
+  });
+  // Sort newest first
+  allRows.sort((a,b) => (b.due_date||''). localeCompare(a.due_date||'')); 
+  const tot  = D.properties.reduce((s,p)=>s+(p.rent||0),0);
+  const paid = allRows.filter(r=>r.status==='Paid').reduce((s,r)=>s+(r.amount||0),0);
+  const outstanding = allRows.filter(r=>r.status==='Due'||r.status==='Late'||r.status==='Scheduled').reduce((s,r)=>s+(r.amount||0),0);
+  const lateCount = allRows.filter(r=>r.status==='Late').length;
+  const rows = allRows.filter(r=>r.status!=='Scheduled'||new Date(r.due_date)<=new Date());
   return`<div class="topbar"><span class="tb-title">Rent</span><div class="tb-right"><button class="btn btn-navy" onclick="moAddPayment()">+ Record payment</button></div></div>
   <div class="content">
     <div class="ph"><h1>Rent</h1><p>Track payments across your portfolio</p></div>
     <div class="metrics metrics-3">
       <div class="mc"><div class="mc-top"><span class="mc-label">Collected</span></div><div class="mc-val" style="color:var(--green-dark)">£${paid.toLocaleString()}</div><div class="mc-sub">of £${tot.toLocaleString()} expected</div></div>
-      <div class="mc"><div class="mc-top"><span class="mc-label">Outstanding</span></div><div class="mc-val" style="color:var(--amber)">£${due.toLocaleString()}</div></div>
-      <div class="mc"><div class="mc-top"><span class="mc-label">Late payments</span></div><div class="mc-val" style="color:var(--red)">${D.rent.filter(r=>r.status==='Late').length}</div></div>
+      <div class="mc"><div class="mc-top"><span class="mc-label">Outstanding</span></div><div class="mc-val" style="color:var(--amber)">£${outstanding.toLocaleString()}</div></div>
+      <div class="mc"><div class="mc-top"><span class="mc-label">Late payments</span></div><div class="mc-val" style="color:var(--red)">${lateCount}</div></div>
     </div>
-    ${D.rent.length?`<div class="panel"><div class="tw"><table>
+    ${allRows.length?`<div class="panel"><div class="tw"><table>
       <thead><tr><th>Property</th><th>Month</th><th>Amount</th><th>Due</th><th>Paid</th><th>Status</th><th></th></tr></thead>
-      <tbody>${D.rent.map(r=>{const p=P(r.prop_id)||{address:'—',city:''};return`<tr>
-        <td class="td-bold">${p.address}</td><td>${r.month}</td>
-        <td>£${(r.amount||0).toLocaleString()}</td><td>${FMS(r.due||r.due_date)}</td>
-        <td>${r.paid||r.paid_date?FMS(r.paid||r.paid_date):'—'}</td><td>${B(r.status)}</td>
-        <td><button onclick="moAddPayment('${r.prop_id}',${r.id})" style="font-size:11px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:none;cursor:pointer;font-family:var(--font)">Edit</button></td>
+      <tbody>${allRows.map(r=>{
+        const ds=r.status==='Scheduled'?'Due':r.status;
+        const ab=(r.status==='Due'||r.status==='Late')
+          ?(r.id
+            ?`<button onclick="moAddPayment('${r.prop_id}',${r.id})" style="font-size:11px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:none;cursor:pointer;font-family:var(--font)">Edit</button>`
+            :`<button onclick="markRentReceived('${r.prop_id}','${r.month}','${r.due_date}',${r.amount})" style="font-size:11px;padding:3px 10px;border-radius:6px;border:1px solid var(--green-dark);background:var(--green-bg);color:var(--green-dark);cursor:pointer;font-family:var(--font);font-weight:600">✓ Mark received</button>`)
+          :(r.id?`<button onclick="moAddPayment('${r.prop_id}',${r.id})" style="font-size:11px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:none;cursor:pointer;font-family:var(--font)">Edit</button>`:'');
+        return`<tr>
+        <td class="td-bold">${r.propAddress}</td><td>${r.month||'—'}</td>
+        <td>£${(r.amount||0).toLocaleString()}</td><td>${FMS(r.due_date)}</td>
+        <td>${r.paid_date?FMS(r.paid_date):'—'}</td><td>${B(ds)}</td>
+        <td>${ab}</td>
       </tr>`}).join('')}</tbody>
-    </table></div></div>`:'<div class="empty"><div class="empty-ic">💷</div><div class="empty-t">No rent records yet</div></div>'}
+    </table></div></div>`:`<div class="empty"><div class="empty-ic">💷</div><div class="empty-t">No rent records yet</div></div>`}
   </div>`;
 }
 
@@ -8948,7 +8972,7 @@ function moAddPayment(prefPropId, editId) {
   const thisMonth = new Date().toISOString().slice(0,7);
   const tenantEmail = () => { const pid = rec?.prop_id||prefPropId; const t = D.tenants.find(t=>String(t.prop_id)===String(pid)&&t.status==='Active'); return t?.email||''; };
   openMo(rec?'Edit Payment':'Record Rent Payment', rec?'Update payment record':'Log a received payment', `
-    <div class="fg"><label>Property <span class="req">*</span></label><select id="pay-prop">${propOpts}</select></div>
+    <div class="fg"><label>Property <span class="req">*</span></label><select id="pay-prop" onchange="(function(){const t=D.tenants.find(x=>String(x.prop_id)===String(document.getElementById('pay-prop').value)&&x.status==='Active');const email=t?.email||'';const cb=document.getElementById('pay-receipt');const lbl=document.getElementById('pay-receipt-lbl');if(cb){cb.checked=!!email;cb.disabled=!email;}if(lbl){lbl.innerHTML=email?'Email receipt to <strong>'+email+'</strong>':'No tenant email on file';}})()">${propOpts}</select></div>
     <div class="fg-row">
       <div class="fg"><label>Month <span class="req">*</span></label><input type="month" id="pay-month" value="${rec?.month||thisMonth}"></div>
       <div class="fg"><label>Amount (£) <span class="req">*</span></label><input type="number" id="pay-amount" value="${rec?.amount||''}" placeholder="e.g. 1200" min="0"></div>
@@ -8965,7 +8989,7 @@ function moAddPayment(prefPropId, editId) {
     <div class="fg"><label>Notes (optional)</label><input type="text" id="pay-notes" value="${rec?.notes||''}" placeholder="e.g. Paid via bank transfer"></div>
     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:4px">
       <input type="checkbox" id="pay-receipt" ${tenantEmail()?'checked':''} ${!tenantEmail()?'disabled':''} style="width:13px;height:13px">
-      <div style="font-size:12px">${tenantEmail()?'Email receipt to <strong>'+tenantEmail()+'</strong>':'No tenant email on file'}</div>
+      <div style="font-size:12px" id="pay-receipt-lbl">${tenantEmail()?'Email receipt to <strong>'+tenantEmail()+'</strong>':'No tenant email on file'}</div>
     </label>
     ${rec?`<button onclick="deletePayment(${rec.id})" style="background:none;border:none;color:var(--red);font-size:12px;cursor:pointer;padding:4px 0;font-family:var(--font)">🗑 Delete this record</button>`:''}
   `, `
@@ -9014,10 +9038,10 @@ async function savePayment(editId) {
 
 /** Writes payment to rent_payments only. Returns { success, error?, data? } */
 async function savePaymentRecord(payload, editId) {
-  const { prop_id, amount, due, paid, status } = payload;
+  const { prop_id, amount, due, paid, status, month, notes } = payload;
   // Auto-lookup lead tenant for this property
   const lead = D.tenants.find(t => String(t.prop_id) === String(prop_id) && t.is_lead && t.status === 'Active');
-  const dp = { prop_id, amount, due_date:due||null, paid_date:paid||null, status, tenant_id: lead?.id || null };
+  const dp = { prop_id, amount, due_date:due||null, paid_date:paid||null, status, tenant_id: lead?.id || null, month: month||null, notes: notes||null };
   try {
     if (editId) {
       const { error } = await sb.from('rent_payments').update(dp).eq('id', editId);
@@ -10774,12 +10798,12 @@ function pgDocLibrary(){
         :docs.map(d=>{
           const name=d.type.replace('__DOC__:','');
           const prop=props.find(p=>String(p.id)===String(d.prop_id));
-          const date=d.expiry?new Date(d.expiry).toLocaleDateString('en-GB'):'—';
+          const uploadedAt = d.created_at ? new Date(d.created_at).toLocaleDateString('en-GB') : (d.expiry ? new Date(d.expiry).toLocaleDateString('en-GB') : '—');
           return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
             <span style="font-size:20px">📄</span>
             <div style="flex:1">
               <div style="font-size:13px;font-weight:600;color:var(--txt)">${name}</div>
-              <div style="font-size:11px;color:var(--muted)">${prop?prop.address:'All properties'} · Uploaded ${date}</div>
+              <div style="font-size:11px;color:var(--muted)">${prop?prop.address:'All properties'} · Uploaded ${uploadedAt}</div>
             </div>
             ${d.engineer ? `
               <button class="btn btn-sm" onclick="dvoOpen('${d.engineer}','${name.replace(/'/g,"\\'")}','${(prop?prop.address:'').replace(/'/g,"\\'")}')">👁 View</button>
@@ -10803,9 +10827,9 @@ async function dlUpload(){
   toast('Uploading…');
   const ext=file.name.split('.').pop();
   const filename=`docs/${currentUser.id}_${Date.now()}.${ext}`;
-  const{error:upErr}=await sb.storage.from('esign-documents').upload(filename,file,{contentType:file.type});
+  const{error:upErr}=await sb.storage.from('documents').upload(filename,file,{contentType:file.type});
   if(upErr){toast('Upload failed: '+upErr.message,true);return;}
-  const{data:urlData}=sb.storage.from('esign-documents').getPublicUrl(filename);
+  const{data:urlData}=sb.storage.from('documents').getPublicUrl(filename);
   const cert={prop_id:propId?String(propId):null,type:'__DOC__:'+name,expiry:new Date().toISOString().split('T')[0],engineer:urlData.publicUrl,status:'Uploaded',has_file:true,served:false,user_id:currentUser.id};
   const{data,error}=await sb.from('certificates').insert(cert).select().single();
   if(error){toast('Save failed: '+error.message,true);return;}
@@ -12188,7 +12212,7 @@ function downloadAsPDF() {
     doc.line(16, y, W-16, y);
     y += 6;
     doc.setFontSize(7.5); doc.setTextColor(153,153,153);
-    const footer = `Generated by NexLet \u00b7 ${new Date().toLocaleDateString('en-GB')} \u00b7 For reference only \u2014 not legal advice`;
+    const footer = `Generated by NexLet \u00b7 ${new Date().toLocaleDateString('en-GB')} \u00b7 For reference only — not legal advice`;
     doc.text(footer, 16, y);
     y += 12;
 
@@ -13052,7 +13076,7 @@ function s8DownloadPDF() {
     doc.setFontSize(15); doc.setTextColor(11,30,61);
     doc.text('NexLet', 16, y);
     doc.setFontSize(9); doc.setTextColor(153,153,153);
-    doc.text(`Section 8 Notice Draft \u2014 ${p?.address||''}`, 45, y);
+    doc.text(`Section 8 Notice Draft — ${p?.address||''}`, 45, y);
     doc.setDrawColor(11,30,61);
     doc.line(16, y+4, W-16, y+4);
     y += 11;
@@ -13080,7 +13104,7 @@ function s8DownloadPDF() {
     doc.line(16, y, W-16, y);
     y += 6;
     doc.setFontSize(7.5); doc.setTextColor(153,153,153);
-    doc.text(`Generated by NexLet \u00b7 ${new Date().toLocaleDateString('en-GB')} \u00b7 Draft only \u2014 transfer to GOV.UK Form 3A before serving`, 16, y);
+    doc.text(`Generated by NexLet \u00b7 ${new Date().toLocaleDateString('en-GB')} \u00b7 Draft only — transfer to GOV.UK Form 3A before serving`, 16, y);
 
     doc.save('section8_notice_draft.pdf');
   } catch(e) {
@@ -13441,10 +13465,20 @@ function updateNavBadges() {
     if (vacBad > 0) { propEl.textContent = vacBad; propEl.className = 'nav-badge amber'; propEl.style.display = 'flex'; }
     else propEl.style.display = 'none';
   }
-  // Rent Tracker — late or due payments
+  // Rent Tracker — late or due payments (DB records + auto-generated overdue rows)
   const rentBadge = document.getElementById('nav-badge-rent');
   if (rentBadge) {
-    const overdue = D.rent.filter(r => r.status === 'Late' || r.status === 'Due').length;
+    let overdue = D.rent.filter(r => r.status === 'Late' || r.status === 'Due').length;
+    // Also count auto-generated overdue rows not yet in DB
+    try {
+      const today = new Date(); today.setHours(0,0,0,0);
+      D.tenants.filter(t => t.rent_day && t.status === 'Active').forEach(t => {
+        const sched = buildRentSchedule(t.prop_id);
+        sched.forEach(r => {
+          if (!r.id && (r.status === 'Late' || r.status === 'Due')) overdue++;
+        });
+      });
+    } catch(e) { /* non-critical */ }
     if (overdue > 0) { rentBadge.textContent = overdue; rentBadge.className = 'nav-badge red'; rentBadge.style.display = 'inline-flex'; }
     else rentBadge.style.display = 'none';
   }
@@ -13632,7 +13666,7 @@ async function invDownloadPDF(){
     doc.setFontSize(15);doc.setTextColor(11,30,61);
     doc.text('NexLet',16,y);
     doc.setFontSize(9);doc.setTextColor(153,153,153);
-    doc.text(`${type} \u2014 ${p.address}`,45,y);
+    doc.text(`${type} — ${p.address}`,45,y);
     doc.setDrawColor(11,30,61);
     doc.line(16,y+4,W-16,y+4);
     y+=11;
@@ -13690,7 +13724,7 @@ async function invDownloadPDF(){
     doc.line(16,y,W-16,y);
     y+=6;
     doc.setFontSize(7.5);doc.setTextColor(153,153,153);
-    const footer=`Generated by NexLet \u00b7 ${new Date().toLocaleDateString('en-GB')} \u00b7 AI-generated \u2014 verify against photos`;
+    const footer=`Generated by NexLet \u00b7 ${new Date().toLocaleDateString('en-GB')} \u00b7 AI-generated — verify against photos`;
     if(y>278){doc.addPage();y=18;}
     doc.text(footer,16,y);
     doc.save((type.replace(/[^a-z0-9]/gi,'_').toLowerCase())+'.pdf');
@@ -13941,8 +13975,6 @@ function moEsign(pid, tid) {
   document.querySelector('.mo-box').classList.add('mo-wide');
 }
 
-function esignShowOptionA() {
-
 // ── E-SIGN: EDIT TOGGLE ──
 function _esignToggleEdit() {
   const preview = document.getElementById('esign-doc-preview');
@@ -13964,6 +13996,8 @@ function _esignToggleEdit() {
     btn.textContent = '✏️ Edit';
   }
 }
+
+function esignShowOptionA() {
   document.getElementById('esign-chooser').style.display = 'none';
   document.getElementById('esign-form-a').style.display = 'block';
 }
@@ -14088,7 +14122,7 @@ async function _sendEsignRequest(pid, tid, mode) {
     document_html:    mode === 'html' ? _esignDocHtml : null,
     document_pdf_url: mode === 'pdf'  ? _esignPdfUrl  : null,
     token,
-    status:     'pending',
+    status:     'sent',
     expires_at: expiresAt,
     landlord_name:      landlordName,
     landlord_signed_at: landlordSignedAt,
