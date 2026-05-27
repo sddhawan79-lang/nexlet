@@ -8401,6 +8401,7 @@ function pgTenantDetail(tid) {
       </div>
 
       ${stickyCard}
+      ${(()=>{ const g8=getGround8Status(t.id); if(!g8||!g8.warning) return ''; const isHit=g8.threshold; return `<div style="background:${isHit?'rgba(229,62,62,0.07)':'rgba(217,119,6,0.06)'};border:1px solid ${isHit?'rgba(229,62,62,0.3)':'rgba(217,119,6,0.3)'};border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><div style="font-size:13px;font-weight:700;color:${isHit?'var(--red)':'var(--amber)'};margin-bottom:4px">${isHit?'🔴 Ground 8 threshold reached':'⚠️ Rent arrears warning'}</div><div style="font-size:12px;color:var(--txt);line-height:1.6">${g8.monthsArrears} month${g8.monthsArrears!==1?'s':''} in arrears · £${g8.totalUnpaid.toLocaleString()} unpaid across ${g8.unpaidCount} payment${g8.unpaidCount!==1?'s':''}${isHit?' · Ground 8 requires 2+ months — you may now serve a Section 8 notice':' · Ground 8 triggers at 2 months'}</div></div><button class="btn btn-sm" style="${isHit?'border-color:var(--red);color:var(--red)':'border-color:var(--amber);color:var(--amber)'}" onclick="moSection8('${t.prop_id}')">⚖️ Section 8 →</button></div>`; })()}
       ${checklistCard}
       ${portalCard}
       ${tenancyCard}
@@ -10465,6 +10466,27 @@ function showAssistant(){
 }
 
 // ── FINANCE HELPERS ──
+// ── GROUND 8 ARREARS CALCULATOR ──
+function getGround8Status(tenantId) {
+  const t = D.tenants.find(x => String(x.id) === String(tenantId));
+  if (!t || t.status !== 'Active') return null;
+  const monthlyRent = t.rent || 0;
+  if (!monthlyRent) return null;
+  const unpaid = D.rent.filter(r =>
+    String(r.prop_id) === String(t.prop_id) &&
+    (r.status === 'Due' || r.status === 'Late')
+  );
+  const totalUnpaid = unpaid.reduce((s, r) => s + (r.amount || monthlyRent), 0);
+  const monthsArrears = totalUnpaid / monthlyRent;
+  return {
+    monthsArrears: Math.round(monthsArrears * 10) / 10,
+    totalUnpaid,
+    unpaidCount: unpaid.length,
+    threshold: monthsArrears >= 2,
+    warning:   monthsArrears >= 1,
+  };
+}
+
 function getMaintCostTotal(pid){
   const fromJA = D.jobAssignments
     .filter(j => j.tenant_maintenance && String(j.tenant_maintenance.prop_id) === String(pid))
