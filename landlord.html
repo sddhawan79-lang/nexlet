@@ -10837,7 +10837,7 @@ function pgDocLibrary(){
       <div style="padding:0 18px 18px;display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end">
         <div class="fg"><label>Document Name</label><input type="text" id="dl-name" placeholder="e.g. Tenancy Agreement 2024" class="fi"></div>
         <div class="fg"><label>Property</label><select id="dl-prop" class="fi"><option value="">All properties</option>${propOpts}</select></div>
-        <div class="fg"><label>File</label><input type="file" id="dl-file" accept=".pdf,.doc,.docx,.jpg,.png" class="fi"></div>
+        <div class="fg"><label>File</label><input type="file" id="dl-file" accept=".pdf,.doc,.docx,.jpg,.png" class="fi" onchange="dlScanDoc(this)"></div>
         <button class="btn btn-navy" onclick="dlUpload()">Upload</button>
       </div>
     </div>
@@ -10865,6 +10865,32 @@ function pgDocLibrary(){
       </div>
     </div>
   </div>`;
+}
+
+async function dlScanDoc(input){
+  if(!input.files[0]) return;
+  const file = input.files[0];
+  window._lastScanFile = file;
+  let scanStatus = document.getElementById('dl-scan-status');
+  if(!scanStatus){
+    const fileRow = input.closest('.fg');
+    scanStatus = document.createElement('div');
+    scanStatus.id = 'dl-scan-status';
+    scanStatus.style.cssText = 'font-size:12px;color:var(--muted);margin-top:6px;padding:6px 10px;background:var(--off);border-radius:6px';
+    fileRow.appendChild(scanStatus);
+  }
+  scanStatus.innerHTML = '⏳ AI scanning document…';
+  try {
+    const prompt = 'UK property document. Extract: document type, reference number, issue date (YYYY-MM-DD), expiry date if present (YYYY-MM-DD), provider or issuing authority name, full property address. Return JSON only, keys: type, ref, issued, expiry, engineer, issuing_authority, address.';
+    await scanAndFill(file, (parsed) => {
+      const nameEl = document.getElementById('dl-name');
+      if(nameEl && !nameEl.value.trim() && parsed.type) nameEl.value = parsed.type;
+      const parts = [parsed.type, parsed.ref, parsed.expiry ? 'Exp: '+parsed.expiry : ''].filter(Boolean);
+      scanStatus.innerHTML = `<span style="color:var(--green-dark);font-weight:600">✓ Scanned</span> — ${parts.join(' · ')}${parsed.address?' · '+parsed.address:''} <button onclick="if(window._lastScanFile)dvoOpen(URL.createObjectURL(window._lastScanFile),window._lastScanFile.name,'Scanned document')" style="margin-left:8px;background:var(--white);border:1px solid var(--border);border-radius:5px;padding:2px 8px;font-size:11px;font-weight:600;color:var(--navy);cursor:pointer;font-family:var(--font)">👁 View</button>`;
+    }, prompt);
+  } catch(e) {
+    scanStatus.innerHTML = '<span style="color:var(--amber)">Could not scan — fill name manually</span>';
+  }
 }
 
 async function dlUpload(){
