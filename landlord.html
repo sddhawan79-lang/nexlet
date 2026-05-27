@@ -8130,6 +8130,7 @@ function pgTenantDetail(tid) {
           ${t.status === 'Ended' ? '<span style="font-size:11px;font-weight:600;background:var(--off);color:var(--muted);padding:5px 10px;border-radius:6px;border:1px solid var(--border)">📦 Archived</span>' : `<button class="btn btn-sm" onclick="moTenantDetail('${t.id}')">✎ Edit</button><button class="btn btn-sm" style="margin-left:4px;border-color:var(--blue);color:var(--blue)" onclick="moTenantDocs('${t.id}','${t.prop_id}')">📄 Upload Docs</button>`}
           <button class="btn btn-sm btn-navy" onclick="moSection8('${t.prop_id}')">⚖️ Section 8</button>
           <button class="btn btn-sm btn-navy" onclick="moTenantComms('${t.id}')">✉ Message</button>
+          ${t.scheme && t.scheme_ref && t.status !== 'Ended' ? `<button class="btn btn-sm" style="border-color:var(--green-dark);color:var(--green-dark)" onclick="moPrescribedInfo('${t.id}')">📄 Prescribed Info</button>` : ''}
           ${t.status === 'Ended' ? '' : `<button class="btn btn-sm" style="border-color:var(--red);color:var(--red)" onclick="moEndTenancy('${t.id}')">⏻ End Tenancy</button>`}
         </div>
       </div>
@@ -10744,6 +10745,155 @@ function moFinancials(pid){
     <div class="fg-div"></div>
     <div style="background:var(--off);border-radius:8px;padding:14px;font-size:12px;color:var(--muted)"><strong style="color:var(--txt)">Gross yield: ${yld}%</strong> — ${parseFloat(yld)>=5?'✅ Strong yield':'⚠️ Consider reviewing rent levels'}. Maintenance from real job records. Tax estimates are indicative only.</div>
   `,'<button class="btn" onclick="closeMo()">Close</button><button class="btn btn-navy" onclick="exportFinancialsPDF(\''+pid+'\')">📄 Export PDF</button>');
+}
+
+// ── PRESCRIBED INFORMATION PDF ──
+function moPrescribedInfo(tid) {
+  const t = D.tenants.find(x => String(x.id) === String(tid));
+  if (!t) return;
+  const p = P(t.prop_id) || { address: '—', city: '', postcode: '' };
+  if (!t.scheme || !t.scheme_ref) { toast('Add deposit scheme and reference number first', true); return; }
+  const landlord = _profileName();
+  const date = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+  const schemeUrls = {
+    'DPS':        { url: 'www.depositprotection.com', dispute: '0330 303 0030' },
+    'MyDeposits': { url: 'www.mydeposits.co.uk',      dispute: '0333 321 9401' },
+    'TDS':        { url: 'www.tenancydepositscheme.com', dispute: '0300 037 1000' },
+  };
+  const schemeInfo = schemeUrls[t.scheme] || { url: 'your deposit scheme website', dispute: 'your deposit scheme helpline' };
+
+  openMo('📄 Prescribed Information', `${t.name} · ${p.address}`, `
+    <div style="background:rgba(0,168,122,0.06);border:1px solid rgba(0,168,122,0.2);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:var(--txt);line-height:1.6">
+      This document must be served on the tenant within <strong>30 days</strong> of receiving the deposit. Keep a signed copy as proof of service. Fine: up to <strong>3× the deposit amount</strong> if missed.
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      ${[
+        ['Tenant', t.name],
+        ['Landlord', landlord],
+        ['Property', p.address + (p.city ? ', ' + p.city : '') + (p.postcode ? ' ' + p.postcode : '')],
+        ['Tenancy start', FMS(t.start_date)],
+        ['Deposit amount', t.deposit ? '£' + t.deposit.toLocaleString() : '—'],
+        ['Deposit scheme', t.scheme],
+        ['Protection ref', t.scheme_ref],
+        ['Scheme website', schemeInfo.url],
+      ].map(([l,v]) => `<div class="det-f"><label>${l}</label><span>${v}</span></div>`).join('')}
+    </div>
+    <div style="font-size:12px;color:var(--muted);background:var(--off);border-radius:7px;padding:10px 12px;line-height:1.7">
+      The deposit is held by <strong>${t.scheme}</strong> under the Tenancy Deposit Protection scheme as required by the Housing Act 2004. The tenant may dispute deductions via the scheme's free Alternative Dispute Resolution (ADR) service — contact: <strong>${schemeInfo.dispute}</strong>.
+    </div>
+  `, `<button class="btn" onclick="closeMo()">Close</button>
+     <button class="btn btn-navy" onclick="generatePrescribedInfoPDF('${tid}')">📥 Download PDF</button>`);
+}
+
+function generatePrescribedInfoPDF(tid) {
+  const t = D.tenants.find(x => String(x.id) === String(tid));
+  if (!t) return;
+  const p = P(t.prop_id) || { address: '—', city: '', postcode: '' };
+  const landlord = _profileName();
+  const date = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+  const schemeUrls = {
+    'DPS':        { url: 'www.depositprotection.com',    dispute: '0330 303 0030', full: 'Deposit Protection Service (DPS)' },
+    'MyDeposits': { url: 'www.mydeposits.co.uk',         dispute: '0333 321 9401', full: 'MyDeposits' },
+    'TDS':        { url: 'www.tenancydepositscheme.com', dispute: '0300 037 1000', full: 'Tenancy Deposit Scheme (TDS)' },
+  };
+  const si = schemeUrls[t.scheme] || { url: 'your scheme website', dispute: 'your scheme helpline', full: t.scheme };
+  const propAddr = [p.address, p.city, p.postcode].filter(Boolean).join(', ');
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const W = doc.internal.pageSize.getWidth();
+    let y = 0;
+    const chk = () => { if (y > 272) { doc.addPage(); y = 20; } };
+    const ln = (text, size=11, bold=false, color=[40,40,40]) => {
+      doc.setFontSize(size); doc.setFont('helvetica', bold ? 'bold' : 'normal');
+      doc.setTextColor(...color);
+      const lines = doc.splitTextToSize(String(text||''), W - 30);
+      lines.forEach(l => { chk(); doc.text(l, 15, y); y += size * 0.45; });
+      y += 1;
+    };
+    const rule = () => { chk(); doc.setDrawColor(210,215,225); doc.setLineWidth(0.3); doc.line(15, y, W-15, y); y += 5; };
+    const row2 = (left, right) => {
+      chk();
+      doc.setFontSize(10); doc.setFont('helvetica','normal'); doc.setTextColor(100,110,130);
+      doc.text(left, 15, y);
+      doc.setFont('helvetica','bold'); doc.setTextColor(30,40,55);
+      doc.text(String(right||'—'), W-15, y, { align: 'right' });
+      y += 6;
+    };
+
+    // Header
+    doc.setFillColor(11,30,61); doc.rect(0, 0, W, 42, 'F');
+    doc.setFillColor(0,200,150); doc.rect(0, 40, W, 3, 'F');
+    doc.setFontSize(18); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
+    doc.text('NexLet', 15, 16);
+    doc.setFontSize(10); doc.setFont('helvetica','normal'); doc.setTextColor(160,205,190);
+    doc.text('Prescribed Information — Tenancy Deposit', 15, 25);
+    doc.setFontSize(9); doc.setTextColor(180,200,220);
+    doc.text('Housing Act 2004, s.213(5) & The Housing (Tenancy Deposits)(Prescribed Information) Order 2007', 15, 33);
+    y = 54;
+
+    ln('Prescribed Information', 14, true, [11,30,61]); y += 2; rule();
+
+    // Parties
+    ln('The Parties', 11, true, [11,30,61]); y += 1;
+    row2('Landlord name', landlord);
+    row2('Tenant name(s)', t.name);
+    row2('Rental property', propAddr);
+    row2('Tenancy start date', FMS(t.start_date));
+    y += 2; rule();
+
+    // Deposit details
+    ln('Deposit Details', 11, true, [11,30,61]); y += 1;
+    row2('Deposit amount', t.deposit ? '£' + Number(t.deposit).toLocaleString() : '—');
+    row2('Deposit scheme', si.full);
+    row2('Protection reference', t.scheme_ref);
+    row2('Scheme website', si.url);
+    row2('Dispute helpline', si.dispute);
+    y += 2; rule();
+
+    // Scheme info
+    ln('About the Deposit Scheme', 11, true, [11,30,61]); y += 2;
+    const body1 = `The deposit of £${t.deposit ? Number(t.deposit).toLocaleString() : '—'} has been protected with ${si.full} as required by the Housing Act 2004. The deposit will be held for the duration of the tenancy and returned at the end, subject to any agreed deductions for unpaid rent, damage beyond fair wear and tear, or other breaches of the tenancy agreement.`;
+    ln(body1, 10, false, [50,55,65]); y += 3;
+
+    // Dispute resolution
+    ln('Dispute Resolution', 11, true, [11,30,61]); y += 2;
+    const body2 = `If there is a dispute over the return of the deposit at the end of the tenancy, the tenant may use the free Alternative Dispute Resolution (ADR) service provided by ${si.full}. Contact the scheme at ${si.url} or ${si.dispute}. Both landlord and tenant must consent to ADR. If ADR is not agreed, either party may apply to the county court.`;
+    ln(body2, 10, false, [50,55,65]); y += 3; rule();
+
+    // Signatures
+    ln('Signatures', 11, true, [11,30,61]); y += 4;
+    doc.setFontSize(10); doc.setFont('helvetica','normal'); doc.setTextColor(50,50,50);
+    doc.text('Landlord signature:', 15, y); doc.setDrawColor(180,180,180); doc.line(60, y+1, W-15, y+1); y += 10;
+    doc.text('Tenant signature:', 15, y); doc.line(55, y+1, W-15, y+1); y += 10;
+    doc.text('Date:', 15, y); doc.line(30, y+1, W-15, y+1); y += 10;
+    rule();
+
+    // Footer
+    doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(150,150,160);
+    const footer = `Generated by NexLet · ${date} · Keep a signed copy as proof of service`;
+    doc.text(footer, W/2, 287, { align: 'center' });
+
+    doc.save(`Prescribed_Information_${t.name.replace(/[^a-zA-Z0-9]/g,'_')}_${new Date().toISOString().slice(0,10)}.pdf`);
+    toast('✅ Prescribed Information PDF downloaded');
+
+    // Log to email_log as served record
+    sb.from('email_log').insert({
+      user_id: currentUser.id,
+      tenant_id: t.id,
+      prop_id: String(t.prop_id),
+      template_id: 'prescribed_info',
+      template_name: 'Prescribed Information (Deposit)',
+      sent_to: t.email || '—',
+      subject: `Prescribed Information — ${propAddr}`,
+      status: 'Generated',
+      email_body: `PDF generated ${date}`
+    }).then(() => {}).catch(() => {});
+
+  } catch(err) {
+    _logError('generatePrescribedInfoPDF', err);
+    toast('PDF error: ' + err.message, true);
+  }
 }
 
 function exportFinancialsPDF(pid){
