@@ -15926,7 +15926,11 @@ async function generateLegalPack(pid) {
 // ── START ──
 // Wire nav clicks
 document.querySelectorAll('.sb-item[data-page]').forEach(btn => {
-  btn.addEventListener('click', () => { closeMobSidebar(); nav(btn.dataset.page); });
+  btn.addEventListener('click', () => {
+    const page = btn.dataset.page;
+    if (page === 'rent-finance' && isStarter()) { upgradePrompt('Rent & Finance', 'landlord'); return; }
+    closeMobSidebar(); nav(page);
+  });
 });
 initApp();
 </script>
