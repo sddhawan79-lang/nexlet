@@ -8617,6 +8617,7 @@ function moTenantDocs(tenantId, propId) {
         ${slotDocs.length
           ? `<button class="btn btn-sm" style="font-size:11px" onclick="moTenantDocsScan('${tenantId}','${s.slot}')">✦ Re-scan</button>`
           : `<div style="font-size:10px;color:var(--blue);font-weight:600;white-space:nowrap">✦ AI auto-scan</div>`}
+        ${s.slot === 'right_to_rent' ? `<button class="btn btn-sm" style="font-size:11px;border-color:var(--blue);color:var(--blue)" onclick="moShareCodeWizard('${tenantId}')">🔍 Share Code</button>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -8681,6 +8682,95 @@ async function moTenantDocsScan(tid, slot) {
     toast(nameMismatch ? '⚠ Name mismatch detected' : '✓ Document scanned');
     if (t) moTenantDocs(tid, t.prop_id);
   } catch(e) { _logError('moTenantDocsScan', e); toast('Scan failed — try again', true); }
+}
+
+
+// ── RIGHT TO RENT SHARE CODE WIZARD ──
+function moShareCodeWizard(tid) {
+  const t = D.tenants.find(x => String(x.id) === String(tid));
+  if (!t) return;
+  const existing = t.share_code || '';
+  const existingExpiry = t.rtr_expiry || '';
+  openMo('🔍 Right to Rent — Share Code', t.name, `
+    <div style="background:rgba(59,111,232,0.06);border:1px solid rgba(59,111,232,0.15);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:var(--txt);line-height:1.6">
+      Enter the share code from the tenant's GOV.UK Right to Rent check result. Format: <strong>W-XXXX-XXXX-XXXX</strong> or 9 characters without dashes. NEXLET will calculate when the follow-up check is due.
+      <a href="https://www.gov.uk/view-right-to-rent" target="_blank" style="color:var(--blue);display:block;margin-top:6px;font-weight:600">↗ Open GOV.UK check service</a>
+    </div>
+    <div class="fg"><label>Share Code <span class="req">*</span></label>
+      <input type="text" id="rtr-code" value="${existing}" placeholder="W-XXXX-XXXX-XXXX" style="text-transform:uppercase;letter-spacing:1px"
+        oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9-]/g,'');rtrValidateCode()">
+      <div id="rtr-code-hint" style="font-size:11px;margin-top:4px;color:var(--muted)"></div>
+    </div>
+    <div class="fg"><label>Document expiry date (if applicable)</label>
+      <input type="date" id="rtr-doc-expiry" value="${existingExpiry}" oninput="rtrCalcFollowUp()">
+      <div style="font-size:11px;color:var(--muted);margin-top:3px">Leave blank for indefinite leave to remain / British/Irish nationals</div>
+    </div>
+    <div id="rtr-followup-box" style="display:none;background:var(--green-bg);border:1px solid rgba(0,168,122,0.2);border-radius:8px;padding:12px 14px;margin-top:4px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--green-dark);margin-bottom:4px">📅 Follow-up check due</div>
+      <div id="rtr-followup-date" style="font-size:14px;font-weight:700;color:var(--green-dark)"></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:3px">Earliest of: document expiry or 12 months from today's check</div>
+    </div>
+    <div class="fg" style="margin-top:14px"><label>Check date</label>
+      <input type="date" id="rtr-check-date" value="${new Date().toISOString().slice(0,10)}">
+    </div>
+  `, `<button class="btn" onclick="closeMo()">Cancel</button>
+     <button class="btn btn-navy" id="rtr-save-btn" onclick="saveShareCode('${tid}')">💾 Save RTR record</button>`);
+  setTimeout(() => { rtrValidateCode(); rtrCalcFollowUp(); }, 100);
+}
+
+function rtrValidateCode() {
+  const val = document.getElementById('rtr-code')?.value || '';
+  const hint = document.getElementById('rtr-code-hint');
+  if (!hint) return;
+  // Accept W-XXXX-XXXX-XXXX or 9-char alphanumeric
+  const clean = val.replace(/-/g,'');
+  if (!val) { hint.textContent = ''; return; }
+  if (clean.length >= 9) {
+    hint.innerHTML = '<span style="color:var(--green-dark)">✓ Valid format</span>';
+  } else {
+    hint.innerHTML = `<span style="color:var(--amber)">${9-clean.length} more characters needed</span>`;
+  }
+}
+
+function rtrCalcFollowUp() {
+  const expiryVal = document.getElementById('rtr-doc-expiry')?.value;
+  const box = document.getElementById('rtr-followup-box');
+  const dateEl = document.getElementById('rtr-followup-date');
+  if (!box || !dateEl) return;
+  const in12months = new Date(); in12months.setFullYear(in12months.getFullYear() + 1);
+  let followUp = in12months;
+  if (expiryVal) {
+    const expiry = new Date(expiryVal);
+    if (!isNaN(expiry) && expiry < in12months) followUp = expiry;
+  }
+  box.style.display = 'block';
+  dateEl.textContent = followUp.toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+  box.dataset.followup = followUp.toISOString().slice(0,10);
+}
+
+async function saveShareCode(tid) {
+  const btn = document.getElementById('rtr-save-btn');
+  const code = document.getElementById('rtr-code')?.value.trim();
+  const docExpiry = document.getElementById('rtr-doc-expiry')?.value || null;
+  const checkDate = document.getElementById('rtr-check-date')?.value || new Date().toISOString().slice(0,10);
+  const followUp = document.getElementById('rtr-followup-box')?.dataset?.followup || null;
+  if (!code) { toast('Please enter a share code', true); return; }
+  const clean = code.replace(/-/g,'');
+  if (clean.length < 9) { toast('Share code must be at least 9 characters', true); return; }
+  btn.disabled = true; btn.textContent = 'Saving…';
+  const updates = {
+    share_code: code,
+    rtr_expiry: followUp,
+    rtr_check_date: checkDate,
+  };
+  const { error } = await sb.from('tenants').update(updates).eq('id', tid);
+  if (error) { toast('Save failed: ' + error.message, true); btn.disabled = false; btn.textContent = '💾 Save RTR record'; return; }
+  const t = D.tenants.find(x => String(x.id) === String(tid));
+  if (t) Object.assign(t, updates);
+  await logAudit('RTR_SHARE_CODE', 'tenants', tid, `RTR share code recorded · follow-up: ${followUp||'none'}`);
+  closeMo();
+  toast('✓ Right to Rent record saved');
+  nav(window._currentPage, window._currentParam);
 }
 
 // ── In-app document viewer ──
@@ -9619,6 +9709,7 @@ function pgMaintenance(){
               <span style="font-size:10px;font-weight:600;color:${priCol};background:${m.priority==='Urgent'?'rgba(229,62,62,0.08)':m.priority==='High'?'rgba(217,119,6,0.08)':'var(--off)'};padding:2px 7px;border-radius:100px">${m.priority||'Low'}</span>
               ${m.cat?`<span style="font-size:10px;color:var(--muted);background:var(--off);padding:2px 7px;border-radius:100px">${m.cat}</span>`:''}
               ${m.awaab?`<span style="font-size:10px;font-weight:700;color:#fff;background:var(--red);padding:2px 7px;border-radius:100px;letter-spacing:.3px">⚠ Awaab's Law</span>`:''}
+              ${(()=>{ const sla=getAwaabSLA(m); if(!sla) return ''; if(sla.resolved) return `<span style="font-size:10px;font-weight:600;color:var(--green-dark);background:var(--green-bg);padding:2px 7px;border-radius:100px">✓ Resolved</span>`; if(sla.breach14d) return `<span style="font-size:10px;font-weight:700;color:#fff;background:#7B0000;padding:2px 7px;border-radius:100px">🚨 14d BREACHED</span>`; if(sla.breach24h) return `<span style="font-size:10px;font-weight:700;color:#fff;background:var(--red);padding:2px 7px;border-radius:100px">⚠ 24h breached · ${sla.daysLeft14}d left</span>`; if(sla.hoursLeft24<=6) return `<span style="font-size:10px;font-weight:700;color:var(--red);background:rgba(229,62,62,0.1);padding:2px 7px;border-radius:100px">⏱ ${sla.hoursLeft24}h to investigate</span>`; return `<span style="font-size:10px;color:var(--amber);background:rgba(217,119,6,0.08);padding:2px 7px;border-radius:100px">${sla.daysLeft14}d SLA left</span>`; })()}
               ${m.cost?`<span style="font-size:10px;font-weight:600;color:var(--green-dark);margin-left:auto">£${m.cost}</span>`:''}
             </div>
             ${m.assigned_to?`<div style="font-size:10px;color:var(--blue);margin-bottom:6px">👷 ${m.assigned_to}</div>`:''}
@@ -9801,6 +9892,7 @@ function moIssueDetail(id){
       ${[['Property',p.address],['Category',m.cat||'—'],['Priority',m.priority||'Low'],['Reported',FMS(m.date||m.issue_date)],['Assigned to',m.assigned_to||'Not assigned'],['Cost',m.cost?'£'+m.cost:'Not set'],['Completed',m.completed_date?FMS(m.completed_date):'—'],['Awaab',m.awaab?'⚠️ Yes':'No']].map(([l,v])=>`<div class="det-f"><label>${l}</label><span>${v}</span></div>`).join('')}
     </div>
     <div style="background:var(--off);border-radius:8px;padding:12px;margin-bottom:14px;font-size:13px;line-height:1.6">${m.description||m.desc||'—'}</div>
+    ${(()=>{ const sla=getAwaabSLA(m); if(!sla) return ''; const breach=sla.breach14d||sla.breach24h; const bg=sla.resolved?'var(--green-bg)':breach?'rgba(229,62,62,0.07)':'rgba(217,119,6,0.06)'; const bdr=sla.resolved?'rgba(0,168,122,0.25)':breach?'rgba(229,62,62,0.3)':'rgba(217,119,6,0.3)'; const col=sla.resolved?'var(--green-dark)':breach?'var(--red)':'var(--amber)'; const status=sla.resolved?'✓ Resolved within SLA':sla.breach14d?`🚨 14-day investigation deadline BREACHED (${sla.daysElapsed}d elapsed)`:sla.breach24h?`⚠ 24h emergency deadline breached · ${sla.daysLeft14}d of 14-day window left`:`⏱ ${sla.hoursLeft24>0?sla.hoursLeft24+'h until 24h deadline · ':''} ${sla.daysLeft14}d of 14-day investigation window remaining`; return `<div style="background:${bg};border:1px solid ${bdr};border-radius:8px;padding:12px 14px;margin-bottom:14px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:${col};margin-bottom:6px">⏰ Awaab's Law SLA</div><div style="font-size:12px;color:var(--txt);line-height:1.6;margin-bottom:8px">${status}</div><div style="display:flex;gap:16px;flex-wrap:wrap"><div style="font-size:11px;color:var(--muted)">Reported: <strong>${FMS(m.issue_date||m.date)}</strong></div><div style="font-size:11px;color:var(--muted)">24h deadline: <strong style="color:${sla.breach24h?'var(--red)':'var(--txt)'}">${sla.investigate24h.toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</strong></div><div style="font-size:11px;color:var(--muted)">14d deadline: <strong style="color:${sla.breach14d?'var(--red)':'var(--txt)'}">${sla.investigate14d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</strong></div></div></div>`; })()}
     <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:8px">Move to stage</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
       ${stages.map(s=>`<button onclick="moveStage('${m.id}','${s}');closeMo()" style="font-size:12px;padding:6px 12px;border-radius:6px;border:2px solid ${(m.stage||'Reported')===s?stageCol[s]:'var(--border)'};background:${(m.stage||'Reported')===s?stageCol[s]:'var(--white)'};color:${(m.stage||'Reported')===s?'#fff':'var(--muted)'};cursor:pointer;font-family:var(--font);font-weight:${(m.stage||'Reported')===s?'700':'400'}">${s}</button>`).join('')}
@@ -10466,6 +10558,31 @@ function showAssistant(){
 }
 
 // ── FINANCE HELPERS ──
+// ── AWAAB'S LAW SLA ENGINE ──
+function getAwaabSLA(m) {
+  if (!m.awaab) return null;
+  const reported = new Date(m.issue_date || m.date);
+  if (isNaN(reported)) return null;
+  const now = new Date();
+  const hoursElapsed = (now - reported) / 36e5;
+  const daysElapsed  = hoursElapsed / 24;
+  // Awaab's Law timers: 24h emergency investigation, 14d full investigation
+  const investigate24h = new Date(reported); investigate24h.setHours(investigate24h.getHours() + 24);
+  const investigate14d = new Date(reported); investigate14d.setDate(investigate14d.getDate() + 14);
+  const resolved = m.status === 'Resolved' || m.stage === 'Completed' || m.stage === 'Closed';
+  return {
+    hoursElapsed: Math.round(hoursElapsed),
+    daysElapsed:  Math.round(daysElapsed * 10) / 10,
+    investigate24h,
+    investigate14d,
+    breach24h: !resolved && hoursElapsed > 24,
+    breach14d: !resolved && daysElapsed  > 14,
+    resolved,
+    hoursLeft24: Math.max(0, Math.round(24 - hoursElapsed)),
+    daysLeft14:  Math.max(0, Math.round(14 - daysElapsed)),
+  };
+}
+
 // ── GROUND 8 ARREARS CALCULATOR ──
 function getGround8Status(tenantId) {
   const t = D.tenants.find(x => String(x.id) === String(tenantId));
