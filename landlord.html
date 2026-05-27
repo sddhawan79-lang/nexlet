@@ -1201,6 +1201,7 @@ const D = {
   emailLog: [], customTemplates: [], contractors: [], jobAssignments: [], tenantDocs: [],
   _invReports: [],
   esignReq: [],
+  calEvents: [],
   userProfile: null,
   chat: [{role:'ai', text:'Hello! I\'m your NexLet assistant. I can help with UK landlord law (RRA 2025, Section 8/13, deposits, Awaab\'s Law, MTD tax) and the NexLet platform itself — ask me where to find a feature, how to generate a document, or anything about your compliance obligations.'}]
 };
@@ -1374,7 +1375,7 @@ async function logout() {
 
 // ── LOAD DATA ──
 async function loadData() {
-  const [p, t, c, m, r, i, el, ct, con, ja, td, up, sub, er] = await Promise.all([
+  const [p, t, c, m, r, i, el, ct, con, ja, td, up, sub, er, ce] = await Promise.all([
     sb.from('properties').select('*').order('created_at', {ascending: false}),
     sb.from('tenants').select('*'),
     sb.from('certificates').select('*'),
@@ -1389,6 +1390,7 @@ async function loadData() {
     sb.from('user_profiles').select('*').eq('id', currentUser.id).maybeSingle(),
     sb.from('stripe_subscriptions').select('plan_name').eq('user_id', currentUser.id).maybeSingle(),
     sb.from('esign_requests').select('*').order('created_at', {ascending: false}),
+    sb.from('calendar_events').select('*').eq('user_id', currentUser.id).order('date', {ascending: true}),
   ]);
 
   if (p.data?.length) {
@@ -1444,6 +1446,7 @@ async function loadData() {
   // Resolve user plan from Stripe subscription, fallback to portfolio (grandfather existing users)
   window._userPlan = (sub.data && sub.data.plan_name) ? sub.data.plan_name : 'portfolio';
   if (er.data?.length) D.esignReq = er.data;
+  if (ce.data?.length) D.calEvents = ce.data;
   await checkComplianceReminders();
   checkAllReminders(); // fire-and-forget weekly digest + reminders on login
 
@@ -10199,6 +10202,16 @@ function getCalEvents(){
     });
   });
 
+  // ── Custom / manual reminders ──
+  (D.calEvents||[]).forEach(e => {
+    const d = new Date(e.date); d.setHours(0,0,0,0);
+    const days = Math.round((d - today) / 864e5);
+    if (days < -30 || days > 365) return;
+    const urg = days < 0 ? 'red' : days <= 7 ? 'amber' : 'blue';
+    const prop = e.prop_id ? (P(e.prop_id)||{address:''}).address : '';
+    events.push({ date: e.date, type: 'custom', label: e.title, sub: [e.notes, prop].filter(Boolean).join(' · '), urg, days, icon: '📌', pid: e.prop_id||null, eid: e.id });
+  });
+
   return events.sort((a,b)=>new Date(a.date)-new Date(b.date));
 }
 
@@ -10289,6 +10302,7 @@ function pgCalendar(){
     {k:'compliance',label:'Compliance',icon:'⚠️'},
     {k:'boiler',label:'Boiler',icon:'🔥'},
     {k:'mortgage',label:'Mortgage',icon:'🏦'},
+    {k:'custom',label:'My Reminders',icon:'📌'},
   ];
   const filterChips = filterTypes.map(f=>`<button onclick="window.calFilter='${f.k}';nav('calendar')" style="padding:5px 12px;border-radius:100px;font-size:11px;font-weight:${window.calFilter===f.k?'700':'500'};border:1px solid ${window.calFilter===f.k?'var(--navy)':'var(--border)'};background:${window.calFilter===f.k?'var(--navy)':'var(--white)'};color:${window.calFilter===f.k?'#fff':'var(--muted)'};cursor:pointer;font-family:var(--font)">${f.icon} ${f.label}</button>`).join('');
 
@@ -10309,6 +10323,7 @@ function pgCalendar(){
       : e.type==='tenancy'&&e.icon==='📈'?`<button onclick="moSection13('${e.pid}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--blue);background:var(--blue-bg);color:var(--blue);cursor:pointer;font-family:var(--font)">S.13 →</button>`
       : e.type==='compliance'&&e.icon==='⚠️'?`<button onclick="moRRASheet()" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--red);background:var(--red-bg);color:var(--red);cursor:pointer;font-family:var(--font)">Send now</button>`
       : e.type==='boiler'?`<button onclick="moPropertySetup('${e.pid}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font)">Update →</button>`
+      : e.type==='custom'?`<button onclick="deleteCalEvent('${e.eid}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--red);background:transparent;color:var(--red);cursor:pointer;font-family:var(--font)">🗑</button>`
       : '';
     return`<div class="ai-row" style="align-items:center">
       <div style="text-align:center;min-width:32px;font-size:16px">${e.icon}</div>
@@ -10330,6 +10345,8 @@ function pgCalendar(){
   }).join('');
 
   return`<div class="topbar"><span class="tb-title">Portfolio Calendar</span><div class="tb-right">
+    <button class="btn" onclick="exportICS()">📅 Export .ics</button>
+    <button class="btn btn-navy" onclick="moAddCalEvent()">+ Add reminder</button>
     <button class="btn" onclick="nav('reminders')">⚙ Reminders</button>
     <select style="padding:6px 10px;border-radius:7px;border:1px solid var(--border);font-family:var(--font);font-size:12px;color:var(--txt);background:var(--white)" onchange="window.calProp=this.value;nav('calendar')">${propOpts}</select>
   </div></div>
@@ -10427,6 +10444,108 @@ function calNav(dir){
 function calToday(){
   window.calYear=new Date().getFullYear();
   window.calMonth=new Date().getMonth();
+  nav('calendar');
+}
+
+function calToday(){
+  window.calYear=new Date().getFullYear();
+  window.calMonth=new Date().getMonth();
+  nav('calendar');
+}
+
+// ── ICS EXPORT ──
+function exportICS() {
+  const events = getCalEvents();
+  if (!events.length) { toast('No events to export', true); return; }
+  const pad = n => String(n).padStart(2,'0');
+  const icsDate = (dateStr) => {
+    const d = new Date(dateStr);
+    return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
+  };
+  const escape = s => (s||'').replace(/[,;\\]/g,'\\$&').replace(/\n/g,'\\n');
+  const uid = () => Math.random().toString(36).slice(2)+Date.now();
+  let lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//NexLet//Portfolio Calendar//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'X-WR-CALNAME:NexLet Portfolio',
+    'X-WR-CALDESC:Auto-generated from NexLet compliance data',
+  ];
+  events.forEach(e => {
+    const col = e.urg==='red' ? 'RED' : e.urg==='amber' ? 'ORANGE' : 'BLUE';
+    lines = lines.concat([
+      'BEGIN:VEVENT',
+      `UID:nexlet-${uid()}@nexlet.co.uk`,
+      `DTSTART;VALUE=DATE:${icsDate(e.date)}`,
+      `DTEND;VALUE=DATE:${icsDate(e.date)}`,
+      `SUMMARY:${escape(e.icon+' '+e.label)}`,
+      `DESCRIPTION:${escape(e.sub||'')}`,
+      `CATEGORIES:${escape(e.type.toUpperCase())}`,
+      `COLOR:${col}`,
+      'END:VEVENT',
+    ]);
+  });
+  lines.push('END:VCALENDAR');
+  const blob = new Blob([lines.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'nexlet-calendar.ics';
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+  toast('✅ Calendar exported — open in Google, Apple or Outlook');
+}
+
+// ── MANUAL CALENDAR EVENTS ──
+function moAddCalEvent() {
+  const propOpts = `<option value="">No specific property</option>` +
+    activeProperties().map(p => `<option value="${p.id}">${p.address}</option>`).join('');
+  openMo('📌 Add Reminder', 'Custom calendar entry', `
+    <div class="fg"><label>Title <span class="req">*</span></label>
+      <input type="text" id="ce-title" placeholder="e.g. Plumber visit, Council meeting, Void period starts" class="fi">
+    </div>
+    <div class="fg"><label>Date <span class="req">*</span></label>
+      <input type="date" id="ce-date" value="${new Date().toISOString().slice(0,10)}" class="fi">
+    </div>
+    <div class="fg"><label>Property (optional)</label>
+      <select id="ce-prop" class="fi">${propOpts}</select>
+    </div>
+    <div class="fg"><label>Notes (optional)</label>
+      <input type="text" id="ce-notes" placeholder="Any additional details" class="fi">
+    </div>
+  `, `<button class="btn" onclick="closeMo()">Cancel</button>
+     <button class="btn btn-navy" id="ce-save-btn" onclick="saveCalEvent()">💾 Save reminder</button>`);
+}
+
+async function saveCalEvent() {
+  const btn = document.getElementById('ce-save-btn');
+  const title = document.getElementById('ce-title')?.value.trim();
+  const date  = document.getElementById('ce-date')?.value;
+  const propId = document.getElementById('ce-prop')?.value || null;
+  const notes = document.getElementById('ce-notes')?.value.trim() || null;
+  if (!title) { toast('Please enter a title', true); return; }
+  if (!date)  { toast('Please select a date', true); return; }
+  btn.disabled = true; btn.textContent = 'Saving…';
+  const { data, error } = await sb.from('calendar_events').insert({
+    user_id: currentUser.id,
+    title, date, prop_id: propId || null, notes
+  }).select().single();
+  if (error) { toast('Save failed: ' + error.message, true); btn.disabled = false; btn.textContent = '💾 Save reminder'; return; }
+  D.calEvents.push(data);
+  await logAudit('ADD_CAL_EVENT', 'calendar_events', data.id, `Reminder: ${title} · ${date}`);
+  closeMo();
+  toast('✅ Reminder added');
+  nav('calendar');
+}
+
+async function deleteCalEvent(id) {
+  if (!confirm('Delete this reminder?')) return;
+  const { error } = await sb.from('calendar_events').delete().eq('id', id);
+  if (error) { toast('Delete failed', true); return; }
+  D.calEvents = D.calEvents.filter(e => String(e.id) !== String(id));
+  await logAudit('DELETE_CAL_EVENT', 'calendar_events', id, 'Reminder deleted');
+  toast('Reminder deleted');
   nav('calendar');
 }
 
