@@ -1556,21 +1556,30 @@ async function reinstateProperty(pid) {
   await logAudit('REINSTATE_PROPERTY', 'properties', pid, 'Reinstated from archive');
   toast('✓ Property reinstated as Vacant'); nav(window._currentPage, window._currentParam);
 }
+// Stripe Price IDs — founding prices for first 100 users
+const PRICE_MAP = {
+  starter:   'price_1TX2zp2LDL4FOJhEvpaUe6sa',   // £4.99/mo founding
+  landlord:  'price_1TcSLU2LDL4FOJhEamxB9g97',   // £11.99/mo founding
+  portfolio: 'price_1TcSPs2LDL4FOJhEJS7VUati',   // £23.99/mo founding
+};
+
 async function redirectToCheckout(plan) {
   try {
     const { data: { session } } = await sb.auth.getSession();
     if (!session) return;
+    const price_id = PRICE_MAP[plan];
+    if (!price_id) throw new Error('Unknown plan: ' + plan);
     const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/stripe-checkout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-      body: JSON.stringify({ plan, billing_cycle: 'monthly' })
+      body: JSON.stringify({ price_id })
     });
     const { url, error } = await res.json();
     if (error) throw new Error(error);
     window.location.href = url;
   } catch(e) {
     toast('Could not start checkout — please try again.', true);
-    window.location.href = 'profile.html';
+    console.error('[checkout]', e);
   }
 }
 
