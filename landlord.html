@@ -13516,9 +13516,52 @@ function s8ShowConsent() {
   const box = document.getElementById('mo-b');
   const footer = document.getElementById('mo-f');
 
+  // Pre-flight compliance check
+  const _pid = _s8.pid;
+  const _t = _s8.tenant;
+  const today = new Date();
+  const propertyCerts = D.certs.filter(c => String(c.prop_id) === String(_pid));
+
+  const hasGas  = propertyCerts.find(c => (c.type||'').toLowerCase().match(/gas|cp12|gsc/));
+  const hasEICR = propertyCerts.find(c => (c.type||'').toLowerCase().match(/eicr|electric/));
+  const hasEPC  = propertyCerts.find(c => (c.type||'').toLowerCase().match(/epc|energy/));
+
+  const isExpired = c => c?.expiry && new Date(c.expiry) < today;
+  const depositOk = _t?.scheme && _t.scheme !== 'None' && _t.scheme !== '' && _t?.scheme_ref;
+
+  const preChecks = [
+    { ok: hasGas && !isExpired(hasGas),   critical: true,  label: 'Gas Safety Certificate',
+      detail: !hasGas ? 'Not found — required annually. Courts will likely dismiss your claim.' : `Expired ${FMT(hasGas.expiry)} — must be valid at time of service.` },
+    { ok: hasEICR && !isExpired(hasEICR), critical: true,  label: 'EICR',
+      detail: !hasEICR ? 'Not found — required every 5 years. Courts may dismiss your claim.' : `Expired ${FMT(hasEICR.expiry)} — must be valid at time of service.` },
+    { ok: depositOk,                      critical: true,  label: 'Deposit protected',
+      detail: 'No deposit scheme or reference recorded. Most Section 8 grounds are invalid without a protected deposit.' },
+    { ok: hasEPC && !isExpired(hasEPC),   critical: false, label: 'EPC',
+      detail: !hasEPC ? 'Not found — required for all tenancies.' : `Expired ${FMT(hasEPC.expiry)}.` },
+  ];
+
+  const allCriticalOk = preChecks.filter(c => c.critical).every(c => c.ok);
+
+  const preflightHtml = `
+    <div style="margin-bottom:16px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:8px;color:var(--txt)">Pre-service compliance check</div>
+      ${preChecks.map(c => `
+        <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 10px;border-radius:7px;margin-bottom:6px;background:${c.ok ? 'rgba(34,197,94,0.07)' : c.critical ? 'rgba(229,62,62,0.07)' : 'rgba(217,119,6,0.07)'};border:1px solid ${c.ok ? 'rgba(34,197,94,0.25)' : c.critical ? 'rgba(229,62,62,0.25)' : 'rgba(217,119,6,0.25)'}">
+          <span style="font-size:14px;flex-shrink:0">${c.ok ? '✅' : c.critical ? '🔴' : '⚠️'}</span>
+          <div>
+            <div style="font-size:12px;font-weight:600;color:var(--txt)">${c.label}</div>
+            ${!c.ok ? `<div style="font-size:11px;color:${c.critical ? 'var(--red)' : 'var(--amber)'};margin-top:2px">${c.detail}</div>` : ''}
+          </div>
+        </div>`).join('')}
+      ${!allCriticalOk
+        ? `<div style="background:rgba(229,62,62,0.07);border:1px solid rgba(229,62,62,0.3);border-radius:7px;padding:9px 12px;font-size:11px;color:var(--red);margin-top:4px;font-weight:600">⚠️ One or more critical issues found. Proceeding may result in an invalid notice or a dismissed court claim. We strongly recommend resolving these before serving.</div>`
+        : `<div style="background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.25);border-radius:7px;padding:9px 12px;font-size:11px;color:var(--green-dark);margin-top:4px;font-weight:600">✅ All critical compliance checks passed.</div>`}
+    </div>`;
+
   box.innerHTML = `
     <div style="font-size:15px;font-weight:600;margin-bottom:4px">Before you generate</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Please read and confirm before generating your Section 8 draft</div>
+    ${preflightHtml}
     <div class="s8-consent-box">
       <div style="font-size:13px;font-weight:600;color:var(--amber);margin-bottom:12px">⚖️ AI-Generated Legal Document — Important Notices</div>
       <label style="display:flex;gap:10px;align-items:flex-start;margin-bottom:12px;cursor:pointer">
@@ -13632,14 +13675,27 @@ INSTRUCTIONS:
       <div style="background:var(--amber-bg);border:1px solid var(--amber);border-radius:8px;padding:9px 13px;font-size:11px;color:var(--txt);margin-bottom:14px">
         <strong>Next steps:</strong> (1) Download this draft PDF · (2) Complete official GOV.UK <strong>Form 3A</strong> using these particulars · (3) Serve on ALL named tenants · (4) Keep proof of service
       </div>
-      <div id="s8-output" style="background:var(--off);border:1px solid var(--border);border-radius:8px;padding:16px;font-size:12.5px;line-height:1.8;max-height:55vh;overflow-y:auto;white-space:pre-wrap;font-family:Georgia,serif">${text.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`;
+      <div id="s8-output" style="background:var(--off);border:1px solid var(--border);border-radius:8px;padding:16px;font-size:12.5px;line-height:1.8;max-height:45vh;overflow-y:auto;white-space:pre-wrap;font-family:Georgia,serif">${text.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+      <label style="display:flex;gap:10px;align-items:flex-start;margin-top:14px;padding:12px 14px;background:rgba(11,30,61,0.04);border:1px solid var(--border);border-radius:8px;cursor:pointer">
+        <input type="checkbox" id="s8_reviewed" style="margin-top:3px;flex-shrink:0;width:16px;height:16px;accent-color:var(--navy)" onchange="
+          const dlBtn = document.getElementById('s8-dl-btn');
+          if (this.checked) {
+            dlBtn.disabled = false;
+            dlBtn.style.opacity = '1';
+            logAudit('REVIEWED_S8_DRAFT', 'section8', '${p.id}', 'Landlord confirmed review of Section 8 draft before download at ' + new Date().toISOString());
+          } else {
+            dlBtn.disabled = true;
+            dlBtn.style.opacity = '0.4';
+          }">
+        <span style="font-size:12px;line-height:1.5;color:var(--txt)">I confirm I have <strong>read and reviewed this draft in full</strong>. I understand it must be transferred to the official GOV.UK <strong>Form 3A</strong> before serving and that downloading does not constitute serving a valid notice.</span>
+      </label>`;
 
     document.getElementById('mo-f').innerHTML = `
       <div style="display:flex;justify-content:space-between;width:100%;gap:8px;flex-wrap:wrap">
         <button class="btn" onclick="closeMo()">Close</button>
         <div style="display:flex;gap:8px">
           <button class="btn" onclick="s8CopyText()">📋 Copy</button>
-          <button class="btn" onclick="s8DownloadPDF()">📄 Download PDF</button>
+          <button class="btn" id="s8-dl-btn" onclick="s8DownloadPDF()" disabled style="opacity:0.4">📄 Download PDF</button>
           <a href="https://assets.publishing.service.gov.uk/media/69eb1f46ed93f72cf816334e/Form_3A.pdf" target="_blank" class="btn" style="text-decoration:none">📝 Form 3A</a>
           ${t?.email ? `<button class="btn btn-navy" onclick="s8SendToTenant()">✉ Send to ${t.name.split(' ')[0]}</button>` : ''}
         </div>
@@ -13660,12 +13716,19 @@ function s8DownloadPDF() {
   const text = _s8.generatedText;
   if (!text) { toast('Generate the draft first', true); return; }
   const p = _s8.prop;
+  const t = _s8.tenant;
+  const selectedGrounds = S8_GROUNDS.filter(g => _s8.selectedGrounds.includes(g.num));
+  const generatedAt = new Date();
+  const generatedAtStr = generatedAt.toLocaleDateString('en-GB', {day:'2-digit',month:'long',year:'numeric'}) + ' at ' + generatedAt.toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit',second:'2-digit'}) + ' (UTC' + (generatedAt.getTimezoneOffset() <= 0 ? '+' : '-') + String(Math.abs(generatedAt.getTimezoneOffset()/60)).padStart(2,'0') + ':00)';
+  const nexletRef = 'S8-' + generatedAt.getTime();
+
   try {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
     const W = doc.internal.pageSize.getWidth();
     let y = 18;
 
+    // ── Header ──
     doc.setFontSize(15); doc.setTextColor(11,30,61);
     doc.text('NexLet', 16, y);
     doc.setFontSize(9); doc.setTextColor(153,153,153);
@@ -13674,7 +13737,43 @@ function s8DownloadPDF() {
     doc.line(16, y+4, W-16, y+4);
     y += 11;
 
-    doc.setFontSize(10); doc.setTextColor(26,43,69);
+    // ── Court-ready audit metadata block ──
+    doc.setFillColor(245, 247, 250);
+    doc.setDrawColor(180, 190, 210);
+    doc.roundedRect(14, y, W-28, 52, 2, 2, 'FD');
+    y += 7;
+
+    doc.setFontSize(8); doc.setFont(undefined, 'bold'); doc.setTextColor(11,30,61);
+    doc.text('DOCUMENT AUDIT RECORD', 18, y);
+    y += 5;
+    doc.setDrawColor(180,190,210);
+    doc.line(18, y, W-18, y);
+    y += 5;
+
+    const metaRows = [
+      ['Generated by',   currentUser?.email || _profileName()],
+      ['Generated at',   generatedAtStr],
+      ['NexLet ref',     nexletRef],
+      ['Property',       `${p?.address||'—'}, ${p?.postcode||'—'}`],
+      ['Tenant',         t ? `${t.name}${t.email ? ' · ' + t.email : ''}` : 'Not specified'],
+      ['Grounds',        selectedGrounds.map(g => `Ground ${g.num}`).join(', ') || '—'],
+      ['Status',         'DRAFT — must be transferred to GOV.UK Form 3A before serving'],
+    ];
+
+    doc.setFont(undefined, 'normal'); doc.setFontSize(7.5);
+    for (const [label, value] of metaRows) {
+      doc.setTextColor(100,115,135);
+      doc.text(label + ':', 18, y);
+      doc.setTextColor(26,43,69); doc.setFont(undefined, 'bold');
+      const valSplits = doc.splitTextToSize(value, W-70);
+      doc.text(valSplits, 58, y);
+      doc.setFont(undefined, 'normal');
+      y += valSplits.length > 1 ? valSplits.length * 4 : 4.5;
+    }
+    y += 6;
+
+    // ── Notice body ──
+    doc.setFontSize(10); doc.setTextColor(26,43,69); doc.setFont(undefined, 'normal');
     const lines = text.split('\n');
     for (const line of lines) {
       if (line.trim().length === 0) { y += 5; continue; }
@@ -13692,14 +13791,15 @@ function s8DownloadPDF() {
       for (const s of splits) { if (y > 270) { doc.addPage(); y = 18; } doc.text(s, 16, y); y += 5.5; }
     }
 
+    // ── Footer ──
     y += 6;
     doc.setDrawColor(238,238,238);
     doc.line(16, y, W-16, y);
     y += 6;
     doc.setFontSize(7.5); doc.setTextColor(153,153,153);
-    doc.text(`Generated by NexLet \u00b7 ${new Date().toLocaleDateString('en-GB')} \u00b7 Draft only — transfer to GOV.UK Form 3A before serving`, 16, y);
+    doc.text(`Generated by NexLet \u00b7 Ref: ${nexletRef} \u00b7 ${new Date().toLocaleDateString('en-GB')} \u00b7 Draft only — transfer to GOV.UK Form 3A before serving`, 16, y);
 
-    doc.save('section8_notice_draft.pdf');
+    doc.save(`section8_draft_${nexletRef}.pdf`);
   } catch(e) {
     _logError('s8DownloadPDF', e);
     toast('PDF generation failed. Try again.', true);
@@ -13748,6 +13848,11 @@ async function s8SendToTenant() {
     };
     await sb.from('email_log').insert(logEntry).select().single();
     D.emailLog.unshift({ ...logEntry, sent_at: new Date().toISOString() });
+
+    await logAudit(
+      'SERVE_S8_NOTICE', 'section8', p.id,
+      `Section 8 notice sent to ${t.email} (${t.name}) · Grounds: ${_s8.selectedGrounds.map(n=>'Ground '+n).join(', ')} · Property: ${p.address} · Sent at: ${new Date().toISOString()}`
+    );
 
     if (btn) { btn.disabled = false; btn.innerHTML = '✓ Sent!'; }
     toast(`✉ Section 8 notice sent to ${t.email}`);
