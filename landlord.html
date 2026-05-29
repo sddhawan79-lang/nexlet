@@ -1218,8 +1218,9 @@ PLATFORM FEATURES — tell users exactly where to find things:
 - Templates (sidebar > Documents > Templates): 20 AI-generated legal documents — Section 8 notices (all RRA 2025 grounds), Section 13 rent increase, Written Statement of Terms, deposit letters, inspection reports, arrears letters, and more
 - Document Library (sidebar > Documents): upload and store property documents
 - Inventory Reports (sidebar > Compliance > Inventory Reports): AI-generated room-by-room condition reports with photo evidence — upload photos, AI writes report, send to tenants with email + PDF
-- Inspections (sidebar > Compliance > Inspections): log and track property inspection records
-- Contractors (sidebar > My Properties > Contractors): contractor directory and job assignments
+- Inspections (sidebar > Compliance > Inspections): log and track property inspection records with pass/advisory/fail ratings
+- Insurance (sidebar > Compliance > Insurance): track buildings and contents insurance policies with expiry alerts
+- Rent Payments (property page > Financials tab): mark rent as received, log payment history, send receipts to tenants
 - Calendar: date-based view of certificate expiries, rent due dates, insurance/licence renewals
 - AI Assistant (sidebar, bottom): you are here
 
@@ -1229,7 +1230,7 @@ KEY WORKFLOWS:
 - Send documents to tenants: generate in Templates, click Send to Tenant button
 - E-sign: property page > Tenant tab > e-sign, or Templates > generate a tenancy agreement
 - Welcome Kit: property page > Tenant tab > Welcome Kit button
-- RRA Information Sheet: Templates > RRA sheet (mandatory — must send to ALL tenants by 31 May 2026, fines up to £7,000)
+- RRA Information Sheet: Templates > RRA sheet (mandatory — deadline was 31 May 2026, send immediately if not yet done, fines up to £7,000)
 - Mark rent as received: property page > Financials tab > click Mark Received
 - Add compliance certificates: Compliance page or property > Compliance tab
 - Log maintenance issues: Maintenance page or property > Maintenance tab
@@ -1239,7 +1240,7 @@ PRICING (founding rates — first 100 users locked for life): Starter £4.99/mo 
 
 UK LAW EXPERTISE:
 - Renters Rights Act 2025 (in force 1 May 2026): Section 21 abolished, all tenancies now periodic assured tenancies, Written Statement of Terms replaces AST, pet permission within 42 days, Decent Homes Standard extended to private sector
-- Section 8 grounds: 38 grounds (Housing Act 1988 as amended), mandatory + discretionary, notice periods from immediate to 4 months
+- Section 8 grounds: 37 grounds (Housing Act 1988 as amended by RRA 2025 — Ground 3 removed for new tenancies from 1 May 2026), mandatory + discretionary, notice periods from immediate to 4 months
 - Section 13 rent increases: 2 months minimum notice, once per 12 months, tenant can refer to First-tier Tribunal
 - Awaab's Law: damp/mould must be investigated within 14 days, emergency repairs within 24 hours
 - Deposits: must protect in TDS/DPS/MyDeposits within 30 days, serve prescribed information
@@ -4029,12 +4030,31 @@ async function aiDraftTenantComms(tid) {
   const btn = document.querySelector('button[onclick*="aiDraftTenantComms"]');
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Drafting…'; }
 
-  const prompt = `Write a professional, friendly landlord-to-tenant message.
-Landlord: ${currentUser?.email || 'Your landlord'}
+  const prompt = `Write a professional landlord-to-tenant message for UK private rented sector use.
+
+Landlord: ${_profileName()}
 Tenant: ${t?.name || 'Tenant'}
 Property: ${p.address}
-Topic: ${category}
-Keep it under 150 words. Plain text only, no markdown. Start with "Hi ${t?.name?.split(' ')[0] || 'there'}," and end with a professional sign-off.`;
+Tenancy start: ${t?.start_date ? FMT(t.start_date) : 'not specified'}
+Monthly rent: ${t?.rent ? '£' + t.rent : 'not specified'}
+
+Message category: ${category}
+Category guidance:
+- general: friendly, warm, open tone
+- maintenance: reassuring, give timeline, confirm next steps
+- rent: polite but firm, factual, no threats, mention making payment promptly
+- inspection: professional, give clear notice, reassure tenant of their rights
+- compliance: factual, explain why certificate or action is needed, no alarm
+- access: formal 24-hour notice tone, state contractor trade if known, cite tenant right to be present
+- other: professional and clear
+
+Rules:
+- Plain text only, no markdown, no bullet points
+- Under 200 words
+- Never make legal threats or mention court proceedings
+- Never invent facts not provided above
+- Start with "Hi ${t?.name?.split(' ')[0] || 'there'},"
+- End with a warm professional sign-off using landlord name: ${_profileName()}`;
 
   try {
     const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
@@ -8489,15 +8509,15 @@ async function scanTenantDoc(docId, tid, slot, file, tenantName) {
 
   // Slot-specific extraction prompts
   const prompts = {
-    passport:      'This is a passport or photo ID document. Extract: full_name, doc_number (passport/ID number), expiry (YYYY-MM-DD or null), nationality, date_of_birth (YYYY-MM-DD or null), issuing_authority (the country or authority that issued it), doc_type_extracted (e.g. Passport, Driving Licence, National ID Card, Biometric Residence Permit). Return JSON only.',
-    right_to_rent: 'This is a UK Right to Rent document. Extract: full_name, doc_type (Passport/BRP/Share Code/eVisa), doc_number or share_code, expiry (YYYY-MM-DD or null), nationality, issuing_authority (Home Office, UKVI, or issuing country), doc_type_extracted (the specific document type). Return JSON only.',
-    address_1:     'This is an address proof document (utility bill, bank statement, etc). Extract: full_name, address (full address as string), doc_type (e.g. Utility Bill, Bank Statement), doc_date (YYYY-MM-DD or null), issuing_authority (the company or organisation that issued it). Return JSON only.',
-    address_2:     'This is an address proof document (utility bill, bank statement, etc). Extract: full_name, address (full address as string), doc_type (e.g. Utility Bill, Bank Statement), doc_date (YYYY-MM-DD or null), issuing_authority (the company or organisation that issued it). Return JSON only.',
-    reference:     'This is a tenant reference or credit check report. Extract: applicant_name, outcome (Pass/Fail/Conditional/Unknown), referee_name, referee_company, reference_date (YYYY-MM-DD or null), issuing_authority (the agency or company that produced the reference). Return JSON only.',
-    guarantor:     'This is a guarantor document or ID. Extract: full_name, address (full address as string), doc_type, expiry (YYYY-MM-DD or null), issuing_authority (the issuer of this document). Return JSON only.',
+    passport:      'This is a passport or photo ID. Extract: full_name (as printed), doc_number (passport number), date_of_birth (YYYY-MM-DD), expiry (YYYY-MM-DD or null), nationality (country name), issuing_authority (issuing country or HMPO/DVLA/UKVI), doc_type_extracted (e.g. Passport, Driving Licence, BRP, National ID Card). Return JSON only, no other text.',
+    right_to_rent: 'This is a UK Right to Rent document. Extract: full_name (as printed), doc_type_extracted (Passport/BRP/Share Code/eVisa/Driving Licence), doc_number (passport, BRP or licence number), share_code (if present, format: 9 characters), share_code_expiry (YYYY-MM-DD or null), expiry (YYYY-MM-DD or null), nationality, issuing_authority (Home Office/UKVI/DVLA or issuing country). Return JSON only, no other text.',
+    address_1:     'This is an address proof document. Extract: full_name (account holder name), address (full address as single string including postcode), issuing_authority (company or organisation name e.g. British Gas, Barclays, HMRC), doc_type_extracted (e.g. Utility Bill, Bank Statement, Council Tax Bill, HMRC Letter), doc_date (YYYY-MM-DD or null). Return JSON only, no other text.',
+    address_2:     'This is an address proof document. Extract: full_name (account holder name), address (full address as single string including postcode), issuing_authority (company or organisation name), doc_type_extracted (e.g. Utility Bill, Bank Statement, Council Tax Bill), doc_date (YYYY-MM-DD or null). Return JSON only, no other text.',
+    reference:     'This is a tenant reference or credit check report. Extract: full_name (applicant name), outcome (Pass/Fail/Conditional/Refer — pick closest), issuing_authority (referencing agency or company name e.g. Homelet, Rent4Sure, OpenRent), doc_type_extracted (e.g. Reference Report, Credit Check, Employment Reference), reference_date (YYYY-MM-DD or null). Return JSON only, no other text.',
+    guarantor:     'This is a guarantor document or ID. Extract: full_name (guarantor name), address (full address as single string), doc_type_extracted (e.g. Guarantor Agreement, Passport, Driving Licence), expiry (YYYY-MM-DD or null), issuing_authority (issuer name). Return JSON only, no other text.',
   };
 
-  const prompt = prompts[slot] || 'Extract key information from this document. Return JSON only with relevant fields.';
+  const prompt = prompts[slot] || 'Extract all key information from this document. Include: full_name if present, doc_number if present, expiry (YYYY-MM-DD or null), address if present, issuing_authority (issuing organisation), doc_type_extracted (describe the document type). Return JSON only, no other text.';
 
   try {
     // Read file as base64
@@ -11298,7 +11318,7 @@ async function dlScanDoc(input){
   }
   scanStatus.innerHTML = '⏳ AI scanning document…';
   try {
-    const prompt = 'UK property document. Extract: document type, reference number, issue date (YYYY-MM-DD), expiry date if present (YYYY-MM-DD), provider or issuing authority name, full property address. Return JSON only, keys: type, ref, issued, expiry, engineer, issuing_authority, address.';
+    const prompt = 'This is a UK property compliance certificate (e.g. Gas Safety Record, EICR, EPC, PAT Test, LGSR, Fire Risk Assessment, Legionella Risk Assessment, or similar). Extract: type (exact certificate type), ref (certificate or report reference number), issued (issue date YYYY-MM-DD or null), expiry (expiry date YYYY-MM-DD or null — for Gas Safety this is 12 months after issue, for EICR 5 years, for EPC 10 years), engineer (engineer or assessor full name), gas_safe_number (Gas Safe registration number if present, else null), issuing_authority (company or organisation name), address (full property address as single string). Return JSON only, no other text.';
     await scanAndFill(file, (parsed) => {
       const nameEl = document.getElementById('dl-name');
       if(nameEl && !nameEl.value.trim() && parsed.type) nameEl.value = parsed.type;
@@ -12553,15 +12573,15 @@ ${notes ? '\nLandlord notes: ' + notes : ''}
 
   const prompts = {
     section8: `${PLACEHOLDER_RULE}Generate a formal UK Section 8 Notice (Housing Act 1988) using these details:\n${contextInfo}\n\nInclude: header, property address, tenant name, grounds for possession (Ground 8 — rent arrears), required notice period (2 weeks minimum), date, landlord signature block. Format professionally. End with a clear disclaimer that this is a template only and not legal advice.`,
-    section13: `${PLACEHOLDER_RULE}Generate a formal UK Section 13 Notice (Housing Act 1988) for a rent increase using:\n${contextInfo}\n\nInclude: header, current rent, new proposed rent (add 5% as example if not specified), effective date (minimum 1 month notice), proper formatting. End with disclaimer.`,
-    rrasheet: `${PLACEHOLDER_RULE}Generate a covering letter to accompany the Government's Renters' Rights Act 2025 Information Sheet, addressed to the tenant, using:\n${contextInfo}\n\nExplain: what the Information Sheet is, key changes (end of fixed terms, periodic tenancies, Section 21 abolished), deadline of 1 May 2026, where to get help. Friendly but professional tone. End with disclaimer.`,
-    writtenstatement: `${PLACEHOLDER_RULE}Generate a Written Statement of Terms (replacement for AST under Renters' Rights Act 2025) using:\n${contextInfo}\n\nInclude all required sections: parties, property, rent amount & payment date, deposit details, periodic tenancy terms, repair obligations, pet policy, notice periods. End with disclaimer.`,
+    section13: `${PLACEHOLDER_RULE}Generate a formal UK Section 13 Notice (Housing Act 1988) for a rent increase using:\n${contextInfo}\n\nInclude: header, current rent, new proposed rent (DO NOT invent or estimate a rent figure — if new rent is not provided, leave it as [NEW RENT AMOUNT] exactly as written), effective date (minimum 1 month notice), proper formatting. End with disclaimer.`,
+    rrasheet: `${PLACEHOLDER_RULE}Generate a covering letter to accompany the Government's Renters' Rights Act 2025 Information Sheet, addressed to the tenant, using:\n${contextInfo}\n\nExplain: what the Information Sheet is, key changes (end of fixed terms, periodic tenancies, Section 21 abolished), that this is required under the Renters'Rights Act 2025 (deadline was 31 May 2026 — send immediately if not yet done), where to get help. Friendly but professional tone. End with disclaimer.`,
+    writtenstatement: `${PLACEHOLDER_RULE}Generate a Written Statement of Terms (replacement for AST under Renters' Rights Act 2025) using:\n${contextInfo}\n\nInclude all required sections: parties, property, rent amount & payment date, deposit details, periodic tenancy terms, repair obligations, pet policy, notice periods. Include a clear note that this document must be served within 28 days of the tenancy start date as required under the Renters' Rights Act 2025. End with disclaimer.`,
     petpermission: `${PLACEHOLDER_RULE}Generate a Pet Permission Response letter (approving the request) under the Renters' Rights Act 2025 using:\n${contextInfo}\n\nInclude: acknowledgement of request, approval with reasonable conditions (professional cleaning at end, damage liability), tenant obligations. End with disclaimer.`,
     endoftenancy: `${PLACEHOLDER_RULE}Generate an End of Tenancy Letter using:\n${contextInfo}\n\nInclude: confirmation of end date, key dates, requirements (cleaning, keys return, meter readings, forwarding address), deposit process timeline. End with disclaimer.`,
     depositreceipt: `${PLACEHOLDER_RULE}Generate a Deposit Receipt Letter for a UK private landlord using:\n${contextInfo}\n\nInclude: confirmation that the deposit has been received, the exact amount, the date received, the protection scheme name and reference number (if provided), the 30-day legal deadline for protection under the Housing Act 2004, and a note that Prescribed Information will be served separately. Professional, clear tone. Address to the tenant. End with disclaimer that this is not legal advice.`,
     depositdeduction: `${PLACEHOLDER_RULE}Generate a Deposit Deduction Letter using:\n${contextInfo}\n\nInclude: itemised deductions table (use example items like cleaning, damage repair), remaining balance, timeline for return. Professional but clear tone. End with disclaimer.`,
     depositreturn: `${PLACEHOLDER_RULE}Generate a Deposit Return Letter confirming full return using:\n${contextInfo}\n\nInclude: confirmation property left in good condition, full deposit amount being returned, bank transfer timeline. End with disclaimer.`,
-    inspection: `${PLACEHOLDER_RULE}Generate a Property Inspection Report using:\n${contextInfo}\n\nInclude: inspection date, inspector name, room-by-room condition table (kitchen, living room, bedrooms, bathroom, exterior), overall rating, any actions required. End with disclaimer.`,
+    inspection: `${PLACEHOLDER_RULE}Generate a Property Inspection Report using:\n${contextInfo}\n\nInclude: inspection date, inspector name, room-by-room condition table (kitchen, living room, bedrooms, bathroom, exterior), overall rating, any actions required. Note at the end that this report should be signed by both landlord and tenant to be valid for deposit dispute purposes. End with disclaimer.`,
     movein: `${PLACEHOLDER_RULE}Generate a Move-in Inventory using:\n${contextInfo}\n\nInclude: date, meter readings section, room-by-room condition and contents checklist, signature blocks for landlord and tenant. End with disclaimer.`,
     moveout: `${PLACEHOLDER_RULE}Generate a Move-out Inventory using:\n${contextInfo}\n\nInclude: date, meter readings, comparison notes against move-in, any damage noted, deposit implication column. End with disclaimer.`,
     rentarrears1: `${PLACEHOLDER_RULE}Generate a friendly but firm first Rent Arrears Warning Letter using:\n${contextInfo}\n\nInclude: amount owed, due date, request to pay within 7 days, contact details, offer to discuss difficulties. Firm but not threatening. End with disclaimer.`,
@@ -13917,7 +13937,7 @@ Today's date: ${new Date().toLocaleDateString('en-GB', {day:'numeric',month:'lon
 
 The letter should:
 1. Explain they are receiving the official GOV.UK RRA 2025 Information Sheet as a PDF attachment
-2. Summarise the key changes in plain English: fixed terms abolished (all tenancies become periodic/rolling from 1 May 2026), Section 21 no-fault evictions abolished, rent can only be increased once per year using Form 4A, tenants can end tenancy with 2 months notice
+2. Summarise the key changes in plain English: fixed terms abolished (all tenancies became periodic/rolling from 1 May 2026), Section 21 no-fault evictions abolished, rent can only be increased once per year with a minimum 2 months' notice, tenants can end tenancy with 2 months notice
 3. Reassure them their tenancy continues and nothing changes immediately
 4. Tell them to read the attached PDF for full details
 5. End with a proper sign-off and landlord name
@@ -14122,7 +14142,9 @@ async function generateInventoryReport(){
     const photos=await Promise.all(photoPromises);
     const content=[
       ...photos.map(ph=>({type:'image',source:{type:'base64',media_type:ph.type,data:ph.b64}})),
-      {type:'text',text:`You are a professional UK property inventory clerk generating a formal condition report. Reference filename hints for room identification: ${photos.map(p=>p.name).join(', ')}
+      {type:'text',text:`You are a professional UK property inventory clerk generating a formal condition report that may be used in deposit disputes or court proceedings. Be specific, factual and objective — describe only what you can see.
+
+Reference filename hints for room identification: ${photos.map(p=>p.name).join(', ')}
 
 Property: ${p.address}, ${p.city||''}, ${p.postcode||''}
 Property type: ${p.type||'—'} · ${p.beds||'—'} bedrooms
@@ -14131,36 +14153,60 @@ Report type: ${type}
 Date: ${new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}
 ${notes?'Additional notes: '+notes:''}
 
-Analyse ALL uploaded photos and generate a detailed room-by-room condition report. Format as:
+REPORT TYPE INSTRUCTIONS:
+- Move-in condition report: document current condition as baseline. Note all existing damage clearly — this protects both parties.
+- Move-out condition report: assess current condition critically. Flag any deterioration beyond fair wear and tear. Note items likely to attract deposit deductions with estimated severity (Minor/Moderate/Significant).
+- Mid-tenancy inspection: note current condition and any maintenance issues requiring attention. Flag any Awaab's Law concerns (damp, mould, condensation).
+- General inventory: document contents and condition room by room.
+
+FORMAT YOUR REPORT EXACTLY AS FOLLOWS:
+
 ━━━ INVENTORY & CONDITION REPORT ━━━
-Report type · Property address · Date · Inspector: AI
+Type: ${type}
+Property: ${p.address}, ${p.postcode||''}
+Tenant: ${t?t.name:'Not specified'}
+Date: ${new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}
+Inspector: AI-assisted (photos reviewed)
 
-KITCHEN
-[Photo analysis: describe walls, floor, worktops, cabinets, sink, appliances, lighting. Note any scratches, stains, damage, wear. Rate: Excellent/Good/Fair/Poor.]
+─── METER READINGS ───
+Electricity meter: [record if visible in photos, else leave blank for landlord to complete]
+Gas meter: [record if visible in photos, else leave blank]
+Water meter: [record if visible in photos, else leave blank]
 
-LIVING ROOM
-[Same format — walls, floor, ceiling, windows, doors, any furniture visible.]
+─── KEYS ───
+Keys handed over: [note number if visible in photos, else leave blank for landlord to complete]
 
-BEDROOM 1 (or determine from context)
-[Same format.]
+Then generate a section for ALL rooms based on ${p.beds||1} bedrooms, in this order: Kitchen, Living Room, Bedroom 1 through Bedroom ${p.beds||1}, Bathroom, Hallway, any other rooms visible in photos.
 
-BEDROOM 2 (if applicable)
-[Same format.]
+For each room use this format:
+─── [ROOM NAME] ───
+Walls: [condition, colour, any marks or damage]
+Floor/Carpet: [condition, type, any stains or damage]
+Ceiling: [condition, any marks, damp or staining]
+Windows/Doors: [condition, locks working, any damage]
+Fixtures & Fittings: [describe what is present and condition]
+Cleanliness: [Excellent/Good/Fair/Poor]
+Condition: [Excellent/Good/Fair/Poor]
+Defects noted: [list specific defects with location — e.g. scuff mark on north wall approx 10cm]
 
-BATHROOM
-[Same format — tiles, bath/shower, toilet, sink, ventilation, any mould or damage.]
+─── OVERALL SUMMARY ───
+Overall condition: [Excellent/Good/Fair/Poor]
+Key issues found: [list]
+Maintenance recommendations: [list]
+Cleanliness overall: [Excellent/Good/Fair/Poor]
+Deposit risk assessment: [Low/Medium/High] — [brief reason]
+Potential deposit deductions (move-out only): [list items with severity Minor/Moderate/Significant, or N/A]
 
-HALLWAY / EXTERIOR (if photos provided)
-[Same format.]
+─── SIGNATURES ───
+This report should be signed by both landlord and tenant within 7 days to be valid for deposit dispute purposes.
+Landlord signature: ___________________ Date: ___________
+Tenant signature: ___________________ Date: ___________
 
-━━━ OVERALL SUMMARY ━━━
-Overall condition rating. Key issues found. Recommendations. Deposit risk assessment (Low/Medium/High).
-
-Be specific and factual. Note exact defects you can see. This may be used for deposit disputes or court evidence.`}
+Be specific and factual. Note exact defects visible in photos. Never invent defects not visible. This report may be used as evidence in deposit disputes or court proceedings.`}
     ];
     const res=await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy',{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:2000,messages:[{role:'user',content}]})
+      body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:3000,messages:[{role:'user',content}]})
     });
     const data=await res.json();
     const report=data.content?.[0]?.text||'Could not generate report. Please try again.';
