@@ -1220,7 +1220,7 @@ PLATFORM FEATURES — tell users exactly where to find things:
 - Inventory Reports (sidebar > Compliance > Inventory Reports): AI-generated room-by-room condition reports with photo evidence — upload photos, AI writes report, send to tenants with email + PDF
 - Inspections (sidebar > Compliance > Inspections): log and track property inspection records with pass/advisory/fail ratings
 - Insurance (sidebar > Compliance > Insurance): track buildings and contents insurance policies with expiry alerts
-- Rent Payments (property page > Financials tab): mark rent as received, log payment history, send receipts to tenants
+- Legal Audit Trail PDF (property page > Compliance tab > scroll to bottom): generates a complete court-ready PDF for one property — all certs, legal notices sent, rent history, deposit protection status, and full audit log with timestamps. Use this when preparing for court, instructing a solicitor, or a deposit dispute.
 - Calendar: date-based view of certificate expiries, rent due dates, insurance/licence renewals
 - AI Assistant (sidebar, bottom): you are here
 
@@ -6521,7 +6521,33 @@ function pdTabContent(pid, tab) {
             </div>`).join('')
             : `<div style="color:var(--muted);font-size:13px">No inventory reports yet</div>`}
         </div>
-      </div>` : ''}`;
+      </div>` : ''}
+
+      <div style="margin-top:8px;background:linear-gradient(135deg,#0B1E3D 0%,#1a3560 100%);border-radius:14px;padding:22px 24px;position:relative;overflow:hidden">
+        <div style="position:absolute;top:-18px;right:-18px;font-size:80px;opacity:0.06;pointer-events:none">&#x2696;</div>
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap">
+          <div style="flex:1;min-width:200px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+              <span style="font-size:16px">&#x2696;</span>
+              <span style="font-size:14px;font-weight:700;color:#fff;letter-spacing:-0.2px">Legal Audit Trail</span>
+              <span style="font-size:10px;font-weight:600;color:#0B1E3D;background:#e8f0fe;padding:2px 8px;border-radius:100px;letter-spacing:0.3px">COURT READY</span>
+            </div>
+            <p style="font-size:12px;color:rgba(255,255,255,0.65);margin:0 0 12px;line-height:1.5">Complete due diligence PDF for this property — timestamped and ready for your solicitor or court.</p>
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <div style="font-size:11px;color:rgba(255,255,255,0.75)">&#x1F4CB; Compliance certificates &mdash; all types, expiry dates, status</div>
+              <div style="font-size:11px;color:rgba(255,255,255,0.75)">&#x2696; Legal notices sent &mdash; S8, S13, RRA sheet with timestamps</div>
+              <div style="font-size:11px;color:rgba(255,255,255,0.75)">&#x1F4B7; Rent history &mdash; paid / unpaid summary</div>
+              <div style="font-size:11px;color:rgba(255,255,255,0.75)">&#x1F50D; Audit trail &mdash; every platform action with date and time</div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0">
+            <button id="lat-btn-${pid}" onclick="generateLegalAuditPDF('${pid}',this)" style="background:#fff;color:#0B1E3D;border:none;border-radius:9px;padding:11px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font);white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.18)">
+              &#x1F4C4; Generate Court PDF
+            </button>
+            <span style="font-size:10px;color:rgba(255,255,255,0.4);text-align:right;line-height:1.4">Live data &middot; Timestamped<br>For solicitor or court use</span>
+          </div>
+        </div>
+      </div>`;
   }
 
   // ── MAINTENANCE TAB ──
@@ -13859,6 +13885,219 @@ async function s8SendToTenant() {
   } catch(e) {
     if (btn) { btn.disabled = false; btn.innerHTML = '✉ Send to ' + t.name.split(' ')[0]; }
     toast('Send failed — check Resend domain verification', true);
+  }
+}
+
+// ── LEGAL AUDIT TRAIL PDF ──
+async function generateLegalAuditPDF(pid, btn) {
+  const p = P(pid);
+  if (!p) { toast('Property not found', true); return; }
+  const t = D.tenants.find(x => String(x.prop_id) === String(pid) && x.status !== 'Archived');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Generating…'; }
+
+  try {
+    // Fetch audit log for this property live
+    const { data: auditData } = await sb.from('audit_log')
+      .select('*').eq('user_id', currentUser.id)
+      .order('created_at', { ascending: false }).limit(500);
+    const auditRows = (auditData || []).filter(r =>
+      String(r.record_id) === String(pid) ||
+      D.tenants.some(tn => String(tn.prop_id) === String(pid) && String(r.record_id) === String(tn.id))
+    ).slice(0, 50);
+
+    const certs      = D.certs.filter(c => String(c.prop_id) === String(pid));
+    const rentRows   = D.rent.filter(r => String(r.prop_id) === String(pid)).sort((a,b) => new Date(b.month||0) - new Date(a.month||0));
+    const emailRows  = D.emailLog.filter(e => String(e.prop_id) === String(pid));
+    const genAt      = new Date();
+    const genAtStr   = genAt.toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'}) + ' at ' + genAt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    const docRef     = 'LAT-' + genAt.getTime();
+    const today      = new Date();
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+    const W = doc.internal.pageSize.getWidth();
+    const H = doc.internal.pageSize.getHeight();
+    let y = 0;
+
+    // ── helpers ──
+    const addPage = () => { doc.addPage(); y = 18; addPageFooter(); };
+    const chk = (need=20) => { if (y + need > H - 18) addPage(); };
+    const addPageFooter = () => {
+      doc.setFontSize(7); doc.setTextColor(180,180,180);
+      doc.text(`NexLet Legal Audit Trail \u00b7 Ref: ${docRef} \u00b7 ${genAt.toLocaleDateString('en-GB')} \u00b7 CONFIDENTIAL`, 16, H-8);
+      doc.text(`Page ${doc.getCurrentPageInfo().pageNumber}`, W-16, H-8, { align:'right' });
+    };
+
+    const sectionHead = (title, icon='') => {
+      chk(16);
+      y += 4;
+      doc.setFillColor(11,30,61); doc.roundedRect(14, y-4, W-28, 10, 2, 2, 'F');
+      doc.setFontSize(9); doc.setFont(undefined,'bold'); doc.setTextColor(255,255,255);
+      doc.text(`${icon}  ${title}`, 18, y+2);
+      doc.setFont(undefined,'normal'); doc.setTextColor(26,43,69);
+      y += 10;
+    };
+
+    const row = (label, value, bold=false) => {
+      chk(7);
+      doc.setFontSize(8); doc.setTextColor(100,115,135); doc.setFont(undefined,'normal');
+      doc.text(label + ':', 18, y);
+      doc.setTextColor(26,43,69);
+      if (bold) doc.setFont(undefined,'bold');
+      const splits = doc.splitTextToSize(String(value||'—'), W-70);
+      doc.text(splits, 62, y);
+      doc.setFont(undefined,'normal');
+      y += splits.length > 1 ? splits.length * 4.5 : 5.5;
+    };
+
+    const divider = () => {
+      chk(6); doc.setDrawColor(220,225,235); doc.line(16, y, W-16, y); y += 5;
+    };
+
+    // ══ COVER PAGE ══
+    doc.setFillColor(11,30,61); doc.rect(0,0,W,42,'F');
+    doc.setFontSize(20); doc.setFont(undefined,'bold'); doc.setTextColor(255,255,255);
+    doc.text('NexLet', 16, 18);
+    doc.setFontSize(10); doc.setFont(undefined,'normal'); doc.setTextColor(180,200,240);
+    doc.text('nexlet.co.uk \u00b7 UK Landlord Compliance Platform', 16, 26);
+    doc.setFontSize(14); doc.setFont(undefined,'bold'); doc.setTextColor(255,255,255);
+    doc.text('Legal Audit Trail', 16, 36);
+    y = 52;
+
+    // Document reference block
+    doc.setFillColor(245,247,250); doc.setDrawColor(200,210,225);
+    doc.roundedRect(14, y-4, W-28, 38, 3, 3, 'FD');
+    y += 2;
+    row('Document ref',   docRef, true);
+    row('Generated by',   currentUser?.email || _profileName());
+    row('Generated at',   genAtStr);
+    row('Property',       `${p.address}, ${p.city||''}, ${p.postcode||''}`);
+    row('Tenant',         t ? `${t.name}${t.email?' · '+t.email:''}` : 'No active tenant');
+    row('Tenancy start',  t?.start_date ? FMT(t.start_date) : '—');
+    row('Purpose',        'Due diligence record for legal proceedings, solicitor review, or court submission');
+    y += 4;
+
+    doc.setFontSize(8); doc.setTextColor(150,150,150);
+    const disclaimer = 'This document is a timestamped export of records held in the NexLet platform. It does not constitute legal advice. All data reflects the state of records at the time of generation. Handle in accordance with UK GDPR.';
+    const dLines = doc.splitTextToSize(disclaimer, W-32);
+    doc.text(dLines, 16, y); y += dLines.length * 4.5 + 4;
+    addPageFooter();
+
+    // ══ SECTION 1 — COMPLIANCE CERTIFICATES ══
+    sectionHead('COMPLIANCE CERTIFICATES', '1.');
+    if (certs.length === 0) {
+      doc.setFontSize(9); doc.setTextColor(180,50,50); doc.text('No certificates on file.', 18, y); y += 8;
+    } else {
+      for (const c of certs) {
+        chk(20);
+        const expired = c.expiry && new Date(c.expiry) < today;
+        const daysLeft = c.expiry ? Math.round((new Date(c.expiry)-today)/864e5) : null;
+        const status = !c.expiry ? 'No expiry' : expired ? `EXPIRED ${Math.abs(daysLeft)}d ago` : `Valid — ${daysLeft}d remaining`;
+        const statusCol = !c.expiry ? [100,115,135] : expired ? [200,50,50] : [34,139,34];
+        row('Type',     c.type||'—');
+        row('Reference', c.ref||'—');
+        row('Issued',   c.issued ? FMT(c.issued) : '—');
+        row('Expiry',   c.expiry ? FMT(c.expiry) : '—');
+        doc.setFontSize(8); doc.setTextColor(...statusCol); doc.setFont(undefined,'bold');
+        chk(6); doc.text(`Status: ${status}`, 62, y); doc.setFont(undefined,'normal'); doc.setTextColor(26,43,69); y += 6;
+        divider();
+      }
+    }
+
+    // ══ SECTION 2 — DEPOSIT PROTECTION ══
+    sectionHead('DEPOSIT PROTECTION', '2.');
+    const depositOk = t?.scheme && t.scheme !== 'None' && t.scheme !== '' && t?.scheme_ref;
+    if (!t) {
+      doc.setFontSize(9); doc.setTextColor(100,115,135); doc.text('No active tenant.', 18, y); y += 8;
+    } else {
+      row('Deposit amount', t.deposit ? `\u00a3${Number(t.deposit).toLocaleString()}` : '—');
+      row('Protection scheme', t.scheme||'NOT SET');
+      row('Scheme reference', t.scheme_ref||'NOT SET');
+      doc.setFontSize(8); doc.setTextColor(...(depositOk ? [34,139,34] : [200,50,50])); doc.setFont(undefined,'bold');
+      chk(6); doc.text(`Status: ${depositOk ? 'PROTECTED' : 'NOT PROTECTED — courts may invalidate S8 grounds'}`, 18, y);
+      doc.setFont(undefined,'normal'); doc.setTextColor(26,43,69); y += 8;
+    }
+
+    // ══ SECTION 3 — LEGAL NOTICES SENT ══
+    sectionHead('LEGAL NOTICES & DOCUMENTS SENT', '3.');
+    const legalEmails = emailRows.filter(e => e.template_id && ['section8_notice','section13','rrasheet','writtenstatement','depositreceipt','rentarrears1','rentarrears2'].includes(e.template_id));
+    if (legalEmails.length === 0) {
+      doc.setFontSize(9); doc.setTextColor(100,115,135); doc.text('No legal notices recorded as sent.', 18, y); y += 8;
+    } else {
+      for (const e of legalEmails) {
+        chk(18);
+        row('Document',  e.template_name||e.template_id);
+        row('Sent to',   e.sent_to||'—');
+        row('Date sent', e.sent_at ? new Date(e.sent_at).toLocaleString('en-GB') : '—');
+        row('Status',    e.status||'—');
+        divider();
+      }
+    }
+
+    // ══ SECTION 4 — RENT PAYMENT HISTORY ══
+    sectionHead('RENT PAYMENT HISTORY', '4.');
+    if (rentRows.length === 0) {
+      doc.setFontSize(9); doc.setTextColor(100,115,135); doc.text('No rent records on file.', 18, y); y += 8;
+    } else {
+      const paid   = rentRows.filter(r => r.status==='Paid').length;
+      const unpaid = rentRows.filter(r => r.status!=='Paid').length;
+      const totalArrears = rentRows.filter(r => r.status!=='Paid').reduce((s,r) => s+(Number(r.amount)||0),0);
+      row('Total records',   String(rentRows.length));
+      row('Paid',            String(paid));
+      row('Unpaid / overdue', `${unpaid}${totalArrears>0?' · \u00a3'+totalArrears.toLocaleString()+' outstanding':''}`, unpaid>0);
+      y += 3; divider();
+      for (const r of rentRows.slice(0,24)) {
+        chk(7);
+        const isPaid = r.status==='Paid';
+        doc.setFontSize(7.5); doc.setTextColor(isPaid ? 34 : 200, isPaid ? 139 : 50, isPaid ? 34 : 50);
+        doc.text(`${r.month||'—'}  ·  \u00a3${Number(r.amount||0).toLocaleString()}  ·  ${r.status||'—'}${r.paid_date?' · paid '+FMT(r.paid_date):''}`, 18, y);
+        doc.setTextColor(26,43,69); y += 5;
+      }
+      if (rentRows.length > 24) { doc.setFontSize(7.5); doc.setTextColor(100,115,135); doc.text(`... and ${rentRows.length-24} more records (see platform for full history)`, 18, y); y += 5; }
+    }
+
+    // ══ SECTION 5 — PLATFORM AUDIT LOG ══
+    sectionHead('PLATFORM AUDIT LOG', '5.');
+    if (auditRows.length === 0) {
+      doc.setFontSize(9); doc.setTextColor(100,115,135); doc.text('No audit entries found for this property.', 18, y); y += 8;
+    } else {
+      for (const a of auditRows) {
+        chk(10);
+        doc.setFontSize(7.5); doc.setTextColor(26,43,69);
+        const ts = a.created_at ? new Date(a.created_at).toLocaleString('en-GB') : '—';
+        const line = `${ts}  ·  ${a.action||'—'}  ·  ${a.details||''}`;
+        const splits = doc.splitTextToSize(line, W-32);
+        for (const s of splits) { chk(5); doc.text(s, 18, y); y += 4.5; }
+        y += 1;
+      }
+    }
+
+    // ══ FINAL DISCLAIMER PAGE ══
+    addPage();
+    doc.setFontSize(12); doc.setFont(undefined,'bold'); doc.setTextColor(11,30,61);
+    doc.text('Important Legal Notices', 16, y); y += 10;
+    doc.setFontSize(9); doc.setFont(undefined,'normal'); doc.setTextColor(60,70,90);
+    const notices = [
+      'This document was generated by NexLet (nexlet.co.uk), a UK landlord compliance platform. It is an automated export of records held within the platform and reflects data as entered by the user.',
+      'NexLet does not provide legal advice. This document is not a substitute for advice from a qualified solicitor. Before taking legal action, you should seek independent legal advice.',
+      'The accuracy of this document depends on the accuracy of data entered into the platform by the user. NexLet accepts no liability for errors, omissions, or inaccuracies in the underlying data.',
+      'This document contains personal data about tenants. It must be handled in accordance with the UK General Data Protection Regulation (UK GDPR) and the Data Protection Act 2018. Do not share without lawful basis.',
+      `Document reference: ${docRef} \u00b7 Generated: ${genAtStr} \u00b7 Generated by: ${currentUser?.email||_profileName()}`,
+    ];
+    for (const n of notices) {
+      chk(20);
+      const nLines = doc.splitTextToSize(n, W-32);
+      doc.text(nLines, 16, y); y += nLines.length * 5.5 + 4;
+    }
+
+    doc.save(`nexlet_legal_audit_trail_${p.postcode||pid}_${docRef}.pdf`);
+    await logAudit('GENERATE_LEGAL_AUDIT_TRAIL', 'properties', pid, `Legal Audit Trail PDF generated · Ref: ${docRef}`);
+    toast('✓ Legal Audit Trail PDF downloaded');
+  } catch(e) {
+    console.error('generateLegalAuditPDF error:', e);
+    toast('PDF generation failed — please try again', true);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '&#x1F4C4; Generate Court PDF'; }
   }
 }
 
