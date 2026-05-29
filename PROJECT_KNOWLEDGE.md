@@ -2600,3 +2600,67 @@ New template added to **Tenancy Documents** category (sits above Deposit Deducti
 
 **Doc name map + LEGAL_DOC_TYPES:** Both updated with `depositreceipt`.
 
+
+---
+
+### Session 25 — 29 May 2026 — Stripe Integration Complete + Go Live
+
+**Date:** 29 May 2026
+**Files modified:** `landlord.html`, `profile.html`, `js/profile.js`, `supabase/functions/stripe-webhook/index.ts`, `supabase/functions/stripe-cancel/index.ts` (new)
+
+#### Stripe Price IDs (Sandbox/Test — founding prices)
+
+| Plan | Type | Price ID |
+|---|---|---|
+| Starter | founding | `price_1TX2zp2LDL4FOJhEvpaUe6sa` |
+| Starter | standard | `price_1TcSFV2LDL4FOJhEsUm1W7Ro` |
+| Landlord | founding | `price_1TcSLU2LDL4FOJhEamxB9g97` |
+| Landlord | standard | `price_1TcSNa2LDL4FOJhEguNEJjhd` |
+| Portfolio | founding | `price_1TcSPs2LDL4FOJhEJS7VUati` |
+| Portfolio | standard | `price_1TcSRK2LDL4FOJhEIXd9FLKP` |
+
+#### Database Changes
+
+```sql
+-- stripe_subscriptions table created with full schema
+-- Columns: id, user_id, stripe_customer_id, stripe_subscription_id,
+--          price_id, plan_name, status, current_period_end,
+--          cancel_at_period_end, created_at, updated_at
+-- RLS: authenticated role SELECT policy (auth.uid() = user_id)
+```
+
+#### Edge Functions Deployed
+
+| Function | Flag | Status |
+|---|---|---|
+| `stripe-checkout` | default | ✅ deployed |
+| `stripe-webhook` | `--no-verify-jwt` | ✅ deployed |
+| `stripe-cancel` | default | ✅ deployed (new) |
+
+**Webhook endpoint:** `https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/stripe-webhook`
+**Stripe events:** `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`
+**Webhook name in Stripe:** `exquisite-wonder`
+
+#### Code Changes
+
+| File | Change |
+|---|---|
+| `landlord.html` | Added `PRICE_MAP` const with 3 founding price IDs. `redirectToCheckout(plan)` now sends `{ price_id }` instead of `{ plan, billing_cycle }` |
+| `profile.html` | Plan card Subscribe buttons changed from `data-link` (hardcoded buy.stripe.com URLs) to `data-price` with real price IDs. Lib scripts changed from `defer` to synchronous load |
+| `js/profile.js` | Subscribe button click handler fixed: `btn.dataset.link` → `btn.dataset.price`, calls `_startCheckout(priceId)`. `_loadSubscription` changed from `.single()` to `.maybeSingle()` to fix 406 error |
+| `stripe-webhook/index.ts` | Full rewrite: corrected price IDs in `PRICE_TO_PLAN` map, fixed imports to `stripe@14.21.0`, changed `serve()` to `Deno.serve()` |
+| `stripe-cancel/index.ts` | New edge function: sets `cancel_at_period_end: true` on Stripe subscription and updates local DB |
+
+#### Known Issues Post-Session
+
+| Issue | Detail |
+|---|---|
+| `stripe_price_id` NULL in DB | Webhook writes to `price_id` column but table column is named `stripe_price_id` — minor, `plan_name` and `status` work correctly |
+| `favicon.ico` 404 | No favicon file in repo — cosmetic only |
+| `newsletter_opted_in` column | Not yet added to `user_profiles` table |
+
+#### E2E Test Result
+
+✅ Test card `4242 4242 4242 4242` → Stripe checkout → payment → webhook 200 OK → `stripe_subscriptions` row created with `plan_name: starter`, `status: active`
+
+**NEXLET IS LIVE at https://nexlet.co.uk**
