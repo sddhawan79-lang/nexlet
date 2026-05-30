@@ -2664,3 +2664,60 @@ New template added to **Tenancy Documents** category (sits above Deposit Deducti
 ✅ Test card `4242 4242 4242 4242` → Stripe checkout → payment → webhook 200 OK → `stripe_subscriptions` row created with `plan_name: starter`, `status: active`
 
 **NEXLET IS LIVE at https://nexlet.co.uk**
+
+---
+
+### Session 26 — 30 May 2026 — Post-Launch UI Polish (Batch A–C)
+
+**Date:** 30 May 2026
+**Files modified:** `landlord.html`
+
+#### Summary
+
+Post-launch UI upgrade pass targeting enterprise SaaS aesthetics. All changes are CSS/rendering only — no schema, no edge functions, no logic changes.
+
+#### Changes Made
+
+**Global CSS tokens:**
+| Variable | Old | New |
+|---|---|---|
+| `--off` | `#F8F6F1` (warm cream) | `#F4F5F7` (cool grey) |
+| `--border` | `#D8D4CC` | `#E2E5EA` |
+| `--txt` | `#1E2A2A` | `#1A2332` |
+| `--muted` | `#6B7A7A` | `#64748B` (slate) |
+
+**Component polish:**
+- `.mc` + `.panel`: added `box-shadow: 0 1px 3px rgba(0,0,0,0.06)`
+- `.topbar`: height 52→56px + micro shadow
+- Founding price banner: large orange box → compact navy pill
+- Send feedback: increased opacity 10%→40%, added `border-top`
+- `.b-green` badge: now correctly uses `--status-green-bg/dark` (#00875A) — "Active", "Valid", "Paid", "Protected" all green
+- Property list rent values: changed from orange `var(--green-dark)` → neutral `var(--txt)`
+
+**Tables & compliance:**
+- `tr:hover td`: hover colour changed to `rgba(59,111,232,0.04)` with CSS transition
+- `.ph2 h2`: 14px → 13px + letter-spacing
+- `th`: white background, letter-spacing .4→.6px
+- `td`: hardcoded `#3D5166` → `var(--txt)`
+- Kanban column headers: `var(--muted)` → `var(--txt)`, letter-spacing bump
+
+**Property detail stat cards (pgTenantDetail):**
+- Removed coloured tinted backgrounds (`var(--green-bg)`, `rgba(59,111,232,0.09)`, etc.)
+- Now: `background:var(--white)`, `border-left:3px solid {status-colour}`, `box-shadow:0 1px 3px rgba(0,0,0,0.06)`
+- Icon bg: `var(--off)` (was `rgba(255,255,255,0.5)`)
+
+**Compliance row density:**
+- Mandatory overdue doc labels: `font-weight:700`
+- Optional docs remain `font-weight:500`
+
+**Postcode lookup fix:**
+- `lookupPostcode()` rewritten: exact lookup first (`/postcodes/{pc}`), fuzzy only as fallback
+- Added `.toUpperCase()` normalisation
+- Fixes random/incorrect results on partial postcode matches
+
+#### Remaining / Next Session
+
+| Task | Detail |
+|---|---|
+| Tenant detail KYC duplication | Sticky summary bar (`stickyCard`) at top of tenant detail repeats "🗂 KYC Documents" heading + pills that are already shown in full section below. Remove sticky bar or collapse it to a minimal status chip only |
+
