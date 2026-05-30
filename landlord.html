@@ -5971,15 +5971,15 @@ function pgPropDetail(pid) {
 
   // Stat cards
   const stats = [
-    { icon:'💷', bg:'var(--green-bg)', col:'var(--green-dark)', val: p.rent ? `£${p.rent.toLocaleString()}` : 'Vacant', lbl:'Monthly rent' },
-    { icon:'👤', bg:'rgba(59,111,232,0.09)', col:'var(--blue)', val: t ? t.name.split(' ')[0] : 'Vacant', lbl: t ? (t.status||'Active') : 'No tenant' },
-    { icon:'🛡', bg: rag.rag==='red'?'rgba(229,62,62,0.09)':rag.rag==='amber'?'rgba(217,119,6,0.09)':'var(--green-bg)', col:ragCol, val:`${rag.score}/100`, lbl:`Compliance: ${rag.label}` },
-    { icon:'🔧', bg: pm.length ? 'rgba(229,62,62,0.09)' : 'var(--green-bg)', col: pm.length ? 'var(--red)' : 'var(--green-dark)', val: pm.length, lbl: pm.length ? 'Open issue' + (pm.length!==1?'s':'') : 'No open issues' },
+    { icon:'💷', col:'var(--txt)',        bdr:'var(--border)',                                                                          val: p.rent ? `£${p.rent.toLocaleString()}` : 'Vacant', lbl:'Monthly rent' },
+    { icon:'👤', col:'var(--blue)',        bdr:'var(--blue)',                                                                            val: t ? t.name.split(' ')[0] : 'Vacant', lbl: t ? (t.status||'Active') : 'No tenant' },
+    { icon:'🛡', col:ragCol,              bdr: rag.rag==='red'?'var(--red)':rag.rag==='amber'?'var(--amber)':'var(--status-green)',     val:`${rag.score}/100`, lbl:`Compliance: ${rag.label}` },
+    { icon:'🔧', col: pm.length ? 'var(--red)' : 'var(--status-green)', bdr: pm.length ? 'var(--red)' : 'var(--status-green)',         val: pm.length, lbl: pm.length ? 'Open issue' + (pm.length!==1?'s':'') : 'No open issues' },
   ];
 
   const statHtml = `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:22px">
-    ${stats.map(s=>`<div class="pd-stat" style="background:${s.bg};border-color:transparent">
-      <div class="pd-stat-icon" style="background:rgba(255,255,255,0.5)">${s.icon}</div>
+    ${stats.map(s=>`<div class="pd-stat" style="background:var(--white);border-color:var(--border);border-left:3px solid ${s.bdr};box-shadow:0 1px 3px rgba(0,0,0,0.06)">
+      <div class="pd-stat-icon" style="background:var(--off)">${s.icon}</div>
       <div><div class="pd-stat-val" style="color:${s.col}">${s.val}</div><div class="pd-stat-lbl">${s.lbl}</div></div>
     </div>`).join('')}
   </div>`;
@@ -6338,7 +6338,7 @@ function pdTabContent(pid, tab) {
         return `
           <div ${_rowClick}>
             <div style="flex:1;min-width:0">
-              <div style="font-size:12.5px;font-weight:500;
+              <div style="font-size:12.5px;font-weight:${st.overdue && doc.mandatory ? '700' : '500'};
                 color:var(--txt)">${doc.label}</div>
               <div style="font-size:10.5px;color:var(--muted);
                 margin-top:1px;line-height:1.4">
