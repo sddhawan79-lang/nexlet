@@ -7295,10 +7295,14 @@ function pgCompliance(){
                       return _eb + _vb + _db + `<button onclick="event.stopPropagation();markServed('${_cr.id}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid #00A87A;background:rgba(0,168,122,0.08);color:#00A87A;cursor:pointer;font-family:var(--font);font-weight:600;white-space:nowrap">✓ Mark Served</button>`;
                     }
                     if (st.lbl==='NOT UPLOADED' || (!_cr && st.overdue)) {
-                      return `<button onclick="event.stopPropagation();moCert('${selPid}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--red);background:rgba(229,62,62,0.07);color:var(--red);cursor:pointer;font-family:var(--font);font-weight:600;white-space:nowrap">+ Upload</button>`;
+                      return doc.mandatory
+                        ? `<button onclick="event.stopPropagation();moCert('${selPid}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--red);background:rgba(229,62,62,0.07);color:var(--red);cursor:pointer;font-family:var(--font);font-weight:600;white-space:nowrap">+ Upload</button>`
+                        : `<button onclick="event.stopPropagation();moCert('${selPid}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font);white-space:nowrap">+ Upload</button>`;
                     }
                     if (st.overdue) {
-                      return _eb + _vb + _db + `<button onclick="event.stopPropagation();moCert('${selPid}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--red);background:rgba(229,62,62,0.07);color:var(--red);cursor:pointer;font-family:var(--font);font-weight:600">+ Upload</button>`;
+                      return doc.mandatory
+                        ? _eb + _vb + _db + `<button onclick="event.stopPropagation();moCert('${selPid}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--red);background:rgba(229,62,62,0.07);color:var(--red);cursor:pointer;font-family:var(--font);font-weight:600">🔄 Renew</button>`
+                        : _eb + _vb + _db + `<button onclick="event.stopPropagation();moCert('${selPid}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font)">+ Upload</button>`;
                     }
                     return `${_eb}${_vb}${_db}`;
                   })()}
@@ -8206,7 +8210,7 @@ function pgTenants(){
         <td><div style="display:flex;align-items:center;gap:10px"><div class="t-av">${INI(t.name)}</div><div><div class="td-bold">${t.name}${isEnded?endedBadge:''}</div><div style="font-size:11px;color:var(--muted)">${p.address}${p.city?', '+p.city:''}</div></div></div></td>
         <td>${FMS(t.start||t.start_date)}</td>
         <td>${t.scheme?B('Protected'):'<span style="color:var(--muted);font-size:12px">Not set</span>'}</td>
-        <td><div style="display:flex;gap:4px;align-items:center">${CHECKLIST_ITEMS.map(item=>{const cl=_checklistRAG(t,item.key);return`<span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:${RAG_COLORS[cl.ra]};cursor:help" title="${item.icon} ${item.label}: ${cl.status}"><span style="font-size:8px;color:#fff;font-weight:700">${cl.ra==='green'?'✓':cl.ra==='amber'?'!':'×'}</span></span>`;}).join('')}</div></td>
+        <td><div style="display:flex;gap:4px;align-items:center">${(() => { const cls = CHECKLIST_ITEMS.map(item => _checklistRAG(t, item.key)); const reds = cls.filter(c => c.ra === 'red').length; const ambers = cls.filter(c => c.ra === 'amber').length; const issues = reds + ambers; if (!issues) return `<span style="font-size:11px;font-weight:600;color:var(--status-green-dark);background:var(--status-green-bg);padding:2px 8px;border-radius:100px" title="${CHECKLIST_ITEMS.map(item=>{const cl=_checklistRAG(t,item.key);return item.icon+' '+item.label+': '+cl.status;}).join(' · ')}">✓ Clear</span>`; if (reds) return `<span style="font-size:11px;font-weight:600;color:var(--red);background:var(--red-bg);padding:2px 8px;border-radius:100px" title="${CHECKLIST_ITEMS.map(item=>{const cl=_checklistRAG(t,item.key);return item.icon+' '+item.label+': '+cl.status;}).join(' · ')}">${issues} issue${issues!==1?'s':''}</span>`; return `<span style="font-size:11px;font-weight:600;color:var(--amber);background:var(--amber-bg);padding:2px 8px;border-radius:100px" title="${CHECKLIST_ITEMS.map(item=>{const cl=_checklistRAG(t,item.key);return item.icon+' '+item.label+': '+cl.status;}).join(' · ')}">${issues} issue${issues!==1?'s':''}</span>`; })()}</div></td>
         <td><button class="btn btn-sm btn-navy" style="font-size:10px;padding:3px 8px" onclick="event.stopPropagation();moTenantDocs('${t.id}','${t.prop_id}')">📎 ${docCount||''}</button></td>
         <td>${isEnded?B('Ended'):B(t.status||'Active')}</td>
       </tr>`}).join('')}</tbody>
