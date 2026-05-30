@@ -1980,7 +1980,9 @@ async function saveCertToDB() {
       D.certs.push({...d2, file: true});
       await _certUploadFile(d2.id, certType, engineer);
       await logAudit('ADD_CERT', 'certificates', d2.id, `Added ${certType}`);
-      closeMo(); toast('✓ Certificate saved' + (expiry ? ' · 📅 Expiry added to calendar' : '') + '!'); nav(window._currentPage, window._currentParam); return;
+      closeMo(); toast('✓ Certificate saved' + (expiry ? ' · 📅 Expiry added to calendar' : '') + '!');
+      setTimeout(() => { const hasTenant = D.tenants.filter(t=>t.status==='Active').length>0; const hasWelcome=(D.emailLog||[]).some(e=>e.template_id==='welcome_kit'); if(!hasTenant) toast('💡 Next: add your first tenant → go to Tenants'); else if(!hasWelcome) toast('💡 Next: send the welcome kit to your tenant → go to Tenants'); }, 2800);
+      nav(window._currentPage, window._currentParam); return;
     }
     toast('Error: ' + error.message, true); return;
   }
@@ -1990,6 +1992,7 @@ async function saveCertToDB() {
   await logAudit('ADD_CERT', 'certificates', data.id, `Added ${certType}`);
   closeMo();
   toast('✓ Certificate saved' + (expiry ? ' · 📅 Expiry added to calendar' : '') + '!');
+  setTimeout(() => { const hasTenant = D.tenants.filter(t=>t.status==='Active').length>0; const hasWelcome=(D.emailLog||[]).some(e=>e.template_id==='welcome_kit'); if(!hasTenant) toast('💡 Next: add your first tenant → go to Tenants'); else if(!hasWelcome) toast('💡 Next: send the welcome kit to your tenant → go to Tenants'); }, 2800);
   nav(window._currentPage, window._currentParam);
 }
 
@@ -6323,7 +6326,7 @@ function pdTabContent(pid, tab) {
             background:rgba(229,62,62,0.07);color:var(--red);
             cursor:pointer;font-family:var(--font);
             white-space:nowrap;font-weight:600">
-            + Upload</button>${_esignBtn}${_naBtn}`;
+            🔄 Renew</button>${_esignBtn}${_naBtn}`;
         } else {
           rowAction = `${_editBtn}${_viewBtn}${_deleteBtn}${_esignBtn}${_naBtn}`;
         }
@@ -12095,7 +12098,42 @@ function renderNewUserStepper() {
   const slot = document.getElementById('new-user-stepper-slot');
   if (!slot) return;
 
-  if (allDone) { slot.innerHTML = ''; return; }
+  if (allDone) {
+    const DONE_KEY = 'nexlet_setup_complete_v1';
+    const doneDismissed = (() => { try { return JSON.parse(localStorage.getItem(DONE_KEY) || 'null')?.dismissed; } catch(e) { return false; } })();
+    if (doneDismissed) { slot.innerHTML = ''; return; }
+    const dismissDone = () => {
+      try { localStorage.setItem(DONE_KEY, JSON.stringify({ dismissed: true, ts: Date.now() })); } catch(e) {}
+      const s = document.getElementById('new-user-stepper-slot');
+      if (s) { s.style.transition = 'opacity .25s'; s.style.opacity = '0'; setTimeout(() => { s.innerHTML = ''; }, 260); }
+    };
+    const nextActions = [
+      { icon:'📋', label:'Review compliance score',    sub:'Check all certs and docs are valid',         fn:`nav('compliance')` },
+      { icon:'📄', label:'Generate a Section 8 draft', sub:'RRA 2025 ready · All 37 grounds',            fn:`nav('templates')` },
+      { icon:'💷', label:'Set up rent tracking',       sub:'Mark payments received, send receipts',      fn:`nav('rent')` },
+      { icon:'🛡', label:'Add insurance policies',     sub:'Buildings, contents, liability',             fn:`nav('insurance')` },
+      { icon:'📅', label:'Check your calendar',        sub:'Cert expiries, rent due dates',              fn:`nav('calendar')` },
+    ];
+    slot.innerHTML =
+      '<div style="background:linear-gradient(135deg,rgba(0,168,122,0.06),rgba(59,111,232,0.06));border:1px solid rgba(0,168,122,0.25);border-radius:14px;padding:18px 20px;margin-bottom:18px;position:relative">' +
+      '<button onclick="(' + dismissDone.toString() + ')()" style="position:absolute;top:12px;right:14px;background:none;border:none;cursor:pointer;color:var(--muted);font-size:16px;line-height:1;padding:2px" title="Dismiss">✕</button>' +
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">' +
+        '<div style="width:36px;height:36px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">✓</div>' +
+        '<div><div style="font-size:14px;font-weight:700;color:var(--txt)">Setup complete — you\'re RRA-ready!</div>' +
+        '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">Here\'s what to explore next</div></div>' +
+      '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:6px">' +
+      nextActions.map(a =>
+        '<div onclick="' + a.fn + '" style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--white);border:1px solid var(--border);border-radius:9px;cursor:pointer" onmouseenter="this.style.background=\'var(--off)\'" onmouseleave="this.style.background=\'var(--white)\'">' +
+        '<span style="font-size:16px;flex-shrink:0">' + a.icon + '</span>' +
+        '<div style="flex:1"><div style="font-size:12.5px;font-weight:600;color:var(--txt)">' + a.label + '</div>' +
+        '<div style="font-size:11px;color:var(--muted);margin-top:1px">' + a.sub + '</div></div>' +
+        '<span style="color:var(--navy);font-weight:700;font-size:14px">›</span>' +
+        '</div>'
+      ).join('') +
+      '</div></div>';
+    return;
+  }
 
   const slotDismissed = (() => { try { return JSON.parse(localStorage.getItem(SLOT_KEY) || 'null')?.dismissed; } catch(e) { return false; } })();
   if (slotDismissed) { slot.innerHTML = ''; return; }
