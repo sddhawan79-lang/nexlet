@@ -5854,6 +5854,107 @@ function propMaintHtml(pid){
 // ── PROPERTY DETAIL — TAB STATE ──
 if (!window._pdTab) window._pdTab = {};
 
+// ── PROPERTY HEALTH BAR ──
+function propHealthBar(pid, p, t, rag) {
+  const today = new Date();
+  const certs = CF(pid);
+  const propDocs = getDocsForProperty(pid);
+  const insList = D.insurance.filter(i => String(i.prop_id) === String(pid));
+
+  // ── Cert count ──
+  let certTotal = 0, certOk = 0;
+  ['safety','licensing','tenancy','movein'].forEach(gk => {
+    const g = propDocs[gk]; if (!g) return;
+    g.docs.forEach(doc => {
+      if (!doc.mandatory) return;
+      certTotal++;
+      const st = getDocStatus(doc, certs, insList);
+      if (!st.overdue) certOk++;
+    });
+  });
+
+  // ── Deposit ──
+  const depositOk = t?.scheme && t.scheme !== 'None' && t.scheme !== '' && t?.scheme_ref;
+
+  // ── Tenancy days remaining ──
+  let tenancyVal = '—', tenancyStatus = 'neutral';
+  if (t?.end_date) {
+    const days = Math.round((new Date(t.end_date) - today) / 864e5);
+    tenancyVal = days < 0 ? 'Ended' : days === 0 ? 'Today' : `${days}d left`;
+    tenancyStatus = days < 0 ? 'red' : days < 30 ? 'amber' : 'green';
+  } else if (t?.start_date) {
+    tenancyVal = 'Periodic';
+    tenancyStatus = 'green';
+  } else if (p.status === 'vacant' || p.status === 'Vacant') {
+    tenancyVal = 'Vacant';
+    tenancyStatus = 'neutral';
+  }
+
+  // ── Pill config ──
+  const pills = [
+    {
+      icon: rag.rag === 'green' ? '✅' : rag.rag === 'amber' ? '⚠️' : '🔴',
+      label: 'Compliance',
+      value: `${rag.score}/100`,
+      sub: rag.label,
+      status: rag.rag,
+      action: `window._pdTab['${pid}']='compliance'; renderPage()`,
+    },
+    {
+      icon: certOk === certTotal && certTotal > 0 ? '✅' : certOk === 0 ? '🔴' : '⚠️',
+      label: 'Certificates',
+      value: certTotal > 0 ? `${certOk}/${certTotal}` : 'None',
+      sub: certTotal > 0 ? (certOk === certTotal ? 'All valid' : `${certTotal - certOk} need attention`) : 'Upload certs',
+      status: certTotal === 0 ? 'red' : certOk === certTotal ? 'green' : certOk / certTotal >= 0.5 ? 'amber' : 'red',
+      action: `window._pdTab['${pid}']='compliance'; renderPage()`,
+    },
+    {
+      icon: !t ? '—' : depositOk ? '✅' : '🔴',
+      label: 'Deposit',
+      value: !t ? 'No tenant' : depositOk ? 'Protected' : 'Unprotected',
+      sub: !t ? '—' : depositOk ? t.scheme : 'Set deposit scheme',
+      status: !t ? 'neutral' : depositOk ? 'green' : 'red',
+      action: t ? `moTenantDetail('${t.id}')` : `startTenancy('${pid}')`,
+    },
+    {
+      icon: tenancyStatus === 'green' ? '✅' : tenancyStatus === 'amber' ? '⚠️' : tenancyStatus === 'red' ? '🔴' : '—',
+      label: 'Tenancy',
+      value: tenancyVal,
+      sub: t ? (t.name.split(' ')[0]) : 'No tenant',
+      status: tenancyStatus,
+      action: `window._pdTab['${pid}']='tenant'; renderPage()`,
+    },
+  ];
+
+  const colours = {
+    green:   { bg: 'rgba(34,197,94,0.07)',  border: 'rgba(34,197,94,0.2)',  val: '#166534', sub: '#15803d' },
+    amber:   { bg: 'rgba(217,119,6,0.07)',  border: 'rgba(217,119,6,0.25)', val: '#92400e', sub: '#b45309' },
+    red:     { bg: 'rgba(229,62,62,0.07)',  border: 'rgba(229,62,62,0.2)',  val: '#991b1b', sub: '#dc2626' },
+    neutral: { bg: 'var(--off)',            border: 'var(--border)',         val: 'var(--txt)', sub: 'var(--muted)' },
+  };
+
+  const pillsHtml = pills.map(pill => {
+    const c = colours[pill.status] || colours.neutral;
+    const isClickable = pill.action && pill.status !== 'neutral';
+    return `<div onclick="${isClickable ? pill.action : ''}"
+      style="flex:1;min-width:130px;max-width:220px;padding:11px 14px;border-radius:10px;
+             background:${c.bg};border:1px solid ${c.border};
+             ${isClickable ? 'cursor:pointer;' : ''}
+             transition:opacity 0.15s"
+      ${isClickable ? `onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"` : ''}>
+      <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">${pill.label}</div>
+      <div style="font-size:15px;font-weight:700;color:${c.val};line-height:1.2">${pill.icon} ${pill.value}</div>
+      <div style="font-size:10.5px;color:${c.sub};margin-top:2px">${pill.sub}</div>
+    </div>`;
+  }).join('');
+
+  return `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px;padding:14px 16px;
+    background:var(--white);border:1px solid var(--border);border-radius:12px;
+    box-shadow:0 1px 4px rgba(11,30,61,0.06)">
+    ${pillsHtml}
+  </div>`;
+}
+
 function pgPropDetail(pid) {
   const p = P(pid); if (!p) return pgProperties();
   const t = D.tenants.find(x => String(x.prop_id) === String(pid));
@@ -5936,6 +6037,8 @@ function pgPropDetail(pid) {
         ${p.licence_type&&p.licence_type!=='None'?`<span class="badge b-amber">${p.licence_type}</span>`:''}
       </div>
     </div>
+
+    ${propHealthBar(pid, p, t, rag)}
 
     ${(() => {
       const sk = p.status || 'vacant';
