@@ -8335,7 +8335,7 @@ function pgTenantDetail(tid) {
     const portalStatusHtml = _portalStatusMap[portalStatus] || _portalStatusMap['not-sent'];
     if (t.status !== 'Ended') {
       portalCard = `
-      <div class="panel" style="margin-bottom:16px">
+      <div class="panel" style="margin-bottom:16px;border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)">
         <div class="ph2">
           <div><h2>🔗 Tenant Portal</h2><p>Magic link — no password needed</p></div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -8343,7 +8343,7 @@ function pgTenantDetail(tid) {
             <button class="btn btn-sm" id="invite-btn-${t.id}" onclick="sendPortalInvite('${t.id}')">
               ${portalStatus==='accessed'?'↺ Resend':'🔗 Send portal invite'}
             </button>
-            ${t.invite_token ? `<a href="https://nexlet.co.uk/tenant.html?token=${t.invite_token}" target="_blank" class="btn btn-sm" style="font-size:11px">↗ Open link</a>` : ''}
+            ${t.invite_token ? `<a href="${window.location.origin}/tenant.html?token=${t.invite_token}" target="_blank" class="btn btn-sm" style="font-size:11px">↗ Open link</a>` : ''}
           </div>
         </div>
         <div style="padding:10px 18px 14px;font-size:12px;color:var(--muted);line-height:1.6">
@@ -8428,18 +8428,13 @@ function pgTenantDetail(tid) {
             ${!hasDocs ? `<div style="font-size:11px;color:var(--red);margin-top:2px">Not uploaded</div>` : ''}
           </div>
           <div style="flex-shrink:0">
-            ${hasDocs
-              ? `<!-- RULE: KYC upload — AI scan fires automatically via uploadTenantDoc → scanTenantDoc. Do NOT remove or simplify this slot. -->
-                 <label class="btn btn-sm btn-navy" style="cursor:pointer;margin:0;font-size:11px">+ Add another
-                   <input type="file" style="display:none" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onchange="uploadTenantDoc('${tid}','${s.slot}',this)">
-                 </label>`
-              : `<!-- RULE: KYC upload — AI badge MUST show in empty state. AI scan fires automatically on upload via uploadTenantDoc → scanTenantDoc. Do NOT revert to plain <label> button. -->
-                 <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-                   <label class="btn btn-sm btn-navy" style="cursor:pointer;margin:0;font-size:11px">Upload
-                     <input type="file" style="display:none" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onchange="uploadTenantDoc('${tid}','${s.slot}',this)">
-                   </label>
-                   <div style="font-size:10px;color:var(--blue);font-weight:600;white-space:nowrap">✦ AI auto-scan</div>
-                 </div>`}
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+              <!-- RULE: KYC upload — AI scan fires automatically via uploadTenantDoc → scanTenantDoc. Do NOT remove or simplify this slot. -->
+              <label class="btn btn-sm btn-navy" style="cursor:pointer;margin:0;font-size:11px">${hasDocs ? '+ Add another' : 'Upload'}
+                <input type="file" style="display:none" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onchange="uploadTenantDoc('${tid}','${s.slot}',this)">
+              </label>
+              <div style="font-size:10px;color:var(--blue);font-weight:600;white-space:nowrap">✦ AI auto-scan</div>
+            </div>
           </div>
         </div>
         ${hasDocs ? slotDocs.map((d,i) => renderDocCard(d, i === slotDocs.length - 1)).join('') : ''}
