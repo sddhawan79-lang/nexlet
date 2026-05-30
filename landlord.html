@@ -13,6 +13,7 @@
 :root{
   --navy:#0B1E3D;--navy-mid:#162F5C;
   --green:#E8923A;--green-dark:#B86E20;--green-bg:rgba(232,146,58,0.1);
+  --status-green:#00875A;--status-green-dark:#005C3B;--status-green-bg:rgba(0,135,90,0.09);
   --blue:#3B6FE8;--blue-bg:rgba(59,111,232,0.09);
   --red:#E53E3E;--red-bg:rgba(229,62,62,0.09);
   --amber:#D97706;--amber-bg:rgba(217,119,6,0.09);
@@ -94,7 +95,7 @@ html,body{height:100%;font-family:var(--font);color:var(--txt);background:var(--
 .ph2 h2{font-size:14px;font-weight:600;color:var(--txt)}
 .ph2 p{font-size:12px;color:var(--muted)}
 .badge{display:inline-flex;align-items:center;padding:2px 9px;border-radius:100px;font-size:11px;font-weight:600;white-space:nowrap}
-.b-green{background:var(--green-bg);color:var(--green-dark)}
+.b-green{background:var(--status-green-bg);color:var(--status-green-dark)}
 .b-red{background:var(--red-bg);color:var(--red)}
 .b-amber{background:var(--amber-bg);color:var(--amber)}
 .b-blue{background:var(--blue-bg);color:var(--blue)}
@@ -441,7 +442,7 @@ tr:hover td{background:rgba(246,248,251,.8)}
     </div>
   </div>
   <div id="sb-trial-chip" style="display:none"></div>
-  <div class="sb-feedback-link" style="text-align:center;padding:6px 10px 12px;font-size:10px;color:rgba(255,255,255,0.25);cursor:pointer" onclick="window.location.href='feedback.html'">Send feedback</div>
+  <div class="sb-feedback-link" style="text-align:center;padding:8px 10px 14px;font-size:11px;color:rgba(255,255,255,0.4);cursor:pointer;border-top:1px solid rgba(255,255,255,0.07);margin-top:4px" onclick="window.location.href='feedback.html'">Send feedback</div>
 </aside>
 
 <!-- MAIN CONTENT -->
@@ -1658,7 +1659,7 @@ async function initApp() {
     // Sidebar chip
     const chip = document.getElementById('sb-trial-chip');
     if (chip) {
-      if (isTrialing) { chip.style.display='block'; chip.innerHTML='<div style="background:linear-gradient(135deg,var(--green-bg),var(--green-bg));border:1px solid var(--green);border-radius:8px;padding:10px;margin:6px 10px;cursor:pointer;font-size:11px;text-align:center" onclick="showTrialUpgradeModal()"><div style="font-weight:700;color:var(--green-dark)">🎁 Founding price — upgrade now</div><div style="color:var(--muted);margin-top:2px">First 100 users lock price for life</div></div>'; }
+      if (isTrialing) { chip.style.display='block'; chip.innerHTML='<div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:7px;padding:7px 10px;margin:4px 10px 2px;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:space-between;gap:6px" onclick="showTrialUpgradeModal()"><span style="color:rgba(255,255,255,0.7);font-weight:500">🎁 Founding price available</span><span style="color:var(--green);font-weight:700;font-size:10px;white-space:nowrap">Upgrade →</span></div>'; }
       else if (hasExpired && plan==='trial') { chip.style.display='block'; chip.innerHTML='<div style="background:var(--red-bg);border:1px solid var(--red);border-radius:8px;padding:10px;margin:6px 10px;cursor:pointer;font-size:11px;text-align:center" onclick="showTrialExpiryPopup()"><div style="font-weight:700;color:var(--red)">⚠ Trial expired — upgrade now</div></div>'; }
       else { chip.style.display='none'; }
     }
@@ -5125,7 +5126,7 @@ function pgProperties(){
           :'<span style="font-size:11px;font-weight:600;color:'+ps.colour+';background:'+(_statusPillClr(p.status))+'0.1);padding:2px 8px;border-radius:100px;cursor:pointer" onclick="event.stopPropagation();moPropertyStatus(\''+p.id+'\')" title="Click to change status">'+ps.badge+' '+ps.label+'</span>'
         )
       +'</div>'
-      +'<div style="flex:1;text-align:right;font-size:13px;font-weight:600;color:var(--green-dark)">'+(p.rent?'£'+(p.rent).toLocaleString()+'/mo':'&#8212;')+'</div>'
+      +'<div style="flex:1;text-align:right;font-size:13px;font-weight:600;color:var(--txt)">'+(p.rent?'£'+(p.rent).toLocaleString()+'/mo':'&#8212;')+'</div>'
       +'<div style="flex:0.7;text-align:center">'
         +(openIssues>0?'<span style="font-size:11px;font-weight:600;color:'+(awaab?'#E53E3E':'#D97706')+'">'+(awaab?'⚠ ':'')+openIssues+' issue'+(openIssues!==1?'s':'')+' open</span>'
                      :'<span style="font-size:11px;color:var(--muted)">&#8212;</span>')
