@@ -3915,6 +3915,9 @@ async function _endTenancy(tid) {
       archived_at: now,
       end_reason: reason,
       end_date: endDate,
+      invite_token: null,
+      invite_used: false,
+      portal_enabled: false,
     }).eq('id', tid);
 
     if (error) { toast('Error: ' + error.message, true); btn.disabled = false; btn.innerHTML = '✔ End Tenancy'; return; }
@@ -3935,7 +3938,7 @@ async function _endTenancy(tid) {
     const allIds = window._endTenancyAllIds || [tid];
     const otherIds = allIds.filter(id => String(id) !== String(tid));
     if (otherIds.length) {
-      await sb.from('tenants').update({ status: 'Ended', archived: true, archived_at: now, end_reason: reason, end_date: endDate }).in('id', otherIds);
+      await sb.from('tenants').update({ status: 'Ended', archived: true, archived_at: now, end_reason: reason, end_date: endDate, invite_token: null, invite_used: false, portal_enabled: false }).in('id', otherIds);
       otherIds.forEach(oid => {
         const ot = D.tenants.find(x => String(x.id) === String(oid));
         if (ot) { ot.status = 'Ended'; ot.archived = true; ot.archived_at = now; ot.end_reason = reason; ot.end_date = endDate; }
