@@ -6162,7 +6162,7 @@ function pdTabContent(pid, tab) {
         <button class="btn btn-sm" onclick="moTenant('${pid}')" style="border-color:var(--green);color:var(--green-dark)">+ Add tenant</button>
       </div>
 
-      <div class="panel" style="margin-bottom:16px">
+      <div class="panel" style="margin-bottom:16px;border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)">
         <div class="ph2"><div><h2>✉ Email log</h2><p>Documents sent to tenants at this property</p></div><button class="btn btn-sm" onclick="nav('templates')">+ Send document</button></div>
         <div style="padding:14px 18px">${propEmailLogHtml(pid)}</div>
       </div>`
@@ -6193,7 +6193,7 @@ function pdTabContent(pid, tab) {
       </div>
 
       <!-- Property details -->
-      <div class="panel" style="margin-bottom:16px">
+      <div class="panel" style="margin-bottom:16px;border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)">
         <div class="ph2"><div><h2>🏠 Property details</h2></div><button class="btn btn-sm" onclick="moEditProp('${pid}')">✎ Edit</button></div>
         <div style="padding:14px 18px"><div class="det-grid">
           ${[['Address',p.address],['City',p.city],['Postcode',p.postcode],['Type',p.type||'—'],['Bedrooms',p.beds||'—'],['Bathrooms',p.bathrooms||'—'],['Monthly rent',p.rent?'£'+p.rent.toLocaleString():'—'],['Council tax band',p.council_tax_band||'—'],['EPC rating',p.epc_rating||'—'],['EPC expiry',FMS(p.epc_expiry)]].map(([l,v])=>`<div class="det-f"><label>${l}</label><span>${v}</span></div>`).join('')}
@@ -6674,7 +6674,7 @@ function pdTabContent(pid, tab) {
         <div class="mc" style="background:${awaab.length?'rgba(229,62,62,0.07)':'var(--off)'};border-color:transparent"><div class="mc-top"><span class="mc-label">Awaab flagged</span></div><div class="mc-val" style="color:${awaab.length?'var(--red)':'var(--muted)'}">${awaab.length}</div></div>
       </div>
 
-      <div class="panel">
+      <div class="panel" style="border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)">
         <div class="ph2"><div><h2>🔧 Issues</h2></div><button class="btn btn-sm btn-navy" onclick="moIssue('${pid}')">+ Report issue</button></div>
         ${allM.length
           ? `<div class="tw"><table><thead><tr><th>Date</th><th>Description</th><th>Priority</th><th>Flags</th><th>Status</th></tr></thead>
@@ -7541,7 +7541,7 @@ function pgCompliance(){
       </div>
 
       ${(window._compView||'full')==='action' ? `
-        <div class="panel" id="comp-action-list">
+        <div class="panel" id="comp-action-list" style="border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)">
           <div class="ph2"
             style="flex-wrap:wrap;gap:8px">
             <div>
@@ -8094,7 +8094,7 @@ function pgReminders() {
       ${cards}
     </div>
 
-    <div class="panel">
+    <div class="panel" style="border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)">
       <div class="ph2"><div><h2>Recent reminders sent</h2><p>Last 10 reminders fired</p></div></div>
       <div style="padding:0">
         ${(()=>{
@@ -8296,7 +8296,7 @@ function pgTenantDetail(tid) {
     ['Rent due',      t.rent_day ? `${t.rent_day}${['','st','nd','rd'][t.rent_day]||'th'} of month` : '—'],
   ];
   const tenancyCard = `
-    <div class="panel" style="margin-bottom:16px">
+    <div class="panel" style="margin-bottom:16px;border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)">
       <div class="ph2">
         <div><h2>Tenancy Details</h2><p>${p.address}</p></div>
         <div style="display:flex;gap:6px">
@@ -8354,7 +8354,7 @@ function pgTenantDetail(tid) {
   } catch(e) { portalCard = ''; }
 
   const checklistCard = `
-    <div class="panel" style="margin-bottom:16px">
+    <div class="panel" style="margin-bottom:16px;border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)">
       <div class="ph2"><div><h2>📋 Compliance Checklist</h2><p>5 items — click to expand and update</p></div></div>
       <div style="padding:0 18px 12px">${checklistHtml}</div>
     </div>`;
@@ -8501,7 +8501,7 @@ function pgTenantDetail(tid) {
   const day30Done = day30Items.filter(i=>i.done).length;
   const journeyCards = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
-      <div class="panel">
+      <div class="panel" style="border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)">
         <div class="ph2" style="padding:12px 16px">
           <div>
             <div style="font-size:13px;font-weight:700">🗓 Day 1 Pack</div>
@@ -8511,7 +8511,7 @@ function pgTenantDetail(tid) {
         </div>
         <div style="padding:4px 16px 12px">${day1Items.map(mkJourneyRow).join('')}</div>
       </div>
-      <div class="panel">
+      <div class="panel" style="border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)">
         <div class="ph2" style="padding:12px 16px">
           <div>
             <div style="font-size:13px;font-weight:700">📆 Day 30 Pack</div>
@@ -8575,13 +8575,13 @@ function pgTenantDetail(tid) {
       ${portalCard}
       ${tenancyCard}
 
-      <div id="kyc-docs-section" class="panel" style="margin-bottom:16px">
+      <div id="kyc-docs-section" class="panel" style="margin-bottom:16px;border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)">
         <div style="padding:14px 18px">${kycRows}</div>
       </div>
 
       ${journeyCards}
 
-      <div class="panel">
+      <div class="panel" style="border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)">
         <div class="ph2"><div><h2>📨 Communications</h2><p>All documents &amp; correspondence sent to this tenant</p></div>
           <button class="btn btn-sm btn-navy" onclick="moCommunicationsHub('${tid}')">+ Send document</button>
         </div>
@@ -10950,7 +10950,7 @@ function pgFinancials(){
       <div class="mc"><div class="mc-top"><span class="mc-label">Maintenance costs</span><div class="mc-icon">🔧</div></div><div class="mc-val" style="color:var(--amber)">£${Math.round(totMaint).toLocaleString()}</div><div class="mc-sub">Avg monthly (real data)</div></div>
       <div class="mc"><div class="mc-top"><span class="mc-label">Net profit</span><div class="mc-icon">📈</div></div><div class="mc-val" style="color:${totProfit>=0?'var(--green-dark)':'var(--red)'}">£${Math.round(totProfit).toLocaleString()}</div><div class="mc-sub">Per month after all costs</div></div>
     </div>
-    <div class="panel">
+    <div class="panel" style="border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)">
       <div class="ph2"><h2>Property breakdown</h2><p>Per property P&L — click Detail for monthly view</p></div>
       <div class="tw"><table>
         <thead><tr><th>Property</th><th>Monthly rent</th><th>Expenses</th><th>Net profit</th><th>Yield</th><th></th></tr></thead>
@@ -11445,7 +11445,7 @@ function pgDocLibrary(){
   const propOpts = props.map(p=>`<option value="${p.id}">${p.address}</option>`).join('');
   return `<div class="content">
     <div class="ph"><h1>📁 Document Library</h1><p>Upload and store any landlord document — tenancy agreements, correspondence, licences, anything not in compliance checklists.</p></div>
-    <div class="panel" style="margin-bottom:18px">
+    <div class="panel" style="margin-bottom:18px;border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)">
       <div class="ph2"><h2>Upload Document</h2></div>
       <div style="padding:0 18px 18px;display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end">
         <div class="fg"><label>Document Name</label><input type="text" id="dl-name" placeholder="e.g. Tenancy Agreement 2024" class="fi"></div>
@@ -11454,7 +11454,7 @@ function pgDocLibrary(){
         <button class="btn btn-navy" onclick="dlUpload()">Upload</button>
       </div>
     </div>
-    <div class="panel">
+    <div class="panel" style="border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)">
       <div class="ph2"><h2>Stored Documents</h2><span style="font-size:12px;color:var(--muted)">${docs.length} document${docs.length!==1?'s':''}</span></div>
       <div style="padding:0 18px 18px">
         ${docs.length===0?`<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">No documents uploaded yet. Use the form above to add your first document.</div>`
