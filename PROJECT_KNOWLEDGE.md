@@ -2819,3 +2819,88 @@ Visual rule: navy left border = key feature / action panel. Data/table-only pane
 | 7 | WhatsApp reminders | Post-launch backlog |
 | 8 | Free public compliance checker | Marketing priority |
 | 9 | Blog / content hub | Marketing priority |
+
+---
+
+### Session 27 — 31 May 2026 — Pre-Launch Branding Fix + Dashboard Wow Factor + Compliance Checklist AI Scanner
+
+**Date:** 31 May 2026
+**Files modified:** `landlord.html`, `tenant.html`
+
+---
+
+#### 1. Tenant portal branding — `tenant.html` (Issues 1 & 4)
+
+Two hardcoded `Rent<span>Safe</span> AI` strings remained in `tenant.html` from the original brand. Both replaced with `Nex<span>Let</span>`:
+
+| Location | Old | New |
+|---|---|---|
+| Loading screen (`div.loading-logo`) | `Rent<span>Safe</span> AI` | `Nex<span>Let</span>` |
+| Portal header topbar (`div.portal-logo`) | `Rent<span>Safe</span> AI` | `Nex<span>Let</span>` |
+
+Both use existing CSS classes (`.loading-logo`, `.portal-logo`) which apply the navy + green split — renders as **Nex**<span style="color:green">**Let**</span> matching the main app.
+
+---
+
+#### 2. Dashboard — Portfolio Health Score ring + micro-charts (Issue 2)
+
+**New: Portfolio Health Score ring** — inserted above the `.metrics` grid in `pgDashboard()`.
+
+- SVG circular progress dial (0–100) colour-coded: ≥80 green, ≥50 amber, <50 red
+- Score formula (100 pts total):
+  - **Certificates (30pts)** — `validCerts / totalCerts × 30`
+  - **Rent (30pts)** — `(totalRent - lateRent) / totalRent × 30`
+  - **Maintenance (20pts)** — deducted for Awaab open / urgent / count
+  - **KYC (20pts)** — `tenantsWithFullKYC / activeTeants × 20`
+- Four mini horizontal progress bars below the ring (one per component)
+- Entire card clickable → `nav('compliance')`
+
+**Enhanced stat cards** — all four cards now include a micro progress bar at the bottom:
+
+| Card | Metric | Bar shows |
+|---|---|---|
+| Properties | Occupancy % | `activeTenants / activeProps × 100` |
+| Monthly rent | Collection rate % | `paidRent / totalRent × 100` |
+| Certificates *(new — replaces Active tenants)* | Valid cert % | `(certCount - issues) / certCount × 100` |
+| Open issues | Resolved % | `resolved / totalMaintenance × 100` |
+
+Note: "Active tenants" card removed — occupancy bar on Properties card conveys same info more efficiently. Certificates card added as standalone metric with expiry tracking.
+
+---
+
+#### 3. Compliance checklist — AI scanner on upload (Issue 3)
+
+**New constant:** `CHECKLIST_UPLOAD_SLOTS` — maps checklist keys to KYC upload slots:
+
+```js
+const CHECKLIST_UPLOAD_SLOTS = {
+  rtr:       { slot: 'right_to_rent', label: 'Upload R2R doc' },
+  id_docs:   { slot: 'passport',      label: 'Upload ID doc' },
+  agreement: { slot: 'agreement',     label: 'Upload agreement' },
+};
+```
+
+**`_checklistRowHtml()` updated:**
+- Rows with an upload slot (`rtr`, `id_docs`, `agreement`) now show:
+  - `✦ AI scan` badge pill in the collapsed row header
+  - Upload button inside the expanded detail panel, wired to `uploadTenantDoc(tid, slot, input)` → auto-triggers `scanTenantDoc()` exactly as KYC section does
+  - After scan: shows extracted name, doc type, expiry + name match / mismatch indicator
+  - "↺ Replace" label if a doc already exists for that slot
+- Rows without an upload slot (`deposit_protection`, `rent_guarantee`, `insurance`) — unchanged, manual status dropdown only
+- Scan results pulled from `D.tenantDocs` filtered by `tenant_id` + `slot` — no new Supabase table needed
+
+---
+
+#### Known issues updated
+
+| # | Issue | Status |
+|---|---|---|
+| 1 | ICO number placeholder in legal docs | Pending registration |
+| 2 | MX record for inbound email | Parked post-launch |
+| 3 | `login.html` newsletter signup checkbox | Not built |
+| 4 | `moFinancials` PDF export — jsPDF needed | Post-launch backlog |
+| 5 | Section 8 UX handoff to Form 3A | Post-launch backlog |
+| 6 | Dual e-sign flow — partially built, not complete | Post-launch backlog |
+| 7 | WhatsApp reminders | Post-launch backlog |
+| 8 | Free public compliance checker | Marketing priority |
+| 9 | Blog / content hub | Marketing priority |
