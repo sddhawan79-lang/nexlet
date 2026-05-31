@@ -2721,3 +2721,101 @@ Post-launch UI upgrade pass targeting enterprise SaaS aesthetics. All changes ar
 |---|---|
 | Tenant detail KYC duplication | Sticky summary bar (`stickyCard`) at top of tenant detail repeats "🗂 KYC Documents" heading + pills that are already shown in full section below. Remove sticky bar or collapse it to a minimal status chip only |
 
+
+---
+
+### Session 27 — 31 May 2026 — UI Polish, Navy Border Treatment & Competitive Audit
+
+#### Navy left-border panel treatment — applied app-wide
+All key feature panels now have `border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)`. Applied to 15 panels:
+
+| Panel | Location in file |
+|---|---|
+| ✉ Email log | Property detail (pgPropDetail) |
+| 🏠 Property details | Property detail |
+| 🔧 Issues | Property detail |
+| Compliance action list (`#comp-action-list`) | pgComplianceSection |
+| Recent reminders sent | pgReminders |
+| Tenancy Details | pgTenantDetail |
+| 📋 Compliance Checklist | pgTenantDetail |
+| 🗓 Day 1 Pack | pgTenantDetail |
+| 📆 Day 30 Pack | pgTenantDetail |
+| KYC Documents (`#kyc-docs-section`) | pgTenantDetail |
+| 📨 Communications | pgTenantDetail |
+| 🏠 Tenant Portal card | pgTenantDetail (pre-existing from Session 26) |
+| Property breakdown | pgFinancials |
+| Upload Document | pgDocLibrary |
+| Stored Documents | pgDocLibrary |
+
+Visual rule: navy left border = key feature / action panel. Data/table-only panels (e.g. rent ledger rows, kanban task rows) do not get this treatment.
+
+#### Completed earlier this session (pre-compaction)
+- **KYC section deduplication** — removed redundant `<h2>🗂 KYC Documents</h2>` + `<p>` subheading from `#kyc-docs-section` panel body (sticky bar retained)
+- **Tenant portal token rename** — `rsa_tenant_token` → `nxl_tenant_token` (5 occurrences in `tenant.html`)
+- **Tenant portal: Ended tenancy** — `handleToken()` checks for `status === 'Ended'` and shows "Tenancy ended — portal access no longer active"
+- **`moEndTenancy()`** — now nulls `invite_token`, `invite_used`, `portal_enabled` for primary AND co-tenants on the same property
+- **`newsletter_opted_in` column** — added `newsletter_opted_in BOOLEAN DEFAULT NULL` and `newsletter_opted_at TIMESTAMPTZ DEFAULT NULL` to `user_profiles` (default NULL = never chosen, not false)
+- **`stripe_price_id` webhook fix** — deployed `stripe-webhook.ts` fix: changed `price_id` → `stripe_price_id` in both `checkout.session.completed` upsert and `customer.subscription.updated` update
+- **`favicon.ico`** — generated white "N" on NEXLET navy (#0B1E3D) circular background, 16×16 + 32×32 ICO. Added `<link rel="icon">` to `landlord.html` and `tenant.html`. File pushed to GitHub repo root.
+- **AI badge on all tenant doc upload buttons** — `✦ AI auto-scan` badge shown on both empty-state and has-docs "Add another" upload buttons
+- **Tenant portal open link** — changed from hardcoded `https://nexlet.co.uk/tenant.html` to `${window.location.origin}/tenant.html`
+
+#### Competitive intelligence audit — LetCompliance vs NEXLET (May 2026)
+
+**LetCompliance confirmed features (from their live site):**
+- 0–100 compliance score, 6 areas
+- Gas / EICR / EPC / deposit / Right to Rent tracking
+- Email + WhatsApp reminders at 90/30/14/7/1 days
+- Section 8 — 14 grounds only
+- SA105 tax pack, MTD quarterly summary, Section 24 calculator
+- Tenant portal (Standard plan only)
+- Free public compliance checker (no signup)
+- Full editorial blog / content hub driving SEO
+- AES-256 / GDPR trust badges in nav
+- £14.99/mo from, 7-day trial
+
+**NEXLET exclusive advantages:**
+1. All 37 RRA 2025 Section 8 grounds (vs their 14) — headline differentiator
+2. AI document scanner on every upload (name mismatch warnings) — not offered by competitor
+3. 30-day free trial, no card (vs their 7 days)
+4. Founding member pricing from £4.99/mo, locked for life (no equivalent at LetCompliance)
+5. Dual e-sign flow (landlord signs first, tenant counter-signs) — not offered
+6. Awaab's Law 24h/7d/14d SLA engine — not offered
+7. Prescribed Information PDF generator — not offered
+8. Right-to-Rent share code wizard — not offered
+9. Ground 8 arrears auto-calculator — not offered
+10. Powered by Claude / Anthropic (they use Gemini)
+11. White-label agent portal planned (Portfolio tier)
+
+**NEXLET gaps vs LetCompliance (to close):**
+1. WhatsApp reminders — they promote heavily, NEXLET email-only
+2. Free public compliance checker (no signup) — high SEO value
+3. Blog / content hub — they rank for every landlord compliance keyword
+4. Trust badges (AES-256, GDPR, ICO) not yet prominent on landing page
+5. Section 21 urgency messaging — they own "Section 21 is gone. Are you ready?"
+
+#### Landing page marketing recommendations (priority order)
+
+1. **[HIGH] Rewrite hero headline** — lead with court loss fear: "Section 21 is dead. Miss one of the 37 Section 8 grounds and your possession case fails. NEXLET is the only tool built around all 37."
+2. **[HIGH] Named competitor comparison table** — 3-column table on landing page: NEXLET vs LetCompliance on 37 grounds, trial length, price. Converts extremely well.
+3. **[HIGH] Founding price urgency counter** — "87 founding slots taken. 13 remaining." Live counter on hero. Drives urgency.
+4. **[MED] AI scanner as headline feature** — dedicated section with "✦ AI scan complete" badge demo. No other landlord tool does this.
+5. **[MED] E-sign proof point** — frame as court-admissible evidence with dual audit trail, not just convenience.
+6. **[MED] Trust badges** — add AES-256 / GDPR / ICO (when registered) / Co. No. above the fold.
+7. **[LOW] Founder story specificity** — add real numbers: properties managed, Section 8 notices served, compliance checks run.
+
+**Positioning statement (for landing, social, email):**
+"NEXLET is the only UK landlord compliance platform built for all 37 RRA 2025 Section 8 grounds — with AI document scanning, dual e-sign, and founding member pricing from £4.99/mo."
+
+#### Known issues still open
+| # | Issue | Status |
+|---|---|---|
+| 1 | ICO number placeholder in legal docs | Pending registration |
+| 2 | MX record for inbound email | Parked post-launch |
+| 3 | `login.html` newsletter signup checkbox | Not built |
+| 4 | `moFinancials` PDF export — jsPDF needed | Post-launch backlog |
+| 5 | Section 8 UX handoff to Form 3A | Post-launch backlog |
+| 6 | Dual e-sign flow — partially built, not complete | Post-launch backlog |
+| 7 | WhatsApp reminders | Post-launch backlog |
+| 8 | Free public compliance checker | Marketing priority |
+| 9 | Blog / content hub | Marketing priority |

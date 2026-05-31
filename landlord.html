@@ -3795,21 +3795,48 @@ function _checklistRAG(tenant, key) {
 }
 
 /** Renders one checklist row as HTML (for tenant detail or list) */
+// Checklist keys that support document upload + AI scan
+const CHECKLIST_UPLOAD_SLOTS = {
+  rtr:        { slot: 'right_to_rent', label: 'Upload R2R doc' },
+  id_docs:    { slot: 'passport',      label: 'Upload ID doc' },
+  agreement:  { slot: 'agreement',     label: 'Upload agreement' },
+};
+
 function _checklistRowHtml(tenant, itemDef) {
   const item = _checklistRAG(tenant, itemDef.key);
   const col = RAG_COLORS[item.ra] || RAG_COLORS.red;
   const statusText = item.status || 'Incomplete';
   const detailText = item.detail || '';
   const tid = tenant?.id || '';
+  const uploadSlot = CHECKLIST_UPLOAD_SLOTS[itemDef.key];
+
+  // Find existing scanned docs for this slot
+  const slotDocs = uploadSlot
+    ? (D.tenantDocs||[]).filter(d => String(d.tenant_id)===String(tid) && d.slot===uploadSlot.slot)
+    : [];
+  const latestDoc = slotDocs.length ? slotDocs[slotDocs.length-1] : null;
+
+  // Build AI scan result snippet if available
+  const scanSnippet = latestDoc?.extracted_name ? `
+    <div style="margin-top:6px;padding:6px 8px;background:${latestDoc.name_mismatch?'rgba(229,62,62,0.05)':'rgba(16,185,129,0.05)'};border:1px solid ${latestDoc.name_mismatch?'rgba(229,62,62,0.2)':'rgba(16,185,129,0.2)'};border-radius:5px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:3px">✦ AI Scanned</div>
+      <div style="font-size:11px;display:flex;flex-wrap:wrap;gap:3px 12px">
+        ${latestDoc.extracted_name?`<span><span style="color:var(--muted)">Name:</span> <strong>${latestDoc.extracted_name}</strong></span>`:''}
+        ${latestDoc.doc_type_extracted?`<span><span style="color:var(--muted)">Type:</span> <strong>${latestDoc.doc_type_extracted}</strong></span>`:''}
+        ${latestDoc.extracted_expiry?`<span><span style="color:var(--muted)">Expiry:</span> <strong>${latestDoc.extracted_expiry}</strong></span>`:''}
+      </div>
+      ${latestDoc.name_mismatch?`<div style="font-size:10px;font-weight:600;color:var(--red);margin-top:3px">⚠ Name mismatch — check document</div>`:'<div style="font-size:10px;font-weight:600;color:var(--green-dark);margin-top:3px">✓ Name matched</div>'}
+    </div>` : (latestDoc && !latestDoc.extracted_name ? `<div style="margin-top:4px;font-size:10px;color:var(--muted)">⏳ Scanning… refresh in a moment</div>` : '');
 
   return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);cursor:pointer"
         onclick="toggleChecklistItem(this,'${tid}','${itemDef.key}')" title="Click to expand">
     <span style="width:10px;height:10px;border-radius:50%;background:${col};flex-shrink:0"></span>
     <span style="font-size:12px;font-weight:500;color:var(--txt);flex:1">${itemDef.icon} ${itemDef.label}</span>
+    ${uploadSlot ? `<span style="font-size:9px;font-weight:700;color:var(--blue);background:rgba(59,111,232,0.08);padding:1px 6px;border-radius:100px;margin-right:2px">✦ AI scan</span>` : ''}
     <span style="font-size:11px;color:${col};font-weight:600">${statusText}</span>
     <span style="font-size:10px;color:var(--muted)">▾</span>
   </div>
-  <div class="checklist-detail" id="cl-detail-${tid}-${itemDef.key}" style="display:none;padding:6px 0 6px 18px;font-size:11px;color:var(--muted)">
+  <div class="checklist-detail" id="cl-detail-${tid}-${itemDef.key}" style="display:none;padding:8px 0 8px 18px;font-size:11px;color:var(--muted)">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
       <span>Status:</span>
       <select id="cl-ra-${tid}-${itemDef.key}" onchange="_onChecklistChange('${tid}','${itemDef.key}')" style="font-size:11px;padding:2px 6px;border-radius:4px;border:1px solid var(--border);font-family:var(--font)">
@@ -3819,9 +3846,22 @@ function _checklistRowHtml(tenant, itemDef) {
       </select>
     </div>
     <div style="margin-bottom:4px"><input id="cl-inp-${tid}-${itemDef.key}" class="fi" placeholder="Add details…" value="${detailText.replace(/"/g,'&quot;')}" style="width:100%;font-size:11px;padding:4px 6px" onchange="_onChecklistDetailChange('${tid}','${itemDef.key}',this.value)"></div>
-    <div style="display:flex;align-items:center;gap:8px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:${uploadSlot?'8px':'0'}">
       <span>Date:</span><input type="date" id="cl-date-${tid}-${itemDef.key}" value="${item.date||''}" style="font-size:11px;padding:2px 6px;border-radius:4px;border:1px solid var(--border);font-family:var(--font)" onchange="_onChecklistDateChange('${tid}','${itemDef.key}',this.value)">
     </div>
+    ${uploadSlot ? `
+    <div style="padding:8px 10px;background:var(--off);border:1px solid var(--border);border-radius:6px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--txt)">${latestDoc ? `📎 ${latestDoc.doc_label||latestDoc.file_name||'File uploaded'}` : 'No document uploaded yet'}</div>
+          <div style="font-size:10px;color:var(--blue);font-weight:600;margin-top:1px">✦ AI will auto-scan on upload</div>
+        </div>
+        <label class="btn btn-sm btn-navy" style="cursor:pointer;margin:0;font-size:11px;flex-shrink:0" id="cl-upload-lbl-${tid}-${itemDef.key}">${latestDoc?'↺ Replace':'Upload'}
+          <input type="file" style="display:none" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onchange="uploadTenantDoc('${tid}','${uploadSlot.slot}',this);moTenantDetail('${tid}')">
+        </label>
+      </div>
+      ${scanSnippet}
+    </div>` : ''}
   </div>`;
 }
 
@@ -4974,31 +5014,109 @@ function pgDashboard(){
       </div>`;
     })()}
 
+    ${(function(){
+      // ── Compliance Health Score Ring ──
+      const _allTenants = D.tenants.filter(t=>t.status==='Active');
+      const _propCount  = D.properties.filter(p=>(p.status||'active')!=='archived').length;
+      const _certChecks = D.certs.filter(c=>{
+        if(!c.expiry_date) return false;
+        return new Date(c.expiry_date) > new Date();
+      }).length;
+      const _totalCerts = D.certs.length;
+      // Score components (0-100):
+      // 1. Cert validity (30pts)
+      const certScore  = _totalCerts>0 ? Math.round((_certChecks/_totalCerts)*30) : 30;
+      // 2. Rent health (30pts)
+      const _lateR = D.rent.filter(r=>r.status==='Late').length;
+      const _totalR= D.rent.filter(r=>['Paid','Late','Due'].includes(r.status)).length;
+      const rentScore = _totalR>0 ? Math.round(((_totalR-_lateR)/_totalR)*30) : 30;
+      // 3. Maintenance (20pts)
+      const _awaabO = D.maintenance.filter(m=>m.awaab&&m.status!=='Resolved').length;
+      const _urgO   = D.maintenance.filter(m=>m.priority==='Urgent'&&m.status!=='Resolved').length;
+      const maintScore = _awaabO>0 ? 0 : _urgO>0 ? 8 : open>3 ? 12 : open>0 ? 16 : 20;
+      // 4. KYC (20pts)
+      const _kycScore = _allTenants.length===0 ? 20 : Math.round((_allTenants.filter(t=>{
+        const cl=t.compliance_checklist||{}; const keys=['rtr','id_docs','agreement'];
+        return keys.every(k=>(cl[k]?.ra||'red')==='green');
+      }).length/_allTenants.length)*20);
+      const healthScore = Math.min(100, certScore+rentScore+maintScore+_kycScore);
+      const hsCol = healthScore>=80?'#10B981':healthScore>=50?'#D97706':'#E53E3E';
+      const hsLabel = healthScore>=80?'Healthy':healthScore>=50?'Needs attention':'At risk';
+      // SVG ring
+      const R=28,C=2*Math.PI*R,fill=C*(healthScore/100);
+      const ringHtml = `<svg width="72" height="72" viewBox="0 0 72 72">
+        <circle cx="36" cy="36" r="${R}" fill="none" stroke="var(--border)" stroke-width="6"/>
+        <circle cx="36" cy="36" r="${R}" fill="none" stroke="${hsCol}" stroke-width="6"
+          stroke-dasharray="${fill} ${C}" stroke-dashoffset="${C*0.25}" stroke-linecap="round"
+          style="transition:stroke-dasharray 1s ease"/>
+        <text x="36" y="40" text-anchor="middle" font-size="14" font-weight="700" fill="${hsCol}" font-family="var(--font)">${healthScore}</text>
+      </svg>`;
+      return `<div style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:20px;box-shadow:0 1px 3px rgba(0,0,0,0.06);cursor:pointer" onclick="nav('compliance')" title="View compliance">
+        <div style="flex-shrink:0">${ringHtml}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:4px">Portfolio Health Score</div>
+          <div style="font-size:18px;font-weight:700;color:${hsCol};margin-bottom:6px">${hsLabel}</div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <div style="display:flex;flex-direction:column;gap:2px;min-width:80px">
+              <div style="font-size:10px;color:var(--muted)">Certificates</div>
+              <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden"><div style="height:100%;width:${certScore/30*100}%;background:${certScore===30?'#10B981':'#D97706'};border-radius:2px;transition:width .8s ease"></div></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:2px;min-width:80px">
+              <div style="font-size:10px;color:var(--muted)">Rent</div>
+              <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden"><div style="height:100%;width:${rentScore/30*100}%;background:${rentScore===30?'#10B981':'#E53E3E'};border-radius:2px;transition:width .8s ease"></div></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:2px;min-width:80px">
+              <div style="font-size:10px;color:var(--muted)">Maintenance</div>
+              <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden"><div style="height:100%;width:${maintScore/20*100}%;background:${maintScore===20?'#10B981':maintScore>=12?'#D97706':'#E53E3E'};border-radius:2px;transition:width .8s ease"></div></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:2px;min-width:80px">
+              <div style="font-size:10px;color:var(--muted)">KYC</div>
+              <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden"><div style="height:100%;width:${_kycScore/20*100}%;background:${_kycScore===20?'#10B981':_kycScore>=10?'#D97706':'#E53E3E'};border-radius:2px;transition:width .8s ease"></div></div>
+            </div>
+          </div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:11px;color:var(--muted)">View full report →</div>
+        </div>
+      </div>`;
+    })()}
     <div class="metrics">
       ${(function(){
         // ── Trend & colour computations ──
         const _propCount = D.properties.length;
         const _propColor = _propCount > 0 ? 'var(--green-dark)' : 'var(--muted)';
+        const _propArchived = D.properties.filter(p=>(p.status||'active')==='archived').length;
+        const _propVacant   = D.properties.filter(p=>p.status==='vacant').length;
 
         const _active = D.tenants.filter(t=>t.status==='Active').length;
-        const _vacancies = _propCount - _active;
+        const _vacancies = D.properties.filter(p=>(p.status||'active')!=='archived').length - _active;
         const _occ = _propCount > 0 ? Math.round((_active/_propCount)*100) : 0;
-        const _tenantColor = _propCount===0 ? 'var(--muted)' : _vacancies===0 ? 'var(--green-dark)' : _occ>=50 ? 'var(--amber)' : 'var(--red)';
-        const _tenantTrend = _propCount===0 ? '' : _vacancies===0
+        const _tenantColor = _propCount===0 ? 'var(--muted)' : _vacancies<=0 ? 'var(--green-dark)' : _occ>=50 ? 'var(--amber)' : 'var(--red)';
+        const _tenantTrend = _propCount===0 ? '' : _vacancies<=0
           ? `<span style="color:var(--green-dark)">↑ Full occupancy</span>`
           : `<span style="color:var(--amber)">↓ ${_vacancies} vacant</span>`;
+        // Occupancy bar
+        const _occPct = Math.max(0, Math.min(100, _occ));
+        const _occBar = `<div style="margin-top:6px"><div style="display:flex;justify-content:space-between;margin-bottom:2px"><span style="font-size:10px;color:var(--muted)">Occupancy</span><span style="font-size:10px;font-weight:600;color:${_tenantColor}">${_occPct}%</span></div><div style="height:3px;background:var(--border);border-radius:2px;overflow:hidden"><div style="height:100%;width:${_occPct}%;background:${_occPct===100?'#10B981':_occPct>=50?'#D97706':'#E53E3E'};border-radius:2px;transition:width .8s ease"></div></div></div>`;
 
         const _lateRent = D.rent.filter(r=>r.status==='Late').length;
         const _dueRent  = D.rent.filter(r=>r.status==='Due').length;
+        const _paidRent = D.rent.filter(r=>r.status==='Paid').length;
+        const _totalRent= D.rent.filter(r=>['Paid','Late','Due'].includes(r.status)).length;
         const _rentColor = _lateRent>0 ? 'var(--red)' : tot>0 ? 'var(--green-dark)' : 'var(--muted)';
         const _rentTrend = _lateRent>0
           ? `<span style="color:var(--red)">↓ ${_lateRent} late</span>`
           : _dueRent>0
             ? `<span style="color:var(--amber)">— ${_dueRent} due</span>`
             : _active>0 ? `<span style="color:var(--green-dark)">↑ All paid</span>` : '';
+        // Rent collection bar
+        const _collPct = _totalRent>0 ? Math.round((_paidRent/_totalRent)*100) : 100;
+        const _rentBar = _totalRent>0 ? `<div style="margin-top:6px"><div style="display:flex;justify-content:space-between;margin-bottom:2px"><span style="font-size:10px;color:var(--muted)">Collection rate</span><span style="font-size:10px;font-weight:600;color:${_collPct===100?'var(--green-dark)':_collPct>=70?'var(--amber)':'var(--red)'}">${_collPct}%</span></div><div style="height:3px;background:var(--border);border-radius:2px;overflow:hidden"><div style="height:100%;width:${_collPct}%;background:${_collPct===100?'#10B981':_collPct>=70?'#D97706':'#E53E3E'};border-radius:2px;transition:width .8s ease"></div></div></div>` : '';
 
         const _awaabOpen   = D.maintenance.filter(m=>m.awaab&&m.status!=='Resolved').length;
         const _urgentOpen  = D.maintenance.filter(m=>m.priority==='Urgent'&&m.status!=='Resolved').length;
+        const _resolved    = D.maintenance.filter(m=>m.status==='Resolved').length;
+        const _totalMaint  = D.maintenance.length;
         const _issueColor  = (_awaabOpen>0||_urgentOpen>0) ? 'var(--red)' : open>3 ? 'var(--red)' : open>0 ? 'var(--amber)' : 'var(--green-dark)';
         const _issueTrend  = _awaabOpen>0
           ? `<span style="color:var(--red)">↑ ${_awaabOpen} Awaab</span>`
@@ -5006,30 +5124,44 @@ function pgDashboard(){
             ? `<span style="color:var(--red)">↑ ${_urgentOpen} urgent</span>`
             : open>0 ? `<span style="color:var(--amber)">— ${open} open</span>`
                      : `<span style="color:var(--green-dark)">↑ All clear</span>`;
+        // Resolution bar
+        const _resPct = _totalMaint>0 ? Math.round((_resolved/_totalMaint)*100) : 100;
+        const _maintBar = _totalMaint>0 ? `<div style="margin-top:6px"><div style="display:flex;justify-content:space-between;margin-bottom:2px"><span style="font-size:10px;color:var(--muted)">Resolved</span><span style="font-size:10px;font-weight:600;color:${_resPct>=80?'var(--green-dark)':_resPct>=50?'var(--amber)':'var(--red)'}">${_resPct}%</span></div><div style="height:3px;background:var(--border);border-radius:2px;overflow:hidden"><div style="height:100%;width:${_resPct}%;background:${_resPct>=80?'#10B981':_resPct>=50?'#D97706':'#E53E3E'};border-radius:2px;transition:width .8s ease"></div></div></div>` : '';
+
+        // Expiring certs in next 30 days
+        const _soon30 = D.certs.filter(c=>{if(!c.expiry_date)return false;const d=(new Date(c.expiry_date)-new Date())/864e5;return d>=0&&d<=30;}).length;
+        const _expired = D.certs.filter(c=>{if(!c.expiry_date)return false;return new Date(c.expiry_date)<new Date();}).length;
+        const _certIssues = _expired + _soon30;
+        const _certColor = _expired>0?'var(--red)':_soon30>0?'var(--amber)':'var(--green-dark)';
+        const _certTrend = _expired>0?`<span style="color:var(--red)">↑ ${_expired} expired</span>`:_soon30>0?`<span style="color:var(--amber)">— ${_soon30} expiring</span>`:`<span style="color:var(--green-dark)">↑ All valid</span>`;
+        const _certCount = D.certs.filter(c=>(c.status||'').toLowerCase()!=='archived').length;
+        const _certPct = _certCount>0 ? Math.max(0, Math.min(100, Math.round(((_certCount-_certIssues)/_certCount)*100))) : 100;
+        const _certBar = _certCount>0 ? `<div style="margin-top:6px"><div style="display:flex;justify-content:space-between;margin-bottom:2px"><span style="font-size:10px;color:var(--muted)">Valid certs</span><span style="font-size:10px;font-weight:600;color:${_certColor}">${_certPct}%</span></div><div style="height:3px;background:var(--border);border-radius:2px;overflow:hidden"><div style="height:100%;width:${_certPct}%;background:${_certPct>=80?'#10B981':_certPct>=50?'#D97706':'#E53E3E'};border-radius:2px;transition:width .8s ease"></div></div></div>` : '';
 
         return `
         <div class="mc" style="cursor:pointer" onclick="nav('properties')" title="View all properties">
           <div class="mc-top"><span class="mc-label">Properties</span><div class="mc-icon">🏠</div></div>
           <div class="mc-val" style="color:${_propColor}">${_propCount}</div>
-          <div class="mc-sub">Active</div>
-        </div>
-        <div class="mc" style="cursor:pointer" onclick="nav('tenants')" title="View all tenants">
-          <div class="mc-top"><span class="mc-label">Active tenants</span><div class="mc-icon">👤</div></div>
-          <div class="mc-val" style="color:${_tenantColor}">${_active}</div>
-          ${_tenantTrend?`<div class="mc-trend">${_tenantTrend}</div>`:''}
-          <div class="mc-sub">All active</div>
+          ${_tenantTrend?`<div class="mc-trend">${_tenantTrend}</div>`:'<div class="mc-sub">Active</div>'}
+          ${_occBar}
         </div>
         <div class="mc" style="cursor:pointer" onclick="nav('rent')" title="View rent records">
           <div class="mc-top"><span class="mc-label">Monthly rent</span><div class="mc-icon">💷</div></div>
           <div class="mc-val" style="color:${_rentColor}">£${tot.toLocaleString()}</div>
           ${_rentTrend?`<div class="mc-trend">${_rentTrend}</div>`:''}
-          <div class="mc-sub">Total portfolio</div>
+          ${_rentBar}
+        </div>
+        <div class="mc" style="cursor:pointer" onclick="nav('compliance')" title="View certificates">
+          <div class="mc-top"><span class="mc-label">Certificates</span><div class="mc-icon">📋</div></div>
+          <div class="mc-val" style="color:${_certColor}">${_certCount}</div>
+          ${_certTrend?`<div class="mc-trend">${_certTrend}</div>`:''}
+          ${_certBar}
         </div>
         <div class="mc" style="cursor:pointer" onclick="nav('maintenance')" title="View maintenance">
           <div class="mc-top"><span class="mc-label">Open issues</span><div class="mc-icon">🔧</div></div>
           <div class="mc-val" style="color:${_issueColor}">${open}</div>
           <div class="mc-trend">${_issueTrend}</div>
-          <div class="mc-sub">${_awaabOpen} Awaab flagged</div>
+          ${_maintBar}
         </div>`;
       })()}
     </div>
