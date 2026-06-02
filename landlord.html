@@ -1736,13 +1736,23 @@ async function savePropToDB() {
   closeMo();
   toast('✓ Property saved!');
 
-  // Post-save prompt — ask about adding a tenant
+  // Post-save prompt — what to do next
   const pid = data.id;
   openMo('🎉 Property added!', `${prop.address}, ${prop.city}`,`
-    <div style="font-size:14px;color:var(--txt);margin-bottom:20px;text-align:center">Would you like to add a tenant to this property?</div>
-    <div style="display:flex;gap:10px;justify-content:center">
-      <button class="btn btn-navy" onclick="window._addPropOrigin='property-detail';closeMo();nav('prop-detail','${pid}')" style="min-width:140px">Add tenant</button>
-      <button class="btn" onclick="closeMo();nav(window._addPropOrigin||'properties')" style="min-width:140px">Not yet</button>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:18px;text-align:center">What would you like to do next?</div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <button class="btn btn-navy" onclick="closeMo();moTenant('${pid}')" style="width:100%;text-align:left;padding:12px 16px;display:flex;align-items:center;gap:12px">
+        <span style="font-size:20px">👤</span>
+        <span><div style="font-weight:600;font-size:13px">Add tenant now</div><div style="font-size:11px;font-weight:400;opacity:.75;margin-top:1px">Skip straight to tenant setup</div></span>
+      </button>
+      <button class="btn" onclick="window._addPropOrigin='property-detail';closeMo();nav('prop-detail','${pid}')" style="width:100%;text-align:left;padding:12px 16px;display:flex;align-items:center;gap:12px;border:1px solid var(--border)">
+        <span style="font-size:20px">✅</span>
+        <span><div style="font-weight:600;font-size:13px">Complete compliance checks first</div><div style="font-size:11px;color:var(--muted);margin-top:1px">EPC · Gas Safety · EICR · Licence</div></span>
+      </button>
+      <button class="btn" onclick="closeMo();nav('properties')" style="width:100%;text-align:left;padding:12px 16px;display:flex;align-items:center;gap:12px;border:1px solid var(--border)">
+        <span style="font-size:20px">🕐</span>
+        <span><div style="font-weight:600;font-size:13px">Do this later</div><div style="font-size:11px;color:var(--muted);margin-top:1px">Return to your properties list</div></span>
+      </button>
     </div>
   `, `<button class="btn" onclick="closeMo()">Close</button>`);
 }
@@ -2310,11 +2320,7 @@ function moAddProp(){
       <div class="fg-row">
         <div class="fg"><label>City / town <span class="req">*</span></label><input type="text" id="p-city" placeholder="e.g. Manchester"></div>
         <div class="fg"><label>Postcode <span class="req">*</span></label>
-          <div style="display:flex;gap:6px">
-            <input type="text" id="p-post" placeholder="e.g. M4 1AQ" style="text-transform:uppercase;flex:1" oninput="this.value=this.value.toUpperCase()">
-            <button type="button" id="p-post-btn" onclick="lookupPostcode('add')" style="padding:0 12px;border-radius:7px;border:1px solid var(--border);background:var(--off);color:var(--txt);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:var(--font)">Find →</button>
-          </div>
-          <div id="p-post-result" style="font-size:11px;margin-top:4px;color:var(--muted)"></div>
+          <input type="text" id="p-post" placeholder="e.g. M4 1AQ" style="text-transform:uppercase;width:100%" oninput="this.value=this.value.toUpperCase()">
         </div>
       </div>
       <div class="fg"><label>Country</label>
@@ -2489,11 +2495,7 @@ function moEditProp(pid){
     <div class="fg-row">
       <div class="fg"><label>City</label><input type="text" id="ep-city" value="${p.city}"></div>
       <div class="fg"><label>Postcode</label>
-        <div style="display:flex;gap:6px">
-          <input type="text" id="ep-post" value="${p.postcode}" style="flex:1;text-transform:uppercase" oninput="this.value=this.value.toUpperCase()">
-          <button type="button" id="ep-post-btn" onclick="lookupPostcode('edit')" style="padding:0 12px;border-radius:7px;border:1px solid var(--border);background:var(--off);color:var(--txt);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:var(--font)">Find →</button>
-        </div>
-        <div id="ep-post-result" style="font-size:11px;margin-top:4px;color:var(--muted)"></div>
+          <input type="text" id="ep-post" value="${p.postcode}" style="width:100%;text-transform:uppercase" oninput="this.value=this.value.toUpperCase()">
       </div>
     </div>
     <div class="fg"><label>Property type</label>
@@ -15925,46 +15927,7 @@ function filterCompliance(filter) {
 }
 
 // ── POSTCODE LOOKUP (moAddProp + moEditProp) ──
-async function lookupPostcode(source) {
-  const prefix = source === 'edit' ? 'ep' : 'p';
-  const pc = (document.getElementById(prefix+'-post')?.value || '').trim().replace(/\s+/g,'').toUpperCase();
-  if (!pc || pc.length < 2) { toast('Enter a postcode first (min 2 characters)', true); return; }
-  const btn = document.getElementById(prefix+'-post-btn');
-  const res = document.getElementById(prefix+'-post-result');
-  if (btn) { btn.disabled = true; btn.textContent = '…'; }
-  try {
-    // Step 1: exact lookup first
-    const r1 = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(pc)}`);
-    const d1 = await r1.json();
-    if (d1.status === 200 && d1.result) {
-      const city = d1.result.admin_district || d1.result.region || '';
-      const ward = d1.result.admin_ward || '';
-      const postcode = d1.result.postcode;
-      const cityEl = document.getElementById(prefix+'-city');
-      const postEl = document.getElementById(prefix+'-post');
-      if (cityEl) cityEl.value = city;
-      if (postEl) postEl.value = postcode;
-      if (res) res.innerHTML = `<span style="color:var(--status-green-dark)">✓ ${postcode}${ward ? ' — '+ward : ''}${city ? ', '+city : ''}</span>`;
-      if (btn) { btn.disabled = false; btn.textContent = 'Find →'; }
-      return;
-    }
-    // Step 2: partial postcode — fuzzy search
-    const r2 = await fetch(`https://api.postcodes.io/postcodes?q=${encodeURIComponent(pc)}&limit=8`);
-    const d2 = await r2.json();
-    if (d2.status === 200 && d2.result && d2.result.length) {
-      const items = d2.result.map(i => {
-        const parts = [i.admin_ward, i.admin_district, i.region].filter(Boolean);
-        return { postcode: i.postcode, city: i.admin_district || i.region || '', ward: i.admin_ward || '', label: `${i.postcode} — ${parts.join(', ')}` };
-      });
-      if (res) res.innerHTML = `<div style="font-size:11px;font-weight:600;color:var(--muted);margin:4px 0 3px">${items.length} match${items.length!==1?'es':''} — pick one:</div>${items.map(it=>`<div onclick="(function(){var c=document.getElementById('${prefix}-city');var p=document.getElementById('${prefix}-post');var r=document.getElementById('${prefix}-post-result');if(c)c.value='${it.city.replace(/'/g,"\\'")}';if(p)p.value='${it.postcode}';if(r)r.innerHTML='<span style=\'color:var(--status-green-dark)\'>✓ ${it.postcode}${it.ward?' — '+it.ward:''}${it.city?', '+it.city:''}</span>';})()" style="cursor:pointer;padding:5px 8px;border-radius:5px;margin-bottom:2px;font-size:11px;color:var(--txt);border:1px solid var(--border);background:var(--white)" onmouseenter="this.style.background='var(--off)'" onmouseleave="this.style.background='var(--white)'">${it.label}</div>`).join('')}`;
-    } else {
-      if (res) res.innerHTML = `<span style="color:var(--red)">Not found — enter details manually</span>`;
-    }
-  } catch(e) {
-    if (res) res.innerHTML = `<span style="color:var(--red)">Lookup failed — enter manually</span>`;
-  }
-  if (btn) { btn.disabled = false; btn.textContent = 'Find →'; }
-}
+// lookupPostcode removed — replaced with getAddress.io (post-launch)
 // ── AI SCAN: PROPERTY LICENCE (moAddProp Step 4) ──
 function scanPropLicence(input) {
   if (!input.files[0]) return;
