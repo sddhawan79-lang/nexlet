@@ -3607,6 +3607,109 @@ function moTenant(pid) {
   document.getElementById('mo').classList.add('open');
 }
 
+
+// ── TENANCY SETUP HELPERS ──────────────────────────────────────────────────
+
+// Open moTenant pre-set to co-tenant tab for a specific property
+function _moCoTenant(pid) {
+  moTenant(pid);
+  // Switch to co-tenant tab after modal opens
+  setTimeout(() => toggleTenantType('co'), 80);
+}
+
+// Step 2 popup: Prepare Written Statement
+function _tenancySetupStep2(pid) {
+  const leadTenant = D.tenants.find(t => String(t.prop_id) === String(pid) && t.is_lead && t.status === 'Active');
+  const tid = leadTenant ? String(leadTenant.id) : '';
+  openMo('📝 Prepare Written Statement', 'Step 2 of tenancy setup',
+    '<div style="text-align:center;padding:8px 0 4px">' +
+    '<div style="font-size:13px;color:var(--muted);margin-bottom:18px;line-height:1.5">Under the Renters' Rights Act 2025, all tenants must receive a Written Statement of Terms. Would you like to prepare it now?</div>' +
+    '<div style="display:flex;flex-direction:column;gap:10px">' +
+    '<button class="btn btn-navy" onclick="closeMo();_markTenancyStep(\'' + pid + '\',\'written_statement_done\',false);moEsign(\'' + pid + '\',\'' + tid + '\')" style="width:100%;text-align:left;padding:12px 16px;display:flex;align-items:center;gap:12px">' +
+    '<span style="font-size:20px">✍️</span><span><div style="font-weight:600;font-size:13px">Prepare Written Statement</div><div style="font-size:11px;font-weight:400;opacity:.75;margin-top:1px">Opens e-sign flow</div></span></button>' +
+    '<button class="btn" onclick="closeMo();nav(\'prop-detail\',\'' + pid + '\')" style="width:100%;text-align:left;padding:12px 16px;display:flex;align-items:center;gap:12px;border:1px solid var(--border)">' +
+    '<span style="font-size:20px">🕐</span><span><div style="font-weight:600;font-size:13px">Do this later</div><div style="font-size:11px;color:var(--muted);margin-top:1px">Setup bar will appear on the property</div></span></button>' +
+    '</div></div>', '');
+}
+
+// Read tenancy_setup_progress from lead tenant record
+function _getTenancyProgress(pid) {
+  const lead = D.tenants.find(t => String(t.prop_id) === String(pid) && t.is_lead && t.status === 'Active');
+  if (!lead) return null;
+  const defaults = { co_tenants_done: false, written_statement_done: false, tenant_docs_done: false, property_docs_done: false, welcome_kit_done: false };
+  return Object.assign({}, defaults, lead.tenancy_setup_progress || {});
+}
+
+// Save a step and update Supabase + local D
+async function _markTenancyStep(pid, stepKey, navToPropDetail) {
+  const lead = D.tenants.find(t => String(t.prop_id) === String(pid) && t.is_lead && t.status === 'Active');
+  if (!lead) return;
+  const prog = _getTenancyProgress(pid);
+  prog[stepKey] = true;
+  lead.tenancy_setup_progress = prog;
+  try {
+    await SB.from('tenants').update({ tenancy_setup_progress: prog }).eq('id', lead.id);
+  } catch(e) { console.warn('Progress save failed', e); }
+  if (navToPropDetail) nav('prop-detail', pid);
+  else { const el = document.getElementById('tenancy-setup-bar-' + pid); if (el) el.outerHTML = _renderTenancySetupBar(pid); }
+}
+
+// Render the sticky progress bar — returns HTML string or '' if complete/not needed
+function _renderTenancySetupBar(pid) {
+  const p = P(pid); if (!p) return '';
+  // Only show for active properties with a lead tenant
+  const lead = D.tenants.find(t => String(t.prop_id) === String(pid) && t.is_lead && t.status === 'Active');
+  if (!lead) return '';
+  const prog = _getTenancyProgress(pid);
+  const steps = [
+    { key: 'written_statement_done', label: 'Written Statement',  icon: '✍️', action: `_tenancySetupStep2('${pid}')` },
+    { key: 'tenant_docs_done',       label: 'Tenant documents',   icon: '🪪', action: `nav('tenants','${lead.id}')` },
+    { key: 'property_docs_done',     label: 'Property compliance',icon: '🛡', action: `pdSetTab('${pid}','compliance')` },
+    { key: 'welcome_kit_done',       label: 'Welcome Kit',        icon: '📦', action: `moWelcomeKit('${pid}')` },
+  ];
+  const allDone = steps.every(s => prog[s.key]);
+  if (allDone) return ''; // hide bar when complete
+  const doneCount = steps.filter(s => prog[s.key]).length;
+  const total = steps.length;
+  const pct = Math.round((doneCount / total) * 100);
+  // Find first incomplete step
+  const nextStep = steps.find(s => !prog[s.key]);
+  // Welcome kit locked until tenant_docs and property_docs both done
+  const welcomeLocked = !prog.tenant_docs_done || !prog.property_docs_done;
+  const stepsHtml = steps.map(s => {
+    const done = prog[s.key];
+    const locked = s.key === 'welcome_kit_done' && welcomeLocked && !done;
+    return `<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:7px;background:${done?'rgba(0,135,90,0.08)':locked?'rgba(0,0,0,0.03)':'var(--white)'};border:1px solid ${done?'rgba(0,135,90,0.2)':locked?'var(--border)':'var(--border)'};cursor:${locked||done?'default':'pointer'};opacity:${locked?'.5':'1'}"
+      ${(!done && !locked) ? `onclick="${s.action}"` : ''}>
+      <span style="font-size:14px">${done ? '✅' : locked ? '🔒' : s.icon}</span>
+      <span style="font-size:11px;font-weight:${done?'500':'600'};color:${done?'var(--muted)':'var(--txt)'};text-decoration:${done?'line-through':'none'}">${s.label}</span>
+      ${(!done && !locked) ? '<span style="font-size:10px;color:var(--blue);margin-left:auto">→</span>' : ''}
+    </div>`;
+  }).join('');
+  return `<div id="tenancy-setup-bar-${pid}" style="background:linear-gradient(135deg,rgba(11,30,61,0.04),rgba(59,111,232,0.06));border:1px solid rgba(59,111,232,0.2);border-radius:12px;padding:16px 18px;margin-bottom:20px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--navy)">🔧 Tenancy setup in progress</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Complete all steps to finish onboarding this tenancy</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:16px;font-weight:700;color:var(--navy)">${doneCount}/${total}</div>
+        <div style="font-size:10px;color:var(--muted)">steps done</div>
+      </div>
+    </div>
+    <div style="height:6px;background:var(--border);border-radius:100px;margin-bottom:14px;overflow:hidden">
+      <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--blue),var(--navy));border-radius:100px;transition:width .4s ease"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px">
+      ${stepsHtml}
+    </div>
+    ${nextStep && !prog[nextStep.key] ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(59,111,232,0.15);display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:11px;color:var(--muted)">Next step: <strong style="color:var(--navy)">${nextStep.label}</strong></span>
+      <button class="btn btn-navy" onclick="${nextStep.key==='welcome_kit_done'&&welcomeLocked?'':nextStep.action}" style="font-size:11px;padding:5px 14px;${nextStep.key==='welcome_kit_done'&&welcomeLocked?'opacity:.4;cursor:not-allowed':''}">Continue →</button>
+    </div>` : ''}
+  </div>`;
+}
+
 async function _saveTenantSetupToDB() {
   if (_expiredGuard('Save tenant')) return;
   const btn = document.getElementById('tsetup-next');
@@ -3717,20 +3820,30 @@ async function _saveTenantSetupToDB() {
     const _newTid = String(td?.id || '');
     const _newTname = (s.name || 'Tenant').replace(/'/g, '&#39;');
     const _newPid = String(s.pid || '');
-    const _skipDest = (window._addPropOrigin === 'property-detail' && _newPid) ? 'prop-detail' : 'tenants';
-    const _skipParam = (window._addPropOrigin === 'property-detail' && _newPid) ? _newPid : '';
-    openMo('Next steps', '',
-      '<div style="text-align:center;padding:8px 0 4px">' +
-      '<div style="font-size:36px;margin-bottom:10px">&#x1F389;</div>' +
-      '<div style="font-size:16px;font-weight:700;color:var(--txt);margin-bottom:6px">' + _newTname + ' added!</div>' +
-      '<div style="font-size:13px;color:var(--muted);margin-bottom:20px;line-height:1.5">What would you like to do next?</div>' +
-      '<div style="display:flex;flex-direction:column;gap:10px">' +
-      '<button class="btn btn-navy" onclick="closeMo();moWelcomeKit(\'' + _newPid + '\')" style="font-size:13px;padding:11px 16px">&#x1F4E6; Send Welcome Kit</button>' +
-      '<button class="btn" onclick="closeMo();nav(\'tenants\',\'' + _newTid + '\')" style="font-size:13px;padding:11px 16px">&#x1F4C4; Upload Documents &amp; RTR</button>' +
-      '<button class="btn" onclick="closeMo();nav(\'' + _skipDest + '\',\'' + _skipParam + '\')" style="font-size:12px;color:var(--muted);border-color:var(--border)">Skip for now</button>' +
-      '</div></div>',
-      ''
-    );
+    const _isCo = (s.tenantType === 'co');
+    if (_isCo) {
+      // Co-tenant saved — loop: add another or proceed to Written Statement popup
+      openMo('✅ Co-tenant added!', _newTname,
+        '<div style="text-align:center;padding:8px 0 4px">' +
+        '<div style="font-size:13px;color:var(--muted);margin-bottom:18px">Would you like to add another co-tenant?</div>' +
+        '<div style="display:flex;flex-direction:column;gap:10px">' +
+        '<button class="btn btn-navy" onclick="closeMo();_moCoTenant(\'' + _newPid + '\')" style="width:100%;text-align:left;padding:12px 16px;display:flex;align-items:center;gap:12px">' +
+        '<span style="font-size:20px">👥</span><span><div style="font-weight:600;font-size:13px">Add another co-tenant</div><div style="font-size:11px;font-weight:400;opacity:.75;margin-top:1px">Add as many as needed</div></span></button>' +
+        '<button class="btn" onclick="closeMo();_tenancySetupStep2(\'' + _newPid + '\')" style="width:100%;text-align:left;padding:12px 16px;display:flex;align-items:center;gap:12px;border:1px solid var(--border)">' +
+        '<span style="font-size:20px">✅</span><span><div style="font-weight:600;font-size:13px">Done — continue setup</div><div style="font-size:11px;color:var(--muted);margin-top:1px">Move to Written Statement</div></span></button>' +
+        '</div></div>', '');
+    } else {
+      // Lead tenant saved — step 1 popup: add co-tenant or skip
+      openMo('🎉 ' + _newTname + ' added!', 'Lead tenant',
+        '<div style="text-align:center;padding:8px 0 4px">' +
+        '<div style="font-size:13px;color:var(--muted);margin-bottom:18px">Do you have any co-tenants to add?</div>' +
+        '<div style="display:flex;flex-direction:column;gap:10px">' +
+        '<button class="btn btn-navy" onclick="closeMo();_moCoTenant(\'' + _newPid + '\')" style="width:100%;text-align:left;padding:12px 16px;display:flex;align-items:center;gap:12px">' +
+        '<span style="font-size:20px">👥</span><span><div style="font-weight:600;font-size:13px">Add co-tenant</div><div style="font-size:11px;font-weight:400;opacity:.75;margin-top:1px">Multiple tenants on this tenancy</div></span></button>' +
+        '<button class="btn" onclick="closeMo();_tenancySetupStep2(\'' + _newPid + '\')" style="width:100%;text-align:left;padding:12px 16px;display:flex;align-items:center;gap:12px;border:1px solid var(--border)">' +
+        '<span style="font-size:20px">📝</span><span><div style="font-weight:600;font-size:13px">No co-tenants — continue</div><div style="font-size:11px;color:var(--muted);margin-top:1px">Prepare Written Statement next</div></span></button>' +
+        '</div></div>', '');
+    }
   } catch(err) {
     if (btn) { btn.disabled = false; btn.textContent = 'Add tenant ✓'; }
     toast('Error saving tenant: ' + err.message, true);
@@ -4646,6 +4759,7 @@ async function sendWelcomeKit(pid) {
 
     closeMo();
     toast('✓ Welcome kit sent to ' + tenantEmail);
+    _markTenancyStep(String(pid), 'welcome_kit_done', false);
 
     // Show confirmation
     openMo('✅ Welcome kit sent!', `${tenantName} · ${propAddr}`, `
@@ -6208,6 +6322,7 @@ function pgPropDetail(pid) {
       </div>`;
     })()}
 
+    ${_renderTenancySetupBar(pid)}
     ${signedPanel}
     ${statHtml}
     ${tabBar}
