@@ -15409,17 +15409,22 @@ function moEsign(pid, tid) {
 
     <div id="esign-form-a" style="display:none">
       <button onclick="document.getElementById('esign-chooser').style.display='block';document.getElementById('esign-form-a').style.display='none'" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;padding:0 0 14px 0;display:block">← Back</button>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px;padding:8px 12px;background:var(--off);border-radius:6px;border-left:3px solid var(--blue)">All fields are required to generate a legally compliant Written Statement under the Renters&#39; Rights Act 2025.</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div class="fg"><label>Property address</label><input type="text" id="esign-address" value="${p.address}, ${p.city}" readonly style="background:var(--off);color:var(--muted)"></div>
-        <div class="fg"><label>Tenant(s) full name(s)</label><input type="text" id="esign-tname" value="${_esignTenantNames}" readonly style="background:var(--off);color:var(--muted)"></div>
-        <div class="fg"><label>Tenancy start date</label><input type="date" id="esign-start" value="${t.start_date||''}"></div>
-        <div class="fg"><label>Monthly rent (£)</label><input type="number" id="esign-rent" value="${t.rent||p.rent||''}"></div>
-        <div class="fg"><label>Deposit amount (£)</label><input type="number" id="esign-deposit" value="${t.deposit||''}"></div>
-        <div class="fg"><label>Deposit scheme</label><input type="text" id="esign-scheme" value="${t.scheme||''}"></div>
-        <div class="fg"><label>Bills included</label><input type="text" id="esign-bills" placeholder="e.g. None, or Water, Internet"></div>
-        <div class="fg"><label>Pets permitted</label><select id="esign-pets"><option value="No">No</option><option value="Yes">Yes</option></select></div>
+        <div class="fg"><label>Property address <span style="color:var(--red)">*</span></label><input type="text" id="esign-address" value="${p.address}, ${p.city}" readonly style="background:var(--off);color:var(--muted)"></div>
+        <div class="fg"><label>Tenant(s) full name(s) <span style="color:var(--red)">*</span></label><input type="text" id="esign-tname" value="${_esignTenantNames}" readonly style="background:var(--off);color:var(--muted)"></div>
+        <div class="fg"><label>Landlord full name <span style="color:var(--red)">*</span></label><input type="text" id="esign-landlord-name" value="${_profileName()}" placeholder="e.g. John Smith"></div>
+        <div class="fg"><label>Landlord address <span style="color:var(--red)">*</span></label><input type="text" id="esign-landlord-addr" value="${D.userProfile?.landlord_address||''}" placeholder="Full UK address including postcode"></div>
+        <div class="fg"><label>Tenancy start date <span style="color:var(--red)">*</span></label><input type="date" id="esign-start" value="${t.start_date||''}"></div>
+        <div class="fg"><label>Monthly rent (£) <span style="color:var(--red)">*</span></label><input type="number" id="esign-rent" value="${t.rent||p.rent||''}" placeholder="e.g. 1200"></div>
+        <div class="fg"><label>Rent due day <span style="color:var(--red)">*</span></label><select id="esign-rentday">${[1,5,10,15,20,25,28].map(d=>`<option value="${d}"${(t.rent_day||1)==d?' selected':''}>${d}${['','st','nd','rd'][d]||'th'} of the month</option>`).join('')}</select></div>
+        <div class="fg"><label>Deposit amount (£) <span style="color:var(--red)">*</span></label><input type="number" id="esign-deposit" value="${t.deposit||''}" placeholder="e.g. 1800"></div>
+        <div class="fg"><label>Deposit scheme <span style="color:var(--red)">*</span></label><input type="text" id="esign-scheme" value="${t.scheme||''}" placeholder="e.g. MyDeposits, DPS, TDS"></div>
+        <div class="fg"><label>Bills included <span style="color:var(--red)">*</span></label><input type="text" id="esign-bills" placeholder="e.g. None, or Water, Internet" value=""></div>
+        <div class="fg"><label>Pets permitted <span style="color:var(--red)">*</span></label><select id="esign-pets"><option value="No">No</option><option value="Yes">Yes</option></select></div>
+        <div class="fg"><label>Property licence number <span style="color:var(--muted);font-weight:400">(if applicable)</span></label><input type="text" id="esign-licence" value="${p.licence_number||''}" placeholder="e.g. HMO/2024/12345"></div>
       </div>
-      <div class="fg"><label>Special terms (optional)</label><textarea id="esign-terms" placeholder="Any additional clauses or special conditions…" rows="3"></textarea></div>
+      <div class="fg" style="margin-top:2px"><label>Special terms <span style="color:var(--muted);font-weight:400">(optional)</span></label><textarea id="esign-terms" placeholder="Any additional clauses or special conditions…" rows="3"></textarea></div>
       <div id="esign-preview-a" style="display:none;margin-top:4px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
           <div style="font-size:12px;font-weight:600;color:var(--txt)">Generated document preview</div>
@@ -15518,20 +15523,48 @@ async function esignHandlePDF(input) {
 
 async function esignGenerateDoc(pid, tid) {
   const p = P(pid);
-  const address  = document.getElementById('esign-address').value;
-  const tenantName = document.getElementById('esign-tname').value;
-  const startDate  = document.getElementById('esign-start').value;
-  const rent       = document.getElementById('esign-rent').value;
-  const deposit    = document.getElementById('esign-deposit').value;
-  const scheme     = document.getElementById('esign-scheme').value;
-  const bills      = document.getElementById('esign-bills').value || 'None';
-  const pets       = document.getElementById('esign-pets').value;
-  const terms      = document.getElementById('esign-terms').value;
-  const landlordName = currentUser.user_metadata?.full_name || currentUser.email;
+  const address       = document.getElementById('esign-address').value;
+  const tenantName    = document.getElementById('esign-tname').value;
+  const landlordName  = document.getElementById('esign-landlord-name').value.trim();
+  const landlordAddr  = document.getElementById('esign-landlord-addr').value.trim();
+  const startDate     = document.getElementById('esign-start').value;
+  const rent          = document.getElementById('esign-rent').value;
+  const rentDay       = document.getElementById('esign-rentday').value;
+  const deposit       = document.getElementById('esign-deposit').value;
+  const scheme        = document.getElementById('esign-scheme').value.trim();
+  const bills         = document.getElementById('esign-bills').value.trim() || 'None';
+  const pets          = document.getElementById('esign-pets').value;
+  const licenceNo     = document.getElementById('esign-licence').value.trim();
+  const terms         = document.getElementById('esign-terms').value;
+
+  // Validation — all mandatory fields
+  const missing = [];
+  if (!landlordName)  missing.push('Landlord full name');
+  if (!landlordAddr)  missing.push('Landlord address');
+  if (!startDate)     missing.push('Tenancy start date');
+  if (!rent)          missing.push('Monthly rent');
+  if (!deposit)       missing.push('Deposit amount');
+  if (!scheme)        missing.push('Deposit scheme');
+  if (!bills || bills === 'None' && !document.getElementById('esign-bills').value.trim()) {
+    // bills defaults to 'None' if blank — acceptable, skip
+  }
+  if (missing.length) {
+    toast('Please complete: ' + missing.join(', '), true);
+    return;
+  }
 
   const btn = document.getElementById('esign-gen-btn');
   btn.disabled = true;
   btn.innerHTML = '<span class="spin"></span> Generating…';
+
+  // Save landlord address to profile for next time
+  if (landlordAddr && D.userProfile) {
+    D.userProfile.landlord_address = landlordAddr;
+    sb.from('user_profiles').update({ landlord_address: landlordAddr }).eq('id', currentUser.id).then(() => {});
+  }
+
+  const rentDayLabel = rentDay + (['','st','nd','rd'][rentDay] || 'th');
+  const licenceClause = licenceNo ? `Property Licence: ${licenceNo}` : 'No HMO or selective licence applies to this property.';
 
   try {
     const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
@@ -15539,17 +15572,53 @@ async function esignGenerateDoc(pid, tid) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-5',
-        max_tokens: 4000,
+        max_tokens: 5000,
         messages: [{
           role: 'user',
-          content: `Generate a fully compliant UK Assured Periodic Tenancy Written Statement under the Renters Rights Act 2025. Use these details:\nProperty: ${address}\nTenant(s): ${tenantName}\nLandlord: ${landlordName}\nStart date: ${startDate}\nMonthly rent: £${rent} payable monthly in advance\nDeposit: £${deposit} protected with ${scheme}\nBills included: ${bills}\nPets: ${pets}\nSpecial terms: ${terms||'None'}\n\nInclude all mandatory RRA 2025 terms: periodic tenancy (no fixed end date), 2 months landlord notice via Section 8 only, rent increases via Section 13 max once per year with 2 months notice, tenant 2 months notice to quit, landlord repair obligations under s11 Landlord and Tenant Act 1985, right of entry with 24hrs notice, deposit protection obligations.\n\nFormat as clean HTML with proper headings and sections. Professional and legally precise. Return only the HTML document content, no preamble.`
+          content: `Generate a fully compliant UK Assured Periodic Tenancy Written Statement of Terms under the Renters' Rights Act 2025. Use these exact details:
+
+PARTIES
+Landlord: ${landlordName}
+Landlord address: ${landlordAddr}
+Tenant(s): ${tenantName} (permitted occupiers)
+Property: ${address}
+
+TENANCY TERMS
+Tenancy type: Assured Periodic Tenancy (no fixed end date) under RRA 2025
+Start date: ${startDate}
+Monthly rent: £${rent} payable on the ${rentDayLabel} of each month in advance
+Rent review: Section 13 Housing Act 1988 — maximum once per year, 2 months written notice required
+Deposit: £${deposit} protected with ${scheme}
+Bills included: ${bills}
+Pets: ${pets}
+${licenceClause}
+Special terms: ${terms || 'None'}
+
+MANDATORY RRA 2025 CLAUSES TO INCLUDE:
+1. Tenancy is periodic from the start — no fixed term
+2. Landlord notice: minimum 4 months via Section 8 grounds only (Section 21 abolished)
+3. Tenant notice: minimum 2 months written notice to quit
+4. Landlord repair obligations under Section 11 Landlord and Tenant Act 1985
+5. Awaab's Law — landlord must investigate hazards within 14 days, begin emergency repairs within 24 hours
+6. Right of entry: 24 hours written notice except emergencies
+7. Deposit protection: protected within 30 days, Prescribed Information served within 30 days
+8. Rent increases: Section 13 process only, once per 12 months, 2 months notice
+9. Anti-harassment and quiet enjoyment clause
+10. Subletting prohibited without written landlord consent
+
+Format as a professional legal HTML document with:
+- Clear numbered sections and sub-sections
+- Proper headings (h2, h3)
+- Signature blocks at the end for Landlord and each Tenant with date fields
+- Today's date pre-filled where appropriate
+Return only the HTML content, no preamble or markdown.`
         }]
       })
     });
     if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error?.message || `API error ${res.status}`); }
     const data = await res.json();
     _esignDocHtml = data.content?.[0]?.text || '';
-    document.getElementById('esign-doc-preview').innerHTML = '<div style="all:initial;font-family:inherit;font-size:inherit;line-height:inherit;color:inherit">' + _esignDocHtml + '</div>';
+    document.getElementById('esign-doc-preview').innerHTML = '<div style="all:initial;font-family:Georgia,serif;font-size:13px;line-height:1.8;color:#1a2332;padding:4px">' + _esignDocHtml + '</div>';
     document.getElementById('esign-doc-editor').value = _esignDocHtml;
     document.getElementById('esign-doc-preview').scrollTop = 0;
     document.getElementById('esign-preview-a').style.display = 'block';
