@@ -26,7 +26,7 @@
 }
 html,body{height:100%;font-family:var(--font);color:var(--txt);background:var(--off);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
 /* ── APP LAYOUT ── */
-.app{display:flex;height:100vh;overflow:hidden}
+.app{display:flex;height:100vh;overflow:hidden;min-height:0}
 /* ── SIDEBAR ── */
 .sidebar{width:220px;min-width:220px;background:var(--navy);display:flex;flex-direction:column;height:100vh;position:relative;z-index:100}
 .sb-logo{padding:20px 18px 16px;border-bottom:1px solid rgba(255,255,255,0.08)}
@@ -64,11 +64,11 @@ html,body{height:100%;font-family:var(--font);color:var(--txt);background:var(--
 .sb-logout:hover{color:rgba(255,255,255,0.7)}
 /* ── MAIN CONTENT AREA ── */
 .main-wrap{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
-.main{flex:1;overflow-y:auto;display:flex;flex-direction:column;min-width:0}
+.main{flex:1;overflow-y:auto;display:flex;flex-direction:column;min-width:0;min-height:0}
 .topbar{background:var(--white);border-bottom:1px solid var(--border);box-shadow:0 1px 0 rgba(0,0,0,0.04);padding:0 28px;height:56px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
 .tb-title{font-size:13px;font-weight:600;color:var(--txt)}
 .tb-right{display:flex;align-items:center;gap:8px}
-.content{padding:24px 28px;flex:1}
+.content{padding:24px 28px;flex:1;min-height:0;width:100%;flex-shrink:0}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:7px;font-family:var(--font);font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;border:1px solid var(--border);background:var(--white);color:var(--muted);text-decoration:none;white-space:nowrap}
 .btn:hover{border-color:#c5d0dd;background:var(--off);color:var(--txt)}
 .btn-navy{background:var(--navy);color:#fff;border-color:var(--navy)}
@@ -15697,7 +15697,7 @@ async function _sendEsignRequest(pid, tid, mode) {
     return;
   }
 
-  const signingLink = `${window.location.origin}/esign.html?esign=${token}`;
+  const signingLink = `https://nexlet.co.uk/esign.html?esign=${token}`;
   const docLabel    = docType === 'written_statement' ? 'Written Statement of Tenancy Terms' : 'Tenancy Document';
   const expDate     = new Date(expiresAt).toLocaleDateString('en-GB', {day:'numeric',month:'long',year:'numeric'});
 
@@ -15724,12 +15724,19 @@ async function _sendEsignRequest(pid, tid, mode) {
   }).catch(e => { console.error('[esign] Send email failed:', e); });
 
   await logAudit('esign_request_sent', 'esign_requests', pid, `E-sign sent to ${t.email} for ${p.address} — landlord signed by ${landlordName}`);
+
+  // Mark written statement done on progress bar
+  await _markTenancyStep(String(pid), 'written_statement_done', false);
+
   closeMo();
   _esignDocHtml = null;
   _esignPdfUrl  = null;
   _esignSigReady = false;
   _esignLandlordPad = null;
-  toast(`✓ Signed & sent to ${t.email}`);
+  toast(`✓ Written Statement sent to ${t.email}`);
+
+  // Return to property detail with progress bar — not dashboard
+  nav('prop-detail', String(pid));
 }
 
 // ── SECTION 13 RENT INCREASE NOTICE GENERATOR ──
