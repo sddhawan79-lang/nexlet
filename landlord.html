@@ -3623,7 +3623,7 @@ function _tenancySetupStep2(pid) {
   const tid = leadTenant ? String(leadTenant.id) : '';
   openMo('📝 Prepare Written Statement', 'Step 2 of tenancy setup',
     '<div style="text-align:center;padding:8px 0 4px">' +
-    '<div style="font-size:13px;color:var(--muted);margin-bottom:18px;line-height:1.5">Under the Renters' Rights Act 2025, all tenants must receive a Written Statement of Terms. Would you like to prepare it now?</div>' +
+    '<div style="font-size:13px;color:var(--muted);margin-bottom:18px;line-height:1.5">Under the Renters&#39; Rights Act 2025, all tenants must receive a Written Statement of Terms. Would you like to prepare it now?</div>' +
     '<div style="display:flex;flex-direction:column;gap:10px">' +
     '<button class="btn btn-navy" onclick="closeMo();_markTenancyStep(\'' + pid + '\',\'written_statement_done\',false);moEsign(\'' + pid + '\',\'' + tid + '\')" style="width:100%;text-align:left;padding:12px 16px;display:flex;align-items:center;gap:12px">' +
     '<span style="font-size:20px">✍️</span><span><div style="font-weight:600;font-size:13px">Prepare Written Statement</div><div style="font-size:11px;font-weight:400;opacity:.75;margin-top:1px">Opens e-sign flow</div></span></button>' +
