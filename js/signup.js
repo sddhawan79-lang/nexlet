@@ -171,15 +171,8 @@
   // ── INIT ──
   async function _init() {
     // Wait for Supabase client (stored on RSA namespace by js/lib/supabase-client.js)
-    var tries = 0;
-    while (!(window.RSA && window.RSA.sb) && tries < 40) {
-      await new Promise(function(r) { setTimeout(r, 50); });
-      tries++;
-    }
-    if (!(window.RSA && window.RSA.sb)) {
-      console.error('[signup] Supabase client not loaded');
-      _showError('Service unavailable. Please refresh the page.');
-      return;
+    while (!(window.RSA && window.RSA.sb)) {
+      await new Promise(function(r) { setTimeout(r, 100); });
     }
 
     // Check if already logged in
