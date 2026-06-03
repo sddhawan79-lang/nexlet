@@ -1,4 +1,5 @@
-/**
+/** 
+ *
  * js/signup.js
  * Sign-up page logic for signup.html.
  * Dependencies: Supabase CDN, js/lib/supabase-client.js (window.sb)
