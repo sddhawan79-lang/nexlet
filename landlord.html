@@ -3642,8 +3642,17 @@ function _getTenancyProgress(pid) {
   const lead = D.tenants.find(t => String(t.prop_id) === String(pid) && t.is_lead && t.status === 'Active');
   if (!lead) return null;
   const defaults = { co_tenants_done: false, written_statement_done: false, tenant_docs_done: false, property_docs_done: false, welcome_kit_done: false };
-  return Object.assign({}, defaults, lead.tenancy_setup_progress || {});
+  const prog = Object.assign({}, defaults, lead.tenancy_setup_progress || {});
+  if (!prog.written_statement_done) {
+    const propTenantIds = D.tenants.filter(t => String(t.prop_id) === String(pid)).map(t => String(t.id));
+    const hasSigned = (D.esignReq || []).some(r => propTenantIds.includes(String(r.tenant_id)) && r.document_type === 'written_statement' && r.status === 'signed');
+    if (hasSigned) prog.written_statement_done = true;
+  }
+  return prog;
 }
+
+
+
 
 // Save a step and update Supabase + local D
 async function _markTenancyStep(pid, stepKey, navToPropDetail) {
@@ -6226,6 +6235,17 @@ function pgPropDetail(pid) {
   const ps = PROPERTY_STATUS[p.status] || PROPERTY_STATUS.active;
   const activeTab = window._pdTab[pid] || 'tenant';
 
+  // Auto-persist written_statement_done if signed esign exists but progress not yet saved
+  const _lead = D.tenants.find(t2 => String(t2.prop_id) === String(pid) && t2.is_lead && t2.status === 'Active');
+  if (_lead) {
+    const _prog = _lead.tenancy_setup_progress || {};
+    if (!_prog.written_statement_done) {
+      const _propTids = D.tenants.filter(t2 => String(t2.prop_id) === String(pid)).map(t2 => String(t2.id));
+      const _hasSigned = (D.esignReq || []).some(r => _propTids.includes(String(r.tenant_id)) && r.document_type === 'written_statement' && r.status === 'signed');
+      if (_hasSigned) _markTenancyStep(String(pid), 'written_statement_done', false);
+    }
+  }
+
   // Stat cards
   const stats = [
     { icon:'💷', col:'var(--txt)',        bdr:'var(--border)',                                                                          val: p.rent ? `£${p.rent.toLocaleString()}` : 'Vacant', lbl:'Monthly rent' },
@@ -6266,8 +6286,14 @@ function pgPropDetail(pid) {
       ${tb.cnt > 0 ? `<span class="pd-cnt">${tb.cnt}</span>` : ''}
     </button>`).join('')}</div>`;
 
-  // Signed documents panel (property-level, visible when docs exist)
-  const signed = (D.esignReq||[]).filter(r => String(r.property_id) === String(pid) && r.status === 'signed');
+  // Signed documents panel — deduped: most recent per tenant per document_type
+  const _allSigned = (D.esignReq||[]).filter(r => String(r.property_id) === String(pid) && r.status === 'signed');
+  const _dedupMap = new Map();
+  _allSigned.sort((a,b) => new Date(b.signed_at) - new Date(a.signed_at)).forEach(r => {
+    const key = String(r.tenant_id) + '|' + r.document_type;
+    if (!_dedupMap.has(key)) _dedupMap.set(key, r);
+  });
+  const signed = Array.from(_dedupMap.values());
   const signedPanel = signed.length ? `<div class="panel" style="margin-bottom:16px">
     <div class="ph2"><div><h2>📄 Signed Documents</h2><p>Completed e-signatures for this property</p></div></div>
     <div style="padding:8px 18px 14px">${signed.map(r => '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);gap:10px"><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:var(--txt)">'+(r.document_type==='written_statement'?'Written Statement':'Uploaded PDF')+'</div><div style="font-size:10px;color:var(--muted)">Signed '+new Date(r.signed_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})+' · '+(r.tenant_name||'Tenant')+'</div></div><span style="display:flex;gap:6px;flex-shrink:0">'+(r.signed_pdf_url?'<button onclick="event.stopPropagation();dvoOpen(\''+r.signed_pdf_url+'\',\''+(r.document_type==='written_statement'?'Signed Written Statement':'Signed E-Sign Document')+'\',\'Signed by '+(r.tenant_name||'Tenant')+'\')" class="btn btn-sm" style="font-size:11px;font-family:var(--font)">👁 View</button><a href="'+r.signed_pdf_url+'" download class="btn btn-sm" style="font-size:11px;text-decoration:none;font-family:var(--font)">⬇ Download</a>':'<span style="font-size:10px;color:var(--muted)">No file</span>')+'</span></div>').join('')}</div>
