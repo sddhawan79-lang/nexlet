@@ -177,7 +177,7 @@ tr:hover td{background:rgba(59,111,232,0.04);transition:background .12s}
 .det-f span{font-size:13.5px;color:var(--txt)}
 .mo{position:fixed;inset:0;background:rgba(0,0,0,0.38);z-index:1000;display:none;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
 .mo.open{display:flex}
-.mo-box{background:var(--white);border-radius:12px;width:520px;max-width:100%;max-height:none;overflow-y:visible;scrollbar-gutter:stable;margin:auto}
+.mo-box{background:var(--white);border-radius:12px;width:520px;max-width:100%;max-height:90vh;overflow-y:auto;scrollbar-gutter:stable;margin:auto}
 .mo-hd{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;position:sticky;top:0;background:var(--white);z-index:1}
 .mo-hd h3{font-size:15px;font-weight:600;color:var(--txt)}
 .mo-hd p{font-size:12px;color:var(--muted);margin-top:2px}
@@ -302,7 +302,7 @@ tr:hover td{background:rgba(59,111,232,0.04);transition:background .12s}
   .pd-tab{padding:9px 12px;font-size:12px;white-space:nowrap}
   /* Modal full screen on mobile */
   .mo{padding:0;align-items:flex-end}
-  .mo-box{width:100%!important;max-width:100%!important;border-radius:16px 16px 0 0;max-height:92vh;scrollbar-gutter:stable}
+  .mo-box{width:100%!important;max-width:100%!important;border-radius:16px 16px 0 0;max-height:92vh;overflow-y:auto;scrollbar-gutter:stable}
   .mo-wide{width:100%!important;max-width:100%!important}
   /* Grids to single column */
   .g2{grid-template-columns:1fr}
@@ -2725,6 +2725,7 @@ async function confirmRelet(pid) {
     closeMo();
     toast('✓ Property cleared and ready for new tenancy');
     nav('prop-detail', String(pid));
+    setTimeout(() => startTenancy(String(pid)), 400);
   } catch(e) {
     toast('Error during clear: ' + e.message, true);
     btn.disabled = false; btn.innerHTML = '🧹 Clear & prepare';
@@ -3593,7 +3594,7 @@ function moTenant(pid) {
       </div>
       <div style="margin-top:4px">${renderScanSlot('ts-dep-scan-box',"scanDepositCert(this)",'Upload Deposit Protection Certificate','DPS, TDS, MyDeposits — AI auto-fills')}</div>
       <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12px;cursor:pointer">
-        <input type="checkbox" id="ts-send-invite" checked onchange="window._tsetup.sendInvite=this.checked">
+        <input type="checkbox" id="ts-send-invite" onchange="window._tsetup.sendInvite=this.checked">
         <span>Send tenant portal invite by email</span>
       </label>
     </div>
@@ -3726,7 +3727,7 @@ async function _saveTenantSetupToDB() {
   s.startDate = s.startDate || document.getElementById('ts-start')?.value || '';
   s.rent    = s.rent    || document.getElementById('ts-rent')?.value || '';
   s.deposit = s.deposit || document.getElementById('ts-deposit')?.value || '';
-  s.sendInvite = document.getElementById('ts-send-invite')?.checked ?? true;
+  s.sendInvite = document.getElementById('ts-send-invite')?.checked ?? false;
   s.scheme   = s.scheme   || document.getElementById('ts-dep-scheme')?.value.trim() || '';
   s.schemeRef= s.schemeRef|| document.getElementById('ts-dep-ref')?.value.trim() || '';
 
@@ -6217,7 +6218,7 @@ function propHealthBar(pid, p, t, rag) {
 
 function pgPropDetail(pid) {
   const p = P(pid); if (!p) return pgProperties();
-  const t = D.tenants.find(x => String(x.prop_id) === String(pid));
+  const t = D.tenants.find(x => String(x.prop_id) === String(pid) && !x.relet_prepared);
   const pc = CF(pid);
   const pm = D.maintenance.filter(m => String(m.prop_id) === String(pid) && m.status !== 'Resolved');
   const rag = calcRAG(pid);
