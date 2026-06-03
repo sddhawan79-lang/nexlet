@@ -1680,7 +1680,17 @@ async function initApp() {
   initSbGroups();
 
   try {
-    nav('dashboard');
+    // Restore page from hash on refresh — fall back to dashboard
+    const _hash = window.location.hash.replace('#', '');
+    const _parts = _hash.split('/');
+    const _hashPage = _parts[0];
+    const _hashParam = _parts.slice(1).join('/') || null;
+    const _validPages = Object.keys(PAGES || {}).concat(['prop-detail','tenant-detail','tenants','compliance','maintenance','rent-finance','documents','dashboard','calendar','templates','doclibrary','assistant']);
+    if (_hashPage && _validPages.includes(_hashPage)) {
+      nav(_hashPage, _hashParam);
+    } else {
+      nav('dashboard');
+    }
     setTimeout(renderNewUserStepper, 50);
   } catch(err) {
     document.getElementById('main').innerHTML = '<div style="padding:32px;font-family:sans-serif"><h2 style="color:#E53E3E">Dashboard Error</h2><pre style="background:#fff5f5;padding:16px;border-radius:8px;font-size:12px;overflow:auto">'+err.stack+'</pre><p style="margin-top:12px;color:#666">Please share this error with the developer.</p></div>';
