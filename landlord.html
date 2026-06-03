@@ -15694,6 +15694,7 @@ async function _sendEsignRequest(pid, tid, mode) {
     landlord_name:      landlordName,
     landlord_signed_at: landlordSignedAt,
     landlord_sig_png:   landlordSigData,
+    landlord_email:     currentUser?.email || null,
   });
   if (insertErr) {
     if (btn) { btn.disabled = false; btn.textContent = 'Send to Tenant'; }
