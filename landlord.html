@@ -466,6 +466,9 @@ tr:hover td{background:rgba(59,111,232,0.04);transition:background .12s}
 </div><!-- end inner flex -->
 </div><!-- end app -->
 
+<!-- RESUME STICKY BAR (Option A) -->
+<div id="resume-sticky-bar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:8500;padding:0 0 env(safe-area-inset-bottom,0) 0"></div>
+
 <!-- MODAL -->
 <div class="mo" id="mo">
   <div class="mo-box">
@@ -1692,6 +1695,7 @@ async function initApp() {
       nav('dashboard');
     }
     setTimeout(renderNewUserStepper, 50);
+    setTimeout(_refreshResumeNudges, 600);
   } catch(err) {
     document.getElementById('main').innerHTML = '<div style="padding:32px;font-family:sans-serif"><h2 style="color:#E53E3E">Dashboard Error</h2><pre style="background:#fff5f5;padding:16px;border-radius:8px;font-size:12px;overflow:auto">'+err.stack+'</pre><p style="margin-top:12px;color:#666">Please share this error with the developer.</p></div>';
     _logError('Dashboard', err);
@@ -2168,6 +2172,8 @@ function closeMo(){
   document.getElementById('mo').classList.remove('open');
   const box = document.querySelector('.mo-box');
   if (box) box.classList.remove('mo-wide');
+  // After any modal closes, refresh resume nudges in case a step was completed or interrupted
+  setTimeout(_refreshResumeNudges, 300);
 }
 function closeModal() { closeMo(); }
 
@@ -5236,17 +5242,17 @@ function pgDashboard(){
       const _totalCerts = D.certs.length;
       // Score components (0-100):
       // 1. Cert validity (30pts)
-      const certScore  = _totalCerts>0 ? Math.round((_certChecks/_totalCerts)*30) : 30;
+      const certScore  = _totalCerts>0 ? Math.round((_certChecks/_totalCerts)*30) : 0;
       // 2. Rent health (30pts)
       const _lateR = D.rent.filter(r=>r.status==='Late').length;
       const _totalR= D.rent.filter(r=>['Paid','Late','Due'].includes(r.status)).length;
-      const rentScore = _totalR>0 ? Math.round(((_totalR-_lateR)/_totalR)*30) : 30;
+      const rentScore = _totalR>0 ? Math.round(((_totalR-_lateR)/_totalR)*30) : 0;
       // 3. Maintenance (20pts)
       const _awaabO = D.maintenance.filter(m=>m.awaab&&m.status!=='Resolved').length;
       const _urgO   = D.maintenance.filter(m=>m.priority==='Urgent'&&m.status!=='Resolved').length;
       const maintScore = _awaabO>0 ? 0 : _urgO>0 ? 8 : open>3 ? 12 : open>0 ? 16 : 20;
       // 4. KYC (20pts)
-      const _kycScore = _allTenants.length===0 ? 20 : Math.round((_allTenants.filter(t=>{
+      const _kycScore = _allTenants.length===0 ? 0 : Math.round((_allTenants.filter(t=>{
         const cl=t.compliance_checklist||{}; const keys=['rtr','id_docs','agreement'];
         return keys.every(k=>(cl[k]?.ra||'red')==='green');
       }).length/_allTenants.length)*20);
@@ -12397,6 +12403,108 @@ async function loadSetupBanner() {
 }
 
 // ── NEW USER ONBOARDING STEPPER ──
+// ── RESUME NUDGES: Option A (sticky bar) + Option C (dashboard card) ──
+function _refreshResumeNudges() {
+  _renderResumeStickyBar();
+  _renderSetupBannerCard();
+}
+
+// Returns all properties with incomplete tenancy setup
+function _getIncompleteSetups() {
+  return D.properties
+    .filter(p => p.status !== 'Archived')
+    .map(p => {
+      const prog = _getTenancyProgress(String(p.id));
+      if (!prog) return null;
+      const steps = [
+        { key: 'written_statement_done', label: 'Written Statement', action: `_tenancySetupStep2('${p.id}')` },
+        { key: 'tenant_docs_done',       label: 'Tenant documents',  action: () => { const lead = D.tenants.find(t => String(t.prop_id) === String(p.id) && t.is_lead && t.status === 'Active'); if (lead) nav('tenant-detail', String(lead.id)); } },
+        { key: 'property_docs_done',     label: 'Property compliance', action: `pdSetTab('${p.id}','compliance')` },
+        { key: 'welcome_kit_done',       label: 'Welcome Kit',       action: `moWelcomeKit('${p.id}')` },
+      ];
+      const nextStep = steps.find(s => !prog[s.key]);
+      const doneCount = steps.filter(s => prog[s.key]).length;
+      const allDone = doneCount === steps.length;
+      if (allDone) return null;
+      return { p, prog, nextStep, doneCount, total: steps.length };
+    })
+    .filter(Boolean);
+}
+
+// Option A — slim sticky bar at bottom showing next incomplete step
+function _renderResumeStickyBar() {
+  const bar = document.getElementById('resume-sticky-bar');
+  if (!bar) return;
+
+  // Don't show while modal is open
+  if (document.getElementById('mo')?.classList.contains('open')) { bar.style.display = 'none'; return; }
+  // Don't show on dashboard (Option C card handles it there)
+  if (window._currentPage === 'dashboard') { bar.style.display = 'none'; return; }
+
+  const incomplete = _getIncompleteSetups();
+  if (!incomplete.length) { bar.style.display = 'none'; return; }
+
+  // Show the most recently active one (first in list)
+  const { p, nextStep, doneCount, total } = incomplete[0];
+  const pct = Math.round((doneCount / total) * 100);
+  const actionAttr = typeof nextStep.action === 'string' ? `onclick="${nextStep.action}"` : '';
+
+  bar.style.display = 'block';
+  bar.innerHTML = `
+    <div style="background:var(--navy);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:12px;box-shadow:0 -2px 12px rgba(0,0,0,0.15);font-family:var(--font)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:11px;opacity:.65;margin-bottom:2px">↩ Resume setup — ${p.address}</div>
+        <div style="font-size:12px;font-weight:600">Next: ${nextStep.label}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+        <div style="font-size:10px;opacity:.6">${doneCount}/${total}</div>
+        <div style="width:48px;height:4px;background:rgba(255,255,255,0.2);border-radius:100px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:var(--green);border-radius:100px"></div>
+        </div>
+        <button ${actionAttr} style="font-size:11px;font-weight:700;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);border-radius:6px;color:#fff;padding:5px 12px;cursor:pointer;font-family:var(--font);white-space:nowrap">Continue →</button>
+        <button onclick="document.getElementById('resume-sticky-bar').style.display='none'" style="background:none;border:none;color:rgba(255,255,255,0.4);font-size:16px;cursor:pointer;padding:0 2px;line-height:1;font-family:var(--font)">✕</button>
+      </div>
+    </div>`;
+}
+
+// Option C — dashboard "Pick up where you left off" card
+function _renderSetupBannerCard() {
+  const slot = document.getElementById('setup-banner-slot');
+  if (!slot) return;
+  if (window._currentPage !== 'dashboard') return;
+
+  const incomplete = _getIncompleteSetups();
+  if (!incomplete.length) { slot.innerHTML = ''; return; }
+
+  const cards = incomplete.slice(0, 3).map(({ p, nextStep, doneCount, total }) => {
+    const pct = Math.round((doneCount / total) * 100);
+    const actionAttr = typeof nextStep.action === 'string' ? `onclick="${nextStep.action}"` : '';
+    return `
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--white);border:1px solid var(--border);border-radius:8px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.address}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">Next: <strong>${nextStep.label}</strong></div>
+          <div style="margin-top:6px;height:3px;background:var(--border);border-radius:100px;overflow:hidden;width:120px">
+            <div style="height:100%;width:${pct}%;background:var(--blue);border-radius:100px;transition:width .4s"></div>
+          </div>
+        </div>
+        <button ${actionAttr} class="btn btn-navy" style="font-size:11px;padding:6px 12px;white-space:nowrap;flex-shrink:0">Continue →</button>
+      </div>`;
+  }).join('');
+
+  const more = incomplete.length > 3 ? `<div style="font-size:11px;color:var(--muted);text-align:center;padding-top:4px">+${incomplete.length - 3} more properties with incomplete setup</div>` : '';
+
+  slot.innerHTML = `
+    <div style="background:linear-gradient(135deg,rgba(59,111,232,0.05),rgba(11,30,61,0.07));border:1px solid rgba(59,111,232,0.2);border-radius:12px;padding:14px 16px;margin-bottom:20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-size:13px;font-weight:700;color:var(--navy)">↩ Pick up where you left off</div>
+        <button onclick="this.closest('[id]').parentElement.innerHTML=''" style="background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;padding:0;line-height:1">✕</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">${cards}</div>
+      ${more}
+    </div>`;
+}
+
 function renderNewUserStepper() {
   // ── Detect real progress ──
   const hasProp    = D.properties.length > 0;
@@ -12557,6 +12665,7 @@ function renderNewUserStepper() {
 function nav(page, param){
   window._currentPage = page;
   window._currentParam = param || null;
+  setTimeout(_refreshResumeNudges, 400);
   // Trial expiry — soft lock: allow browsing, block write pages
   if (isExpired()) {
     const allowedPages = ['dashboard','properties','tenants','compliance','maintenance','rent-finance','documents','prop-detail'];
@@ -15576,7 +15685,7 @@ function moEsign(pid, tid) {
           <div style="font-size:12px;font-weight:600;color:var(--txt)">Generated document preview</div>
           <div style="display:flex;gap:8px">
             <button onclick="_esignDownloadDraft()" style="font-size:11px;color:var(--green-dark);background:rgba(0,168,122,0.08);border:1px solid rgba(0,168,122,0.25);border-radius:5px;padding:3px 10px;cursor:pointer;font-family:var(--font)">⬇ Download Draft</button>
-            <button onclick="_esignToggleEdit()" id="esign-edit-btn" style="font-size:11px;color:var(--blue);background:none;border:none;cursor:pointer">✏️ Edit</button>
+            <button onclick="_esignToggleEdit()" id="esign-edit-btn" style="font-size:11px;color:var(--blue);background:none;border:none;cursor:pointer">✏️ Edit terms</button>
             <button onclick="document.getElementById('esign-preview-a').style.display='none';document.getElementById('esign-generate-row').style.display='block';document.getElementById('esign-send-row-a').style.display='none';document.getElementById('esign-gen-btn').disabled=false;document.getElementById('esign-gen-btn').innerHTML='✦ Generate Document'" style="font-size:11px;color:var(--muted);background:none;border:none;cursor:pointer">✎ Regenerate</button>
           </div>
         </div>
@@ -15644,24 +15753,124 @@ function _esignDownloadDraft() {
   toast('📄 Draft downloaded — review it, then return here to sign and send');
 }
 
+// ── OPTION B: Structured clause editor ──
+// Shows mandatory clauses as locked, only Special Terms editable
 function _esignToggleEdit() {
   const preview = document.getElementById('esign-doc-preview');
-  const editor = document.getElementById('esign-doc-editor');
-  const btn = document.getElementById('esign-edit-btn');
-  if (!preview || !editor) return;
-  if (editor.style.display === 'none') {
-    // Switch to edit mode
-    editor.value = _esignDocHtml;
-    preview.style.display = 'none';
-    editor.style.display = 'block';
-    btn.textContent = '✓ Done';
-  } else {
-    // Save edits and switch back to preview
-    _esignDocHtml = editor.value;
-    preview.innerHTML = '<div style="all:initial;font-family:inherit;font-size:inherit;line-height:inherit;color:inherit">' + _esignDocHtml + '</div>';
-    editor.style.display = 'none';
-    preview.style.display = 'block';
-    btn.textContent = '✏️ Edit';
+  const editor  = document.getElementById('esign-doc-editor');
+  if (!preview) return;
+
+  // If structured editor already open — close it
+  const existing = document.getElementById('esign-structured-editor');
+  if (existing) { existing.remove(); preview.style.display = 'block'; return; }
+
+  // Extract current special terms from _esignDocHtml
+  // Look for content after the last mandatory section heading
+  let currentSpecial = '';
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(_esignDocHtml, 'text/html');
+    // Find special terms / additional conditions section
+    const allText = doc.body.innerText || doc.body.textContent || '';
+    const specialMatch = allText.match(/special terms[:\s\n]+([\s\S]*?)(?=\n[A-Z0-9]+\.|signature|signed by|$)/i);
+    if (specialMatch) currentSpecial = specialMatch[1].trim();
+  } catch(e) {}
+
+  const LOCKED_CLAUSES = [
+    { label: 'Tenancy type',        text: 'Assured Periodic Tenancy — no fixed term, periodic from start date under the Renters\' Rights Act 2025.' },
+    { label: 'Section 21 abolished',text: 'Section 21 no-fault eviction is abolished. Landlord may only recover possession via Section 8 grounds.' },
+    { label: 'Landlord notice',     text: 'Minimum 4 months\' notice required via valid Section 8 grounds only.' },
+    { label: 'Tenant notice',       text: 'Minimum 2 months\' written notice to quit required from tenant.' },
+    { label: 'Repair obligations',  text: 'Landlord responsible for structure, exterior, and installations under Section 11 Landlord and Tenant Act 1985.' },
+    { label: 'Awaab\'s Law',        text: 'Landlord must investigate hazards within 14 days and begin emergency repairs within 24 hours.' },
+    { label: 'Right of entry',      text: '24 hours\' written notice required except in emergencies.' },
+    { label: 'Deposit protection',  text: 'Deposit protected within 30 days; Prescribed Information served within 30 days of receipt.' },
+    { label: 'Rent increases',      text: 'Section 13 process only — maximum once per 12 months, 2 months\' written notice required.' },
+    { label: 'Quiet enjoyment',     text: 'Tenant has the right to quiet enjoyment of the property free from landlord harassment.' },
+  ];
+
+  const lockedHtml = LOCKED_CLAUSES.map(c => `
+    <div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:13px;margin-top:1px">🔒</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px">${c.label}</div>
+        <div style="font-size:12px;color:var(--txt);line-height:1.6;opacity:.7">${c.text}</div>
+      </div>
+    </div>`).join('');
+
+  preview.style.display = 'none';
+
+  const editorDiv = document.createElement('div');
+  editorDiv.id = 'esign-structured-editor';
+  editorDiv.innerHTML = `
+    <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--white)">
+      <div style="background:rgba(229,62,62,0.05);border-bottom:1px solid rgba(229,62,62,0.15);padding:10px 14px;display:flex;align-items:center;gap:8px">
+        <span style="font-size:13px">🔒</span>
+        <div>
+          <div style="font-size:12px;font-weight:700;color:var(--txt)">Mandatory RRA 2025 clauses — protected</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:1px">These clauses are required by law and cannot be removed or altered</div>
+        </div>
+      </div>
+      <div style="padding:4px 14px 8px;max-height:200px;overflow-y:auto">${lockedHtml}</div>
+    </div>
+    <div style="margin-top:12px">
+      <div style="font-size:12px;font-weight:700;color:var(--txt);margin-bottom:6px">✏️ Additional / special terms <span style="font-weight:400;color:var(--muted)">(editable)</span></div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Add, edit or remove your own clauses. Mandatory clauses above cannot be changed here.</div>
+      <textarea id="esign-special-terms-edit" rows="6" style="width:100%;border:1px solid var(--blue);border-radius:8px;padding:12px 14px;font-size:12px;line-height:1.6;font-family:var(--font);background:var(--white);color:var(--txt);resize:vertical;outline:none">${currentSpecial}</textarea>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button onclick="_esignApplyStructuredEdit()" class="btn btn-navy" style="font-size:12px;padding:7px 16px">✓ Apply changes</button>
+      <button onclick="(function(){document.getElementById('esign-structured-editor').remove();document.getElementById('esign-doc-preview').style.display='block';})()" style="font-size:12px;padding:7px 16px;border:1px solid var(--border);border-radius:7px;background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font)">Cancel</button>
+    </div>`;
+
+  preview.parentNode.insertBefore(editorDiv, preview.nextSibling);
+}
+
+async function _esignApplyStructuredEdit() {
+  const newTerms = (document.getElementById('esign-special-terms-edit')?.value || '').trim();
+  if (!_esignDocHtml) return;
+
+  const btn = document.querySelector('#esign-structured-editor .btn-navy');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Applying…'; }
+
+  // Ask AI to rebuild the special terms section only — mandatory clauses untouched
+  try {
+    const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 6000,
+        messages: [{ role: 'user', content: `You are updating a UK tenancy Written Statement HTML document.
+
+Here is the current document:
+${_esignDocHtml}
+
+The landlord wants to update ONLY the special/additional terms section to contain exactly this:
+${newTerms || 'None'}
+
+Rules:
+1. Do NOT alter any mandatory RRA 2025 clauses (Section 21, notice periods, Awaab's Law, deposit protection, rent review, quiet enjoyment, repair obligations, right of entry)
+2. ONLY replace the special terms / additional conditions section content
+3. If the new terms contain anything potentially unlawful or discriminatory under UK law, exclude it and add a visible HTML warning noting what was excluded and why
+4. Return the complete updated HTML document only — no preamble, no markdown` }]
+      })
+    });
+    if (!res.ok) throw new Error('API error');
+    const data = await res.json();
+    const updated = (data.content?.[0]?.text || '').replace(/^```html\s*/i,'').replace(/^```\s*/i,'').replace(/```\s*$/i,'').trim();
+    if (!updated) throw new Error('Empty response');
+    _esignDocHtml = updated;
+    const preview = document.getElementById('esign-doc-preview');
+    if (preview) {
+      preview.innerHTML = '<div style="all:initial;font-family:Georgia,serif;font-size:13px;line-height:1.8;color:#1a2332;padding:4px">' + _esignDocHtml + '</div>';
+      preview.style.display = 'block';
+    }
+    document.getElementById('esign-structured-editor')?.remove();
+    toast('✓ Special terms updated — mandatory clauses preserved');
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '✓ Apply changes'; }
+    toast('Failed to apply changes — please try again', true);
   }
 }
 
