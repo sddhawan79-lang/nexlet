@@ -2713,6 +2713,10 @@ async function confirmRelet(pid) {
       if (clearPortal) {
         await sb.from('tenants').update({ invite_token: null, invite_used: false, portal_enabled: false }).eq('id', t.id);
       }
+      // Mark as archived and hidden from active view — data retained for 6-year legal obligation
+      await sb.from('tenants').update({ archived: true, relet_prepared: true }).eq('id', t.id);
+      const cached = D.tenants.find(x => String(x.id) === String(t.id));
+      if (cached) { cached.archived = true; cached.relet_prepared = true; }
     }
 
     await logAudit('RELET_PREPARE', 'properties', pid,
@@ -6238,7 +6242,7 @@ function pgPropDetail(pid) {
 
   // Tabs — 4 tabs
   const tabDefs = [
-    { id:'tenant',      icon:'👤', label:'Tenants',     cnt: D.tenants.filter(x=>String(x.prop_id)===String(pid)).length },
+    { id:'tenant',      icon:'👤', label:'Tenants',     cnt: D.tenants.filter(x=>String(x.prop_id)===String(pid)&&!x.relet_prepared).length },
     { id:'compliance',  icon:'🛡', label:'Compliance',
       cnt: (() => {
         const propDocs = getDocsForProperty(pid);
@@ -6355,7 +6359,7 @@ function pdSetTab(pid, tab) {
 
 function pdTabContent(pid, tab) {
   const p = P(pid);
-  const ts = D.tenants.filter(x => String(x.prop_id) === String(pid));
+  const ts = D.tenants.filter(x => String(x.prop_id) === String(pid) && !x.relet_prepared);
   const t = ts[0];
   const pc = CF(pid);
   const pi = D.insurance.filter(i => String(i.prop_id) === String(pid));
