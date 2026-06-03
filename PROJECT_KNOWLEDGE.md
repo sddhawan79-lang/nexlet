@@ -3068,3 +3068,206 @@ ADD COLUMN IF NOT EXISTS landlord_address TEXT;
 | 10 | `stripe_price_id` NULL in webhook | Non-critical, plan_name/status correct |
 | 11 | `newsletter_opted_in` column missing from user_profiles | Post-launch backlog |
 | 12 | favicon.ico missing | Post-launch backlog |
+
+---
+
+### Session 32 — 3 June 2026 — Live Bug Fixes & UX Improvements
+
+**Date:** 3 June 2026
+**Files modified:** `landlord.html`, `esign.html`
+
+---
+
+#### 1. `portal_enabled` column missing from `tenants` table
+
+**Bug:** End Tenancy flow threw `Error: Could not find the 'portal_enabled' column of 'tenants' in the schema cache`. All End Tenancy options were non-functional.
+
+**Fix:** SQL migration run in Supabase SQL Editor:
+```sql
+ALTER TABLE tenants ADD COLUMN portal_enabled boolean DEFAULT true;
+```
+Default `true` so existing active tenants retain portal access. Code sets it to `false` on end/archive — no code change needed.
+
+---
+
+#### 2. Prepare to Re-let — tenant data not clearing from UI
+
+**Bug:** After "Clear & prepare", ended tenants still appeared on the property (stat cards, tenant tab, tenant count) making it look like the property was still occupied.
+
+**Root cause:** `confirmRelet()` cleared KYC docs and reset deposit/portal fields but never hid ended tenants from the active view. `pgPropDetail()` and `pdTabContent()` were fetching all tenants for the property including ended/archived ones.
+
+**Fix (landlord.html — 3 changes):**
+- `confirmRelet()` now sets `archived: true, relet_prepared: true` on all ended tenants and updates local cache
+- `pgPropDetail()` `t` variable: added `&& !x.relet_prepared` filter
+- `pdTabContent()` `ts` variable: added `&& !x.relet_prepared` filter  
+- Tenant tab count badge: added `&&!x.relet_prepared` filter
+
+**Data retention:** Tenant records are NOT deleted — retained in Supabase for 6-year legal obligation. `relet_prepared: true` hides them from the active UI only.
+
+**SQL migration required:**
+```sql
+ALTER TABLE tenants ADD COLUMN relet_prepared boolean DEFAULT false;
+```
+
+**Post re-let flow:** After "Clear & prepare" completes, `startTenancy(pid)` is auto-triggered (400ms delay) so landlord is immediately dropped into the guided tenancy setup wizard — same as adding a new property.
+
+---
+
+#### 3. Portal invite sending with e-sign (opt-in fix)
+
+**Bug:** Portal invite checkbox in Add Tenant flow was `checked` by default — invites fired automatically unless landlord actively unticked it.
+
+**Fix:** Removed `checked` attribute from `#ts-send-invite` checkbox. Changed fallback default from `true` to `false`:
+```js
+s.sendInvite = document.getElementById('ts-send-invite')?.checked ?? false;
+```
+Portal invite is now opt-in. Landlord must explicitly tick the box to send.
+
+---
+
+#### 4. E-sign modal — background page compression
+
+**Bug:** When e-sign modal opened with AI-generated written statement, the background app content visibly shrank/compressed.
+
+**Root cause:** `esign-doc-preview` div had `min-height:500px` forcing the modal taller than the viewport on many screens, fighting against the `max-height:90vh` CSS constraint and causing layout issues.
+
+**Fix (landlord.html — 2 CSS changes):**
+- `.mo-box`: `max-height:none; overflow-y:visible` → `max-height:90vh; overflow-y:auto` — modal caps at 90vh and scrolls internally
+- Mobile `.mo-box`: added `overflow-y:auto` (was missing despite having `max-height:92vh`)
+- `esign-doc-preview`: `min-height:500px; max-height:65vh` → `height:45vh; max-height:45vh` — fixed height prevents modal expanding beyond viewport
+
+---
+
+#### 5. Written statement — `\`\`\`html` appearing in document preview
+
+**Bug:** AI-generated written statement displayed raw markdown code fences (`` ```html `` at top, `` ``` `` at bottom) inside the preview and in signed PDFs.
+
+**Root cause:** Claude API returning markdown-wrapped HTML; response was stored raw without stripping fences.
+
+**Fix (landlord.html — line 15629):**
+```js
+_esignDocHtml = (data.content?.[0]?.text || '')
+  .replace(/^```html\s*/i, '')
+  .replace(/^```\s*/i, '')
+  .replace(/```\s*$/i, '')
+  .trim();
+```
+
+---
+
+#### 6. Signed documents panel — duplicate rows
+
+**Bug:** "Signed Documents" panel in property detail showed duplicate rows when the same tenant signed (or attempted to sign) multiple times.
+
+**Root cause:** Panel rendered all `status === 'signed'` records for the property with no deduplication.
+
+**Fix (landlord.html):** Deduplicated by `tenant_id + document_type` key, showing only the most recent signed record per tenant per document type:
+```js
+const _dedupMap = new Map();
+_allSigned.sort((a,b) => new Date(b.signed_at) - new Date(a.signed_at))
+  .forEach(r => {
+    const key = String(r.tenant_id) + '|' + r.document_type;
+    if (!_dedupMap.has(key)) _dedupMap.set(key, r);
+  });
+```
+
+---
+
+#### 7. Progress bar — written statement not ticking after signing
+
+**Bug:** Tenancy setup progress bar "Written Statement" step did not tick even after tenant had signed the document.
+
+**Root causes:**
+1. `_getTenancyProgress()` read only the stored `tenancy_setup_progress` JSONB — never cross-checked actual `D.esignReq` data
+2. `_markTenancyStep('written_statement_done')` fired on *send* not on *sign* — and if the bar re-rendered before DB write completed, it would miss the update
+
+**Fix (landlord.html — 2 changes):**
+
+**Fix A — `_getTenancyProgress()` auto-detection:**
+```js
+if (!prog.written_statement_done) {
+  const propTenantIds = D.tenants.filter(t => String(t.prop_id) === String(pid)).map(t => String(t.id));
+  const hasSigned = (D.esignReq || []).some(r =>
+    propTenantIds.includes(String(r.tenant_id)) &&
+    r.document_type === 'written_statement' &&
+    r.status === 'signed'
+  );
+  if (hasSigned) prog.written_statement_done = true;
+}
+```
+
+**Fix B — Auto-persist on `pgPropDetail` load:**
+On every property detail page load, if a signed written statement is detected in `D.esignReq` but `written_statement_done` is not yet persisted, `_markTenancyStep()` fires to write it to Supabase — ensuring the progress state is always accurate.
+
+---
+
+#### 8. Hash-based routing — refresh restores current page
+
+**Bug:** Refreshing the browser always navigated to the dashboard, losing the current page (property detail, tenant, compliance, etc.).
+
+**Root cause:** `initApp()` always called `nav('dashboard')` regardless of `window.location.hash`.
+
+**Fix (landlord.html — `initApp()`):**
+Hash routing was already partially implemented (`nav()` writes `#page/param` to URL). Added restore logic at startup:
+```js
+const _hash = window.location.hash.replace('#', '');
+const _parts = _hash.split('/');
+const _hashPage = _parts[0];
+const _hashParam = _parts.slice(1).join('/') || null;
+const _validPages = Object.keys(PAGES || {}).concat([...]);
+if (_hashPage && _validPages.includes(_hashPage)) {
+  nav(_hashPage, _hashParam);
+} else {
+  nav('dashboard');
+}
+```
+On refresh: reads hash, validates against known page list, navigates directly. Invalid or empty hash falls back to dashboard.
+
+---
+
+#### 9. esign.html — post-sign success screen redesigned (Option C)
+
+**Old:** Simple card with ✅ emoji, one-line message, download button.
+
+**New:** Step-completion timeline (Option C) with:
+- Navy gradient header with large checkmark, tenant name + date injected dynamically
+- 4 timeline steps: Document reviewed → Electronic consent given → Signed electronically → Copy emailed
+- Green connector lines between completed steps
+- Download button (primary, green) + "Close this tab" button (secondary)
+- Legal footer: "This document was signed electronically and is legally binding under the Electronic Communications Act 2000."
+- Tenant name and email injected from `_esignTenant` at point of success
+
+---
+
+#### Known issues updated
+
+| # | Issue | Status |
+|---|---|---|
+| 1 | ICO number placeholder in legal docs | Pending registration |
+| 2 | MX record for inbound email | Parked post-launch |
+| 3 | `login.html` newsletter signup checkbox | Not built |
+| 4 | `moFinancials` PDF export — jsPDF needed | Post-launch backlog |
+| 5 | Section 8 UX handoff to Form 3A | Post-launch backlog |
+| 6 | WhatsApp reminders | Post-launch backlog |
+| 7 | Free public compliance checker | Marketing priority |
+| 8 | Blog / content hub | Marketing priority |
+| 9 | Postcode finder — replace with getAddress.io | Post-launch backlog |
+| 10 | `stripe_price_id` NULL — sandbox test data only, live table clean | Closed |
+| 11 | `newsletter_opted_in` column missing from user_profiles | Pending SQL |
+| 12 | favicon.ico missing | Pending |
+| 13 | Duplicate tenant KYC sticky bar | Next session |
+| 14 | `relet_prepared` column needed on tenants | Run SQL above |
+| 15 | `portal_enabled` column needed on tenants | ✅ Fixed — SQL run |
+
+---
+
+#### SQL migrations required (Session 32)
+
+```sql
+-- 1. portal_enabled column (already run)
+ALTER TABLE tenants ADD COLUMN portal_enabled boolean DEFAULT true;
+
+-- 2. relet_prepared column (run before deploying landlord.html)
+ALTER TABLE tenants ADD COLUMN relet_prepared boolean DEFAULT false;
+```
+
