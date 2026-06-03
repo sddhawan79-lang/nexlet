@@ -1,4 +1,5 @@
-/**
+/** 
+ *
  * js/signup.js
  * Sign-up page logic for signup.html.
  * Dependencies: Supabase CDN, js/lib/supabase-client.js (window.sb)
@@ -116,10 +117,11 @@
 
     if (!email) { _showError('Please enter your email address.'); return; }
     if (!pw) { _showError('Please enter a password.'); return; }
+    if (!cp) { _showError('Please confirm your password.'); return; }
+    if (pw !== cp) { _showError('Passwords do not match.'); return; }
 
     var score = _updateStrength(pw);
     if (score < 2) { _showError('Password is too weak. Please choose a stronger password.'); return; }
-    if (pw !== cp) { _showError('Passwords do not match.'); return; }
 
     if (btn) {
       btn.disabled = true;
@@ -127,7 +129,7 @@
     }
 
     try {
-      var result = await window.sb.auth.signUp({
+      var result = await window.RSA.sb.auth.signUp({
         email: email,
         password: pw,
         options: { data: { newsletter_opted_in: newsletter } }
@@ -148,7 +150,7 @@
         // Upsert newsletter preference — fire and forget
         var uid = result.data.user.id;
         var now = new Date().toISOString();
-        window.sb.from('user_profiles').upsert({
+        window.RSA.sb.from('user_profiles').upsert({
           id: uid,
           newsletter_opted_in: newsletter,
           newsletter_opted_at: newsletter ? now : null
@@ -169,21 +171,14 @@
 
   // ── INIT ──
   async function _init() {
-    // Wait for Supabase client
-    var tries = 0;
-    while (!window.sb && tries < 40) {
-      await new Promise(function(r) { setTimeout(r, 50); });
-      tries++;
-    }
-    if (!window.sb) {
-      console.error('[signup] Supabase client not loaded');
-      _showError('Service unavailable. Please refresh the page.');
-      return;
+    // Wait for Supabase client (stored on RSA namespace by js/lib/supabase-client.js)
+    while (!(window.RSA && window.RSA.sb)) {
+      await new Promise(function(r) { setTimeout(r, 100); });
     }
 
     // Check if already logged in
     try {
-      var session = await window.sb.auth.getSession();
+      var session = await window.RSA.sb.auth.getSession();
       if (session && session.data && session.data.session) {
         window.location.href = 'landlord.html';
         return;

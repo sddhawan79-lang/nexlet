@@ -141,7 +141,7 @@ rentsafeai/
 
 > **Session 20 files listed below** (`cron_setup.sql`, `email-*.html`, `sidebar-*.html`) are referenced in the change log but do not yet exist in the repo. Same for `session14_*.sql`, `session13_inventory_reports.sql`.
 
-> **`supabase/functions/ai-proxy/index.ts`** and **`supabase/functions/stripe-checkout/index.ts`** exist in repo.
+> **`supabase/functions/`** directories exist for: `ai-proxy`, `stripe-checkout`, `stripe-webhook`.
 
 ### HTML File Responsibilities
 
@@ -2061,114 +2061,95 @@ When **touching any of these files for a new feature or bug fix**, follow this p
 
 ## 14. Stripe Integration Guide
 
-> **Architecture:** Stripe Checkout (hosted). No Stripe.js SDK needed on the frontend.
-> The browser is redirected to Stripe's own payment page, then back to `profile.html`.
+> **Architecture:** Stripe Payment Links (hosted checkout). No edge function needed for checkout.
+> The browser opens the Stripe Payment Link in a new tab, then Stripe fires webhook events to
+> `stripe-webhook` to record the subscription in the database.
 
 ### How the Payment Flow Works
 
 ```
 User clicks "Subscribe" on profile.html
   ↓
-js/profile.js calls supabase.functions.invoke('stripe-checkout', { body: { plan } })
+js/profile.js reads data-link from the plan button
   ↓
-stripe-checkout Edge Function:
-  1. Verifies user's Supabase JWT
-  2. Retrieves or creates a Stripe Customer (cus_...)
-  3. Creates a Stripe Checkout Session (cs_...)
-  4. Returns { url: 'https://checkout.stripe.com/pay/cs_...' }
+window.open(link, '_blank') opens Stripe Payment Link in a new tab
   ↓
-profile.js redirects browser to that URL
+User pays on Stripe's hosted checkout page
   ↓
-User pays on Stripe's hosted page (card 4242 4242 4242 4242 for test)
-  ↓
-Stripe redirects to: profile.html?success=true  (or ?canceled=true)
-  ↓
-In the background, Stripe POSTs 'checkout.session.completed' to:
+Stripe fires 'checkout.session.completed' to webhook:
   https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/stripe-webhook
   ↓
-stripe-webhook Edge Function upserts stripe_subscriptions table
+stripe-webhook Edge Function:
+  1. Verifies Stripe-Signature
+  2. Retrieves subscription from Stripe API
+  3. Maps price_id → plan_name via PRICE_TO_PLAN
+  4. Upserts into stripe_subscriptions table
 ```
 
-### Setup Checklist (one-time)
+### Plan Cards
 
-#### Step 1 — Stripe Dashboard: Get API Keys
-1. Log in to https://dashboard.stripe.com
-2. Go to **Developers → API Keys**
-3. Make sure you're in **Test mode** (toggle in top-left)
-4. Copy the **Publishable key** (`pk_test_...`) — not needed in code yet, save for later
-5. Reveal and copy the **Secret key** (`sk_test_...`) — needed as Supabase secret
-
-#### Step 2 — Stripe Dashboard: Create Products & Prices
-1. Go to **Products → Add product**
-2. Create three products with **Recurring** pricing:
-
-| Product name | Price | Billing period |
+| Plan | Payment Link | Price ID |
 |---|---|---|
-| NexLet Starter | £9.99 | Monthly |
-| NexLet Landlord | £19.99 | Monthly |
-| NexLet Portfolio | £39.99 | Monthly |
+| Starter | `https://buy.stripe.com/test_7sY8wQ023cGmg6d5oX9Ve01` | `price_1TYw3tICNn8XxxhbIhMQ47XE` |
+| Landlord | `https://buy.stripe.com/test_bJe6oI7uv0XE7zHaJh9Ve02` | `price_1TYwEuICNn8XxxhbXpY1bl1O` |
+| Portfolio | `https://buy.stripe.com/test_fZueVebKLeOu9HPg3B9Ve04` | `price_1TYwIHICNn8Xxxhbw76LS7h5` |
 
-3. After creating each, click on the price row and copy the **Price ID** (`price_...`)
+### Stripe Payment Link Creation (one-time setup)
 
-#### Step 3 — Supabase Dashboard: Add Edge Function Secrets
-Go to: Supabase Dashboard → Project Settings → Edge Functions → Secrets
+1. Log in to https://dashboard.stripe.com
+2. Go to **Products → Add product** — create 3 products (Starter, Landlord, Portfolio) with recurring pricing
+3. For each product, create a **Payment Link** — copy the buy.stripe.com URL
+4. Update `data-link` attributes in `profile.html` with the Payment Link URLs
 
-| Secret name | Value |
+### Edge Function Secrets (for stripe-webhook)
+
+Set in Supabase Dashboard → Project Settings → Edge Functions → Secrets:
+
+| Secret | Value source |
 |---|---|
-| `STRIPE_SECRET_KEY` | `sk_test_...` from Step 1 |
-| `STRIPE_PRICE_STARTER` | `price_...` for £9.99 product |
-| `STRIPE_PRICE_LANDLORD` | `price_...` for £19.99 product |
-| `STRIPE_PRICE_PORTFOLIO` | `price_...` for £39.99 product |
-| `STRIPE_WEBHOOK_SECRET` | Set in Step 5 below |
+| `STRIPE_SECRET_KEY` | Stripe Dashboard → Developers → API Keys (`sk_test_...`) |
+| `STRIPE_WEBHOOK_SECRET` | Stripe Dashboard → Webhooks → signing secret (`whsec_...`) |
 
-#### Step 4 — Run Database Migration
-Run `sprint13_db.sql` in **Supabase → SQL Editor**.
+### Deploy stripe-webhook
 
-#### Step 5 — Deploy Edge Functions
 ```powershell
-# Checkout function (standard JWT verification)
-Copy-Item stripe-checkout-index.ts supabase\functions\stripe-checkout\index.ts -Force
-npx supabase functions deploy stripe-checkout --project-ref mahtcfukgzbonwibtsxz
-
-# Webhook function (no JWT — Stripe calls it directly)
 Copy-Item stripe-webhook-index.ts supabase\functions\stripe-webhook\index.ts -Force
 npx supabase functions deploy stripe-webhook --project-ref mahtcfukgzbonwibtsxz --no-verify-jwt
 ```
 
-#### Step 6 — Register Webhook in Stripe Dashboard
+### Register Webhook in Stripe Dashboard
+
 1. Go to **Developers → Webhooks → Add endpoint**
-2. Endpoint URL: `https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/stripe-webhook`
-3. Select events to listen for:
-   - `checkout.session.completed`
-   - `customer.subscription.updated`
-   - `customer.subscription.deleted`
-4. Click **Add endpoint**
-5. On the webhook detail page, reveal the **Signing secret** (`whsec_...`)
-6. Add this as the `STRIPE_WEBHOOK_SECRET` secret in Supabase (Step 3)
+2. URL: `https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/stripe-webhook`
+3. Events: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`
+4. Copy the signing secret → set as `STRIPE_WEBHOOK_SECRET`
 
-#### Step 7 — Test the Flow
-1. Open `profile.html` as a logged-in user
-2. Click **Subscribe** on any plan
-3. On the Stripe checkout page, use test card: `4242 4242 4242 4242`, any future date, any CVC
-4. After payment, you should be redirected to `profile.html?success=true`
-5. The plan card should show "Current Plan" after the webhook fires (may take a few seconds)
-6. Check Supabase: `SELECT * FROM stripe_subscriptions;` to confirm the row was written
+### Database
 
-### Test Card Numbers (Stripe Test Mode)
-| Card number | Scenario |
+`sprint13_db.sql` creates the `stripe_subscriptions` table with columns:
+`id`, `user_id`, `stripe_customer_id`, `stripe_subscription_id`, `stripe_price_id`, `plan_name`, `status`, `current_period_start`, `current_period_end`, `cancel_at_period_end`, `created_at`, `updated_at`
+
+### Test the Flow
+
+1. Open `profile.html` as logged-in user → click Subscribe on any plan
+2. Pays on Stripe test page (card `4242 4242 4242 4242`, any future date, any CVC)
+3. Webhook fires → `SELECT * FROM stripe_subscriptions;` should show a row
+
+### Test Card Numbers
+
+| Card | Scenario |
 |---|---|
-| `4242 4242 4242 4242` | Successful payment |
-| `4000 0025 0000 3155` | Requires 3D Secure authentication |
-| `4000 0000 0000 9995` | Card declined |
+| `4242 4242 4242 4242` | Successful |
+| `4000 0025 0000 3155` | 3D Secure |
+| `4000 0000 0000 9995` | Declined |
 
 ### Going Live
-When ready to accept real payments:
-1. In Stripe Dashboard, switch from **Test mode** to **Live mode**
-2. Get the **live** Secret key (`sk_live_...`) and Publishable key
-3. Create the same 3 Products/Prices in Live mode and copy their Price IDs
-4. Replace all Supabase secrets with the live values
-5. Register a new webhook endpoint in Live mode (same URL)
-6. No code changes needed — the same edge functions work for both modes
+
+1. Switch Stripe to **Live mode**
+2. Get live Secret key (`sk_live_...`) and create live Price IDs / Payment Links
+3. Update `data-link` values in `profile.html` with live Payment Link URLs
+4. Update `PRICE_TO_PLAN` mapping in `stripe-webhook-index.ts` with live Price IDs
+5. Redeploy `stripe-webhook`, register live webhook endpoint
 
 ---
 
@@ -3069,205 +3050,41 @@ ADD COLUMN IF NOT EXISTS landlord_address TEXT;
 | 11 | `newsletter_opted_in` column missing from user_profiles | Post-launch backlog |
 | 12 | favicon.ico missing | Post-launch backlog |
 
----
-
-### Session 32 — 3 June 2026 — Live Bug Fixes & UX Improvements
+### Session 31 — 3 June 2026 — Profile Subscribe → Stripe Payment Links
 
 **Date:** 3 June 2026
-**Files modified:** `landlord.html`, `esign.html`
+**Files modified:** `profile.html`, `js/profile.js`, `stripe-checkout-index.ts`, `stripe-webhook-index.ts`
 
----
+#### Change Summary
 
-#### 1. `portal_enabled` column missing from `tenants` table
+Profile page Subscribe buttons now link directly to Stripe Payment Links (buy.stripe.com) instead of calling the `stripe-checkout` edge function. This simplifies the checkout flow and doesn't require the edge function to be deployed.
 
-**Bug:** End Tenancy flow threw `Error: Could not find the 'portal_enabled' column of 'tenants' in the schema cache`. All End Tenancy options were non-functional.
+| Plan | Payment Link |
+|---|---|
+| Starter | `https://buy.stripe.com/test_7sY8wQ023cGmg6d5oX9Ve01` |
+| Landlord | `https://buy.stripe.com/test_bJe6oI7uv0XE7zHaJh9Ve02` |
+| Portfolio | `https://buy.stripe.com/test_fZueVebKLeOu9HPg3B9Ve04` |
 
-**Fix:** SQL migration run in Supabase SQL Editor:
-```sql
-ALTER TABLE tenants ADD COLUMN portal_enabled boolean DEFAULT true;
-```
-Default `true` so existing active tenants retain portal access. Code sets it to `false` on end/archive — no code change needed.
+#### Changes
 
----
+- **`profile.html`** — Subscribe buttons changed from `data-price` (price IDs) to `data-link` (Stripe Payment Link URLs)
+- **`js/profile.js`** — Click handler reads `btn.dataset.link` and calls `window.open(link, '_blank')` — no edge function call
+- **`stripe-checkout-index.ts`** — Removed `PRICE_IDS` mapping; accepts `price_id` directly in request body (still functional if deployed);
+- **`stripe-webhook-index.ts`** — Added `PRICE_TO_PLAN` mapping for the three price IDs; maps `price_id` → `plan_name` in `checkout.session.completed` handler; removed `STRIPE_PRICE_*` secret dependency
 
-#### 2. Prepare to Re-let — tenant data not clearing from UI
+#### Stripe Webhook Price-to-Plan Mapping
 
-**Bug:** After "Clear & prepare", ended tenants still appeared on the property (stat cards, tenant tab, tenant count) making it look like the property was still occupied.
-
-**Root cause:** `confirmRelet()` cleared KYC docs and reset deposit/portal fields but never hid ended tenants from the active view. `pgPropDetail()` and `pdTabContent()` were fetching all tenants for the property including ended/archived ones.
-
-**Fix (landlord.html — 3 changes):**
-- `confirmRelet()` now sets `archived: true, relet_prepared: true` on all ended tenants and updates local cache
-- `pgPropDetail()` `t` variable: added `&& !x.relet_prepared` filter
-- `pdTabContent()` `ts` variable: added `&& !x.relet_prepared` filter  
-- Tenant tab count badge: added `&&!x.relet_prepared` filter
-
-**Data retention:** Tenant records are NOT deleted — retained in Supabase for 6-year legal obligation. `relet_prepared: true` hides them from the active UI only.
-
-**SQL migration required:**
-```sql
-ALTER TABLE tenants ADD COLUMN relet_prepared boolean DEFAULT false;
+```typescript
+const PRICE_TO_PLAN: Record<string, string> = {
+  'price_1TYw3tICNn8XxxhbIhMQ47XE': 'starter',
+  'price_1TYwEuICNn8XxxhbXpY1bl1O': 'landlord',
+  'price_1TYwIHICNn8Xxxhbw76LS7h5': 'portfolio',
+};
 ```
 
-**Post re-let flow:** After "Clear & prepare" completes, `startTenancy(pid)` is auto-triggered (400ms delay) so landlord is immediately dropped into the guided tenancy setup wizard — same as adding a new property.
+#### Deploy Status
 
----
-
-#### 3. Portal invite sending with e-sign (opt-in fix)
-
-**Bug:** Portal invite checkbox in Add Tenant flow was `checked` by default — invites fired automatically unless landlord actively unticked it.
-
-**Fix:** Removed `checked` attribute from `#ts-send-invite` checkbox. Changed fallback default from `true` to `false`:
-```js
-s.sendInvite = document.getElementById('ts-send-invite')?.checked ?? false;
-```
-Portal invite is now opt-in. Landlord must explicitly tick the box to send.
-
----
-
-#### 4. E-sign modal — background page compression
-
-**Bug:** When e-sign modal opened with AI-generated written statement, the background app content visibly shrank/compressed.
-
-**Root cause:** `esign-doc-preview` div had `min-height:500px` forcing the modal taller than the viewport on many screens, fighting against the `max-height:90vh` CSS constraint and causing layout issues.
-
-**Fix (landlord.html — 2 CSS changes):**
-- `.mo-box`: `max-height:none; overflow-y:visible` → `max-height:90vh; overflow-y:auto` — modal caps at 90vh and scrolls internally
-- Mobile `.mo-box`: added `overflow-y:auto` (was missing despite having `max-height:92vh`)
-- `esign-doc-preview`: `min-height:500px; max-height:65vh` → `height:45vh; max-height:45vh` — fixed height prevents modal expanding beyond viewport
-
----
-
-#### 5. Written statement — `\`\`\`html` appearing in document preview
-
-**Bug:** AI-generated written statement displayed raw markdown code fences (`` ```html `` at top, `` ``` `` at bottom) inside the preview and in signed PDFs.
-
-**Root cause:** Claude API returning markdown-wrapped HTML; response was stored raw without stripping fences.
-
-**Fix (landlord.html — line 15629):**
-```js
-_esignDocHtml = (data.content?.[0]?.text || '')
-  .replace(/^```html\s*/i, '')
-  .replace(/^```\s*/i, '')
-  .replace(/```\s*$/i, '')
-  .trim();
-```
-
----
-
-#### 6. Signed documents panel — duplicate rows
-
-**Bug:** "Signed Documents" panel in property detail showed duplicate rows when the same tenant signed (or attempted to sign) multiple times.
-
-**Root cause:** Panel rendered all `status === 'signed'` records for the property with no deduplication.
-
-**Fix (landlord.html):** Deduplicated by `tenant_id + document_type` key, showing only the most recent signed record per tenant per document type:
-```js
-const _dedupMap = new Map();
-_allSigned.sort((a,b) => new Date(b.signed_at) - new Date(a.signed_at))
-  .forEach(r => {
-    const key = String(r.tenant_id) + '|' + r.document_type;
-    if (!_dedupMap.has(key)) _dedupMap.set(key, r);
-  });
-```
-
----
-
-#### 7. Progress bar — written statement not ticking after signing
-
-**Bug:** Tenancy setup progress bar "Written Statement" step did not tick even after tenant had signed the document.
-
-**Root causes:**
-1. `_getTenancyProgress()` read only the stored `tenancy_setup_progress` JSONB — never cross-checked actual `D.esignReq` data
-2. `_markTenancyStep('written_statement_done')` fired on *send* not on *sign* — and if the bar re-rendered before DB write completed, it would miss the update
-
-**Fix (landlord.html — 2 changes):**
-
-**Fix A — `_getTenancyProgress()` auto-detection:**
-```js
-if (!prog.written_statement_done) {
-  const propTenantIds = D.tenants.filter(t => String(t.prop_id) === String(pid)).map(t => String(t.id));
-  const hasSigned = (D.esignReq || []).some(r =>
-    propTenantIds.includes(String(r.tenant_id)) &&
-    r.document_type === 'written_statement' &&
-    r.status === 'signed'
-  );
-  if (hasSigned) prog.written_statement_done = true;
-}
-```
-
-**Fix B — Auto-persist on `pgPropDetail` load:**
-On every property detail page load, if a signed written statement is detected in `D.esignReq` but `written_statement_done` is not yet persisted, `_markTenancyStep()` fires to write it to Supabase — ensuring the progress state is always accurate.
-
----
-
-#### 8. Hash-based routing — refresh restores current page
-
-**Bug:** Refreshing the browser always navigated to the dashboard, losing the current page (property detail, tenant, compliance, etc.).
-
-**Root cause:** `initApp()` always called `nav('dashboard')` regardless of `window.location.hash`.
-
-**Fix (landlord.html — `initApp()`):**
-Hash routing was already partially implemented (`nav()` writes `#page/param` to URL). Added restore logic at startup:
-```js
-const _hash = window.location.hash.replace('#', '');
-const _parts = _hash.split('/');
-const _hashPage = _parts[0];
-const _hashParam = _parts.slice(1).join('/') || null;
-const _validPages = Object.keys(PAGES || {}).concat([...]);
-if (_hashPage && _validPages.includes(_hashPage)) {
-  nav(_hashPage, _hashParam);
-} else {
-  nav('dashboard');
-}
-```
-On refresh: reads hash, validates against known page list, navigates directly. Invalid or empty hash falls back to dashboard.
-
----
-
-#### 9. esign.html — post-sign success screen redesigned (Option C)
-
-**Old:** Simple card with ✅ emoji, one-line message, download button.
-
-**New:** Step-completion timeline (Option C) with:
-- Navy gradient header with large checkmark, tenant name + date injected dynamically
-- 4 timeline steps: Document reviewed → Electronic consent given → Signed electronically → Copy emailed
-- Green connector lines between completed steps
-- Download button (primary, green) + "Close this tab" button (secondary)
-- Legal footer: "This document was signed electronically and is legally binding under the Electronic Communications Act 2000."
-- Tenant name and email injected from `_esignTenant` at point of success
-
----
-
-#### Known issues updated
-
-| # | Issue | Status |
+| Function | Source | Status |
 |---|---|---|
-| 1 | ICO number placeholder in legal docs | Pending registration |
-| 2 | MX record for inbound email | Parked post-launch |
-| 3 | `login.html` newsletter signup checkbox | Not built |
-| 4 | `moFinancials` PDF export — jsPDF needed | Post-launch backlog |
-| 5 | Section 8 UX handoff to Form 3A | Post-launch backlog |
-| 6 | WhatsApp reminders | Post-launch backlog |
-| 7 | Free public compliance checker | Marketing priority |
-| 8 | Blog / content hub | Marketing priority |
-| 9 | Postcode finder — replace with getAddress.io | Post-launch backlog |
-| 10 | `stripe_price_id` NULL — sandbox test data only, live table clean | Closed |
-| 11 | `newsletter_opted_in` column missing from user_profiles | Pending SQL |
-| 12 | favicon.ico missing | Pending |
-| 13 | Duplicate tenant KYC sticky bar | Next session |
-| 14 | `relet_prepared` column needed on tenants | Run SQL above |
-| 15 | `portal_enabled` column needed on tenants | ✅ Fixed — SQL run |
-
----
-
-#### SQL migrations required (Session 32)
-
-```sql
--- 1. portal_enabled column (already run)
-ALTER TABLE tenants ADD COLUMN portal_enabled boolean DEFAULT true;
-
--- 2. relet_prepared column (run before deploying landlord.html)
-ALTER TABLE tenants ADD COLUMN relet_prepared boolean DEFAULT false;
-```
-
+| `stripe-webhook` | `supabase/functions/stripe-webhook/index.ts` | Updated — needs redeploy |
+| `stripe-checkout` | `supabase/functions/stripe-checkout/index.ts` | Updated — no longer called from profile.html |

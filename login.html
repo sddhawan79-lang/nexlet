@@ -238,7 +238,12 @@ async function login() {
   if (error) {
     btn.disabled = false;
     btn.innerHTML = 'Log in';
-    showError(err, 'Incorrect email or password. Please try again.');
+    var msg = error.message || '';
+    if (msg.toLowerCase().indexOf('email not confirmed') !== -1 || msg.toLowerCase().indexOf('not confirmed') !== -1) {
+      showError(err, 'Email not confirmed. Please check your inbox for the confirmation link.');
+    } else {
+      showError(err, 'Incorrect email or password. Please try again.');
+    }
     document.getElementById('email').classList.add('error');
     document.getElementById('password').classList.add('error');
     document.getElementById('password').value = '';
