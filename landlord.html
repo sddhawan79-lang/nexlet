@@ -3654,11 +3654,25 @@ function _getTenancyProgress(pid) {
   const defaults = { co_tenants_done: false, written_statement_done: false, tenant_docs_done: false, property_docs_done: false, welcome_kit_done: false };
   const prog = Object.assign({}, defaults, lead.tenancy_setup_progress || {});
   if (!prog.written_statement_done) {
-    const propTenantIds = D.tenants.filter(t => String(t.prop_id) === String(pid)).map(t => String(t.id));
-    const hasSigned = (D.esignReq || []).some(r => propTenantIds.includes(String(r.tenant_id)) && r.document_type === 'written_statement' && r.status === 'signed');
-    if (hasSigned) prog.written_statement_done = true;
+    const propTenants = D.tenants.filter(t => String(t.prop_id) === String(pid) && t.status === 'Active' && t.email);
+    // All tenants with email must have signed — not just one
+    if (propTenants.length > 0) {
+      const allSigned = propTenants.every(tenant =>
+        (D.esignReq || []).some(r => String(r.tenant_id) === String(tenant.id) && r.document_type === 'written_statement' && r.status === 'signed')
+      );
+      if (allSigned) prog.written_statement_done = true;
+    }
   }
   return prog;
+}
+
+// Returns signing status per tenant for nudge display
+function _getEsignStatus(pid) {
+  const propTenants = D.tenants.filter(t => String(t.prop_id) === String(pid) && t.status === 'Active' && t.email);
+  return propTenants.map(tenant => {
+    const req = (D.esignReq || []).find(r => String(r.tenant_id) === String(tenant.id) && r.document_type === 'written_statement');
+    return { tenant, req, signed: req?.status === 'signed', sent: !!req, pending: req && req.status !== 'signed' };
+  });
 }
 
 
@@ -3676,6 +3690,36 @@ async function _markTenancyStep(pid, stepKey, navToPropDetail) {
   } catch(e) { console.warn('Progress save failed', e); }
   if (navToPropDetail) nav('prop-detail', pid);
   else { const el = document.getElementById('tenancy-setup-bar-' + pid); if (el) el.outerHTML = _renderTenancySetupBar(pid); }
+}
+
+// Send a reminder email to all tenants who haven't signed yet
+async function _nudgeUnsignedTenants(pid) {
+  const p = P(pid); if (!p) return;
+  const esignStatus = _getEsignStatus(pid);
+  const pending = esignStatus.filter(x => x.pending);
+  if (!pending.length) { toast('All tenants have signed', false); return; }
+  let sent = 0;
+  for (const { tenant, req } of pending) {
+    if (!req || !tenant.email) continue;
+    const signingLink = `https://nexlet.co.uk/esign.html?esign=${req.token}`;
+    const expDate = req.expires_at ? new Date(req.expires_at).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : '7 days from original send';
+    const html = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:28px 24px;color:#1A2B45">
+      <div style="border-bottom:2px solid #0B1E3D;padding-bottom:12px;margin-bottom:20px"><span style="font-size:17px;font-weight:700;color:#0B1E3D">NexLet</span></div>
+      <h2 style="font-size:16px;font-weight:600;margin-bottom:8px">Reminder — signature still needed</h2>
+      <p style="font-size:13px;color:#7A8FA6;margin-bottom:20px">Hi ${tenant.name}, this is a friendly reminder that your tenancy document for <strong>${p.address}</strong> still needs your signature.</p>
+      <div style="text-align:center;margin:28px 0"><a href="${signingLink}" style="background:#0B1E3D;color:#fff;padding:13px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;display:inline-block">Sign Now →</a></div>
+      <p style="font-size:12px;color:#7A8FA6">Or copy this link: <a href="${signingLink}" style="color:#3B6FE8;word-break:break-all">${signingLink}</a></p>
+      <div style="margin-top:20px;background:#FEF3C7;border-radius:8px;padding:12px 14px;font-size:12px;color:#92400E">⏰ This link expires on ${expDate}.</div>
+      <div style="margin-top:20px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#999">Sent via NexLet · documents@nexlet.co.uk</div>
+    </div>`;
+    await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'send_email', to: tenant.email, subject: `Reminder — please sign your tenancy document for ${p.address}`, html })
+    }).catch(e => console.error('[nudge] email failed', e));
+    sent++;
+  }
+  toast(`📧 Reminder sent to ${sent} tenant${sent!==1?'s':''}`);
 }
 
 // Render the sticky progress bar — returns HTML string or '' if complete/not needed
@@ -3696,21 +3740,47 @@ function _renderTenancySetupBar(pid) {
   const doneCount = steps.filter(s => prog[s.key]).length;
   const total = steps.length;
   const pct = Math.round((doneCount / total) * 100);
-  // Find first incomplete step
   const nextStep = steps.find(s => !prog[s.key]);
-  // Welcome kit locked until tenant_docs and property_docs both done
   const welcomeLocked = !prog.tenant_docs_done || !prog.property_docs_done;
+  const welcomeReady = prog.tenant_docs_done && prog.property_docs_done && !prog.welcome_kit_done;
+
+  // Signing status for nudge
+  const esignStatus = _getEsignStatus(pid);
+  const pendingSigners = esignStatus.filter(x => x.pending);
+  const noneStarted = esignStatus.length > 0 && esignStatus.every(x => !x.sent);
+
   const stepsHtml = steps.map(s => {
     const done = prog[s.key];
-    const locked = s.key === 'welcome_kit_done' && welcomeLocked && !done;
+    const isCompliance = s.key === 'property_docs_done';
+    const isWelcome = s.key === 'welcome_kit_done';
+    const softWarn = isCompliance && !done && !prog.written_statement_done;
+    const locked = isWelcome && welcomeLocked && !done;
+    const highlight = isWelcome && welcomeReady;
     const onclickAttr = (!done && !locked) ? `onclick="${s.action}"` : '';
-    return `<button ${onclickAttr} style="display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:7px;background:${done?'rgba(0,135,90,0.08)':locked?'rgba(0,0,0,0.03)':'var(--white)'};border:1px solid ${done?'rgba(0,135,90,0.2)':locked?'var(--border)':'var(--border)'};cursor:${locked||done?'default':'pointer'};opacity:${locked?'.5':'1'};font-family:var(--font);width:100%;text-align:left">
-      <span style="font-size:14px">${done ? '✅' : locked ? '🔒' : s.icon}</span>
-      <span style="font-size:11px;font-weight:${done?'500':'600'};color:${done?'var(--muted)':'var(--txt)'};text-decoration:${done?'line-through':'none'}">${s.label}</span>
-      ${(!done && !locked) ? '<span style="font-size:10px;color:var(--blue);margin-left:auto">→</span>' : ''}
+    return `<button ${onclickAttr} style="display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:7px;background:${done?'rgba(0,135,90,0.08)':highlight?'rgba(0,168,122,0.12)':locked?'rgba(0,0,0,0.03)':'var(--white)'};border:1px solid ${done?'rgba(0,135,90,0.2)':highlight?'rgba(0,168,122,0.4)':locked?'var(--border)':'var(--border)'};cursor:${locked||done?'default':'pointer'};font-family:var(--font);width:100%;text-align:left;position:relative${highlight?';animation:pulse-green 2s infinite':''}">
+      <span style="font-size:14px">${done ? '✅' : locked ? '🔒' : highlight ? '🟢' : s.icon}</span>
+      <span style="font-size:11px;font-weight:${done?'500':'600'};color:${done?'var(--muted)':highlight?'var(--green-dark)':'var(--txt)'};text-decoration:${done?'line-through':'none'}">${s.label}</span>
+      ${highlight ? '<span style="font-size:10px;color:var(--green-dark);margin-left:auto;font-weight:700">Ready →</span>' : (!done && !locked) ? '<span style="font-size:10px;color:var(--blue);margin-left:auto">→</span>' : ''}
+      ${softWarn ? '<span title="Complete Written Statement first for best practice" style="font-size:10px;color:var(--amber);margin-left:auto">⚠</span>' : ''}
     </button>`;
   }).join('');
+
+  // Nudge section — show if written statement sent but some haven't signed
+  const nudgeHtml = (!prog.written_statement_done && pendingSigners.length > 0) ? `
+    <div style="margin-top:10px;padding:10px 12px;background:rgba(217,119,6,0.06);border:1px solid rgba(217,119,6,0.25);border-radius:8px">
+      <div style="font-size:11px;font-weight:700;color:var(--amber);margin-bottom:6px">⏳ Awaiting signatures</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+        ${pendingSigners.map(x => `<span style="font-size:11px;color:var(--txt);background:var(--white);border:1px solid var(--border);border-radius:5px;padding:3px 8px">${x.tenant.name}</span>`).join('')}
+        <button onclick="event.stopPropagation();_nudgeUnsignedTenants('${pid}')" style="font-size:11px;font-weight:600;color:var(--amber);background:rgba(217,119,6,0.1);border:1px solid rgba(217,119,6,0.3);border-radius:5px;padding:4px 10px;cursor:pointer;font-family:var(--font)">📧 Nudge</button>
+      </div>
+    </div>` : '';
+
+  // Soft warning banner for compliance accessed before written statement
+  const complianceSoftWarnHtml = (!prog.written_statement_done && !noneStarted && pendingSigners.length > 0) ? '' :
+    (!prog.written_statement_done && noneStarted) ? '' : '';
+
   return `<div id="tenancy-setup-bar-${pid}" style="background:linear-gradient(135deg,rgba(11,30,61,0.04),rgba(59,111,232,0.06));border:1px solid rgba(59,111,232,0.2);border-radius:12px;padding:16px 18px;margin-bottom:20px">
+    <style>.pulse-green{animation:pulse-green 2s infinite}@keyframes pulse-green{0%,100%{box-shadow:0 0 0 0 rgba(0,168,122,0.3)}50%{box-shadow:0 0 0 6px rgba(0,168,122,0)}}</style>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px">
       <div>
         <div style="font-size:13px;font-weight:700;color:var(--navy)">🔧 Tenancy setup in progress</div>
@@ -3727,6 +3797,7 @@ function _renderTenancySetupBar(pid) {
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px">
       ${stepsHtml}
     </div>
+    ${nudgeHtml}
     ${nextStep && !prog[nextStep.key] ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(59,111,232,0.15);display:flex;align-items:center;justify-content:space-between">
       <span style="font-size:11px;color:var(--muted)">Next step: <strong style="color:var(--navy)">${nextStep.label}</strong></span>
       <button class="btn btn-navy" onclick="${nextStep.key==='welcome_kit_done'&&welcomeLocked?'':nextStep.action}" style="font-size:11px;padding:5px 14px;${nextStep.key==='welcome_kit_done'&&welcomeLocked?'opacity:.4;cursor:not-allowed':''}">Continue →</button>
@@ -5988,8 +6059,7 @@ async function initPropChecklist(prefix, pid, mode) {
 
 // ── PROPERTY RENT PANEL ──
 // ── AUTO RENT SCHEDULE — merges virtual rows with real D.rent records ──
-// Returns a Date clamped to the last valid day of the month when rent_day exceeds it
-// e.g. rent_day=31 in February → 28th (or 29th in leap year)
+// Clamps rent due day to last valid day of month (e.g. day=31 in Feb → 28/29)
 function rentDueDate(year, month, day) {
   const lastDay = new Date(year, month + 1, 0).getDate();
   return new Date(year, month, Math.min(day, lastDay));
@@ -6252,14 +6322,13 @@ function pgPropDetail(pid) {
   const ps = PROPERTY_STATUS[p.status] || PROPERTY_STATUS.active;
   const activeTab = window._pdTab[pid] || 'tenant';
 
-  // Auto-persist written_statement_done if signed esign exists but progress not yet saved
+  // Auto-persist written_statement_done if ALL tenants have signed (recalculated via _getTenancyProgress)
   const _lead = D.tenants.find(t2 => String(t2.prop_id) === String(pid) && t2.is_lead && t2.status === 'Active');
   if (_lead) {
     const _prog = _lead.tenancy_setup_progress || {};
     if (!_prog.written_statement_done) {
-      const _propTids = D.tenants.filter(t2 => String(t2.prop_id) === String(pid)).map(t2 => String(t2.id));
-      const _hasSigned = (D.esignReq || []).some(r => _propTids.includes(String(r.tenant_id)) && r.document_type === 'written_statement' && r.status === 'signed');
-      if (_hasSigned) _markTenancyStep(String(pid), 'written_statement_done', false);
+      const _computed = _getTenancyProgress(String(pid));
+      if (_computed && _computed.written_statement_done) _markTenancyStep(String(pid), 'written_statement_done', false);
     }
   }
 
@@ -6381,7 +6450,14 @@ function pgPropDetail(pid) {
 function pdSetTab(pid, tab) {
   window._pdTab[pid] = tab;
   // Auto-mark property_docs_done when compliance tab is viewed
-  if (tab === 'compliance') setTimeout(() => _markTenancyStep(String(pid), 'property_docs_done', false), 300);
+  if (tab === 'compliance') {
+    setTimeout(() => _markTenancyStep(String(pid), 'property_docs_done', false), 300);
+    // Soft warning if written statement not yet fully signed
+    const _compProg = _getTenancyProgress(String(pid));
+    if (_compProg && !_compProg.written_statement_done) {
+      setTimeout(() => toast('⚠ Tip: Complete the Written Statement first — it\'s best practice before uploading compliance docs', false), 600);
+    }
+  }
   document.querySelectorAll('.pd-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   let el = document.getElementById('pd-tab-content');
   if (!el) {
@@ -15476,17 +15552,39 @@ function moEsign(pid, tid) {
         <div class="fg"><label>Pets permitted <span style="color:var(--red)">*</span></label><select id="esign-pets"><option value="No">No</option><option value="Yes">Yes</option></select></div>
         <div class="fg"><label>Property licence number <span style="color:var(--muted);font-weight:400">(if applicable)</span></label><input type="text" id="esign-licence" value="${p.licence_number||''}" placeholder="e.g. HMO/2024/12345"></div>
       </div>
-      <div class="fg" style="margin-top:2px"><label>Special terms <span style="color:var(--muted);font-weight:400">(optional)</span></label><textarea id="esign-terms" placeholder="Any additional clauses or special conditions…" rows="3"></textarea></div>
+      <div class="fg" style="margin-top:2px;grid-column:1/-1">
+        <label>Additional clauses <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
+          ${[
+            'No smoking anywhere on the property',
+            'No drying clothes indoors (mould prevention)',
+            'No candles or open flames permitted',
+            'No alterations to the property without written consent',
+            'Tenant responsible for garden maintenance',
+            'No additional occupants without landlord consent',
+            'Communal areas must be kept clear at all times',
+            'Noise curfew 11pm–7am in consideration of neighbours',
+            'No commercial activity to be carried out at the property',
+            'Tenant to report any maintenance issues within 24 hours of discovery'
+          ].map(clause => `<button type="button" onclick="(function(b,c){const t=document.getElementById('esign-terms');t.value=(t.value?t.value+'\\n':'')+c;b.style.opacity='.4';b.style.cursor='default';b.onclick=null;})(this,'${clause.replace(/'/g,"\\'")}') " style="font-size:11px;padding:4px 10px;border:1px solid var(--border);border-radius:20px;background:var(--white);color:var(--txt);cursor:pointer;font-family:var(--font);transition:opacity .15s">${clause}</button>`).join('')}
+        </div>
+        <textarea id="esign-terms" placeholder="Your selected clauses appear here — or type your own additional terms…" rows="4" style="width:100%;font-size:12px"></textarea>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">💡 AI will screen your clauses on generation and flag anything potentially unlawful or unenforceable.</div>
+      </div>
       <div id="esign-preview-a" style="display:none;margin-top:4px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
           <div style="font-size:12px;font-weight:600;color:var(--txt)">Generated document preview</div>
           <div style="display:flex;gap:8px">
+            <button onclick="_esignDownloadDraft()" style="font-size:11px;color:var(--green-dark);background:rgba(0,168,122,0.08);border:1px solid rgba(0,168,122,0.25);border-radius:5px;padding:3px 10px;cursor:pointer;font-family:var(--font)">⬇ Download Draft</button>
             <button onclick="_esignToggleEdit()" id="esign-edit-btn" style="font-size:11px;color:var(--blue);background:none;border:none;cursor:pointer">✏️ Edit</button>
             <button onclick="document.getElementById('esign-preview-a').style.display='none';document.getElementById('esign-generate-row').style.display='block';document.getElementById('esign-send-row-a').style.display='none';document.getElementById('esign-gen-btn').disabled=false;document.getElementById('esign-gen-btn').innerHTML='✦ Generate Document'" style="font-size:11px;color:var(--muted);background:none;border:none;cursor:pointer">✎ Regenerate</button>
           </div>
         </div>
         <div id="esign-doc-preview" style="border:1px solid var(--border);border-radius:8px;height:45vh;max-height:45vh;overflow-y:auto;padding:20px 24px;font-size:13.5px;line-height:1.8;background:var(--white);width:100%"></div>
         <textarea id="esign-doc-editor" style="display:none;width:100%;min-height:500px;border:1px solid var(--blue);border-radius:8px;padding:14px 16px;font-size:12px;line-height:1.6;font-family:var(--font);background:var(--white);color:var(--txt);resize:vertical;outline:none"></textarea>
+        <div style="margin-top:10px;padding:10px 14px;background:rgba(59,111,232,0.05);border:1px solid rgba(59,111,232,0.2);border-radius:8px;font-size:12px;color:var(--muted)">
+          💡 Download the draft, read it carefully, then return here to sign and send when ready.
+        </div>
       </div>
       <div id="esign-generate-row" style="margin-top:14px">
         <button class="btn btn-navy" style="width:100%" id="esign-gen-btn" onclick="esignGenerateDoc('${pid}','${tid}')">✦ Generate Document</button>
@@ -15527,6 +15625,25 @@ function moEsign(pid, tid) {
 }
 
 // ── E-SIGN: EDIT TOGGLE ──
+// Download a DRAFT watermarked copy of the generated document
+function _esignDownloadDraft() {
+  if (!_esignDocHtml) { toast('No document generated yet', true); return; }
+  const draftHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>DRAFT — Written Statement</title>
+  <style>
+    body { font-family: Georgia, serif; font-size: 13px; line-height: 1.8; color: #1a2332; max-width: 800px; margin: 40px auto; padding: 0 40px; }
+    .draft-banner { background: #FEF3C7; border: 2px solid #D97706; border-radius: 8px; padding: 12px 16px; margin-bottom: 28px; text-align: center; font-size: 13px; font-weight: 700; color: #92400E; letter-spacing: .5px; }
+    @media print { .draft-banner { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  </style></head><body>
+  <div class="draft-banner">⚠ DRAFT ONLY — NOT FOR SIGNING — Review carefully before sending to tenants</div>
+  ${_esignDocHtml}
+  </body></html>`;
+  const blob = new Blob([draftHtml], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'Written-Statement-DRAFT.html'; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  toast('📄 Draft downloaded — review it, then return here to sign and send');
+}
+
 function _esignToggleEdit() {
   const preview = document.getElementById('esign-doc-preview');
   const editor = document.getElementById('esign-doc-editor');
@@ -15646,6 +15763,9 @@ Pets: ${pets}
 ${licenceClause}
 Special terms: ${terms || 'None'}
 
+ADDITIONAL CLAUSE SCREENING:
+Before including any special terms, check each one. If any clause is potentially unlawful, discriminatory, or unenforceable under UK law (e.g. banning children, restricting nationality, waiving statutory rights, imposing unfair penalties), DO NOT include it. Instead, add a clearly visible HTML warning box at the top of the document listing the flagged clause(s) and why they were excluded. Include all valid clauses as drafted.
+
 MANDATORY RRA 2025 CLAUSES TO INCLUDE:
 1. Tenancy is periodic from the start — no fixed term
 2. Landlord notice: minimum 4 months via Section 8 grounds only (Section 21 abolished)
@@ -15726,38 +15846,41 @@ async function _sendEsignRequest(pid, tid, mode) {
 
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin spin-dark"></span> Sending…'; }
 
-  const token      = crypto.randomUUID();
   const expiresAt  = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
   const docType    = mode === 'html' ? 'written_statement' : 'rra_receipt';
+  const docLabel   = docType === 'written_statement' ? 'Written Statement of Tenancy Terms' : 'Tenancy Document';
+  const expDate    = new Date(expiresAt).toLocaleDateString('en-GB', {day:'numeric',month:'long',year:'numeric'});
 
-  const { error: insertErr } = await sb.from('esign_requests').insert({
-    property_id:      pid,
-    tenant_id:        tid,
-    document_type:    docType,
-    document_html:    mode === 'html' ? _esignDocHtml : null,
-    document_pdf_url: mode === 'pdf'  ? _esignPdfUrl  : null,
-    token,
-    status:     'sent',
-    expires_at: expiresAt,
-    landlord_name:      landlordName,
-    landlord_signed_at: landlordSignedAt,
-    landlord_sig_png:   landlordSigData,
-    landlord_email:     currentUser?.email || null,
-  });
-  if (insertErr) {
-    if (btn) { btn.disabled = false; btn.textContent = 'Send to Tenant'; }
-    toast('Error: ' + insertErr.message, true);
-    return;
-  }
+  // All active tenants on this property — lead + co-tenants all get individual signing links
+  const allTenants = D.tenants.filter(x => String(x.prop_id) === String(pid) && x.status === 'Active' && x.email);
+  if (!allTenants.length) { toast('No tenants with email addresses found', true); if (btn) { btn.disabled = false; btn.textContent = '✍ Sign & Send'; } return; }
 
-  const signingLink = `https://nexlet.co.uk/esign.html?esign=${token}`;
-  const docLabel    = docType === 'written_statement' ? 'Written Statement of Tenancy Terms' : 'Tenancy Document';
-  const expDate     = new Date(expiresAt).toLocaleDateString('en-GB', {day:'numeric',month:'long',year:'numeric'});
+  let anyError = false;
+  const sentTo = [];
 
-  const html = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:28px 24px;color:#1A2B45">
+  for (const tenant of allTenants) {
+    const token = crypto.randomUUID();
+    const { error: insertErr } = await sb.from('esign_requests').insert({
+      property_id:      pid,
+      tenant_id:        String(tenant.id),
+      document_type:    docType,
+      document_html:    mode === 'html' ? _esignDocHtml : null,
+      document_pdf_url: mode === 'pdf'  ? _esignPdfUrl  : null,
+      token,
+      status:     'sent',
+      expires_at: expiresAt,
+      landlord_name:      landlordName,
+      landlord_signed_at: landlordSignedAt,
+      landlord_sig_png:   landlordSigData,
+      landlord_email:     currentUser?.email || null,
+    });
+    if (insertErr) { console.error('[esign] Insert failed for', tenant.email, insertErr); anyError = true; continue; }
+
+    const signingLink = `https://nexlet.co.uk/esign.html?esign=${token}`;
+    const html = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:28px 24px;color:#1A2B45">
     <div style="border-bottom:2px solid #0B1E3D;padding-bottom:12px;margin-bottom:20px"><span style="font-size:17px;font-weight:700;color:#0B1E3D">NexLet</span></div>
     <h2 style="font-size:16px;font-weight:600;margin-bottom:8px">Action required — please sign your tenancy document</h2>
-    <p style="font-size:13px;color:#7A8FA6;margin-bottom:20px">Hi ${t.name}, your landlord has sent a document for you to review and sign electronically.</p>
+    <p style="font-size:13px;color:#7A8FA6;margin-bottom:20px">Hi ${tenant.name}, your landlord has sent a document for you to review and sign electronically.</p>
     <div style="background:#F6F8FB;border-radius:8px;padding:16px;margin-bottom:24px">
       <div style="font-size:12px;color:#7A8FA6;margin-bottom:4px">Document</div>
       <div style="font-size:13px;font-weight:600">${docLabel}</div>
@@ -15770,25 +15893,30 @@ async function _sendEsignRequest(pid, tid, mode) {
     <div style="margin-top:20px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#999">Sent via NexLet · documents@nexlet.co.uk</div>
   </div>`;
 
-  await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ type: 'send_email', to: t.email, subject: 'Action required — please sign your tenancy document', html })
-  }).catch(e => { console.error('[esign] Send email failed:', e); });
+    await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'send_email', to: tenant.email, subject: 'Action required — please sign your tenancy document', html })
+    }).catch(e => { console.error('[esign] Email failed for', tenant.email, e); });
 
-  await logAudit('esign_request_sent', 'esign_requests', pid, `E-sign sent to ${t.email} for ${p.address} — landlord signed by ${landlordName}`);
+    sentTo.push(tenant.name);
+  }
 
-  // Mark written statement done on progress bar
-  await _markTenancyStep(String(pid), 'written_statement_done', false);
+  await logAudit('esign_request_sent', 'esign_requests', pid, `E-sign sent to ${sentTo.join(', ')} for ${p.address} — landlord signed by ${landlordName}`);
 
+  // Do NOT mark written_statement_done here — only mark when ALL tenants have signed
   closeMo();
   _esignDocHtml = null;
   _esignPdfUrl  = null;
   _esignSigReady = false;
   _esignLandlordPad = null;
-  toast(`✓ Written Statement sent to ${t.email}`);
+  if (anyError) {
+    toast(`⚠ Sent to ${sentTo.length} tenant(s) — some failed, check console`, true);
+  } else {
+    toast(`✓ Signing request sent to ${sentTo.join(', ')}`);
+  }
 
-  // Return to property detail with progress bar — not dashboard
+  // Return to property detail with progress bar
   nav('prop-detail', String(pid));
 }
 
