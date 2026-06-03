@@ -2904,3 +2904,167 @@ const CHECKLIST_UPLOAD_SLOTS = {
 | 7 | WhatsApp reminders | Post-launch backlog |
 | 8 | Free public compliance checker | Marketing priority |
 | 9 | Blog / content hub | Marketing priority |
+
+---
+
+### Session 30 — 3 June 2026 — Live Bug Fixes
+
+**Date:** 3 June 2026
+**Files modified:** `landlord.html`, `esign.html`
+
+---
+
+#### 1. Postcode finder removed
+
+**Bug:** `postcodes.io` only returns area/district data — not individual addresses. After 5 failed fix attempts the feature was removed entirely.
+
+**Fix:** "Find →" button and result div removed from both Add property and Edit property forms. `lookupPostcode()` function removed. Postcode field is now a plain manual text input on both forms.
+
+**Post-launch backlog:** Replace with `getAddress.io` API (~£5–20/month) — returns full address list per postcode for dropdown selection.
+
+---
+
+#### 2. Post-property-save popup redesigned
+
+**Bug:** After adding a property the popup said "Add tenant?" but clicking it went to the pre-tenancy checklist, not the tenant setup form.
+
+**Fix:** Popup replaced with three clearly labelled stacked buttons:
+- 👤 **Add tenant now** → `moTenant(pid)` — opens tenant setup modal directly
+- ✅ **Complete compliance checks first** → `nav('prop-detail', pid)` — property detail with pre-tenancy checklist
+- 🕐 **Do this later** → `nav('properties')` — back to properties list
+
+---
+
+#### 3. Tenancy setup flow — full rebuild
+
+**New feature:** Multi-step guided tenancy setup replacing the single "next steps" popup.
+
+**Popup chain (steps 1–2):**
+- After lead tenant saved → Popup 1: "Add co-tenant" / "No co-tenants — continue"
+- After co-tenant saved → loops: "Add another co-tenant" / "Done — continue setup"
+- Step 2 popup → "Prepare Written Statement" (opens e-sign flow) / "Do this later"
+
+**Sticky progress bar on prop-detail (steps 3–6):**
+- Rendered by `_renderTenancySetupBar(pid)` — injected above stat cards in `pgPropDetail()`
+- 4 steps: Written Statement · Tenant documents · Property compliance · Welcome Kit
+- Welcome Kit locked until tenant docs + property docs both done
+- Progress bar disappears when all steps complete
+- Each step card is a `<button>` element for reliable click handling
+
+**Auto-marking:**
+- `written_statement_done` — marked on e-sign send in `_sendEsignRequest()`
+- `tenant_docs_done` — auto-marked when `pgTenantDetail()` is visited
+- `property_docs_done` — auto-marked when compliance tab is opened via `pdSetTab()`
+- `welcome_kit_done` — marked in `sendWelcomeKit()` success path
+
+**New helper functions:** `_moCoTenant()`, `_tenancySetupStep2()`, `_getTenancyProgress()`, `_markTenancyStep()`, `_renderTenancySetupBar()`
+
+**Supabase migration required:**
+```sql
+ALTER TABLE tenants
+ADD COLUMN IF NOT EXISTS tenancy_setup_progress JSONB DEFAULT '{
+  "co_tenants_done": false,
+  "written_statement_done": false,
+  "tenant_docs_done": false,
+  "property_docs_done": false,
+  "welcome_kit_done": false
+}'::jsonb;
+```
+
+---
+
+#### 4. E-sign modal — written statement improvements
+
+**Bugs fixed:**
+- Modal too narrow (520px) and preview too small (260px) for reading legal documents
+- Fields not all mandatory — missing landlord details
+
+**Fixes:**
+- Modal widened to 760px (`mo-wide` class applied in `moEsign()`)
+- Preview area: `min-height:500px`, `max-height:65vh`, font 13.5px / 1.8 line-height, `contain:strict` removed
+- Editor textarea height increased to match
+
+**New mandatory fields added to e-sign form:**
+- Landlord full name (auto-filled from `_profileName()`)
+- Landlord address (auto-filled from `D.userProfile.landlord_address` after first entry; saved to Supabase)
+- Rent due day (auto-filled from `t.rent_day`)
+- All existing fields (start date, rent, deposit, scheme, bills, pets) now validated before Generate
+
+**New optional field:** Property licence number (auto-filled from `p.licence_number`)
+
+**AI prompt upgraded:**
+- `max_tokens` increased to 5000
+- 10 mandatory RRA 2025 clauses explicitly listed including Awaab's Law, Section 8 only notices, Section 13 rent review
+- Signature blocks for all parties included
+- Permitted occupiers = named tenants (no separate field)
+- Notice period + repair responsibilities pre-filled as standard clauses
+
+**Validation:** Toast error listing missing fields if any mandatory field empty before Generate fires.
+
+**Landlord address persistence:**
+```sql
+ALTER TABLE user_profiles
+ADD COLUMN IF NOT EXISTS landlord_address TEXT;
+```
+
+---
+
+#### 5. Modal overlay layout fix — page compression
+
+**Bug:** App content area was shrinking/compressing when modals opened on dashboard and prop-detail.
+
+**Root cause:** `.mo` overlay used `align-items:center` + `.mo-box` had `max-height:90vh` — together they squashed the background layout.
+
+**Fix:**
+- `.mo` changed to `align-items:flex-start; overflow-y:auto` — overlay scrolls, background unaffected
+- `.mo-box` `max-height` removed — modal grows with content
+- `.content` given `flex-shrink:0; min-height:0` — prevents content area collapsing
+
+---
+
+#### 6. E-sign post-send navigation
+
+**Bug:** After sending e-sign document, app redirected to dashboard instead of property detail.
+
+**Fix:** `_sendEsignRequest()` now calls `nav('prop-detail', String(pid))` after send, returning landlord to the property with the progress bar updated.
+
+---
+
+#### 7. E-sign signing link domain fix
+
+**Bug:** Tenant received email with signing link pointing to `sddhawan79-lang.github.io/esign.html` (GitHub Pages origin) instead of `nexlet.co.uk/esign.html`.
+
+**Fix:** `window.location.origin` replaced with hardcoded `https://nexlet.co.uk` in signing link construction.
+
+---
+
+#### 8. esign.html — fully self-contained rebuild
+
+**Bug:** `esign.html` referenced `js/lib/supabase-client.js` which did not exist in the repository root, causing `window.RSA?.sb` to be undefined and the entire signing flow to fail silently.
+
+**Fix:** `esign.html` rebuilt as fully self-contained single file:
+- Supabase init inlined directly (URL + anon key from `landlord.html`)
+- All `esign-content.js` logic inlined into a `<script>` block
+- External `js/lib/supabase-client.js` and `js/esign-content.js` no longer referenced
+- Logo fixed: `Rent<span>Safe</span> AI` → `Nex<span>Let</span>`
+- Document frame CSS improved for reading legal HTML (headings, paragraphs, lists styled)
+- `js/esign-content.js` can remain in repo harmlessly
+
+---
+
+#### 9. Known issues updated
+
+| # | Issue | Status |
+|---|---|---|
+| 1 | ICO number placeholder in legal docs | Pending registration |
+| 2 | MX record for inbound email | Parked post-launch |
+| 3 | `login.html` newsletter signup checkbox | Not built |
+| 4 | `moFinancials` PDF export — jsPDF needed | Post-launch backlog |
+| 5 | Section 8 UX handoff to Form 3A | Post-launch backlog |
+| 6 | WhatsApp reminders | Post-launch backlog |
+| 7 | Free public compliance checker | Marketing priority |
+| 8 | Blog / content hub | Marketing priority |
+| 9 | Postcode finder — replace with getAddress.io | Post-launch backlog |
+| 10 | `stripe_price_id` NULL in webhook | Non-critical, plan_name/status correct |
+| 11 | `newsletter_opted_in` column missing from user_profiles | Post-launch backlog |
+| 12 | favicon.ico missing | Post-launch backlog |
