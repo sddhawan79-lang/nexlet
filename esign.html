@@ -147,14 +147,82 @@ h1,h2,h3{font-family:var(--disp)}
 
       <!-- Success screen -->
       <div id="esign-success" style="display:none">
-        <div class="panel">
-          <div class="panel-body">
-            <div class="success-card">
-              <div class="success-anim">✅</div>
-              <div class="success-title">Document signed successfully</div>
-              <div class="success-sub">A copy has been emailed to you and your landlord. You can also download your signed copy below.</div>
-              <a id="esign-download-link" href="#" target="_blank" class="btn btn-green" style="display:inline-flex;margin-top:16px;padding:10px 24px">⬇ Download signed document</a>
+        <div class="panel" style="border-radius:16px;overflow:hidden">
+          <div class="panel-body" style="padding:0">
+
+            <!-- Green header bar -->
+            <div style="background:linear-gradient(135deg,#0B1E3D,#0d2a4a);padding:32px 28px 28px;text-align:center">
+              <div style="width:56px;height:56px;background:rgba(0,200,150,0.15);border:2px solid #00C896;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:26px">✅</div>
+              <div style="font-family:'DM Serif Display',serif;font-size:20px;color:#fff;margin-bottom:6px">Signing complete</div>
+              <div id="esign-success-name" style="font-size:13px;color:rgba(255,255,255,0.6)"></div>
             </div>
+
+            <!-- Timeline -->
+            <div style="padding:28px 28px 8px">
+              <div style="font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-bottom:18px">What happened</div>
+              <div style="display:flex;flex-direction:column;gap:0">
+
+                <div style="display:flex;gap:14px;align-items:flex-start">
+                  <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">
+                    <div style="width:28px;height:28px;background:#00C896;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">✓</div>
+                    <div style="width:2px;flex:1;min-height:24px;background:rgba(0,200,150,0.2);margin:3px 0"></div>
+                  </div>
+                  <div style="padding-bottom:20px">
+                    <div style="font-size:13px;font-weight:600;color:var(--txt)">Document reviewed</div>
+                    <div style="font-size:12px;color:var(--muted);margin-top:2px">You read the full tenancy document before signing</div>
+                  </div>
+                </div>
+
+                <div style="display:flex;gap:14px;align-items:flex-start">
+                  <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">
+                    <div style="width:28px;height:28px;background:#00C896;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">✓</div>
+                    <div style="width:2px;flex:1;min-height:24px;background:rgba(0,200,150,0.2);margin:3px 0"></div>
+                  </div>
+                  <div style="padding-bottom:20px">
+                    <div style="font-size:13px;font-weight:600;color:var(--txt)">Electronic consent given</div>
+                    <div style="font-size:12px;color:var(--muted);margin-top:2px">You consented to sign electronically under the Electronic Communications Act 2000</div>
+                  </div>
+                </div>
+
+                <div style="display:flex;gap:14px;align-items:flex-start">
+                  <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">
+                    <div style="width:28px;height:28px;background:#00C896;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">✓</div>
+                    <div style="width:2px;flex:1;min-height:24px;background:rgba(0,200,150,0.2);margin:3px 0"></div>
+                  </div>
+                  <div style="padding-bottom:20px">
+                    <div style="font-size:13px;font-weight:600;color:var(--txt)">Signed electronically</div>
+                    <div style="font-size:12px;color:var(--muted);margin-top:2px">Your signature was applied and timestamped with your IP address as legal record</div>
+                  </div>
+                </div>
+
+                <div style="display:flex;gap:14px;align-items:flex-start">
+                  <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">
+                    <div style="width:28px;height:28px;background:#00C896;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">✓</div>
+                  </div>
+                  <div style="padding-bottom:8px">
+                    <div style="font-size:13px;font-weight:600;color:var(--txt)">Copy emailed</div>
+                    <div id="esign-success-email" style="font-size:12px;color:var(--muted);margin-top:2px">A signed copy has been sent to you and your landlord</div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- Actions -->
+            <div style="padding:0 28px 28px;display:flex;flex-direction:column;gap:10px">
+              <a id="esign-download-link" href="#" target="_blank" class="btn btn-green" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:13px;font-size:14px;font-weight:600;text-decoration:none;border-radius:10px">
+                ⬇ Download your signed copy
+              </a>
+              <button onclick="window.close()" style="background:none;border:1.5px solid var(--border);border-radius:10px;padding:12px;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;font-family:var(--font);width:100%">
+                ✓ All done — close this tab
+              </button>
+            </div>
+
+            <!-- Legal footer -->
+            <div style="padding:14px 28px 20px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);text-align:center;line-height:1.6">
+              This document was signed electronically and is legally binding under the Electronic Communications Act 2000. Keep your downloaded copy for your records.
+            </div>
+
           </div>
         </div>
       </div>
@@ -485,6 +553,10 @@ async function signDocument() {
     document.getElementById('esign-sign-flow').style.display = 'none';
     document.getElementById('esign-success').style.display = 'block';
     document.getElementById('esign-download-link').href = signedPdfUrl;
+    const _tn = _esignTenant?.name || _esignRequest?.tenant_name || '';
+    const _te = _esignTenant?.email || '';
+    if (_tn) document.getElementById('esign-success-name').textContent = _tn + ' · ' + new Date().toLocaleDateString('en-GB', {day:'numeric',month:'long',year:'numeric'});
+    if (_te) document.getElementById('esign-success-email').textContent = 'A signed copy has been sent to ' + _te + ' and your landlord';
 
   } catch(e) {
     btn.disabled = false;
