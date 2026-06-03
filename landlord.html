@@ -15776,15 +15776,39 @@ function moEsign(pid, tid) {
 // Download a DRAFT watermarked copy of the generated document
 function _esignDownloadDraft() {
   if (!_esignDocHtml) { toast('No document generated yet', true); return; }
-  const draftHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>DRAFT — Written Statement</title>
+  // Extract body content only — strip outer html/head/body/style tags if AI returned full doc
+  let bodyContent = _esignDocHtml;
+  const bodyMatch = _esignDocHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+  if (bodyMatch) bodyContent = bodyMatch[1];
+  bodyContent = bodyContent.replace(/<style[\s\S]*?<\/style>/gi, '');
+  const draftHtml = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>DRAFT — Written Statement of Terms</title>
   <style>
-    body { font-family: Georgia, serif; font-size: 13px; line-height: 1.8; color: #1a2332; max-width: 800px; margin: 40px auto; padding: 0 40px; }
-    .draft-banner { background: #FEF3C7; border: 2px solid #D97706; border-radius: 8px; padding: 12px 16px; margin-bottom: 28px; text-align: center; font-size: 13px; font-weight: 700; color: #92400E; letter-spacing: .5px; }
-    @media print { .draft-banner { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
-  </style></head><body>
+    * { box-sizing: border-box; }
+    body { font-family: Georgia, serif; font-size: 13.5px; line-height: 1.9; color: #1a2332; max-width: 780px; margin: 40px auto; padding: 0 48px 60px; background: #fff; }
+    h1 { font-size: 18px; font-weight: 700; margin: 0 0 6px; color: #0B1E3D; }
+    h2 { font-size: 15px; font-weight: 700; margin: 28px 0 8px; color: #0B1E3D; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; }
+    h3 { font-size: 13px; font-weight: 700; margin: 16px 0 4px; color: #1a2332; }
+    p { margin: 6px 0; }
+    ul, ol { margin: 6px 0 6px 20px; padding: 0; }
+    li { margin-bottom: 4px; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+    td, th { padding: 7px 10px; border: 1px solid #dde3ed; font-size: 13px; vertical-align: top; }
+    th { background: #f0f4fa; font-weight: 700; }
+    .signature-block { margin-top: 48px; padding-top: 20px; border-top: 2px solid #0B1E3D; }
+    .signature-line { margin-top: 32px; border-top: 1px solid #000; width: 280px; padding-top: 4px; font-size: 11px; color: #666; }
+    .draft-banner { background: #FEF3C7; border: 2px solid #D97706; border-radius: 6px; padding: 12px 16px; margin-bottom: 32px; text-align: center; font-size: 13px; font-weight: 700; color: #92400E; letter-spacing: .3px; }
+    @media print { .draft-banner { -webkit-print-color-adjust: exact; print-color-adjust: exact; } body { margin: 20px; padding: 0 24px; } }
+  </style>
+</head>
+<body>
   <div class="draft-banner">⚠ DRAFT ONLY — NOT FOR SIGNING — Review carefully before sending to tenants</div>
-  ${_esignDocHtml}
-  </body></html>`;
+  ${bodyContent}
+</body>
+</html>`;
   const blob = new Blob([draftHtml], { type: 'text/html' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = 'Written-Statement-DRAFT.html'; a.click();
