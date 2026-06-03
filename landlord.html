@@ -15604,6 +15604,31 @@ let _esignPdfUrl  = null;
 let _esignSigReady = false;
 let _esignLandlordPad = null;
 
+// Persist draft to localStorage keyed by pid+tid — survives modal close for 72 hours
+function _esignSaveDraft(pid, tid, html) {
+  try {
+    localStorage.setItem('nexlet_esign_draft_' + pid + '_' + tid, JSON.stringify({
+      html, ts: Date.now(), pid, tid
+    }));
+  } catch(e) { console.warn('[esign] draft save failed', e); }
+}
+
+function _esignLoadDraft(pid, tid) {
+  try {
+    const raw = localStorage.getItem('nexlet_esign_draft_' + pid + '_' + tid);
+    if (!raw) return null;
+    const saved = JSON.parse(raw);
+    const age = Date.now() - (saved.ts || 0);
+    const hrs72 = 72 * 60 * 60 * 1000;
+    if (age > hrs72) { localStorage.removeItem('nexlet_esign_draft_' + pid + '_' + tid); return null; }
+    return { html: saved.html, ageHrs: Math.round(age / 36e5) };
+  } catch(e) { return null; }
+}
+
+function _esignClearDraft(pid, tid) {
+  try { localStorage.removeItem('nexlet_esign_draft_' + pid + '_' + tid); } catch(e) {}
+}
+
 function _esignClearSig(suffix) {
   if (_esignLandlordPad) { _esignLandlordPad.clear(); _esignSigReady = false; }
   const btn = document.getElementById('esign-send-' + suffix + '-btn');
@@ -15618,6 +15643,10 @@ function moEsign(pid, tid) {
   _esignPdfUrl  = null;
   _esignSigReady = false;
   _esignLandlordPad = null;
+
+  // Check for a saved draft within 72hr window
+  const _savedDraft = _esignLoadDraft(pid, tid);
+  if (_savedDraft) { _esignDocHtml = _savedDraft.html; }
   document.querySelector('.mo-box').classList.add('mo-wide');
 
   // Gather all active tenants for this property (lead + co-tenants)
@@ -15631,6 +15660,15 @@ function moEsign(pid, tid) {
   openMo('Send Document for Signing', `${_esignTenantNames} · ${p.address}`, `
     <div id="esign-chooser">
       ${_coTenantsNote}
+      ${_savedDraft ? `<div style="background:rgba(0,168,122,0.07);border:1px solid rgba(0,168,122,0.3);border-radius:10px;padding:14px 16px;margin-bottom:14px">
+        <div style="font-size:12px;font-weight:700;color:var(--green-dark);margin-bottom:4px">📄 Saved draft found — ${_savedDraft.ageHrs < 1 ? 'just now' : _savedDraft.ageHrs + 'h ago'}</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">You generated a Written Statement earlier. Resume where you left off or start fresh.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button onclick="esignResumeDraft('${pid}','${tid}')" class="btn btn-navy" style="font-size:12px;padding:7px 14px">↩ Resume — send this draft</button>
+          <button onclick="_esignClearDraft('${pid}','${tid}');document.getElementById('esign-draft-banner')?.remove();document.getElementById('esign-fresh-options').style.display='block'" style="font-size:12px;padding:7px 14px;border:1px solid var(--border);border-radius:7px;background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font)">✕ Discard — generate fresh</button>
+        </div>
+      </div>
+      <div id="esign-fresh-options" style="display:none">` : ''}
       <p style="font-size:13px;color:var(--muted);margin-bottom:18px">Choose how you want to send the document to your tenant for e-signature.</p>
       <div style="display:grid;gap:10px">
         <div onclick="esignShowOptionA()" style="border:2px solid var(--border);border-radius:10px;padding:16px 18px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--border)'">
@@ -15642,6 +15680,7 @@ function moEsign(pid, tid) {
           <div style="font-size:12px;color:var(--muted)">Upload your own tenancy agreement or written statement (PDF, max 5MB) to send for signing</div>
         </div>
       </div>
+      ${_savedDraft ? '</div>' : ''}
     </div>
 
     <div id="esign-form-a" style="display:none">
@@ -15874,6 +15913,30 @@ Rules:
   }
 }
 
+function esignResumeDraft(pid, tid) {
+  // Hide chooser, show form-a directly with saved document already in preview
+  document.getElementById('esign-chooser').style.display = 'none';
+  const formA = document.getElementById('esign-form-a');
+  if (!formA) return;
+  formA.style.display = 'block';
+  // Skip straight to preview — document already in _esignDocHtml
+  const ageHrs = (() => { try { const r = localStorage.getItem('nexlet_esign_draft_' + pid + '_' + tid); if (!r) return 0; return Math.round((Date.now() - JSON.parse(r).ts) / 36e5); } catch(e) { return 0; } })();
+  const preview = document.getElementById('esign-doc-preview');
+  if (preview) {
+    preview.innerHTML = '<div style="all:initial;font-family:Georgia,serif;font-size:13px;line-height:1.8;color:#1a2332;padding:4px">' + _esignDocHtml + '</div>';
+  }
+  document.getElementById('esign-generate-row').style.display = 'none';
+  document.getElementById('esign-preview-a').style.display = 'block';
+  document.getElementById('esign-send-row-a').style.display = 'block';
+  // Show age warning if older than 4 hours
+  if (ageHrs >= 4) {
+    const warn = document.createElement('div');
+    warn.style.cssText = 'background:rgba(217,119,6,0.08);border:1px solid rgba(217,119,6,0.3);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--amber);margin-bottom:10px';
+    warn.innerHTML = `⚠ This draft was generated ${ageHrs}h ago — tenant or property details may have changed. <button onclick="document.getElementById('esign-preview-a').style.display='none';document.getElementById('esign-generate-row').style.display='block';document.getElementById('esign-send-row-a').style.display='none';document.getElementById('esign-gen-btn').disabled=false;document.getElementById('esign-gen-btn').innerHTML='✦ Generate Document';this.parentElement.remove()" style="background:none;border:none;color:var(--blue);cursor:pointer;font-size:12px;padding:0;font-family:var(--font);text-decoration:underline">Regenerate instead</button>`;
+    document.getElementById('esign-send-row-a')?.parentNode?.insertBefore(warn, document.getElementById('esign-send-row-a'));
+  }
+}
+
 function esignShowOptionA() {
   document.getElementById('esign-chooser').style.display = 'none';
   document.getElementById('esign-form-a').style.display = 'block';
@@ -15999,6 +16062,7 @@ Return only the HTML content, no preamble or markdown.`
     if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error?.message || `API error ${res.status}`); }
     const data = await res.json();
     _esignDocHtml = (data.content?.[0]?.text || '').replace(/^```html\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
+    _esignSaveDraft(pid, tid, _esignDocHtml);
     document.getElementById('esign-doc-preview').innerHTML = '<div style="all:initial;font-family:Georgia,serif;font-size:13px;line-height:1.8;color:#1a2332;padding:4px">' + _esignDocHtml + '</div>';
     document.getElementById('esign-doc-editor').value = _esignDocHtml;
     document.getElementById('esign-doc-preview').scrollTop = 0;
@@ -16112,6 +16176,8 @@ async function _sendEsignRequest(pid, tid, mode) {
   }
 
   await logAudit('esign_request_sent', 'esign_requests', pid, `E-sign sent to ${sentTo.join(', ')} for ${p.address} — landlord signed by ${landlordName}`);
+  // Clear saved draft — document has been sent, no longer needed
+  _esignClearDraft(pid, tid);
 
   // Do NOT mark written_statement_done here — only mark when ALL tenants have signed
   closeMo();
