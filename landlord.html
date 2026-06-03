@@ -3663,7 +3663,7 @@ function _renderTenancySetupBar(pid) {
   const prog = _getTenancyProgress(pid);
   const steps = [
     { key: 'written_statement_done', label: 'Written Statement',  icon: '✍️', action: `_tenancySetupStep2('${pid}')` },
-    { key: 'tenant_docs_done',       label: 'Tenant documents',   icon: '🪪', action: `nav('tenants','${lead.id}')` },
+    { key: 'tenant_docs_done',       label: 'Tenant documents',   icon: '🪪', action: `nav('tenant-detail','${lead.id}')` },
     { key: 'property_docs_done',     label: 'Property compliance',icon: '🛡', action: `pdSetTab('${pid}','compliance')` },
     { key: 'welcome_kit_done',       label: 'Welcome Kit',        icon: '📦', action: `moWelcomeKit('${pid}')` },
   ];
@@ -3679,12 +3679,12 @@ function _renderTenancySetupBar(pid) {
   const stepsHtml = steps.map(s => {
     const done = prog[s.key];
     const locked = s.key === 'welcome_kit_done' && welcomeLocked && !done;
-    return `<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:7px;background:${done?'rgba(0,135,90,0.08)':locked?'rgba(0,0,0,0.03)':'var(--white)'};border:1px solid ${done?'rgba(0,135,90,0.2)':locked?'var(--border)':'var(--border)'};cursor:${locked||done?'default':'pointer'};opacity:${locked?'.5':'1'}"
-      ${(!done && !locked) ? `onclick="${s.action}"` : ''}>
+    const onclickAttr = (!done && !locked) ? `onclick="${s.action}"` : '';
+    return `<button ${onclickAttr} style="display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:7px;background:${done?'rgba(0,135,90,0.08)':locked?'rgba(0,0,0,0.03)':'var(--white)'};border:1px solid ${done?'rgba(0,135,90,0.2)':locked?'var(--border)':'var(--border)'};cursor:${locked||done?'default':'pointer'};opacity:${locked?'.5':'1'};font-family:var(--font);width:100%;text-align:left">
       <span style="font-size:14px">${done ? '✅' : locked ? '🔒' : s.icon}</span>
       <span style="font-size:11px;font-weight:${done?'500':'600'};color:${done?'var(--muted)':'var(--txt)'};text-decoration:${done?'line-through':'none'}">${s.label}</span>
       ${(!done && !locked) ? '<span style="font-size:10px;color:var(--blue);margin-left:auto">→</span>' : ''}
-    </div>`;
+    </button>`;
   }).join('');
   return `<div id="tenancy-setup-bar-${pid}" style="background:linear-gradient(135deg,rgba(11,30,61,0.04),rgba(59,111,232,0.06));border:1px solid rgba(59,111,232,0.2);border-radius:12px;padding:16px 18px;margin-bottom:20px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px">
@@ -6332,6 +6332,8 @@ function pgPropDetail(pid) {
 
 function pdSetTab(pid, tab) {
   window._pdTab[pid] = tab;
+  // Auto-mark property_docs_done when compliance tab is viewed
+  if (tab === 'compliance') setTimeout(() => _markTenancyStep(String(pid), 'property_docs_done', false), 300);
   document.querySelectorAll('.pd-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   let el = document.getElementById('pd-tab-content');
   if (!el) {
@@ -8492,6 +8494,8 @@ function pgTenantDetail(tid) {
   try {
   const t = D.tenants.find(x => String(x.id) === String(tid));
   if (!t) return pgTenants();
+  // Auto-mark tenant_docs_done on progress bar when landlord visits tenant detail
+  if (t.prop_id) setTimeout(() => _markTenancyStep(String(t.prop_id), 'tenant_docs_done', false), 300);
   const p = P(t.prop_id) || { address: '—', city: '' };
   const docs = D.tenantDocs.filter(d => String(d.tenant_id) === String(tid));
 
