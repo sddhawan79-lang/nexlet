@@ -3599,7 +3599,7 @@ function moTenant(pid) {
       </div>
       <div class="fg"><label>Rent due day</label>
         <select id="ts-rentday" class="fi" style="width:100%" onchange="window._tsetup.rentDay=parseInt(this.value)">
-          ${[1,5,10,15,20,25,28].map(d=>`<option value="${d}">${d}${['','st','nd','rd'][d]||'th'} of month</option>`).join('')}
+          ${Array.from({length:31},(_,i)=>i+1).map(d=>`<option value="${d}">${d}${['','st','nd','rd'][d]||'th'} of month${d>=29?' ⚠':''}${d===29?' (Feb: 28th/29th)':d===30?' (Feb: last day)':d===31?' (long months only)':''}</option>`).join('')}
         </select>
       </div>
       <div style="margin-top:4px">${renderScanSlot('ts-dep-scan-box',"scanDepositCert(this)",'Upload Deposit Protection Certificate','DPS, TDS, MyDeposits — AI auto-fills')}</div>
@@ -5988,6 +5988,13 @@ async function initPropChecklist(prefix, pid, mode) {
 
 // ── PROPERTY RENT PANEL ──
 // ── AUTO RENT SCHEDULE — merges virtual rows with real D.rent records ──
+// Returns a Date clamped to the last valid day of the month when rent_day exceeds it
+// e.g. rent_day=31 in February → 28th (or 29th in leap year)
+function rentDueDate(year, month, day) {
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  return new Date(year, month, Math.min(day, lastDay));
+}
+
 function buildRentSchedule(pid) {
   const p = P(pid);
   const t = D.tenants.find(x => String(x.prop_id) === String(pid) && x.status === 'Active');
@@ -6000,8 +6007,8 @@ function buildRentSchedule(pid) {
   startMo = new Date(startMo.getFullYear(), startMo.getMonth(), 1);
   const limitMo = new Date(today.getFullYear(), today.getMonth() + 2, 1);
   const rows = [];
-  let cur = new Date(startMo.getFullYear(), startMo.getMonth(), day);
-  if (cur < startMo) cur = new Date(startMo.getFullYear(), startMo.getMonth() + 1, day);
+  let cur = rentDueDate(startMo.getFullYear(), startMo.getMonth(), day);
+  if (cur < startMo) cur = rentDueDate(startMo.getFullYear(), startMo.getMonth() + 1, day);
   while (cur < limitMo) {
     const monthLabel = cur.toLocaleString('en-GB', {month: 'long', year: 'numeric'});
     const dueDateStr = cur.toISOString().slice(0, 10);
@@ -6027,7 +6034,7 @@ function buildRentSchedule(pid) {
       status,
       paid_date: existing ? (existing.paid || existing.paid_date) : null,
     });
-    cur = new Date(cur.getFullYear(), cur.getMonth() + 1, day);
+    cur = rentDueDate(cur.getFullYear(), cur.getMonth() + 1, day);
   }
   return rows.reverse();
 }
@@ -8036,7 +8043,7 @@ async function checkAllReminders() {
   // ── 8. Rent overdue ──
   if (isReminderEnabled('rent')) {
     for (const t of D.tenants.filter(t=>t.rent&&t.rent_day&&t.status==='Active')) {
-      const dueThis = new Date(); dueThis.setDate(t.rent_day);
+      const _rdNow = new Date(); const dueThis = rentDueDate(_rdNow.getFullYear(), _rdNow.getMonth(), t.rent_day);
       dueThis.setHours(0,0,0,0);
       const daysLate = Math.round((today-dueThis)/864e5);
       if (![1,3,7].includes(daysLate)) continue;
@@ -10553,7 +10560,7 @@ function getCalEvents(){
     const prop=(P(t.prop_id)||{address:'—'}).address;
     const day=t.rent_day||1;
     for(let m=0;m<6;m++){
-      const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()+m); d.setDate(day);
+      const _tmp=new Date(); _tmp.setDate(1); _tmp.setMonth(_tmp.getMonth()+m); const d=rentDueDate(_tmp.getFullYear(),_tmp.getMonth(),day);
       const days=Math.round((d-today)/864e5);
       if(days>=-1&&days<=180){
         const dStr=d.toISOString().slice(0,10);
@@ -14682,8 +14689,8 @@ function moTenantDetail(tid) {
   if (!t) return;
   const p = P(t.prop_id) || { address: '—', city: '' };
 
-  const rentDayOpts = [1,5,10,15,20,25,28].map(d =>
-    `<option value="${d}"${(t.rent_day||1)===d?' selected':''}>${d}${['','st','nd','rd'][d]||'th'} of month</option>`).join('');
+  const rentDayOpts = Array.from({length:31},(_,i)=>i+1).map(d =>
+    `<option value="${d}"${(t.rent_day||1)===d?' selected':''}>${d}${['','st','nd','rd'][d]||'th'} of month${d>=29?' ⚠':''}${d===29?' (Feb: 28th/29th)':d===30?' (Feb: last day)':d===31?' (long months only)':''}</option>`).join('');
   const schemeOpts = ['','DPS','TDS','MyDeposits'].map(s =>
     `<option value="${s}"${(t.scheme||'')===s?' selected':''}>${s||'— Not set —'}</option>`).join('');
 
@@ -15462,7 +15469,7 @@ function moEsign(pid, tid) {
         <div class="fg"><label>Landlord address <span style="color:var(--red)">*</span></label><input type="text" id="esign-landlord-addr" value="${D.userProfile?.landlord_address||''}" placeholder="Full UK address including postcode"></div>
         <div class="fg"><label>Tenancy start date <span style="color:var(--red)">*</span></label><input type="date" id="esign-start" value="${t.start_date||''}"></div>
         <div class="fg"><label>Monthly rent (£) <span style="color:var(--red)">*</span></label><input type="number" id="esign-rent" value="${t.rent||p.rent||''}" placeholder="e.g. 1200"></div>
-        <div class="fg"><label>Rent due day <span style="color:var(--red)">*</span></label><select id="esign-rentday">${[1,5,10,15,20,25,28].map(d=>`<option value="${d}"${(t.rent_day||1)==d?' selected':''}>${d}${['','st','nd','rd'][d]||'th'} of the month</option>`).join('')}</select></div>
+        <div class="fg"><label>Rent due day <span style="color:var(--red)">*</span></label><select id="esign-rentday">${Array.from({length:31},(_,i)=>i+1).map(d=>`<option value="${d}"${(t.rent_day||1)==d?' selected':''}>${d}${['','st','nd','rd'][d]||'th'} of the month${d>=29?' ⚠':''}${d===29?' (Feb: 28th/29th)':d===30?' (Feb: last day)':d===31?' (long months only)':''}</option>`).join('')}</select></div>
         <div class="fg"><label>Deposit amount (£) <span style="color:var(--red)">*</span></label><input type="number" id="esign-deposit" value="${t.deposit||''}" placeholder="e.g. 1800"></div>
         <div class="fg"><label>Deposit scheme <span style="color:var(--red)">*</span></label><input type="text" id="esign-scheme" value="${t.scheme||''}" placeholder="e.g. MyDeposits, DPS, TDS"></div>
         <div class="fg"><label>Bills included <span style="color:var(--red)">*</span></label><input type="text" id="esign-bills" placeholder="e.g. None, or Water, Internet" value=""></div>
