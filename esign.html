@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Document Signing — NexLet AI</title>
+<title>Document Signing — NexLet</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%230B1E3D'/><path d='M8 22V13l8-6 8 6v9' stroke='%2300C896' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/><path d='M13 22v-5h6v5' stroke='%2300C896' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -17,92 +18,56 @@
   --white:#fff;--off:#F6F8FB;
   --border:#E4EAF1;--txt:#1A2B45;--muted:#7A8FA6;
   --red:#E53E3E;--amber:#D97706;--blue:#3B6FE8;
-  --red-bg:rgba(229,62,62,0.08);--amber-bg:rgba(217,119,6,0.08);
-  --green-bg:rgba(0,200,150,0.08);--blue-bg:rgba(59,111,232,0.08);
   --radius:10px;
 }
 body{font-family:var(--font);color:var(--txt);background:var(--off);min-height:100vh;-webkit-font-smoothing:antialiased}
 h1,h2,h3{font-family:var(--disp)}
-.fg{display:flex;flex-direction:column;gap:6px}
-.fg label{font-size:12px;font-weight:600;color:var(--navy);text-transform:uppercase;letter-spacing:.3px}
-.fg input,.fg select,.fg textarea{
-  font-family:var(--font);font-size:13px;color:var(--txt);
-  padding:10px 14px;border:1px solid var(--border);border-radius:8px;
-  background:var(--white);width:100%;outline:none;transition:border-color .15s
-}
-.fg input:focus,.fg select:focus,.fg textarea:focus{border-color:var(--blue)}
-.btn{
-  display:inline-flex;align-items:center;justify-content:center;gap:8px;
-  font-family:var(--font);font-size:13px;font-weight:600;
-  padding:10px 20px;border-radius:8px;cursor:pointer;transition:all .15s;
-  border:1.5px solid var(--border);background:var(--white);color:var(--txt);text-decoration:none
-}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font);font-size:13px;font-weight:600;padding:10px 20px;border-radius:8px;cursor:pointer;transition:all .15s;border:1.5px solid var(--border);background:var(--white);color:var(--txt);text-decoration:none}
 .btn:hover{opacity:.85}
 .btn-navy{background:var(--navy);color:var(--white);border-color:var(--navy)}
 .btn-green{background:var(--green-dark);color:var(--white);border-color:var(--green-dark)}
 
-/* Portal layout */
+/* Layout */
 .portal-wrap{max-width:860px;margin:0 auto;padding:0 16px 40px}
-.portal-header{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:18px 24px;background:var(--white);border-bottom:1px solid var(--border);
-  position:sticky;top:0;z-index:50;margin-bottom:20px
-}
-.portal-logo{font-family:var(--disp);font-size:20px;font-weight:700;color:var(--navy)}
+.portal-header{display:flex;align-items:center;justify-content:space-between;padding:18px 24px;background:var(--white);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50;margin-bottom:20px}
+.portal-logo{font-family:var(--disp);font-size:20px;font-weight:700;color:var(--navy);letter-spacing:-.3px}
 .portal-logo span{color:var(--green)}
 .portal-user{font-size:13px;font-weight:600;color:var(--txt)}
 .portal-body{padding:0 8px}
 .panel{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
 .panel-head{padding:16px 20px;border-bottom:1px solid var(--border)}
-.panel-head h2{font-size:15px;font-weight:600;color:var(--txt);margin-bottom:2px}
+.panel-head h2{font-size:15px;font-weight:600;color:var(--txt);margin-bottom:2px;font-family:var(--disp)}
 .panel-head p{font-size:12px;color:var(--muted);font-family:var(--font)}
 .panel-body{padding:20px}
 
-/* E-SIGN */
-.esign-consent-overlay{
-  position:fixed;inset:0;z-index:1000;
-  background:rgba(11,30,61,0.96);
-  display:flex;align-items:center;justify-content:center;padding:20px
-}
-.esign-consent-card{
-  background:var(--white);border-radius:16px;
-  padding:36px 32px;max-width:480px;width:100%;text-align:center
-}
-.esign-doc-frame{
-  max-height:60vh;overflow-y:auto;
-  border-top:1px solid var(--border);font-size:13px;
-  line-height:1.7;color:var(--txt)
-}
-.sig-canvas-wrap{
-  border:1.5px solid var(--border);border-radius:8px;
-  overflow:hidden;background:var(--white);touch-action:none;position:relative
-}
-#signature-canvas{
-  display:block;width:100%;height:150px;cursor:crosshair;touch-action:none
-}
+/* Consent overlay */
+.esign-consent-overlay{position:fixed;inset:0;z-index:1000;background:rgba(11,30,61,0.96);display:flex;align-items:center;justify-content:center;padding:20px}
+.esign-consent-card{background:var(--white);border-radius:16px;padding:36px 32px;max-width:480px;width:100%;text-align:center}
+
+/* Document frame */
+.esign-doc-frame{max-height:65vh;overflow-y:auto;border-top:1px solid var(--border);font-size:13.5px;line-height:1.8;color:var(--txt);padding:20px 24px}
+.esign-doc-frame h1,.esign-doc-frame h2,.esign-doc-frame h3{font-family:Georgia,serif;margin:16px 0 8px}
+.esign-doc-frame p{margin-bottom:10px}
+.esign-doc-frame ol,.esign-doc-frame ul{padding-left:20px;margin-bottom:10px}
+.esign-doc-frame li{margin-bottom:4px}
+
+/* Signature */
+.sig-canvas-wrap{border:1.5px solid var(--border);border-radius:8px;overflow:hidden;background:var(--white);touch-action:none;position:relative}
+#signature-canvas{display:block;width:100%;height:150px;cursor:crosshair;touch-action:none}
 
 /* Toast */
-.toast{
-  position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
-  background:var(--navy);color:var(--white);
-  font-size:13px;padding:12px 24px;border-radius:100px;
-  z-index:9999;opacity:0;pointer-events:none;transition:opacity .3s
-}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--navy);color:var(--white);font-size:13px;padding:12px 24px;border-radius:100px;z-index:9999;opacity:0;pointer-events:none;transition:opacity .3s}
 .toast.show{opacity:1}
 .toast.err{background:var(--red)}
 
 /* Spinner */
 @keyframes spin{to{transform:rotate(360deg)}}
-.spin{
-  display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.3);
-  border-top-color:var(--white);border-radius:50%;animation:spin .6s linear infinite
-}
-.spin-dark{border-color:rgba(11,30,61,.15);border-top-color:var(--navy)}
+.spin{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:var(--white);border-radius:50%;animation:spin .6s linear infinite}
 
 /* Success */
 .success-card{text-align:center;padding:30px 20px}
 .success-anim{font-size:48px;margin-bottom:16px}
-.success-title{font-size:16px;font-weight:600;color:var(--txt);margin-bottom:8px}
+.success-title{font-size:16px;font-weight:600;color:var(--txt);margin-bottom:8px;font-family:var(--disp)}
 .success-sub{font-size:13px;color:var(--muted);line-height:1.6}
 
 @media(max-width:480px){
@@ -110,6 +75,7 @@ h1,h2,h3{font-family:var(--disp)}
   .portal-header{padding:14px 16px}
   .portal-logo{font-size:17px}
   .panel-body{padding:14px}
+  .esign-doc-frame{padding:14px 16px}
 }
 </style>
 <!-- CRISP LIVE CHAT -->
@@ -123,7 +89,7 @@ h1,h2,h3{font-family:var(--disp)}
 <div class="esign-consent-overlay" id="esign-consent">
   <div class="esign-consent-card">
     <div style="font-size:40px;margin-bottom:16px">⚖️</div>
-    <h2 style="font-size:18px;font-weight:600;color:var(--txt);margin-bottom:12px">Electronic Document Consent</h2>
+    <h2 style="font-size:18px;font-weight:600;color:var(--txt);margin-bottom:12px;font-family:var(--disp)">Electronic Document Consent</h2>
     <p style="font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:28px">By continuing, you confirm you consent to receiving and signing legal documents electronically. Electronic signatures are legally binding under the <strong style="color:var(--txt)">Electronic Communications Act 2000</strong>.</p>
     <button class="btn btn-green" style="width:100%;padding:12px;font-size:14px" onclick="acceptEsignConsent()">I Agree — Continue</button>
   </div>
@@ -133,32 +99,30 @@ h1,h2,h3{font-family:var(--disp)}
 <div id="esign-body" style="display:none">
   <div class="portal-wrap">
     <div class="portal-header">
-      <div class="portal-logo">Rent<span>Safe</span> AI</div>
-      <div class="portal-user"><span class="portal-name" id="esign-tenant-display"></span></div>
+      <div class="portal-logo">Nex<span>Let</span></div>
+      <div class="portal-user" id="esign-tenant-display"></div>
     </div>
     <div class="portal-body">
 
-      <!-- Status screens (already signed / expired) -->
+      <!-- Status screens (already signed / expired / error) -->
       <div id="esign-status" style="display:none">
         <div class="panel"><div class="panel-body"><div id="esign-status-content" style="text-align:center;padding:20px 0"></div></div></div>
       </div>
 
       <!-- Signing flow -->
-      <div id="esign-sign-flow">
+      <div id="esign-sign-flow" style="display:none">
         <!-- Document preview -->
         <div class="panel" style="margin-bottom:16px">
           <div class="panel-head">
-            <div>
-              <h2 id="esign-doc-title">Document for signing</h2>
-              <p id="esign-doc-meta">Please read the full document before signing</p>
-            </div>
+            <h2 id="esign-doc-title">Document for signing</h2>
+            <p id="esign-doc-meta">Please read the full document before signing</p>
           </div>
           <div id="esign-doc-content" class="esign-doc-frame"></div>
         </div>
 
         <!-- Signature section -->
         <div class="panel" id="esign-sig-panel">
-          <div class="panel-head"><div><h2>Sign document</h2><p>Draw your signature in the box below</p></div></div>
+          <div class="panel-head"><h2>Sign document</h2><p>Draw your signature in the box below</p></div>
           <div class="panel-body">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
               <div>
@@ -174,7 +138,7 @@ h1,h2,h3{font-family:var(--disp)}
             <div class="sig-canvas-wrap"><canvas id="signature-canvas"></canvas></div>
             <button onclick="clearSignature()" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;margin-top:6px;padding:0">Clear signature</button>
             <div style="margin-top:20px">
-              <button class="btn-primary" id="esign-sign-btn" onclick="signDocument()" disabled style="width:100%;padding:12px;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:600;cursor:not-allowed;border:none;background:var(--navy);color:#fff;opacity:.45;display:inline-flex;align-items:center;justify-content:center;gap:8px">Sign Document</button>
+              <button id="esign-sign-btn" onclick="signDocument()" disabled style="width:100%;padding:12px;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:600;cursor:not-allowed;border:none;background:var(--navy);color:#fff;opacity:.45;display:inline-flex;align-items:center;justify-content:center;gap:8px">Sign Document</button>
             </div>
             <p style="font-size:11px;color:var(--muted);text-align:center;margin-top:10px;line-height:1.6">By clicking "Sign Document" you are electronically signing this document. Your signature is legally binding under the Electronic Communications Act 2000.</p>
           </div>
@@ -183,27 +147,426 @@ h1,h2,h3{font-family:var(--disp)}
 
       <!-- Success screen -->
       <div id="esign-success" style="display:none">
-        <div class="panel">
-          <div class="panel-body">
-            <div class="success-card">
-              <div class="success-anim">✅</div>
-              <div class="success-title">Document signed successfully</div>
-              <div class="success-sub">A copy has been emailed to you and your landlord. You can also download your signed copy below.</div>
-              <a id="esign-download-link" href="#" target="_blank" class="btn btn-green" style="display:inline-flex;margin-top:16px;padding:10px 24px">⬇ Download signed document</a>
+        <div class="panel" style="border-radius:16px;overflow:hidden">
+          <div class="panel-body" style="padding:0">
+
+            <!-- Green header bar -->
+            <div style="background:linear-gradient(135deg,#0B1E3D,#0d2a4a);padding:32px 28px 28px;text-align:center">
+              <div style="width:56px;height:56px;background:rgba(0,200,150,0.15);border:2px solid #00C896;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:26px">✅</div>
+              <div style="font-family:'DM Serif Display',serif;font-size:20px;color:#fff;margin-bottom:6px">Signing complete</div>
+              <div id="esign-success-name" style="font-size:13px;color:rgba(255,255,255,0.6)"></div>
             </div>
+
+            <!-- Timeline -->
+            <div style="padding:28px 28px 8px">
+              <div style="font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-bottom:18px">What happened</div>
+              <div style="display:flex;flex-direction:column;gap:0">
+
+                <div style="display:flex;gap:14px;align-items:flex-start">
+                  <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">
+                    <div style="width:28px;height:28px;background:#00C896;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">✓</div>
+                    <div style="width:2px;flex:1;min-height:24px;background:rgba(0,200,150,0.2);margin:3px 0"></div>
+                  </div>
+                  <div style="padding-bottom:20px">
+                    <div style="font-size:13px;font-weight:600;color:var(--txt)">Document reviewed</div>
+                    <div style="font-size:12px;color:var(--muted);margin-top:2px">You read the full tenancy document before signing</div>
+                  </div>
+                </div>
+
+                <div style="display:flex;gap:14px;align-items:flex-start">
+                  <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">
+                    <div style="width:28px;height:28px;background:#00C896;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">✓</div>
+                    <div style="width:2px;flex:1;min-height:24px;background:rgba(0,200,150,0.2);margin:3px 0"></div>
+                  </div>
+                  <div style="padding-bottom:20px">
+                    <div style="font-size:13px;font-weight:600;color:var(--txt)">Electronic consent given</div>
+                    <div style="font-size:12px;color:var(--muted);margin-top:2px">You consented to sign electronically under the Electronic Communications Act 2000</div>
+                  </div>
+                </div>
+
+                <div style="display:flex;gap:14px;align-items:flex-start">
+                  <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">
+                    <div style="width:28px;height:28px;background:#00C896;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">✓</div>
+                    <div style="width:2px;flex:1;min-height:24px;background:rgba(0,200,150,0.2);margin:3px 0"></div>
+                  </div>
+                  <div style="padding-bottom:20px">
+                    <div style="font-size:13px;font-weight:600;color:var(--txt)">Signed electronically</div>
+                    <div style="font-size:12px;color:var(--muted);margin-top:2px">Your signature was applied and timestamped with your IP address as legal record</div>
+                  </div>
+                </div>
+
+                <div style="display:flex;gap:14px;align-items:flex-start">
+                  <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">
+                    <div style="width:28px;height:28px;background:#00C896;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">✓</div>
+                  </div>
+                  <div style="padding-bottom:8px">
+                    <div style="font-size:13px;font-weight:600;color:var(--txt)">Copy emailed</div>
+                    <div id="esign-success-email" style="font-size:12px;color:var(--muted);margin-top:2px">A signed copy has been sent to you and your landlord</div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- Actions -->
+            <div style="padding:0 28px 28px;display:flex;flex-direction:column;gap:10px">
+              <a id="esign-download-link" href="#" target="_blank" class="btn btn-green" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:13px;font-size:14px;font-weight:600;text-decoration:none;border-radius:10px">
+                ⬇ Download your signed copy
+              </a>
+              <button onclick="window.close()" style="background:none;border:1.5px solid var(--border);border-radius:10px;padding:12px;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;font-family:var(--font);width:100%">
+                ✓ All done — close this tab
+              </button>
+            </div>
+
+            <!-- Legal footer -->
+            <div style="padding:14px 28px 20px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);text-align:center;line-height:1.6">
+              This document was signed electronically and is legally binding under the Electronic Communications Act 2000. Keep your downloaded copy for your records.
+            </div>
+
           </div>
         </div>
       </div>
 
-    </div><!-- /portal-body -->
-  </div><!-- /portal-wrap -->
-</div><!-- /esign-body -->
+    </div>
+  </div>
+</div>
 
 <!-- Dependencies -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="js/lib/supabase-client.js"></script>
-<script src="js/esign-content.js"></script>
+
+<script>
+// ── SUPABASE INIT (inlined — no external dependency) ─────────────────────
+const SUPABASE_URL      = 'https://mahtcfukgzbonwibtsxz.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1haHRjZnVrZ3pib253aWJ0c3h6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MjQ2MDAsImV4cCI6MjA5MTIwMDYwMH0.-wC55rGp1WFKfjKR3EhuXqAPDiWJ4w_e2LBXjHr_y5Y';
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const EDGE_URL = 'https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy';
+
+// ── STATE ─────────────────────────────────────────────────────────────────
+let _esignRequest = null;
+let _esignTenant  = null;
+let _signaturePad = null;
+let _toastTimer   = null;
+
+// ── TOAST ─────────────────────────────────────────────────────────────────
+function _toast(msg, err) {
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'toast show' + (err ? ' err' : '');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { el.className = 'toast'; }, 3200);
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────
+function init() {
+  const params = new URLSearchParams(window.location.search);
+  const esignToken = params.get('esign');
+  if (esignToken) {
+    handleEsignToken(esignToken);
+  } else {
+    showError('Invalid link', 'This signing link is missing a token. Please use the link your landlord sent you.');
+  }
+}
+
+function showError(title, msg) {
+  document.getElementById('esign-consent').style.display = 'none';
+  document.getElementById('esign-body').style.display = 'block';
+  document.getElementById('esign-sign-flow').style.display = 'none';
+  document.getElementById('esign-status').style.display = 'block';
+  document.getElementById('esign-status-content').innerHTML =
+    '<div style="font-size:40px;margin-bottom:16px">⚠️</div>' +
+    '<div style="font-size:16px;font-weight:600;margin-bottom:8px">' + title + '</div>' +
+    '<div style="font-size:13px;color:var(--muted)">' + msg + '</div>';
+}
+
+// ── TOKEN HANDLER ─────────────────────────────────────────────────────────
+let _esignTokenReady = false; // Bug 2 guard
+
+async function handleEsignToken(token) {
+  const { data: req, error } = await sb
+    .from('esign_requests')
+    .select('*')
+    .eq('token', token)
+    .maybeSingle();
+
+  if (error || !req) {
+    showError('Invalid signing link', 'This signing link is invalid or does not exist. Please contact your landlord.');
+    return;
+  }
+
+  // Bug 1 fix: only strip token from URL after confirmed valid lookup
+  window.history.replaceState({}, '', window.location.pathname);
+
+  _esignRequest = req;
+  _esignTokenReady = true; // Bug 2 fix: consent button now safe to proceed
+
+  if (sessionStorage.getItem('esign_consent') === '1') {
+    document.getElementById('esign-consent').style.display = 'none';
+    document.getElementById('esign-body').style.display = 'block';
+    showEsignSigningFlow(req);
+  } else {
+    document.getElementById('esign-consent').style.display = 'flex';
+    document.getElementById('esign-body').style.display = 'none';
+  }
+}
+
+// ── CONSENT ───────────────────────────────────────────────────────────────
+function acceptEsignConsent() {
+  if (!_esignTokenReady) {
+    // DB fetch still in flight — wait and retry
+    _toast('Loading document, please wait…');
+    setTimeout(acceptEsignConsent, 400);
+    return;
+  }
+  sessionStorage.setItem('esign_consent', '1');
+  document.getElementById('esign-consent').style.display = 'none';
+  document.getElementById('esign-body').style.display = 'block';
+  showEsignSigningFlow(_esignRequest);
+}
+
+// ── SIGNING FLOW ──────────────────────────────────────────────────────────
+async function showEsignSigningFlow(req) {
+  if (!req) { showError('Error', 'No signing request found. Please use the link from your email.'); return; }
+
+  const [{ data: tenant }, { data: prop }] = await Promise.all([
+    sb.from('tenants').select('name,email,user_id').eq('id', req.tenant_id).maybeSingle(),
+    sb.from('properties').select('address,city').eq('id', req.property_id).maybeSingle()
+  ]);
+  // Bug 4 fix: landlord_email stored directly on esign_requests record
+  const landlordEmail = req.landlord_email || null;
+  _esignTenant = tenant ? { ...tenant, landlord_email: landlordEmail } : tenant;
+
+  const tenantName = tenant?.name || 'Tenant';
+  const propAddr   = prop ? prop.address + (prop.city ? ', ' + prop.city : '') : '';
+
+  document.getElementById('esign-tenant-display').textContent = tenantName;
+  document.getElementById('esign-sig-name').textContent = tenantName;
+  document.getElementById('esign-sig-date').textContent = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+  document.getElementById('esign-doc-title').textContent = req.document_type === 'written_statement' ? 'Written Statement of Tenancy Terms' : 'Tenancy Document';
+  const signedByLabel = req.landlord_signed_at
+    ? ' · ✍ Signed by landlord on ' + new Date(req.landlord_signed_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+    : '';
+  document.getElementById('esign-doc-meta').textContent = propAddr + ' · Please read the full document before signing' + signedByLabel;
+
+  if (req.status === 'signed') {
+    document.getElementById('esign-sign-flow').style.display = 'none';
+    document.getElementById('esign-status').style.display = 'block';
+    document.getElementById('esign-status-content').innerHTML =
+      '<div style="font-size:40px;margin-bottom:16px">✅</div>' +
+      '<div style="font-size:16px;font-weight:600;margin-bottom:8px">Already signed</div>' +
+      '<div style="font-size:13px;color:var(--muted)">You have already signed this document. A copy was emailed to you.</div>';
+    return;
+  }
+  if (req.status === 'expired' || new Date(req.expires_at) < new Date()) {
+    document.getElementById('esign-sign-flow').style.display = 'none';
+    document.getElementById('esign-status').style.display = 'block';
+    document.getElementById('esign-status-content').innerHTML =
+      '<div style="font-size:40px;margin-bottom:16px">⏰</div>' +
+      '<div style="font-size:16px;font-weight:600;margin-bottom:8px">Link expired</div>' +
+      '<div style="font-size:13px;color:var(--muted)">This signing link has expired. Please contact your landlord for a new link.</div>';
+    return;
+  }
+
+  document.getElementById('esign-sign-flow').style.display = 'block';
+  const docContent = document.getElementById('esign-doc-content');
+  if (req.document_html) {
+    docContent.innerHTML = req.document_html;
+  } else if (req.document_pdf_url) {
+    docContent.innerHTML = '<iframe src="' + req.document_pdf_url + '" style="width:100%;height:65vh;border:none;display:block"></iframe>';
+  }
+
+  // Bug 3 fix: defer until after layout paint so canvas.offsetWidth is non-zero
+  requestAnimationFrame(() => initSignaturePad());
+}
+
+// ── SIGNATURE PAD ─────────────────────────────────────────────────────────
+function initSignaturePad() {
+  const canvas = document.getElementById('signature-canvas');
+  if (!canvas || !window.SignaturePad) return;
+
+  const ratio = Math.max(window.devicePixelRatio || 1, 1);
+  canvas.width  = canvas.offsetWidth  * ratio;
+  canvas.height = canvas.offsetHeight * ratio;
+  canvas.getContext('2d').scale(ratio, ratio);
+
+  _signaturePad = new SignaturePad(canvas, { backgroundColor: 'rgb(255,255,255)', penColor: 'rgb(26,43,69)' });
+  _signaturePad.addEventListener('endStroke', () => {
+    const btn = document.getElementById('esign-sign-btn');
+    if (btn) {
+      const empty = _signaturePad.isEmpty();
+      btn.disabled = empty;
+      btn.style.opacity = empty ? '.45' : '1';
+      btn.style.cursor  = empty ? 'not-allowed' : 'pointer';
+    }
+  });
+
+  window.addEventListener('resize', () => {
+    if (!_signaturePad) return;
+    const saved = _signaturePad.toData();
+    const r = Math.max(window.devicePixelRatio || 1, 1);
+    canvas.width  = canvas.offsetWidth  * r;
+    canvas.height = canvas.offsetHeight * r;
+    canvas.getContext('2d').scale(r, r);
+    _signaturePad.clear();
+    if (saved.length) _signaturePad.fromData(saved);
+  }, { passive: true });
+}
+
+function clearSignature() {
+  if (_signaturePad) {
+    _signaturePad.clear();
+    const btn = document.getElementById('esign-sign-btn');
+    if (btn) { btn.disabled = true; btn.style.opacity = '.45'; btn.style.cursor = 'not-allowed'; }
+  }
+}
+
+// ── SIGN DOCUMENT ─────────────────────────────────────────────────────────
+async function signDocument() {
+  if (!_signaturePad || _signaturePad.isEmpty()) { _toast('Please draw your signature first', true); return; }
+
+  const req = _esignRequest;
+  const btn = document.getElementById('esign-sign-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Processing…';
+
+  const sigDataUrl = _signaturePad.toDataURL('image/png');
+  const signedAt   = new Date();
+
+  try {
+    // Get IP
+    let ipAddress = 'Unknown';
+    try { const r = await fetch('https://api.ipify.org?format=json'); ipAddress = (await r.json()).ip || 'Unknown'; } catch(e) {}
+
+    const tenant     = _esignTenant;
+    const tenantName = tenant?.name || 'Tenant';
+    const [{ data: prop }] = await Promise.all([
+      sb.from('properties').select('address,city').eq('id', req.property_id).maybeSingle()
+    ]);
+    const propAddr = prop ? prop.address + (prop.city ? ', ' + prop.city : '') : '';
+
+    _toast('Generating signed document…');
+    const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' });
+
+    // Cover page
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.setTextColor(11, 30, 61);
+    doc.text('NexLet', 105, 28, { align: 'center' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(100, 100, 100);
+    doc.text('Electronically Signed Tenancy Document', 105, 38, { align: 'center' });
+    doc.setDrawColor(0, 200, 150); doc.setLineWidth(0.8); doc.line(20, 44, 190, 44);
+    doc.setTextColor(11, 30, 61); doc.setFont('helvetica', 'bold'); doc.setFontSize(13);
+    const docLabel = req.document_type === 'written_statement' ? 'Written Statement of Tenancy Terms' : 'Tenancy Document';
+    doc.text(docLabel, 20, 58);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
+    ['Property: ' + propAddr, 'Tenant: ' + tenantName, 'Document type: ' + docLabel, '', 'This PDF contains the full signed document.', 'The signature confirmation is on the final page.']
+      .forEach((l, i) => doc.text(l, 20, 70 + i * 8));
+
+    // Document content
+    if (req.document_html) {
+      doc.addPage();
+      const text = req.document_html
+        .replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n\n').replace(/<\/h[1-6]>/gi, '\n\n')
+        .replace(/<\/li>/gi, '\n').replace(/<[^>]+>/g, '')
+        .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')
+        .replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/\n{3,}/g, '\n\n').trim();
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(40, 40, 40);
+      const lines = doc.splitTextToSize(text, 170);
+      let y = 20;
+      for (const line of lines) { if (y > 277) { doc.addPage(); y = 20; } doc.text(line, 20, y); y += 5; }
+    } else if (req.document_pdf_url) {
+      doc.addPage();
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(11, 30, 61);
+      doc.text('Uploaded Document Reference', 20, 20);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(80, 80, 80);
+      ['The landlord uploaded a PDF document for signing.', 'This signed confirmation page serves as proof of electronic signature.', '', 'Original document URL: ' + req.document_pdf_url, '', 'The tenant has reviewed and signed this document electronically.']
+        .forEach((l, i) => doc.text(l, 20, 36 + i * 8));
+    }
+
+    // Landlord signature page
+    if (req.landlord_sig_png && req.landlord_signed_at) {
+      doc.addPage();
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(11, 30, 61);
+      doc.text('Landlord Signature', 20, 20);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
+      const lDate = new Date(req.landlord_signed_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+      ['Signed by (landlord): ' + (req.landlord_name || 'Landlord'), 'Date: ' + lDate, '', 'The landlord electronically signed this document before sending it to the tenant.', 'This signature was applied under the Electronic Communications Act 2000.']
+        .forEach((l, i) => doc.text(l, 20, 36 + i * 8));
+      try { doc.addImage(req.landlord_sig_png, 'PNG', 20, 95, 80, 28); } catch(e) {}
+    }
+
+    // Tenant signature confirmation page
+    doc.addPage();
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.text('Electronic Signature Confirmation', 20, 20);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
+    ['Electronically signed by: ' + tenantName,
+     'Date: ' + signedAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+     'Time: ' + signedAt.toLocaleTimeString('en-GB'),
+     'Document: ' + docLabel,
+     'IP Address: ' + ipAddress, '',
+     'This document was electronically signed under the Electronic Communications Act 2000.']
+      .forEach((l, i) => doc.text(l, 20, 36 + i * 8));
+    try { doc.addImage(sigDataUrl, 'PNG', 20, 104, 80, 28); } catch(e) {}
+
+    // Upload PDF
+    _toast('Uploading signed document…');
+    const pdfBlob   = doc.output('blob');
+    const filename  = 'signed_' + req.token + '_' + Date.now() + '.pdf';
+    const { error: uploadErr } = await sb.storage.from('signed-documents').upload(filename, pdfBlob, { contentType: 'application/pdf' });
+    if (uploadErr) throw new Error('Upload failed: ' + uploadErr.message);
+    const { data: urlData } = sb.storage.from('signed-documents').getPublicUrl(filename);
+    const signedPdfUrl = urlData.publicUrl;
+
+    // Update esign_requests
+    await sb.from('esign_requests').update({ status: 'signed', signed_at: signedAt.toISOString(), signed_pdf_url: signedPdfUrl, ip_address: ipAddress }).eq('id', req.id);
+
+    // Audit log
+    try { await sb.from('audit_log').insert({ action: 'document_signed', table_name: 'esign_requests', record_id: String(req.id), details: 'Signed via tenant portal. IP: ' + ipAddress, user_id: null }); } catch(e) {}
+
+    // Send confirmation emails
+    _toast('Sending confirmation emails…');
+    const signedTimeStr = signedAt.toLocaleString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+    const tenantEmailHtml = '<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:28px 24px;color:#1A2B45">' +
+      '<div style="border-bottom:2px solid #0B1E3D;padding-bottom:12px;margin-bottom:20px"><span style="font-size:17px;font-weight:700;color:#0B1E3D">NexLet</span></div>' +
+      '<h2 style="font-size:16px;font-weight:600;margin-bottom:8px">Your signed document — ' + propAddr + '</h2>' +
+      '<p style="font-size:13px;color:#7A8FA6;margin-bottom:20px">Hi ' + tenantName + ', thank you for signing your tenancy document.</p>' +
+      '<div style="background:#F6F8FB;border-radius:8px;padding:16px;margin-bottom:24px"><div style="font-size:12px;color:#7A8FA6;margin-bottom:2px">Signed at</div><div style="font-size:13px;font-weight:600">' + signedTimeStr + '</div></div>' +
+      '<div style="text-align:center;margin:24px 0"><a href="' + signedPdfUrl + '" style="background:#0B1E3D;color:#fff;padding:13px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;display:inline-block">⬇ Download signed document</a></div>' +
+      '<div style="margin-top:20px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#999">Sent via NexLet · documents@nexlet.co.uk</div></div>';
+
+    const landlordEmailHtml = '<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:28px 24px;color:#1A2B45">' +
+      '<div style="border-bottom:2px solid #0B1E3D;padding-bottom:12px;margin-bottom:20px"><span style="font-size:17px;font-weight:700;color:#0B1E3D">NexLet</span></div>' +
+      '<h2 style="font-size:16px;font-weight:600;margin-bottom:8px">✅ Tenant has signed — ' + tenantName + ', ' + propAddr + '</h2>' +
+      '<div style="background:#F6F8FB;border-radius:8px;padding:16px;margin-bottom:20px">' +
+      '<div style="font-size:12px;color:#7A8FA6;margin-bottom:2px">Tenant</div><div style="font-size:13px;font-weight:600;margin-bottom:10px">' + tenantName + '</div>' +
+      '<div style="font-size:12px;color:#7A8FA6;margin-bottom:2px">Property</div><div style="font-size:13px;font-weight:600;margin-bottom:10px">' + propAddr + '</div>' +
+      '<div style="font-size:12px;color:#7A8FA6;margin-bottom:2px">Signed at</div><div style="font-size:13px;font-weight:600;margin-bottom:10px">' + signedTimeStr + '</div>' +
+      '<div style="font-size:12px;color:#7A8FA6;margin-bottom:2px">IP address</div><div style="font-size:13px;font-weight:600">' + ipAddress + '</div></div>' +
+      '<div style="text-align:center;margin:24px 0"><a href="' + signedPdfUrl + '" style="background:#0B1E3D;color:#fff;padding:13px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;display:inline-block">⬇ Download signed document</a></div>' +
+      '<div style="margin-top:20px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#999">Sent via NexLet · documents@nexlet.co.uk</div></div>';
+
+    if (tenant?.email) fetch(EDGE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'send_email', to: tenant.email, subject: 'Your signed document — ' + propAddr, html: tenantEmailHtml }) }).catch(e => console.error('[esign] Tenant email failed:', e));
+    if (tenant?.landlord_email) fetch(EDGE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'send_email', to: tenant.landlord_email, subject: 'Tenant has signed — ' + tenantName + ', ' + propAddr, html: landlordEmailHtml }) }).catch(e => console.error('[esign] Landlord email failed:', e));
+
+    document.getElementById('esign-sign-flow').style.display = 'none';
+    document.getElementById('esign-success').style.display = 'block';
+    document.getElementById('esign-download-link').href = signedPdfUrl;
+    const _tn = _esignTenant?.name || _esignRequest?.tenant_name || '';
+    const _te = _esignTenant?.email || '';
+    if (_tn) document.getElementById('esign-success-name').textContent = _tn + ' · ' + new Date().toLocaleDateString('en-GB', {day:'numeric',month:'long',year:'numeric'});
+    if (_te) document.getElementById('esign-success-email').textContent = 'A signed copy has been sent to ' + _te + ' and your landlord';
+
+  } catch(e) {
+    btn.disabled = false;
+    btn.innerHTML = 'Sign Document';
+    btn.style.opacity = '1';
+    _toast('Error signing document: ' + e.message, true);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
 </body>
 </html>

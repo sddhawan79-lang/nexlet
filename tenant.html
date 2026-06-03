@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tenant Portal — NexLet</title>
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -195,7 +196,7 @@ html,body{min-height:100%;font-family:var(--font);color:var(--txt);background:va
 <div id="screen-loading">
   <div class="loading-wrap">
     <div class="loading-inner">
-      <div class="loading-logo">Rent<span>Safe</span> AI</div>
+      <div class="loading-logo">Nex<span>Let</span></div>
       <div class="spin-lg"></div>
     </div>
   </div>
@@ -228,7 +229,7 @@ html,body{min-height:100%;font-family:var(--font);color:var(--txt);background:va
   <div class="portal-wrap">
     <!-- Header -->
     <div class="portal-header">
-      <div class="portal-logo">Rent<span>Safe</span> AI</div>
+      <div class="portal-logo">Nex<span>Let</span></div>
       <div class="portal-user">
         <span class="portal-name" id="portal-tenant-name"></span>
         <button class="btn-logout" onclick="logout()">Log out</button>
@@ -421,7 +422,7 @@ async function init(){
     return;
   }
 
-  const savedToken = localStorage.getItem('rsa_tenant_token');
+  const savedToken = localStorage.getItem('nxl_tenant_token');
   if(savedToken){
     await handleToken(savedToken);
     return;
@@ -441,15 +442,23 @@ async function handleToken(token){
     .maybeSingle();
 
   if(error || !tenant){
-    localStorage.removeItem('rsa_tenant_token');
+    localStorage.removeItem('nxl_tenant_token');
     showScreen('error');
     document.getElementById('error-title').textContent = 'Link not valid';
     document.getElementById('error-msg').textContent = 'This portal link is invalid or has been revoked. Contact your landlord for a new one.';
     return;
   }
 
+  if(tenant.status === 'Ended'){
+    localStorage.removeItem('nxl_tenant_token');
+    showScreen('error');
+    document.getElementById('error-title').textContent = 'Tenancy ended';
+    document.getElementById('error-msg').textContent = 'Your tenancy has ended and portal access is no longer active. If you have any queries, please contact your landlord directly.';
+    return;
+  }
+
   if(tenant.status === 'revoked' || tenant.status === 'Former'){
-    localStorage.removeItem('rsa_tenant_token');
+    localStorage.removeItem('nxl_tenant_token');
     showScreen('error');
     document.getElementById('error-title').textContent = 'Access revoked';
     document.getElementById('error-msg').textContent = 'Your portal access has been revoked. Please contact your landlord.';
@@ -457,7 +466,7 @@ async function handleToken(token){
   }
 
   // Valid — persist token for return visits
-  localStorage.setItem('rsa_tenant_token', token);
+  localStorage.setItem('nxl_tenant_token', token);
   currentTenant = tenant;
   await loadTenantPortal(tenant);
 }
@@ -882,7 +891,7 @@ async function downloadCert(certId, certType){
 
 // ── LOGOUT ──
 async function logout(){
-  localStorage.removeItem('rsa_tenant_token');
+  localStorage.removeItem('nxl_tenant_token');
   currentTenant = null;
   tenantJobs = [];
   showScreen('loggedout');

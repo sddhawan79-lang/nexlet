@@ -52,8 +52,8 @@
 
     document.querySelectorAll('.plan-btn').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        var link = btn.dataset.link;
-        if (link) window.open(link, '_blank');
+        var priceId = btn.dataset.price;
+        if (priceId) _startCheckout(priceId);
       });
     });
   });
@@ -116,7 +116,7 @@
         .from('stripe_subscriptions')
         .select('plan_name, status, current_period_end, cancel_at_period_end')
         .eq('user_id', _userId)
-        .single();
+        .maybeSingle();
 
       // PGRST116 = no subscription — that's normal for free users
       if (result.error && result.error.code !== 'PGRST116') {

@@ -188,6 +188,7 @@ rentsafeai/
 | `tenancy_started_at` | timestamptz | Session 18 |
 | `tenancy_ended_at` | timestamptz | Session 18 |
 | `vacant_since` | timestamptz | Session 18 |
+| `na_docs` | jsonb | Session 23: Array of doc IDs marked as N/A for this property (e.g. `["legionella","pat"]`). Default `[]`. Run: `ALTER TABLE properties ADD COLUMN IF NOT EXISTS na_docs jsonb DEFAULT '[]'::jsonb;` |
 
 #### `tenants`
 | Column | Type | Notes |
@@ -247,6 +248,8 @@ rentsafeai/
 | `amount` | numeric | |
 | `due_date`, `paid_date` | date | |
 | `status` | text | `paid`, `overdue`, `pending` |
+| `month` | text | Session 22 fix: month label e.g. `2026-05` — was missing from DB write |
+| `notes` | text | Session 22 fix: payment notes — was missing from DB write |
 
 #### `tenant_maintenance`
 Maintenance jobs submitted via the tenant portal (token-based, no auth).
@@ -658,6 +661,9 @@ Session 8 introduced a 3-checkbox pre-generation consent gate for 4 legal docume
 | 8 | No offline/error recovery states | General | Technical debt |
 | 9 | MX record missing for `nexlet.co.uk` | DNS / Email | Post-launch |
 | 10 | Supabase credentials hardcoded in HTML files | Security hygiene | Acceptable — anon key is public-safe |
+| 51 | `user_profiles` missing `plan` + `newsletter_opted_in` columns | Database | **FIXED 23 May 2026** — ALTER TABLE run in SQL Editor |
+| 52 | `inventory_reports` table missing | Database | **FIXED 23 May 2026** — CREATE TABLE + RLS run in SQL Editor |
+| 53 | No favicon.ico | Static files | Pending — add to repo root |
 | 11 | `parseInt()` on UUID `prop_id`/`tenant_id` values — produces NaN | Data integrity | **FIXED Session 7** — replaced with `String()` (22 locations) |
 | 12 | `tenant_documents` table missing from DB — KYC scanning fails silently | Database | **SQL created** — run `session7_tenant_documents.sql` in Supabase SQL Editor |
 | 13 | `tenant-documents` Storage bucket RLS — uploads fail with "row-level security policy" | Storage | **FIXED** — INSERT + SELECT policies added via SQL Editor |
@@ -2389,3 +2395,676 @@ Final pricing after the 19 May 2026 repricing pass (founding / standard monthly)
 - **S8 compact card:** "Generate →" button calls `s8LaunchFromTemplates()` — handles 1-property (auto-launch) and multi-property (picker modal)
 - **`closeModal()` alias:** Added next to `closeMo()` for comms hub compatibility
 - **Doc library View buttons:** Extended URL resolution to check `engineer` field (stores public URL for doc library uploads)
+
+### Session 21 — 23 May 2026 — Bug Fixes, Onboarding Stepper & Journey Card Updates
+
+**Date:** 23 May 2026
+**File modified:** `landlord.html` (15,288 → 15,297 lines)
+
+#### Supabase Schema Fixes
+
+- **`user_profiles` 400 error fixed:** Missing `plan` (text, default 'trial') and `newsletter_opted_in` (boolean, default false) columns added via SQL:
+  ```sql
+  ALTER TABLE user_profiles
+  ADD COLUMN IF NOT EXISTS plan text DEFAULT 'trial',
+  ADD COLUMN IF NOT EXISTS newsletter_opted_in boolean DEFAULT false;
+  ```
+- **`inventory_reports` 404 fixed:** Table created (was missing) — full schema with RLS policy:
+  ```sql
+  CREATE TABLE IF NOT EXISTS inventory_reports (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
+    prop_id text, type text, notes text, file_url text,
+    created_at timestamptz DEFAULT now()
+  );
+  ALTER TABLE inventory_reports ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY "Users manage own inventory reports" ON inventory_reports
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+  ```
+
+#### Bug Fixes (Priority Gap List — all 10 resolved)
+
+| # | Fix | Details |
+|---|-----|---------|
+| 1 | **Mark Served / upload button** | Compliance detail view cert rows now show green `✓ Mark Served` button (calls `markServed(certId)`) when status is NOT SERVED. NOT UPLOADED rows show red `+ Upload` button. |
+| 2 | **Post-tenant-add CTA modal** | After `_saveTenantSetupToDB()` saves, instead of silent nav, shows "Next steps 🎉" modal with: Send Welcome Kit → `moWelcomeKit()`, Upload Documents & RTR → `nav('tenants', tid)`, Skip for now → original nav. String concatenation used (not template literals) to avoid nesting syntax errors. |
+| 3 | **E-sign repositioned as Day 1 step** | "✍️ Written Statement e-signed" moved from Day 30 Pack to Day 1 Pack. Day 30 now contains deposit-only items: Prescribed info served, Deposit scheme protected, Smoke & CO alarm tested. |
+| 4 | **Deposit protection reminder** | `checkAllReminders()` now fires at day 25 and day 28 after tenancy start for any tenant with `deposit > 0` and no `scheme`/`scheme_ref`. Email includes deadline date + 3× deposit penalty warning. Added to `REMINDER_TYPES` as mandatory (`id: 'deposit_protect'`). |
+| 5 | **Inventory in Day 1 journey card** | "📋 Inventory / schedule of condition" added as last item in Day 1 Pack. Done check: cert type includes 'inventory' or 'schedule of condition'. Action: `nav('inventory-reports')`. |
+| 6 | **New user onboarding stepper** | `renderNewUserStepper()` function added (line ~10922). Renders a 4-step card on dashboard when `D.properties.length === 0`: (1) Add property, (2) Upload certs, (3) Add tenant, (4) Send welcome kit. Step 1 highlighted navy. Dismissable (localStorage `nexlet_onboard_stepper_v1`). Auto-hides once properties exist. Slot added to `pgDashboard()` as `<div id="new-user-stepper-slot">` above setup-banner-slot. Called via `setTimeout(renderNewUserStepper, 50)` after `nav('dashboard')` in `initApp`. |
+| 7 | **RTR/ID upload prompt actionable** | Passive blue info banner in pre-tenancy checklist (onboard mode) replaced with flex row + `📄 Upload Docs →` button calling `nav('tenants', pid)`. |
+| 8 | **Co-tenants grouped on contract** | `moEsign()` now gathers all active tenants for property via `_esignAllTenants`. Blue info banner shown for joint tenancies. Modal subtitle + `esign-tname` field show all tenant names comma-separated. AI prompt updated from `Tenant:` to `Tenant(s):`. |
+| 9 | Legionella missing from compliance | Already present in `COMPLIANCE_DOCS` as mandatory — no change needed. |
+| 10 | Deposit protection date not verified | Covered by deposit protection reminder (Fix #4) + existing deposit scheme check in compliance. |
+
+#### Syntax Errors Fixed
+
+- **Fix 2 (post-tenant CTA):** Original used nested template literals with `${_skipNav}` inside onclick inside outer backtick string — caused `SyntaxError: Invalid or unexpected token`. Rewritten as plain string concatenation.
+- **Fix 3 (RTR banner):** `+(pid||'')+` embedded inside single-quoted string broke string boundary. Rewritten as multi-part string concatenation with `+` operators outside quotes. Em dash replaced with HTML entity `&#x2014;`.
+
+#### Post-Launch Backlog Added
+
+- **In-app workflow guidance** (contextual "?" tooltips or help modal) — parked post-launch. Option A = modal (quick), Option B = inline tooltips.
+
+#### Key Function Locations (updated)
+
+| Function | Line ~ | Notes |
+|---|---|---|
+| `renderNewUserStepper()` | 10922 | New user 4-step onboarding stepper |
+| `_saveTenantSetupToDB()` | 3475 | Now shows post-add CTA modal instead of silent nav |
+| `moEsign(pid, tid)` | 13405 | Now co-tenant aware — shows all tenant names |
+| Day 1 journey items | 7921 | Now includes e-sign + inventory |
+| Day 30 journey items | 7979 | Now deposit-only (3 items) |
+| Deposit protect reminder | ~7530 | New block in `checkAllReminders()` |
+| Mark Served button | ~6908 | In compliance detail cert row button IIFE |
+
+
+---
+
+### Session 22 — 24 May 2026 — Rent Collection, Documents & E-Sign Full Audit
+
+**Date:** 24 May 2026
+**File modified:** `landlord.html`
+
+#### Bug Fixes — Rent Collection
+
+| # | Bug | Fix |
+|---|-----|-----|
+| 1 | **`savePaymentRecord` dropped `month` and `notes`** | `dp` payload now includes `month: month\|\|null` and `notes: notes\|\|null`. Both were passed in but never written to DB. Every payment saved without a month label. |
+| 2 | **`pgRent()` showed only raw DB records** | Replaced with `buildRentSchedule()` per property — now shows full schedule including auto-generated rows, matching property detail view. Orphan DB records (properties without active tenant) appended separately. "✓ Mark received" button on unrecorded overdue rows. |
+| 3 | **Nav badge missed auto-generated overdue rows** | Badge now also iterates `buildRentSchedule()` rows with no DB id and `Late`/`Due` status. No longer shows 0 when months are genuinely unpaid. |
+| 4 | **Overdue reminder suppressed by same-month payment from prior year** | Added `.getFullYear()===today.getFullYear()` to the paid check in `checkAllReminders()`. |
+| 5 | **Receipt checkbox stale after property dropdown change** | Added `onchange` handler to property dropdown in `moAddPayment` — refreshes checkbox state and label for the newly selected property's tenant. Added `id="pay-receipt-lbl"` to the label div. |
+| 6 | **`buildRentSchedule` never assigned `'Late'` status** | `cur < today` → `'Late'`, `cur.getTime() === today.getTime()` → `'Due'`. Auto-rows now correctly distinguish overdue from due-today. |
+
+#### Bug Fixes — Documents
+
+| # | Bug | Fix |
+|---|-----|-----|
+| 7 | **`dlUpload` used wrong storage bucket** | Changed from `esign-documents` to `documents` bucket — consistent with all other cert/doc uploads. |
+| 8 | **Doc Library showed `expiry` as "Uploaded" date** | Now uses `created_at` (fallback to `expiry`) for the upload date label. |
+
+#### Bug Fixes — E-Sign
+
+| # | Bug | Fix |
+|---|-----|-----|
+| 11 | **E-sign status mismatch** | `_sendEsignRequest` inserted `status: 'pending'` but tenant card queried `r.status === 'sent'`. Changed insert to `'sent'`. Pending e-sign badges now appear correctly. |
+| 12 | **`esignShowOptionA` function body split** | `_esignToggleEdit` was accidentally nested inside the opening of `esignShowOptionA`. Restructured as two properly separate top-level functions. |
+
+#### Key Function Changes
+
+| Function | Change |
+|---|---|
+| `savePaymentRecord(payload, editId)` | Now destructures and writes `month` + `notes` to `dp` |
+| `pgRent()` | Full rewrite — uses `buildRentSchedule()` across all properties |
+| `buildRentSchedule(pid)` | `cur < today` → `'Late'`; `cur === today` → `'Due'` |
+| `renderNewUserStepper()` (nav badge block) | Badge counts auto-generated overdue rows |
+| `checkAllReminders()` — rent overdue check | Year added to paid-check: `.getFullYear()===today.getFullYear()` |
+| `moAddPayment()` | Property dropdown has `onchange` to refresh receipt checkbox/label |
+| `dlUpload()` | Storage bucket: `esign-documents` → `documents` |
+| `pgDocLibrary()` | Upload date uses `created_at` not `expiry` |
+| `_sendEsignRequest()` | Insert `status` changed from `'pending'` to `'sent'` |
+| `esignShowOptionA()` / `_esignToggleEdit()` | Functions separated — were incorrectly interleaved |
+
+---
+
+### Session 23 — 24 May 2026 — W2 E-sign Placement, C2 Optional Doc Toggles, U3 Onboarding, Deposit Receipt Template
+
+**Date:** 24 May 2026
+**File modified:** `landlord.html`
+
+#### U3 — New User Onboarding Wizard
+
+`renderNewUserStepper()` fully rebuilt. Two-mode system:
+
+**Mode 1 — Full-screen wizard** (first login, zero properties):
+- Overlays entire screen with blurred navy backdrop (`onboard-wizard-overlay` div injected into `<body>`)
+- 4 steps with live progress bar, vertical stepper, connecting lines turn green as steps complete
+- Completed steps struck through. Next actionable step highlighted navy with CTA button
+- Dismissed via `nexlet_onboard_wizard_v1` localStorage key — never shows again once skipped
+- On close: calls `renderNewUserStepper()` again to render slot widget
+
+**Mode 2 — Dashboard slot widget** (after wizard dismissed, steps still incomplete):
+- Compact panel in `new-user-stepper-slot` on dashboard
+- Shows 4 rows with progress dots + "N of 4 complete" header with mini progress bar
+- Only next incomplete step gets CTA button
+- Dismissed via `nexlet_onboard_stepper_v1` key
+
+**Real progress detection** (was hardcoded `false` before):
+- Step 1: `D.properties.length > 0`
+- Step 2: active tenant exists
+- Step 3: any cert with `has_file` uploaded
+- Step 4: `welcome_kit` in email log
+
+**RTR/KYC nudge (Option B contextual):**
+- Step 2 (Add tenant) has a `note` field: amber pill `"⚠️ Right to Rent check required — verify ID, share code or visa before move-in"` with `Go to tenant →` link
+- Only appears when `hasTenant === true` (tenant just added — exactly the right moment)
+- Renders in both wizard and slot widget
+
+#### C2 — Optional Doc N/A Toggles
+
+**New functions:**
+- `bypassDoc(pid, docId)` — adds `docId` to `p.na_docs` array, saves to Supabase `properties.na_docs` (jsonb), logs to audit trail, re-navs
+- `unbypassDoc(pid, docId)` — removes `docId` from array, same persistence
+
+**`getDocStatus(doc, certList, insuranceList, naDocs)`:**
+- New optional 4th param `naDocs`
+- If `!doc.mandatory && naDocs.includes(doc.id)`: returns `{ lbl:'N/A', overdue:false, isNA:true }` immediately
+
+**`renderCompGroup(..., naDocs)`:**
+- New `naDocs` param passed to `getDocStatus` and `overdueCount` filter
+- `_naBtn` variable: pill-style `N/A` button on non-mandatory, non-insurance rows. When `st.isNA`: shows `↩ Undo N/A` instead
+- Row states: N/A rows → only Undo button. Overdue rows → Upload + N/A. Valid rows → edit/view/delete + N/A
+
+**Recommended block:** Same `_recNA` treatment — `getDocStatus` passes `pNaDocs`, `_recNA` button wired into output
+
+**All 5 `renderCompGroup` call sites** updated to pass `pNaDocs = Array.isArray(p?.na_docs) ? p.na_docs : []`
+
+**Supabase column required:**
+```sql
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS na_docs jsonb DEFAULT '[]'::jsonb;
+```
+
+#### W2 — E-sign Placement (Two New Entry Points)
+
+**Entry point 1 — Compliance tab, Written Statement row:**
+- `_esignTenant` = active tenant lookup for `pid`
+- `_esignBtn` green pill: `✍ Send for e-sign` + sub-label `AI generates & tenant signs online`
+- Appears on overdue rows (alongside Upload) and valid rows
+- Hidden if no active tenant or doc is N/A
+
+**Entry point 2 — Templates page, Written Statement card:**
+- E-sign button below "Generate with AI" on `writtenstatement` card only
+- Finds first active tenant across portfolio for `moEsign()` call
+- Toast `"Add a tenant first"` if no tenant exists
+- Sub-label: `AI generates & tenant signs online`
+
+#### Deposit Receipt Letter Template
+
+New template added to **Tenancy Documents** category (sits above Deposit Deduction — chronological order):
+
+| Field | Value |
+|---|---|
+| Template ID | `depositreceipt` |
+| Name | `Deposit Receipt Letter` |
+| Tag | `Deposit` |
+| Category | `LEGAL_DOC_TYPES` |
+
+**Form fields (`TEMPLATE_FIELDS.depositreceipt`):**
+- Deposit amount (£) — required
+- Protection scheme — dropdown: DPS / MyDeposits / TDS / Not yet protected
+- Scheme reference — optional text
+- Date deposit received — required
+
+**AI prompt:** Generates UK landlord deposit receipt letter covering: amount, date received, scheme + reference, 30-day legal protection deadline (Housing Act 2004), note that Prescribed Information follows separately. Professional tone, addressed to tenant by name.
+
+**Doc name map + LEGAL_DOC_TYPES:** Both updated with `depositreceipt`.
+
+
+---
+
+### Session 25 — 29 May 2026 — Stripe Integration Complete + Go Live
+
+**Date:** 29 May 2026
+**Files modified:** `landlord.html`, `profile.html`, `js/profile.js`, `supabase/functions/stripe-webhook/index.ts`, `supabase/functions/stripe-cancel/index.ts` (new)
+
+#### Stripe Price IDs (Sandbox/Test — founding prices)
+
+| Plan | Type | Price ID |
+|---|---|---|
+| Starter | founding | `price_1TX2zp2LDL4FOJhEvpaUe6sa` |
+| Starter | standard | `price_1TcSFV2LDL4FOJhEsUm1W7Ro` |
+| Landlord | founding | `price_1TcSLU2LDL4FOJhEamxB9g97` |
+| Landlord | standard | `price_1TcSNa2LDL4FOJhEguNEJjhd` |
+| Portfolio | founding | `price_1TcSPs2LDL4FOJhEJS7VUati` |
+| Portfolio | standard | `price_1TcSRK2LDL4FOJhEIXd9FLKP` |
+
+#### Database Changes
+
+```sql
+-- stripe_subscriptions table created with full schema
+-- Columns: id, user_id, stripe_customer_id, stripe_subscription_id,
+--          price_id, plan_name, status, current_period_end,
+--          cancel_at_period_end, created_at, updated_at
+-- RLS: authenticated role SELECT policy (auth.uid() = user_id)
+```
+
+#### Edge Functions Deployed
+
+| Function | Flag | Status |
+|---|---|---|
+| `stripe-checkout` | default | ✅ deployed |
+| `stripe-webhook` | `--no-verify-jwt` | ✅ deployed |
+| `stripe-cancel` | default | ✅ deployed (new) |
+
+**Webhook endpoint:** `https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/stripe-webhook`
+**Stripe events:** `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`
+**Webhook name in Stripe:** `exquisite-wonder`
+
+#### Code Changes
+
+| File | Change |
+|---|---|
+| `landlord.html` | Added `PRICE_MAP` const with 3 founding price IDs. `redirectToCheckout(plan)` now sends `{ price_id }` instead of `{ plan, billing_cycle }` |
+| `profile.html` | Plan card Subscribe buttons changed from `data-link` (hardcoded buy.stripe.com URLs) to `data-price` with real price IDs. Lib scripts changed from `defer` to synchronous load |
+| `js/profile.js` | Subscribe button click handler fixed: `btn.dataset.link` → `btn.dataset.price`, calls `_startCheckout(priceId)`. `_loadSubscription` changed from `.single()` to `.maybeSingle()` to fix 406 error |
+| `stripe-webhook/index.ts` | Full rewrite: corrected price IDs in `PRICE_TO_PLAN` map, fixed imports to `stripe@14.21.0`, changed `serve()` to `Deno.serve()` |
+| `stripe-cancel/index.ts` | New edge function: sets `cancel_at_period_end: true` on Stripe subscription and updates local DB |
+
+#### Known Issues Post-Session
+
+| Issue | Detail |
+|---|---|
+| `stripe_price_id` NULL in DB | Webhook writes to `price_id` column but table column is named `stripe_price_id` — minor, `plan_name` and `status` work correctly |
+| `favicon.ico` 404 | No favicon file in repo — cosmetic only |
+| `newsletter_opted_in` column | Not yet added to `user_profiles` table |
+
+#### E2E Test Result
+
+✅ Test card `4242 4242 4242 4242` → Stripe checkout → payment → webhook 200 OK → `stripe_subscriptions` row created with `plan_name: starter`, `status: active`
+
+**NEXLET IS LIVE at https://nexlet.co.uk**
+
+---
+
+### Session 26 — 30 May 2026 — Post-Launch UI Polish (Batch A–C)
+
+**Date:** 30 May 2026
+**Files modified:** `landlord.html`
+
+#### Summary
+
+Post-launch UI upgrade pass targeting enterprise SaaS aesthetics. All changes are CSS/rendering only — no schema, no edge functions, no logic changes.
+
+#### Changes Made
+
+**Global CSS tokens:**
+| Variable | Old | New |
+|---|---|---|
+| `--off` | `#F8F6F1` (warm cream) | `#F4F5F7` (cool grey) |
+| `--border` | `#D8D4CC` | `#E2E5EA` |
+| `--txt` | `#1E2A2A` | `#1A2332` |
+| `--muted` | `#6B7A7A` | `#64748B` (slate) |
+
+**Component polish:**
+- `.mc` + `.panel`: added `box-shadow: 0 1px 3px rgba(0,0,0,0.06)`
+- `.topbar`: height 52→56px + micro shadow
+- Founding price banner: large orange box → compact navy pill
+- Send feedback: increased opacity 10%→40%, added `border-top`
+- `.b-green` badge: now correctly uses `--status-green-bg/dark` (#00875A) — "Active", "Valid", "Paid", "Protected" all green
+- Property list rent values: changed from orange `var(--green-dark)` → neutral `var(--txt)`
+
+**Tables & compliance:**
+- `tr:hover td`: hover colour changed to `rgba(59,111,232,0.04)` with CSS transition
+- `.ph2 h2`: 14px → 13px + letter-spacing
+- `th`: white background, letter-spacing .4→.6px
+- `td`: hardcoded `#3D5166` → `var(--txt)`
+- Kanban column headers: `var(--muted)` → `var(--txt)`, letter-spacing bump
+
+**Property detail stat cards (pgTenantDetail):**
+- Removed coloured tinted backgrounds (`var(--green-bg)`, `rgba(59,111,232,0.09)`, etc.)
+- Now: `background:var(--white)`, `border-left:3px solid {status-colour}`, `box-shadow:0 1px 3px rgba(0,0,0,0.06)`
+- Icon bg: `var(--off)` (was `rgba(255,255,255,0.5)`)
+
+**Compliance row density:**
+- Mandatory overdue doc labels: `font-weight:700`
+- Optional docs remain `font-weight:500`
+
+**Postcode lookup fix:**
+- `lookupPostcode()` rewritten: exact lookup first (`/postcodes/{pc}`), fuzzy only as fallback
+- Added `.toUpperCase()` normalisation
+- Fixes random/incorrect results on partial postcode matches
+
+#### Remaining / Next Session
+
+| Task | Detail |
+|---|---|
+| Tenant detail KYC duplication | Sticky summary bar (`stickyCard`) at top of tenant detail repeats "🗂 KYC Documents" heading + pills that are already shown in full section below. Remove sticky bar or collapse it to a minimal status chip only |
+
+
+---
+
+### Session 27 — 31 May 2026 — UI Polish, Navy Border Treatment & Competitive Audit
+
+#### Navy left-border panel treatment — applied app-wide
+All key feature panels now have `border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)`. Applied to 15 panels:
+
+| Panel | Location in file |
+|---|---|
+| ✉ Email log | Property detail (pgPropDetail) |
+| 🏠 Property details | Property detail |
+| 🔧 Issues | Property detail |
+| Compliance action list (`#comp-action-list`) | pgComplianceSection |
+| Recent reminders sent | pgReminders |
+| Tenancy Details | pgTenantDetail |
+| 📋 Compliance Checklist | pgTenantDetail |
+| 🗓 Day 1 Pack | pgTenantDetail |
+| 📆 Day 30 Pack | pgTenantDetail |
+| KYC Documents (`#kyc-docs-section`) | pgTenantDetail |
+| 📨 Communications | pgTenantDetail |
+| 🏠 Tenant Portal card | pgTenantDetail (pre-existing from Session 26) |
+| Property breakdown | pgFinancials |
+| Upload Document | pgDocLibrary |
+| Stored Documents | pgDocLibrary |
+
+Visual rule: navy left border = key feature / action panel. Data/table-only panels (e.g. rent ledger rows, kanban task rows) do not get this treatment.
+
+#### Completed earlier this session (pre-compaction)
+- **KYC section deduplication** — removed redundant `<h2>🗂 KYC Documents</h2>` + `<p>` subheading from `#kyc-docs-section` panel body (sticky bar retained)
+- **Tenant portal token rename** — `rsa_tenant_token` → `nxl_tenant_token` (5 occurrences in `tenant.html`)
+- **Tenant portal: Ended tenancy** — `handleToken()` checks for `status === 'Ended'` and shows "Tenancy ended — portal access no longer active"
+- **`moEndTenancy()`** — now nulls `invite_token`, `invite_used`, `portal_enabled` for primary AND co-tenants on the same property
+- **`newsletter_opted_in` column** — added `newsletter_opted_in BOOLEAN DEFAULT NULL` and `newsletter_opted_at TIMESTAMPTZ DEFAULT NULL` to `user_profiles` (default NULL = never chosen, not false)
+- **`stripe_price_id` webhook fix** — deployed `stripe-webhook.ts` fix: changed `price_id` → `stripe_price_id` in both `checkout.session.completed` upsert and `customer.subscription.updated` update
+- **`favicon.ico`** — generated white "N" on NEXLET navy (#0B1E3D) circular background, 16×16 + 32×32 ICO. Added `<link rel="icon">` to `landlord.html` and `tenant.html`. File pushed to GitHub repo root.
+- **AI badge on all tenant doc upload buttons** — `✦ AI auto-scan` badge shown on both empty-state and has-docs "Add another" upload buttons
+- **Tenant portal open link** — changed from hardcoded `https://nexlet.co.uk/tenant.html` to `${window.location.origin}/tenant.html`
+
+#### Competitive intelligence audit — LetCompliance vs NEXLET (May 2026)
+
+**LetCompliance confirmed features (from their live site):**
+- 0–100 compliance score, 6 areas
+- Gas / EICR / EPC / deposit / Right to Rent tracking
+- Email + WhatsApp reminders at 90/30/14/7/1 days
+- Section 8 — 14 grounds only
+- SA105 tax pack, MTD quarterly summary, Section 24 calculator
+- Tenant portal (Standard plan only)
+- Free public compliance checker (no signup)
+- Full editorial blog / content hub driving SEO
+- AES-256 / GDPR trust badges in nav
+- £14.99/mo from, 7-day trial
+
+**NEXLET exclusive advantages:**
+1. All 37 RRA 2025 Section 8 grounds (vs their 14) — headline differentiator
+2. AI document scanner on every upload (name mismatch warnings) — not offered by competitor
+3. 30-day free trial, no card (vs their 7 days)
+4. Founding member pricing from £4.99/mo, locked for life (no equivalent at LetCompliance)
+5. Dual e-sign flow (landlord signs first, tenant counter-signs) — not offered
+6. Awaab's Law 24h/7d/14d SLA engine — not offered
+7. Prescribed Information PDF generator — not offered
+8. Right-to-Rent share code wizard — not offered
+9. Ground 8 arrears auto-calculator — not offered
+10. Powered by Claude / Anthropic (they use Gemini)
+11. White-label agent portal planned (Portfolio tier)
+
+**NEXLET gaps vs LetCompliance (to close):**
+1. WhatsApp reminders — they promote heavily, NEXLET email-only
+2. Free public compliance checker (no signup) — high SEO value
+3. Blog / content hub — they rank for every landlord compliance keyword
+4. Trust badges (AES-256, GDPR, ICO) not yet prominent on landing page
+5. Section 21 urgency messaging — they own "Section 21 is gone. Are you ready?"
+
+#### Landing page marketing recommendations (priority order)
+
+1. **[HIGH] Rewrite hero headline** — lead with court loss fear: "Section 21 is dead. Miss one of the 37 Section 8 grounds and your possession case fails. NEXLET is the only tool built around all 37."
+2. **[HIGH] Named competitor comparison table** — 3-column table on landing page: NEXLET vs LetCompliance on 37 grounds, trial length, price. Converts extremely well.
+3. **[HIGH] Founding price urgency counter** — "87 founding slots taken. 13 remaining." Live counter on hero. Drives urgency.
+4. **[MED] AI scanner as headline feature** — dedicated section with "✦ AI scan complete" badge demo. No other landlord tool does this.
+5. **[MED] E-sign proof point** — frame as court-admissible evidence with dual audit trail, not just convenience.
+6. **[MED] Trust badges** — add AES-256 / GDPR / ICO (when registered) / Co. No. above the fold.
+7. **[LOW] Founder story specificity** — add real numbers: properties managed, Section 8 notices served, compliance checks run.
+
+**Positioning statement (for landing, social, email):**
+"NEXLET is the only UK landlord compliance platform built for all 37 RRA 2025 Section 8 grounds — with AI document scanning, dual e-sign, and founding member pricing from £4.99/mo."
+
+#### Known issues still open
+| # | Issue | Status |
+|---|---|---|
+| 1 | ICO number placeholder in legal docs | Pending registration |
+| 2 | MX record for inbound email | Parked post-launch |
+| 3 | `login.html` newsletter signup checkbox | Not built |
+| 4 | `moFinancials` PDF export — jsPDF needed | Post-launch backlog |
+| 5 | Section 8 UX handoff to Form 3A | Post-launch backlog |
+| 6 | Dual e-sign flow — partially built, not complete | Post-launch backlog |
+| 7 | WhatsApp reminders | Post-launch backlog |
+| 8 | Free public compliance checker | Marketing priority |
+| 9 | Blog / content hub | Marketing priority |
+
+---
+
+### Session 27 — 31 May 2026 — Pre-Launch Branding Fix + Dashboard Wow Factor + Compliance Checklist AI Scanner
+
+**Date:** 31 May 2026
+**Files modified:** `landlord.html`, `tenant.html`
+
+---
+
+#### 1. Tenant portal branding — `tenant.html` (Issues 1 & 4)
+
+Two hardcoded `Rent<span>Safe</span> AI` strings remained in `tenant.html` from the original brand. Both replaced with `Nex<span>Let</span>`:
+
+| Location | Old | New |
+|---|---|---|
+| Loading screen (`div.loading-logo`) | `Rent<span>Safe</span> AI` | `Nex<span>Let</span>` |
+| Portal header topbar (`div.portal-logo`) | `Rent<span>Safe</span> AI` | `Nex<span>Let</span>` |
+
+Both use existing CSS classes (`.loading-logo`, `.portal-logo`) which apply the navy + green split — renders as **Nex**<span style="color:green">**Let**</span> matching the main app.
+
+---
+
+#### 2. Dashboard — Portfolio Health Score ring + micro-charts (Issue 2)
+
+**New: Portfolio Health Score ring** — inserted above the `.metrics` grid in `pgDashboard()`.
+
+- SVG circular progress dial (0–100) colour-coded: ≥80 green, ≥50 amber, <50 red
+- Score formula (100 pts total):
+  - **Certificates (30pts)** — `validCerts / totalCerts × 30`
+  - **Rent (30pts)** — `(totalRent - lateRent) / totalRent × 30`
+  - **Maintenance (20pts)** — deducted for Awaab open / urgent / count
+  - **KYC (20pts)** — `tenantsWithFullKYC / activeTeants × 20`
+- Four mini horizontal progress bars below the ring (one per component)
+- Entire card clickable → `nav('compliance')`
+
+**Enhanced stat cards** — all four cards now include a micro progress bar at the bottom:
+
+| Card | Metric | Bar shows |
+|---|---|---|
+| Properties | Occupancy % | `activeTenants / activeProps × 100` |
+| Monthly rent | Collection rate % | `paidRent / totalRent × 100` |
+| Certificates *(new — replaces Active tenants)* | Valid cert % | `(certCount - issues) / certCount × 100` |
+| Open issues | Resolved % | `resolved / totalMaintenance × 100` |
+
+Note: "Active tenants" card removed — occupancy bar on Properties card conveys same info more efficiently. Certificates card added as standalone metric with expiry tracking.
+
+---
+
+#### 3. Compliance checklist — AI scanner on upload (Issue 3)
+
+**New constant:** `CHECKLIST_UPLOAD_SLOTS` — maps checklist keys to KYC upload slots:
+
+```js
+const CHECKLIST_UPLOAD_SLOTS = {
+  rtr:       { slot: 'right_to_rent', label: 'Upload R2R doc' },
+  id_docs:   { slot: 'passport',      label: 'Upload ID doc' },
+  agreement: { slot: 'agreement',     label: 'Upload agreement' },
+};
+```
+
+**`_checklistRowHtml()` updated:**
+- Rows with an upload slot (`rtr`, `id_docs`, `agreement`) now show:
+  - `✦ AI scan` badge pill in the collapsed row header
+  - Upload button inside the expanded detail panel, wired to `uploadTenantDoc(tid, slot, input)` → auto-triggers `scanTenantDoc()` exactly as KYC section does
+  - After scan: shows extracted name, doc type, expiry + name match / mismatch indicator
+  - "↺ Replace" label if a doc already exists for that slot
+- Rows without an upload slot (`deposit_protection`, `rent_guarantee`, `insurance`) — unchanged, manual status dropdown only
+- Scan results pulled from `D.tenantDocs` filtered by `tenant_id` + `slot` — no new Supabase table needed
+
+---
+
+#### Known issues updated
+
+| # | Issue | Status |
+|---|---|---|
+| 1 | ICO number placeholder in legal docs | Pending registration |
+| 2 | MX record for inbound email | Parked post-launch |
+| 3 | `login.html` newsletter signup checkbox | Not built |
+| 4 | `moFinancials` PDF export — jsPDF needed | Post-launch backlog |
+| 5 | Section 8 UX handoff to Form 3A | Post-launch backlog |
+| 6 | Dual e-sign flow — partially built, not complete | Post-launch backlog |
+| 7 | WhatsApp reminders | Post-launch backlog |
+| 8 | Free public compliance checker | Marketing priority |
+| 9 | Blog / content hub | Marketing priority |
+
+---
+
+### Session 30 — 3 June 2026 — Live Bug Fixes
+
+**Date:** 3 June 2026
+**Files modified:** `landlord.html`, `esign.html`
+
+---
+
+#### 1. Postcode finder removed
+
+**Bug:** `postcodes.io` only returns area/district data — not individual addresses. After 5 failed fix attempts the feature was removed entirely.
+
+**Fix:** "Find →" button and result div removed from both Add property and Edit property forms. `lookupPostcode()` function removed. Postcode field is now a plain manual text input on both forms.
+
+**Post-launch backlog:** Replace with `getAddress.io` API (~£5–20/month) — returns full address list per postcode for dropdown selection.
+
+---
+
+#### 2. Post-property-save popup redesigned
+
+**Bug:** After adding a property the popup said "Add tenant?" but clicking it went to the pre-tenancy checklist, not the tenant setup form.
+
+**Fix:** Popup replaced with three clearly labelled stacked buttons:
+- 👤 **Add tenant now** → `moTenant(pid)` — opens tenant setup modal directly
+- ✅ **Complete compliance checks first** → `nav('prop-detail', pid)` — property detail with pre-tenancy checklist
+- 🕐 **Do this later** → `nav('properties')` — back to properties list
+
+---
+
+#### 3. Tenancy setup flow — full rebuild
+
+**New feature:** Multi-step guided tenancy setup replacing the single "next steps" popup.
+
+**Popup chain (steps 1–2):**
+- After lead tenant saved → Popup 1: "Add co-tenant" / "No co-tenants — continue"
+- After co-tenant saved → loops: "Add another co-tenant" / "Done — continue setup"
+- Step 2 popup → "Prepare Written Statement" (opens e-sign flow) / "Do this later"
+
+**Sticky progress bar on prop-detail (steps 3–6):**
+- Rendered by `_renderTenancySetupBar(pid)` — injected above stat cards in `pgPropDetail()`
+- 4 steps: Written Statement · Tenant documents · Property compliance · Welcome Kit
+- Welcome Kit locked until tenant docs + property docs both done
+- Progress bar disappears when all steps complete
+- Each step card is a `<button>` element for reliable click handling
+
+**Auto-marking:**
+- `written_statement_done` — marked on e-sign send in `_sendEsignRequest()`
+- `tenant_docs_done` — auto-marked when `pgTenantDetail()` is visited
+- `property_docs_done` — auto-marked when compliance tab is opened via `pdSetTab()`
+- `welcome_kit_done` — marked in `sendWelcomeKit()` success path
+
+**New helper functions:** `_moCoTenant()`, `_tenancySetupStep2()`, `_getTenancyProgress()`, `_markTenancyStep()`, `_renderTenancySetupBar()`
+
+**Supabase migration required:**
+```sql
+ALTER TABLE tenants
+ADD COLUMN IF NOT EXISTS tenancy_setup_progress JSONB DEFAULT '{
+  "co_tenants_done": false,
+  "written_statement_done": false,
+  "tenant_docs_done": false,
+  "property_docs_done": false,
+  "welcome_kit_done": false
+}'::jsonb;
+```
+
+---
+
+#### 4. E-sign modal — written statement improvements
+
+**Bugs fixed:**
+- Modal too narrow (520px) and preview too small (260px) for reading legal documents
+- Fields not all mandatory — missing landlord details
+
+**Fixes:**
+- Modal widened to 760px (`mo-wide` class applied in `moEsign()`)
+- Preview area: `min-height:500px`, `max-height:65vh`, font 13.5px / 1.8 line-height, `contain:strict` removed
+- Editor textarea height increased to match
+
+**New mandatory fields added to e-sign form:**
+- Landlord full name (auto-filled from `_profileName()`)
+- Landlord address (auto-filled from `D.userProfile.landlord_address` after first entry; saved to Supabase)
+- Rent due day (auto-filled from `t.rent_day`)
+- All existing fields (start date, rent, deposit, scheme, bills, pets) now validated before Generate
+
+**New optional field:** Property licence number (auto-filled from `p.licence_number`)
+
+**AI prompt upgraded:**
+- `max_tokens` increased to 5000
+- 10 mandatory RRA 2025 clauses explicitly listed including Awaab's Law, Section 8 only notices, Section 13 rent review
+- Signature blocks for all parties included
+- Permitted occupiers = named tenants (no separate field)
+- Notice period + repair responsibilities pre-filled as standard clauses
+
+**Validation:** Toast error listing missing fields if any mandatory field empty before Generate fires.
+
+**Landlord address persistence:**
+```sql
+ALTER TABLE user_profiles
+ADD COLUMN IF NOT EXISTS landlord_address TEXT;
+```
+
+---
+
+#### 5. Modal overlay layout fix — page compression
+
+**Bug:** App content area was shrinking/compressing when modals opened on dashboard and prop-detail.
+
+**Root cause:** `.mo` overlay used `align-items:center` + `.mo-box` had `max-height:90vh` — together they squashed the background layout.
+
+**Fix:**
+- `.mo` changed to `align-items:flex-start; overflow-y:auto` — overlay scrolls, background unaffected
+- `.mo-box` `max-height` removed — modal grows with content
+- `.content` given `flex-shrink:0; min-height:0` — prevents content area collapsing
+
+---
+
+#### 6. E-sign post-send navigation
+
+**Bug:** After sending e-sign document, app redirected to dashboard instead of property detail.
+
+**Fix:** `_sendEsignRequest()` now calls `nav('prop-detail', String(pid))` after send, returning landlord to the property with the progress bar updated.
+
+---
+
+#### 7. E-sign signing link domain fix
+
+**Bug:** Tenant received email with signing link pointing to `sddhawan79-lang.github.io/esign.html` (GitHub Pages origin) instead of `nexlet.co.uk/esign.html`.
+
+**Fix:** `window.location.origin` replaced with hardcoded `https://nexlet.co.uk` in signing link construction.
+
+---
+
+#### 8. esign.html — fully self-contained rebuild
+
+**Bug:** `esign.html` referenced `js/lib/supabase-client.js` which did not exist in the repository root, causing `window.RSA?.sb` to be undefined and the entire signing flow to fail silently.
+
+**Fix:** `esign.html` rebuilt as fully self-contained single file:
+- Supabase init inlined directly (URL + anon key from `landlord.html`)
+- All `esign-content.js` logic inlined into a `<script>` block
+- External `js/lib/supabase-client.js` and `js/esign-content.js` no longer referenced
+- Logo fixed: `Rent<span>Safe</span> AI` → `Nex<span>Let</span>`
+- Document frame CSS improved for reading legal HTML (headings, paragraphs, lists styled)
+- `js/esign-content.js` can remain in repo harmlessly
+
+---
+
+#### 9. Known issues updated
+
+| # | Issue | Status |
+|---|---|---|
+| 1 | ICO number placeholder in legal docs | Pending registration |
+| 2 | MX record for inbound email | Parked post-launch |
+| 3 | `login.html` newsletter signup checkbox | Not built |
+| 4 | `moFinancials` PDF export — jsPDF needed | Post-launch backlog |
+| 5 | Section 8 UX handoff to Form 3A | Post-launch backlog |
+| 6 | WhatsApp reminders | Post-launch backlog |
+| 7 | Free public compliance checker | Marketing priority |
+| 8 | Blog / content hub | Marketing priority |
+| 9 | Postcode finder — replace with getAddress.io | Post-launch backlog |
+| 10 | `stripe_price_id` NULL in webhook | Non-critical, plan_name/status correct |
+| 11 | `newsletter_opted_in` column missing from user_profiles | Post-launch backlog |
+| 12 | favicon.ico missing | Post-launch backlog |

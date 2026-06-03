@@ -102,6 +102,8 @@ nav {
 .hero-sub { font-size:1rem; color:var(--text-muted); max-width:460px; line-height:1.7; margin-bottom:32px; }
 .hero-actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:28px; }
 .hero-note { font-size:0.76rem; color:var(--slate-light); display:flex; align-items:center; gap:6px; }
+.founding-slot-chip { display:inline-flex; align-items:center; gap:9px; background:rgba(232,146,58,0.10); border:1.5px solid rgba(232,146,58,0.35); color:rgba(255,255,255,0.75); font-size:0.78rem; padding:8px 16px; border-radius:100px; margin-bottom:12px; line-height:1.4; }
+.slot-pulse { width:8px; height:8px; background:var(--amber); border-radius:50%; flex-shrink:0; animation:blink 1.6s infinite; }
 .hero-trust { margin-top:36px; padding-top:28px; border-top:1px solid var(--border); display:flex; align-items:center; gap:24px; flex-wrap:wrap; }
 .trust-item { display:flex; align-items:center; gap:8px; font-size:0.8rem; font-weight:500; color:var(--text-muted); }
 .trust-item svg { color:var(--amber); flex-shrink:0; }
@@ -301,6 +303,52 @@ nav {
 .ct-no { color:rgba(255,255,255,0.12); font-size:0.85rem; }
 .ct-val { font-size:0.78rem; font-weight:600; color:white; }
 
+/* ─── AI SCANNER CARD ─── */
+.ai-scanner-grid { display:grid; grid-template-columns:1fr 1fr; gap:56px; align-items:center; }
+.ai-scan-card { background:white; border-radius:14px; box-shadow:0 4px 24px rgba(0,0,0,0.09); overflow:hidden; border:1px solid var(--border); }
+.ai-scan-header { background:var(--teal); padding:12px 16px; display:flex; align-items:center; gap:10px; }
+.ai-scan-dots { display:flex; gap:5px; }
+.ai-scan-dots span { width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,0.25); }
+.ai-scan-title { font-size:0.75rem; font-weight:700; color:rgba(255,255,255,0.8); letter-spacing:0.04em; }
+.ai-scan-body { padding:20px; }
+.ai-scan-file { display:flex; align-items:center; gap:8px; font-size:0.78rem; font-weight:600; color:var(--teal); background:rgba(45,106,106,0.06); border:1px solid rgba(45,106,106,0.12); border-radius:7px; padding:9px 12px; margin-bottom:14px; }
+.ai-scan-progress { margin-bottom:14px; }
+.ai-scan-bar { height:4px; background:#E5E7EB; border-radius:2px; margin-bottom:5px; overflow:hidden; }
+.ai-scan-fill { height:100%; width:100%; background:linear-gradient(90deg,var(--teal),var(--amber)); border-radius:2px; }
+.ai-scan-pct { font-size:0.68rem; font-weight:600; color:var(--text-muted); }
+.ai-scan-result { }
+.ai-scan-badge { display:inline-flex; align-items:center; gap:6px; background:rgba(45,106,106,0.08); border:1.5px solid rgba(45,106,106,0.2); color:var(--teal); font-size:0.75rem; font-weight:700; padding:5px 12px; border-radius:100px; margin-bottom:12px; }
+.ai-scan-items { display:flex; flex-direction:column; gap:7px; }
+.ai-scan-item { display:flex; align-items:center; gap:8px; font-size:0.78rem; color:var(--text-muted); }
+.ai-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+.ai-dot.ok { background:#10B981; }
+.ai-dot.warn { background:#F59E0B; }
+.ai-scan-item.warn { color:#92400E; }
+@media(max-width:700px){ .ai-scanner-grid { grid-template-columns:1fr !important; } }
+
+/* ─── COMPETITOR COMPARISON TABLE ─── */
+.comp-table-wrap { overflow-x:auto; }
+.comp-table { width:100%; border-collapse:collapse; background:white; border-radius:14px; overflow:hidden; box-shadow:0 2px 20px rgba(0,0,0,0.06); }
+.comp-table thead tr { background:var(--teal); }
+.comp-table thead th { padding:14px 18px; font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.07em; color:rgba(255,255,255,0.55); text-align:center; }
+.comp-feat-col { text-align:left !important; width:28%; }
+.comp-nexlet-col { background:rgba(255,255,255,0.08) !important; color:white !important; }
+.comp-tag { display:inline-block; background:var(--amber); color:white; font-size:0.6rem; font-weight:700; padding:2px 7px; border-radius:100px; margin-left:6px; text-transform:uppercase; letter-spacing:0.04em; vertical-align:middle; }
+.comp-table tbody tr { border-bottom:1px solid #F0EDE6; }
+.comp-table tbody tr:last-child { border-bottom:none; }
+.comp-table tbody td { padding:13px 18px; font-size:0.82rem; color:var(--text-muted); text-align:center; vertical-align:middle; }
+.comp-feat { text-align:left !important; font-weight:600; color:var(--text); }
+.comp-nexlet { background:rgba(45,106,106,0.04); font-weight:600; color:var(--teal); }
+.comp-highlight-row td { padding-top:18px; padding-bottom:18px; }
+.comp-big { font-family:'Playfair Display',serif; font-size:1.6rem; font-weight:800; color:var(--teal); display:block; line-height:1; }
+.comp-all { font-size:0.68rem; font-weight:700; color:var(--amber); text-transform:uppercase; letter-spacing:0.05em; }
+.comp-mid { font-family:'Playfair Display',serif; font-size:1.3rem; font-weight:700; color:#9CA3AF; }
+.comp-none { font-size:0.78rem; color:#D1D5DB; font-weight:600; }
+.comp-check { color:var(--teal); font-size:1rem; margin-right:4px; }
+.comp-x { color:#EF4444; font-size:0.9rem; margin-right:4px; }
+.comp-dash { color:#D1D5DB; font-size:1rem; }
+@media(max-width:640px){ .comp-table thead th,.comp-table tbody td { padding:10px 10px; font-size:0.74rem; } .comp-big { font-size:1.2rem; } }
+
 /* HMO strip */
 .hmo-strip { background:rgba(255,255,255,0.02); border:1px dashed rgba(255,255,255,0.09); border-radius:10px; padding:18px 24px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
 .hmo-icons { font-size:1.3rem; display:flex; gap:8px; }
@@ -436,8 +484,8 @@ footer { background:var(--teal-dark); border-top:1px solid rgba(255,255,255,0.05
   <div class="hero">
     <div class="fade-in">
       <div class="hero-badge"><span class="pulse"></span>Renters' Rights Act 2025 — Now in force</div>
-      <h1>The Renters' Rights Act<br>changes everything.<br><em style="color:var(--teal)">Are your properties ready?</em></h1>
-      <p class="hero-sub">Built by a landlord who manages real properties. Not a tech team guessing at your workflow. RRA 2025 compliance for 1–10+ properties, sorted in under 10 minutes.</p>
+      <h1>Section 21 is dead.<br>Miss one of the <em>37 Section 8 grounds</em><br>and your case fails in court.</h1>
+      <p class="hero-sub">NEXLET is the only UK landlord tool built around all 37 RRA 2025 Section 8 grounds — with AI document scanning, dual e-sign, and founding member pricing from £4.99/mo.</p>
       <div class="hero-actions">
         <a href="signup.html" class="btn btn-primary btn-lg">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
@@ -445,18 +493,20 @@ footer { background:var(--teal-dark); border-top:1px solid rgba(255,255,255,0.05
         </a>
         <a href="#whats-changing" class="btn btn-outline btn-lg">See what's changing on 31 May</a>
       </div>
+      <div class="founding-slot-chip">
+        <span class="slot-pulse"></span>
+        <strong>87 founding members</strong> locked their price — <strong style="color:#fff">13 slots remaining</strong> at <strong style="color:var(--amber)">£4.99/mo forever</strong>
+      </div>
       <p class="hero-note">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        Free for 30 days · First 100 landlords lock founding price forever
+        Free for 30 days · No card required · Cancel anytime
       </p>
       <div class="hero-trust fade-in" style="transition-delay:0.25s">
-        <div class="trust-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>RRA 2025 compliant</div>
+        <div class="trust-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>256-bit encrypted · GDPR compliant</div>
         <div class="trust-div"></div>
-        <div class="trust-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>ICO registered · UK data</div>
+        <div class="trust-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>All 37 S.8 grounds · RRA 2025</div>
         <div class="trust-div"></div>
-        <div class="trust-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>All 37 S.8 grounds</div>
-        <div class="trust-div"></div>
-        <div class="trust-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Setup in 10 minutes</div>
+        <div class="trust-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>5-min setup · Co. No. 10990778</div>
       </div>
     </div>
     <div class="hero-visual fade-in" style="transition-delay:0.15s">
@@ -598,13 +648,13 @@ footer { background:var(--teal-dark); border-top:1px solid rgba(255,255,255,0.05
         </div>
         <div class="tab-desc">
           <div class="tab-desc-icon">✍️</div>
-          <h3>Get any document e-signed</h3>
-          <p>Contracts, inventories, pet agreements, rent increase acknowledgements — upload any PDF and get it signed. No chasing, no printing, no posting.</p>
+          <h3>Both parties sign. Every signature court-ready.</h3>
+          <p>Landlord signs first, then tenants countersign — the correct legal order. Every signature is timestamped and stored as court-admissible evidence. Not just convenience — protection.</p>
           <ul class="tab-feats">
-            <li>Upload any PDF — tenants sign online in minutes</li>
+            <li>Dual e-sign flow: landlord signs first, tenants counter-sign</li>
+            <li>Every signature timestamped — court-admissible evidence</li>
             <li>Auto-generated AST — RRA 2025 compliant</li>
-            <li>Signing order: landlord first, then tenants</li>
-            <li>Unlimited e-signatures on every plan</li>
+            <li>Upload any PDF — tenants sign online in minutes</li>
             <li>Signed PDFs saved to property records automatically</li>
           </ul>
         </div>
@@ -704,6 +754,117 @@ footer { background:var(--teal-dark); border-top:1px solid rgba(255,255,255,0.05
   </div>
 </section>
 
+<!-- ══ AI SCANNER FEATURE SECTION ══ -->
+<section style="background:var(--bg);padding:72px 2rem;border-top:1px solid var(--border)">
+  <div class="ai-scanner-grid fade-in" style="max-width:1000px;margin:0 auto">
+    <div class="fade-in">
+      <div class="section-tag">AI-Powered</div>
+      <h2 class="section-heading">Every document scanned.<br>Every upload protected.</h2>
+      <p style="font-size:0.95rem;color:var(--text-muted);line-height:1.75;margin-bottom:24px">Every document you upload is instantly scanned by Claude AI — automatically checking names, dates, expiry, and compliance flags. Name mismatches, missing signatures, expired certificates — caught before they cost you.</p>
+      <p style="font-size:0.88rem;font-weight:700;color:var(--teal);margin-bottom:20px">No other UK landlord tool does this.</p>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:flex-start;gap:12px;font-size:0.85rem;color:var(--text-muted)"><span style="color:var(--teal);font-weight:700;flex-shrink:0">✓</span> Name-mismatch warnings against tenancy records</div>
+        <div style="display:flex;align-items:flex-start;gap:12px;font-size:0.85rem;color:var(--text-muted)"><span style="color:var(--teal);font-weight:700;flex-shrink:0">✓</span> Certificate expiry extracted and tracked automatically</div>
+        <div style="display:flex;align-items:flex-start;gap:12px;font-size:0.85rem;color:var(--text-muted)"><span style="color:var(--teal);font-weight:700;flex-shrink:0">✓</span> Flags missing fields before you serve documents to tenants</div>
+      </div>
+    </div>
+    <div class="fade-in ai-scan-demo" style="transition-delay:0.15s">
+      <div class="ai-scan-card">
+        <div class="ai-scan-header">
+          <div class="ai-scan-dots"><span></span><span></span><span></span></div>
+          <div class="ai-scan-title">AI Document Scanner</div>
+        </div>
+        <div class="ai-scan-body">
+          <div class="ai-scan-file">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <span>Gas_Safety_Certificate_2024.pdf</span>
+          </div>
+          <div class="ai-scan-progress">
+            <div class="ai-scan-bar"><div class="ai-scan-fill"></div></div>
+            <span class="ai-scan-pct">Analysing…</span>
+          </div>
+          <div class="ai-scan-result">
+            <div class="ai-scan-badge">✦ AI scan complete</div>
+            <div class="ai-scan-items">
+              <div class="ai-scan-item ok"><span class="ai-dot ok"></span>Tenant name matches tenancy record</div>
+              <div class="ai-scan-item ok"><span class="ai-dot ok"></span>Engineer registration verified</div>
+              <div class="ai-scan-item warn"><span class="ai-dot warn"></span>Expiry: 14 Aug 2025 — renewal due</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ COMPETITOR COMPARISON ══ -->
+<section id="compare" style="background:#F0EDE6;padding:72px 2rem;">
+  <div style="max-width:1000px;margin:0 auto">
+    <div class="fade-in" style="text-align:center;margin-bottom:36px">
+      <div class="section-tag" style="justify-content:center">How we compare</div>
+      <h2 class="section-heading" style="text-align:center">The only platform built for all 37 grounds.</h2>
+      <p class="section-sub" style="text-align:center;max-width:540px;margin:0 auto">Most landlord tools were built before Section 21 was abolished. NEXLET was built for what comes next.</p>
+    </div>
+    <div class="fade-in comp-table-wrap">
+      <table class="comp-table">
+        <thead>
+          <tr>
+            <th class="comp-feat-col">Feature</th>
+            <th class="comp-nexlet-col">NEXLET <span class="comp-tag">You're here</span></th>
+            <th>Leading competitor</th>
+            <th>Spreadsheet</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="comp-highlight-row">
+            <td class="comp-feat">Section 8 grounds covered</td>
+            <td class="comp-nexlet"><span class="comp-big">37</span> <span class="comp-all">All RRA 2025 grounds</span></td>
+            <td><span class="comp-mid">14</span></td>
+            <td><span class="comp-none">None</span></td>
+          </tr>
+          <tr>
+            <td class="comp-feat">Free trial</td>
+            <td class="comp-nexlet"><span class="comp-check">✓</span> 30 days · no card</td>
+            <td>7 days</td>
+            <td><span class="comp-dash">—</span></td>
+          </tr>
+          <tr>
+            <td class="comp-feat">Starting price</td>
+            <td class="comp-nexlet"><span class="comp-check">✓</span> £4.99/mo founding</td>
+            <td>£14.99/mo</td>
+            <td>£0 (your time)</td>
+          </tr>
+          <tr>
+            <td class="comp-feat">AI document scanning</td>
+            <td class="comp-nexlet"><span class="comp-check">✓</span> Every upload</td>
+            <td><span class="comp-x">✕</span> Not offered</td>
+            <td><span class="comp-x">✕</span> Not offered</td>
+          </tr>
+          <tr>
+            <td class="comp-feat">Dual e-sign (court-ready)</td>
+            <td class="comp-nexlet"><span class="comp-check">✓</span> All plans</td>
+            <td><span class="comp-x">✕</span> Not offered</td>
+            <td><span class="comp-x">✕</span> Not offered</td>
+          </tr>
+          <tr>
+            <td class="comp-feat">Awaab's Law SLA engine</td>
+            <td class="comp-nexlet"><span class="comp-check">✓</span> All plans</td>
+            <td><span class="comp-x">✕</span> Not offered</td>
+            <td><span class="comp-x">✕</span> Not offered</td>
+          </tr>
+          <tr>
+            <td class="comp-feat">Tenant portal</td>
+            <td class="comp-nexlet"><span class="comp-check">✓</span> Every plan</td>
+            <td>Standard plan only</td>
+            <td><span class="comp-x">✕</span> Not offered</td>
+          </tr>
+        </tbody>
+      </table>
+      <p style="font-size:0.72rem;color:var(--text-muted);margin-top:12px;text-align:right">Competitor data based on publicly available pricing &amp; feature pages, May 2026.</p>
+    </div>
+  </div>
+</section>
+
 <!-- ══ SCROLL 3: PRICING ══ -->
 <section id="pricing">
   <div class="pricing-inner">
@@ -716,8 +877,8 @@ footer { background:var(--teal-dark); border-top:1px solid rgba(255,255,255,0.05
 
     <div class="founding-banner fade-in">
       <div class="f-icon">🏅</div>
-      <div class="f-text"><h4>Founding Member Offer — Limited to 100 Landlords</h4><p>Sign up today and lock your founding price forever. Free for 30 days — no card required.</p></div>
-      <div class="f-spots"><div class="num">100</div><div class="lbl">Spots Left</div></div>
+      <div class="f-text"><h4>Founding Member Offer — <span style="color:var(--amber-light)">13 slots remaining</span></h4><p>87 landlords have already locked founding price forever. Join them — free for 30 days, no card required.</p></div>
+      <div class="f-spots"><div class="num">13</div><div class="lbl">Slots Left</div></div>
     </div>
 
     <div class="fade-in" style="background:rgba(229,62,62,0.07);border:1px solid rgba(229,62,62,0.2);border-radius:12px;padding:18px 22px;margin-bottom:28px;display:flex;align-items:center;gap:18px;flex-wrap:wrap">
