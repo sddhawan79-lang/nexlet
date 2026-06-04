@@ -1201,6 +1201,7 @@ function getDocStatus(doc, certList, insuranceList, naDocs) {
   return { lbl:'VALID', bg:'var(--green-bg)', col:'#00A87A', bdr:'var(--green-bg)', days:null, overdue:false };
 }
 
+window._scanningDocs = window._scanningDocs || new Set(); // tracks docs scanning in this session only
 const D = {
   properties: [], tenants: [], certs: [], maintenance: [], rent: [], insurance: [],
   emailLog: [], customTemplates: [], contractors: [], jobAssignments: [], tenantDocs: [],
@@ -4048,7 +4049,7 @@ function _checklistRowHtml(tenant, itemDef) {
         ${latestDoc.extracted_expiry?`<span><span style="color:var(--muted)">Expiry:</span> <strong>${latestDoc.extracted_expiry}</strong></span>`:''}
       </div>
       ${latestDoc.name_mismatch?`<div style="font-size:10px;font-weight:600;color:var(--red);margin-top:3px">⚠ Name mismatch — check document</div>`:'<div style="font-size:10px;font-weight:600;color:var(--green-dark);margin-top:3px">✓ Name matched</div>'}
-    </div>` : (latestDoc && !latestDoc.extracted_name ? `<div style="margin-top:4px;font-size:10px;color:var(--muted)">⏳ Scanning… refresh in a moment</div>` : '');
+    </div>` : (latestDoc && !latestDoc.extracted_name ? (window._scanningDocs?.has(String(latestDoc.id)) ? `<div style="margin-top:4px;font-size:10px;color:var(--muted)">&#9203; Scanning… refresh in a moment</div>` : `<div style="margin-top:4px;font-size:10px;color:var(--muted)">Not scanned — <button onclick="event.stopPropagation();_rescanDoc('${latestDoc.id}','${tid}','${latestDoc.slot}')" style="background:none;border:none;color:var(--blue);font-size:10px;cursor:pointer;font-family:var(--font);padding:0">Re-scan</button></div>`) : '');
 
   return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);cursor:pointer"
         onclick="toggleChecklistItem(this,'${tid}','${itemDef.key}')" title="Click to expand">
@@ -4081,7 +4082,7 @@ function _checklistRowHtml(tenant, itemDef) {
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
           ${latestDoc ? `<button class="btn btn-sm" style="font-size:11px;padding:3px 8px" onclick="event.stopPropagation();viewDocInline(\`${SUPABASE_URL}/storage/v1/object/public/tenant-documents/${latestDoc.file_name}\`,\`${(latestDoc.doc_label||latestDoc.file_name||'Document').replace(/`/g,"'")}\`)">👁 View</button>` : ''}
           <label class="btn btn-sm btn-navy" style="cursor:pointer;margin:0;font-size:11px" id="cl-upload-lbl-${tid}-${itemDef.key}">${latestDoc?'↺ Replace':'Upload'}
-            <input type="file" style="display:none" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onchange="uploadTenantDoc('${tid}','${uploadSlot.slot}',this);moTenantDetail('${tid}')">
+            <input type="file" style="display:none" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onchange="uploadTenantDoc('${tid}','${uploadSlot.slot}',this)">
           </label>
         </div>
       </div>
@@ -8757,7 +8758,12 @@ function pgTenantDetail(tid) {
             </div>` : '')}
         </div>`;
     } else {
-      extractedHtml = `<div style="margin-top:4px;font-size:11px;color:var(--muted)">⏳ Scanning… refresh in a moment</div>`;
+      extractedHtml = window._scanningDocs?.has(String(doc.id))
+        ? `<div style="margin-top:4px;font-size:11px;color:var(--muted)">&#9203; Scanning… refresh in a moment</div>`
+        : `<div style="margin-top:4px;display:flex;align-items:center;gap:8px">
+             <span style="font-size:11px;color:var(--muted)">Not scanned</span>
+             <button class="btn btn-sm" style="font-size:10px;padding:2px 8px" onclick="event.stopPropagation();_rescanDoc('${doc.id}','${tid}','${doc.slot}')">Re-scan</button>
+           </div>`;
     }
     return `
       <div style="padding:10px 12px;border:1px solid ${doc.name_mismatch && !doc.verified?'rgba(229,62,62,0.3)':doc.verified?'var(--green-bg)':'var(--border)'};border-radius:6px;background:var(--white);${isLast?'':'margin-bottom:6px'}">
@@ -9109,7 +9115,7 @@ async function uploadTenantDoc(tid, slot, input) {
   nav(window._currentPage, window._currentParam);
 
   // Trigger AI scan in background
-  if (savedDoc?.id) scanTenantDoc(savedDoc.id, tid, slot, file, t?.name || '');
+  if (savedDoc?.id) { window._scanningDocs.add(String(savedDoc.id)); scanTenantDoc(savedDoc.id, tid, slot, file, t?.name || ''); }
 }
 
 async function scanTenantDoc(docId, tid, slot, file, tenantName) {
@@ -9180,16 +9186,34 @@ async function scanTenantDoc(docId, tid, slot, file, tenantName) {
     await sb.from('tenant_documents').update(updates).eq('id', docId);
     D.tenantDocs = D.tenantDocs.map(d => String(d.id) === String(docId) ? { ...d, ...updates } : d);
 
+    window._scanningDocs.delete(String(docId));
     toast(nameMismatch ? '⚠ Scan done — name mismatch detected' : '✦ Document scanned successfully');
     nav('tenant-detail', tid);
 
   } catch(e) {
     console.warn('KYC scan failed:', e);
+    window._scanningDocs.delete(String(docId));
     toast('⚠ Could not scan — document saved, fill details manually');
-    nav('tenant-detail', tid); // always re-render so "Scanning…" doesn't get stuck
+    nav('tenant-detail', tid);
   }
 }
 
+
+async function _rescanDoc(docId, tid, slot) {
+  const doc = D.tenantDocs.find(d => String(d.id) === String(docId));
+  if (!doc) { toast('Document not found', true); return; }
+  const t = D.tenants.find(x => String(x.id) === String(tid));
+  toast('&#10006; Re-scanning…');
+  try {
+    const url = `https://mahtcfukgzbonwibtsxz.supabase.co/storage/v1/object/public/tenant-documents/${doc.file_name}`;
+    const resp = await fetch(url);
+    const blob = await resp.blob();
+    const file = new File([blob], doc.doc_label || doc.file_name, { type: blob.type });
+    await scanTenantDoc(docId, tid, slot, file, t?.name || '');
+  } catch(e) {
+    toast('Re-scan failed — ' + e.message, true);
+  }
+}
 async function verifyTenantDoc(docId, tid) {
   await sb.from('tenant_documents').update({ verified: true }).eq('id', docId);
   D.tenantDocs = D.tenantDocs.map(d => String(d.id) === String(docId) ? { ...d, verified: true } : d);
