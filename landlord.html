@@ -9423,6 +9423,7 @@ function _rtrWizRender(tArg) {
           <span id="rtr-ss-label">${window._rtrWiz.screenshotFile ? `✓ ${window._rtrWiz.screenshotFile.name}` : 'Click to attach screenshot (JPG, PNG or PDF)'}</span>
           <input type="file" accept=".jpg,.jpeg,.png,.pdf" style="display:none" onchange="_rtrWizSetScreenshot(this)">
         </label>
+        ${window._rtrWiz.screenshotFile && window._rtrWiz.screenshotB64 ? `<button class="btn btn-sm" style="margin-top:6px;font-size:11px" onclick="dvoOpen(window._rtrWiz.screenshotB64,'RTR Evidence — ${t.name}','GOV.UK screenshot')">👁 View uploaded doc</button>` : ''}
         <div style="font-size:11px;color:var(--muted);margin-top:4px">Stored securely against the tenant record — admissible as evidence if the tenancy is disputed</div>
       </div>
       ${window._rtrWiz.result === 'Time-limited' ? `
@@ -9460,10 +9461,11 @@ function _rtrWizSetScreenshot(input) {
   if (!file) return;
   window._rtrWiz.screenshotFile = file;
   const reader = new FileReader();
-  reader.onload = e => { window._rtrWiz.screenshotB64 = e.target.result; };
+  reader.onload = e => {
+    window._rtrWiz.screenshotB64 = e.target.result;
+    _rtrWizRender(); // re-render so View button appears
+  };
   reader.readAsDataURL(file);
-  const lbl = document.getElementById('rtr-ss-label');
-  if (lbl) lbl.textContent = `✓ ${file.name}`;
 }
 
 function _rtrWizNext() {
@@ -9517,7 +9519,6 @@ async function _rtrWizSave() {
     // Save to tenant record
     const updates = {
       share_code: code,
-      date_of_birth: dob || null,
       rtr_result: result,
       rtr_expiry: expiry || null,
       rtr_check_date: checkDate,
@@ -12652,7 +12653,7 @@ function _getIncompleteSetups() {
       if (!prog) return null;
       const steps = [
         { key: 'written_statement_done', label: 'Written Statement', action: `_tenancySetupStep2('${p.id}')` },
-        { key: 'tenant_docs_done',       label: 'Tenant documents',  action: () => { const lead = D.tenants.find(t => String(t.prop_id) === String(p.id) && t.is_lead && t.status === 'Active'); if (lead) nav('tenant-detail', String(lead.id)); } },
+        { key: 'tenant_docs_done',       label: 'Tenant documents',  action: `(function(){ const lead = D.tenants.find(t => String(t.prop_id) === String('${p.id}') && t.is_lead && t.status === 'Active'); if (lead) nav('tenant-detail', String(lead.id)); })()` },
         { key: 'property_docs_done',     label: 'Property compliance', action: `pdSetTab('${p.id}','compliance')` },
         { key: 'welcome_kit_done',       label: 'Welcome Kit',       action: `moWelcomeKit('${p.id}')` },
       ];
