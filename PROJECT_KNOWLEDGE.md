@@ -3283,3 +3283,132 @@ ALTER TABLE tenants ADD COLUMN portal_enabled boolean DEFAULT true;
 ALTER TABLE tenants ADD COLUMN relet_prepared boolean DEFAULT false;
 ```
 
+
+---
+
+## Session 33 — Bug Fixes & RTR Wizard (4 June 2026)
+
+### Features & Changes
+
+---
+
+#### 1. AI response corruption guard — Written Statement (both HTML-rendering AI calls)
+
+**Bug:** AI occasionally returned PDF binary or malformed content into the Written Statement preview, causing raw CSS/HTML tags to render visibly.
+
+**Root cause:** `_esignDocHtml` was set directly from raw AI response with no validation. Two functions affected:
+- `esignGenerateDoc` (document generation)
+- `_esignApplyStructuredEdit` (edit terms)
+
+**Fix (landlord.html — both functions):**
+```js
+// Reject if suspiciously large (binary/PDF bleed)
+if (_rawHtml.length > 200000 || (!_rawHtml.includes('<') && !_rawHtml.includes('>'))) {
+  throw new Error('Generated document appears corrupt — please try again');
+}
+// Extract body content if full HTML doc returned
+const _bodyMatch = _rawHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+if (_bodyMatch) _rawHtml = _bodyMatch[1];
+// Strip embedded style/script tags
+_rawHtml = _rawHtml.replace(/<script[\s\S]*?<\/script>/gi, '')
+                   .replace(/<style[\s\S]*?<\/style>/gi, '').trim();
+if (!_rawHtml || _rawHtml.length < 100) throw new Error('Generated document was empty — please try again');
+```
+
+**Scope:** Only two places in the entire app render AI output as raw HTML — both now protected. All other AI calls return JSON and were never at risk.
+
+---
+
+#### 2. Download draft — simplified
+
+`_esignDownloadDraft()` simplified — no longer needs its own body extraction since `_esignDocHtml` is now always pre-cleaned body-only HTML before storage. Draft wraps clean content in styled document shell with amber DRAFT banner.
+
+---
+
+#### 3. Right to Rent — full 3-step wizard (replaces basic share code modal)
+
+**Old:** Single-screen modal — share code entry, expiry date, save. No result recording, no evidence upload, no follow-up calendar entry.
+
+**New — `moShareCodeWizard()` fully rebuilt as 3-step guided wizard:**
+
+**Step 1 — Enter details**
+- Share code input (auto-uppercase, format validation, character count hint)
+- Tenant date of birth (required — needed for GOV.UK check)
+- Check date (defaults to today)
+- Previous check banner shown if record exists
+
+**Step 2 — Check on UKVI**
+- Displays share code + DOB in a reference panel
+- "Open GOV.UK Right to Rent check ↗" button (opens `gov.uk/view-right-to-rent` in new tab)
+- Landlord confirms result back in NEXLET: **Valid / Time-limited / Invalid** (styled radio buttons)
+- Expiry date field — required for Time-limited, optional for Valid, hidden for Invalid
+- Invalid result shows red warning: must not allow tenancy to proceed, take legal advice
+- Note: UKVI has no public API — check is manually confirmed by landlord (by design)
+
+**Step 3 — Save record**
+- Full summary review (tenant, share code, DOB, check date, result, expiry, follow-up date)
+- Screenshot upload slot (JPG/PNG/PDF) — stored to Supabase Storage at `rtr-evidence/{tid}-{timestamp}.ext`
+- Time-limited: amber notice that a calendar reminder will be added automatically
+- On save:
+  - All fields written to `tenants` row
+  - If Time-limited: calendar event inserted (`category: 'compliance'`) for follow-up date
+  - Audit log entry: `RTR_CHECK`
+  - Toast confirms save + evidence upload + reminder
+
+**Step bar:** Visual 3-step progress indicator at top of modal (navy = current, green tick = complete, grey = pending)
+
+**New functions added:**
+- `moShareCodeWizard(tid)` — entry point, initialises `window._rtrWiz` state
+- `_rtrWizRender(tArg)` — renders current step into modal
+- `_rtrCodeHint()` — live share code format validation
+- `_rtrWizSetScreenshot(input)` — handles file selection, reads as base64
+- `_rtrWizNext()` — validates and advances step
+- `_rtrWizBack()` — steps back
+- `_rtrWizSave()` — uploads screenshot to storage, saves tenant record, creates calendar reminder, logs audit
+
+**Old functions removed:**
+- `rtrValidateCode()` — replaced by `_rtrCodeHint()`
+- `rtrCalcFollowUp()` — logic now inline in `_rtrWizRender` step 3
+- `saveShareCode(tid)` — replaced by `_rtrWizSave()`
+
+---
+
+#### 4. Known issues updated
+
+| # | Issue | Status |
+|---|---|---|
+| 1 | ICO number placeholder in legal docs | Pending registration |
+| 2 | MX record for inbound email | Parked post-launch |
+| 3 | `login.html` newsletter signup checkbox | Not built |
+| 4 | `moFinancials` PDF export — jsPDF needed | Post-launch backlog |
+| 5 | Section 8 UX handoff to Form 3A | Post-launch backlog |
+| 6 | WhatsApp reminders | Post-launch backlog |
+| 7 | Free public compliance checker | Marketing priority |
+| 8 | Blog / content hub | Marketing priority |
+| 9 | Postcode finder — replace with getAddress.io | Post-launch backlog |
+| 10 | `stripe_price_id` NULL — sandbox only, live table clean | Closed |
+| 11 | `newsletter_opted_in` column missing from user_profiles | Pending SQL |
+| 12 | favicon.ico missing | Post-launch backlog |
+| 13 | `relet_prepared` column needed on tenants | Pending SQL |
+| 14 | `portal_enabled` column needed on tenants | ✅ SQL run Session 32 |
+| 15 | RTR new columns needed on tenants | Run SQL below |
+
+---
+
+#### 5. SQL migrations required (Session 33)
+
+```sql
+-- RTR wizard new columns (run each separately in Supabase SQL editor)
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS rtr_result text;
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS rtr_followup_date date;
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS rtr_evidence_path text;
+```
+
+> Existing columns already present: `share_code`, `rtr_expiry`, `rtr_check_date`, `date_of_birth`
+
+---
+
+#### 6. Supabase Storage
+
+RTR evidence screenshots are stored in the existing `tenant-documents` bucket under path prefix `rtr-evidence/`. No new bucket required.
+

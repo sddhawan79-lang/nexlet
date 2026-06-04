@@ -5250,7 +5250,8 @@ function pgDashboard(){
       // 3. Maintenance (20pts)
       const _awaabO = D.maintenance.filter(m=>m.awaab&&m.status!=='Resolved').length;
       const _urgO   = D.maintenance.filter(m=>m.priority==='Urgent'&&m.status!=='Resolved').length;
-      const maintScore = _awaabO>0 ? 0 : _urgO>0 ? 8 : open>3 ? 12 : open>0 ? 16 : 20;
+      const _maintHasData = D.properties.length > 0;
+      const maintScore = !_maintHasData ? 0 : _awaabO>0 ? 0 : _urgO>0 ? 8 : open>3 ? 12 : open>0 ? 16 : 20;
       // 4. KYC (20pts)
       const _kycScore = _allTenants.length===0 ? 0 : Math.round((_allTenants.filter(t=>{
         const cl=t.compliance_checklist||{}; const keys=['rtr','id_docs','agreement'];
@@ -5268,31 +5269,31 @@ function pgDashboard(){
           style="transition:stroke-dasharray 1s ease"/>
         <text x="36" y="40" text-anchor="middle" font-size="14" font-weight="700" fill="${hsCol}" font-family="var(--font)">${healthScore}</text>
       </svg>`;
-      return `<div style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:20px;box-shadow:0 1px 3px rgba(0,0,0,0.06);cursor:pointer" onclick="nav('compliance')" title="View compliance">
-        <div style="flex-shrink:0">${ringHtml}</div>
+      return `<div style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:20px;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
+        <div style="flex-shrink:0;cursor:pointer" onclick="nav('compliance')" title="View compliance">${ringHtml}</div>
         <div style="flex:1;min-width:0">
           <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:4px">Portfolio Health Score</div>
           <div style="font-size:18px;font-weight:700;color:${hsCol};margin-bottom:6px">${hsLabel}</div>
           <div style="display:flex;gap:12px;flex-wrap:wrap">
-            <div style="display:flex;flex-direction:column;gap:2px;min-width:80px">
+            <div style="display:flex;flex-direction:column;gap:2px;min-width:80px;cursor:pointer" onclick="nav('compliance')" title="View certificates">
               <div style="font-size:10px;color:var(--muted)">Certificates</div>
               <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden"><div style="height:100%;width:${certScore/30*100}%;background:${certScore===30?'#10B981':'#D97706'};border-radius:2px;transition:width .8s ease"></div></div>
             </div>
-            <div style="display:flex;flex-direction:column;gap:2px;min-width:80px">
+            <div style="display:flex;flex-direction:column;gap:2px;min-width:80px;cursor:pointer" onclick="nav('finance')" title="View rent">
               <div style="font-size:10px;color:var(--muted)">Rent</div>
               <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden"><div style="height:100%;width:${rentScore/30*100}%;background:${rentScore===30?'#10B981':'#E53E3E'};border-radius:2px;transition:width .8s ease"></div></div>
             </div>
-            <div style="display:flex;flex-direction:column;gap:2px;min-width:80px">
+            <div style="display:flex;flex-direction:column;gap:2px;min-width:80px;cursor:pointer" onclick="nav('maintenance')" title="View maintenance">
               <div style="font-size:10px;color:var(--muted)">Maintenance</div>
-              <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden"><div style="height:100%;width:${maintScore/20*100}%;background:${maintScore===20?'#10B981':maintScore>=12?'#D97706':'#E53E3E'};border-radius:2px;transition:width .8s ease"></div></div>
+              <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden"><div style="height:100%;width:${maintScore/20*100}%;background:${!_maintHasData?'var(--border)':maintScore===20?'#10B981':maintScore>=12?'#D97706':'#E53E3E'};border-radius:2px;transition:width .8s ease"></div></div>
             </div>
-            <div style="display:flex;flex-direction:column;gap:2px;min-width:80px">
+            <div style="display:flex;flex-direction:column;gap:2px;min-width:80px;cursor:pointer" onclick="nav('tenants')" title="View KYC">
               <div style="font-size:10px;color:var(--muted)">KYC</div>
               <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden"><div style="height:100%;width:${_kycScore/20*100}%;background:${_kycScore===20?'#10B981':_kycScore>=10?'#D97706':'#E53E3E'};border-radius:2px;transition:width .8s ease"></div></div>
             </div>
           </div>
         </div>
-        <div style="text-align:right;flex-shrink:0">
+        <div style="text-align:right;flex-shrink:0;cursor:pointer" onclick="nav('compliance')" title="View full compliance report">
           <div style="font-size:11px;color:var(--muted)">View full report →</div>
         </div>
       </div>`;
@@ -8829,13 +8830,14 @@ function pgTenantDetail(tid) {
   const tenantLog2 = D.emailLog.filter(e => String(e.tenant_id) === String(tid));
   const propCerts  = D.certs.filter(c => String(c.prop_id) === String(t.prop_id));
 
+  const _day1Dispatched = propLog.some(e=>e.template_id==='welcome_kit')||tenantLog2.some(e=>e.template_id==='welcome_kit');
   const day1Items = [
-    { icon:'📋', label:'RRA Sheet sent',
+    { icon:'📋', label:'RRA Information Sheet served',
       done: propLog.some(e=>e.template_id==='rra_info_sheet')||tenantLog2.some(e=>e.template_id==='rra_info_sheet'),
       action:`moRRASheet()`, btnLabel:'Send RRA' },
-    { icon:'📦', label:'Welcome Kit sent',
-      done: propLog.some(e=>e.template_id==='welcome_kit')||tenantLog2.some(e=>e.template_id==='welcome_kit'),
-      action:`moWelcomeKit('${t.prop_id}')`, btnLabel:'Send Kit' },
+    { icon:'📖', label:'How to Rent guide served',
+      done: propLog.some(e=>(e.template_id||'').includes('how_to_rent')||(e.subject||'').toLowerCase().includes('how to rent'))||tenantLog2.some(e=>(e.template_id||'').includes('how_to_rent')||(e.subject||'').toLowerCase().includes('how to rent')),
+      action:`moCommunicationsHub('${tid}')`, btnLabel:'Send guide' },
     { icon:'🔥', label:'Gas Safety Certificate served',
       done: propCerts.some(c=>c.type&&c.type.toLowerCase().includes('gas')&&(c.served_to_tenant||c.served)),
       action:`moBulkScan('${t.prop_id}')`, btnLabel:'Upload GSC' },
@@ -8851,12 +8853,11 @@ function pgTenantDetail(tid) {
     { icon:'🔗', label:'Portal invite sent',
       done: !!(t.invite_used||propLog.some(e=>e.template_id?.includes('portal')||e.template_id?.includes('invite'))||tenantLog2.some(e=>e.template_id?.includes('portal')||e.template_id?.includes('invite'))),
       action:`sendPortalInvite('${t.id}')`, btnLabel:'Send Invite' },
-    { icon:'📋', label:'Inventory / schedule of condition',
-      done: propCerts.some(c=>c.type&&(c.type.toLowerCase().includes('inventory')||c.type.toLowerCase().includes('schedule of condition'))),
-      action:`nav('inventory-reports')`, btnLabel:'Create Inventory' },
   ];
 
   const day30Due = t.start_date ? new Date(new Date(t.start_date).getTime()+30*864e5).toLocaleDateString('en-GB',{day:'numeric',month:'short'}) : '—';
+  const _day30Dispatched = propLog.some(e=>e.template_id==='day30_pack')||tenantLog2.some(e=>e.template_id==='day30_pack');
+  const _hasPet = !!(t.pet_allowed || t.has_pet);
   const day30Items = [
     { icon:'🏦', label:'Deposit prescribed info served',
       done: propLog.some(e=>e.template_id==='prescribed'||e.template_id?.includes('prescribed'))||tenantLog2.some(e=>e.template_id?.includes('prescribed')),
@@ -8867,6 +8868,15 @@ function pgTenantDetail(tid) {
     { icon:'🔔', label:'Smoke & CO alarm tested',
       done: propLog.some(e=>(e.subject||'').toLowerCase().includes('smoke')||(e.template_id||'').toLowerCase().includes('smoke')),
       action:`moCommunicationsHub('${tid}')`, btnLabel:'Log test' },
+    { icon:'📋', label:'Inventory / schedule of condition signed',
+      done: propCerts.some(c=>c.type&&(c.type.toLowerCase().includes('inventory')||c.type.toLowerCase().includes('schedule of condition'))),
+      action:`nav('inventory-reports')`, btnLabel:'Create Inventory' },
+    { icon:'🧪', label:'Legionella risk assessment completed',
+      done: propCerts.some(c=>c.type&&c.type.toLowerCase().includes('legionella')),
+      action:`moBulkScan('${t.prop_id}')`, btnLabel:'Upload assessment' },
+    ...(_hasPet ? [{ icon:'🐾', label:'Pet agreement signed',
+      done: propLog.some(e=>(e.template_id||'').includes('pet')||(e.subject||'').toLowerCase().includes('pet'))||tenantLog2.some(e=>(e.subject||'').toLowerCase().includes('pet')),
+      action:`moCommunicationsHub('${tid}')`, btnLabel:'Send pet agreement' }] : []),
   ];
 
   const mkJourneyRow = item => {
@@ -8893,6 +8903,13 @@ function pgTenantDetail(tid) {
           <span style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:100px;background:${day1Done===day1Items.length?'var(--green-bg)':'rgba(229,62,62,0.08)'};color:${day1Done===day1Items.length?'var(--green-dark)':'var(--red)'}">${day1Done}/${day1Items.length}</span>
         </div>
         <div style="padding:4px 16px 12px">${day1Items.map(mkJourneyRow).join('')}</div>
+        <div style="padding:8px 16px 14px;border-top:1px solid var(--border)">
+          ${_day1Dispatched
+            ? `<div style="font-size:11px;color:var(--green-dark);font-weight:600">✓ Day 1 Pack dispatched</div>`
+            : `<button class="btn btn-navy" style="width:100%;font-size:12px;padding:7px 0" onclick="moWelcomeKit('${t.prop_id}')">📦 Dispatch Day 1 Pack</button>
+               <div style="font-size:10px;color:var(--muted);margin-top:5px;text-align:center">Sends welcome letter + all ready documents to tenant</div>`
+          }
+        </div>
       </div>
       <div class="panel" style="border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)">
         <div class="ph2" style="padding:12px 16px">
@@ -8903,6 +8920,13 @@ function pgTenantDetail(tid) {
           <span style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:100px;background:${day30Done===day30Items.length?'var(--green-bg)':'rgba(229,62,62,0.08)'};color:${day30Done===day30Items.length?'var(--green-dark)':'var(--red)'}">${day30Done}/${day30Items.length}</span>
         </div>
         <div style="padding:4px 16px 12px">${day30Items.map(mkJourneyRow).join('')}</div>
+        <div style="padding:8px 16px 14px;border-top:1px solid var(--border)">
+          ${_day30Dispatched
+            ? `<div style="font-size:11px;color:var(--green-dark);font-weight:600">✓ Day 30 Pack dispatched</div>`
+            : `<button class="btn btn-navy" style="width:100%;font-size:12px;padding:7px 0" onclick="moCommunicationsHub('${tid}')">📨 Dispatch Day 30 Pack</button>
+               <div style="font-size:10px;color:var(--muted);margin-top:5px;text-align:center">Sends deposit prescribed info + inventory to tenant</div>`
+          }
+        </div>
       </div>
     </div>`;
 
