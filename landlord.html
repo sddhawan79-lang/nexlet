@@ -4023,9 +4023,12 @@ function _checklistRAG(tenant, key) {
 /** Renders one checklist row as HTML (for tenant detail or list) */
 // Checklist keys that support document upload + AI scan
 const CHECKLIST_UPLOAD_SLOTS = {
-  rtr:        { slot: 'right_to_rent', label: 'Upload R2R doc' },
-  id_docs:    { slot: 'passport',      label: 'Upload ID doc' },
-  agreement:  { slot: 'agreement',     label: 'Upload Written Statement' },
+  rtr:                { slot: 'right_to_rent',    label: 'Upload R2R doc' },
+  id_docs:            { slot: 'passport',          label: 'Upload ID doc' },
+  agreement:          { slot: 'agreement',         label: 'Upload Written Statement' },
+  deposit_protection: { slot: 'deposit_cert',      label: 'Upload deposit certificate' },
+  rent_guarantee:     { slot: 'rent_guarantee_doc',label: 'Upload RGI policy' },
+  insurance:          { slot: 'insurance_doc',     label: 'Upload insurance certificate' },
 };
 
 function _checklistRowHtml(tenant, itemDef) {
