@@ -3955,7 +3955,6 @@ async function _saveTenantSetupToDB() {
 const CHECKLIST_ITEMS = [
   { key:'agreement',          label:'Written Statement',         icon:'📝' },
   { key:'deposit_protection', label:'Deposit protected',         icon:'🏦' },
-  { key:'rent_guarantee',     label:'Rent Guarantee Insurance',  icon:'🛡️' },
 ];
 const RAG_COLORS = { red:'#E53E3E', amber:'#D97706', green:'var(--green)' };
 const RAG_LABELS = { red:'red', amber:'amber', green:'green' };
@@ -3982,6 +3981,9 @@ function _checklistRAG(tenant, key) {
   if (key === 'rtr') {
     if (tenant?.rtr_check_date) return { ra:'green', status:'Complete', detail:'Checked ' + new Date(tenant.rtr_check_date).toLocaleDateString('en-GB'), date:tenant.rtr_check_date };
     if (tenant?.rtr_skipped)   return { ra:'amber', status:'Deferred',  detail:'RTR check skipped', date:'' };
+    // Doc uploaded directly to right_to_rent slot (without wizard) — amber until wizard run
+    const _rtrDoc = (D.tenantDocs||[]).find(d => String(d.tenant_id)===String(tenant?.id) && d.slot==='right_to_rent');
+    if (_rtrDoc) return { ra:'amber', status:'Document uploaded', detail:'Run Share Code Wizard to complete the check', date:'' };
   }
   if (key === 'id_docs') {
     const mandatorySlots = ['passport', 'address_1', 'address_2', 'reference'];
@@ -4020,7 +4022,6 @@ const CHECKLIST_UPLOAD_SLOTS = {
   id_docs:            { slot: 'passport',          label: 'Upload ID doc' },
   agreement:          { slot: 'agreement',         label: 'Upload Written Statement' },
   deposit_protection: { slot: 'deposit_cert',      label: 'Upload deposit certificate' },
-  rent_guarantee:     { slot: 'rent_guarantee_doc',label: 'Upload RGI policy' },
 };
 
 function _checklistRowHtml(tenant, itemDef) {
@@ -8804,7 +8805,38 @@ function pgTenantDetail(tid) {
           </div>
         </div>
         ${hasDocs ? slotDocs.map((d,i) => renderDocCard(d, i === slotDocs.length - 1)).join('') : ''}
-        ${isRTR ? `<div style="margin-top:8px"><button class="btn btn-sm" style="font-size:11px;border-color:var(--blue);color:var(--blue)" onclick="moShareCodeWizard('${tid}')">🔍 Run Share Code Wizard</button><span style="font-size:10px;color:var(--muted);margin-left:8px">Check on UKVI &amp; save result</span></div>` : ''}
+        ${isRTR ? (() => {
+          const wizardDone = !!(t.rtr_check_date);
+          const wizardResult = t.rtr_result || '';
+          const resultColour = wizardResult==='Valid'?'var(--green-dark)':wizardResult==='Time-limited'?'var(--amber)':'var(--red)';
+          if (wizardDone) {
+            return `
+              <div style="margin-top:10px;padding:10px 12px;background:rgba(0,168,122,0.06);border:1px solid rgba(0,168,122,0.2);border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+                <div>
+                  <div style="font-size:12px;font-weight:700;color:var(--green-dark)">&#10003; Right to Rent check complete</div>
+                  <div style="font-size:11px;color:var(--muted);margin-top:2px">
+                    Result: <strong style="color:${resultColour}">${wizardResult}</strong>
+                    &middot; Checked ${new Date(t.rtr_check_date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}
+                    ${t.rtr_expiry ? ` &middot; Expires ${new Date(t.rtr_expiry).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}` : ''}
+                  </div>
+                </div>
+                <button class="btn btn-sm" style="font-size:11px;border-color:var(--blue);color:var(--blue);flex-shrink:0" onclick="moShareCodeWizard('${tid}')">&#8635; Re-check</button>
+              </div>`;
+          } else {
+            return `
+              <div style="margin-top:10px;padding:10px 12px;background:${hasDocs?'rgba(245,158,11,0.06)':'rgba(229,62,62,0.04)'};border:1px solid ${hasDocs?'rgba(245,158,11,0.3)':'rgba(229,62,62,0.2)'};border-radius:8px">
+                <div style="font-size:12px;font-weight:600;color:${hasDocs?'var(--amber)':'var(--red)'};margin-bottom:6px">
+                  ${hasDocs ? '&#9203; Step 2 of 2 &mdash; Run the UKVI check' : '&#9888; Right to Rent check required'}
+                </div>
+                <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">
+                  ${hasDocs
+                    ? "Document uploaded. Now verify the tenant's status on GOV.UK using their share code &mdash; takes 2 minutes."
+                    : 'Upload the tenant\'s identity document above, then run the UKVI check to confirm their right to rent in England.'}
+                </div>
+                <button class="btn btn-sm btn-navy" style="font-size:11px" onclick="moShareCodeWizard('${tid}')">&#128269; Run Share Code Wizard &rarr;</button>
+              </div>`;
+          }
+        })() : ''}
       </div>`;
   }).join('');
 
@@ -9154,6 +9186,7 @@ async function scanTenantDoc(docId, tid, slot, file, tenantName) {
   } catch(e) {
     console.warn('KYC scan failed:', e);
     toast('⚠ Could not scan — document saved, fill details manually');
+    nav('tenant-detail', tid); // always re-render so "Scanning…" doesn't get stuck
   }
 }
 
