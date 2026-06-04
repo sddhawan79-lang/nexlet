@@ -9237,91 +9237,276 @@ async function moTenantDocsScan(tid, slot) {
 
 
 // ── RIGHT TO RENT SHARE CODE WIZARD ──
+// State for wizard
+window._rtrWiz = { tid: null, step: 1, code: '', dob: '', result: '', expiry: '', checkDate: '', screenshotFile: null, screenshotB64: null };
+
 function moShareCodeWizard(tid) {
   const t = D.tenants.find(x => String(x.id) === String(tid));
   if (!t) return;
-  const existing = t.share_code || '';
-  const existingExpiry = t.rtr_expiry || '';
-  openMo('🔍 Right to Rent — Share Code', t.name, `
-    <div style="background:rgba(59,111,232,0.06);border:1px solid rgba(59,111,232,0.15);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:var(--txt);line-height:1.6">
-      Enter the share code from the tenant's GOV.UK Right to Rent check result. Format: <strong>W-XXXX-XXXX-XXXX</strong> or 9 characters without dashes. NEXLET will calculate when the follow-up check is due.
-      <a href="https://www.gov.uk/view-right-to-rent" target="_blank" style="color:var(--blue);display:block;margin-top:6px;font-weight:600">↗ Open GOV.UK check service</a>
-    </div>
-    <div class="fg"><label>Share Code <span class="req">*</span></label>
-      <input type="text" id="rtr-code" value="${existing}" placeholder="W-XXXX-XXXX-XXXX" style="text-transform:uppercase;letter-spacing:1px"
-        oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9-]/g,'');rtrValidateCode()">
-      <div id="rtr-code-hint" style="font-size:11px;margin-top:4px;color:var(--muted)"></div>
-    </div>
-    <div class="fg"><label>Document expiry date (if applicable)</label>
-      <input type="date" id="rtr-doc-expiry" value="${existingExpiry}" oninput="rtrCalcFollowUp()">
-      <div style="font-size:11px;color:var(--muted);margin-top:3px">Leave blank for indefinite leave to remain / British/Irish nationals</div>
-    </div>
-    <div id="rtr-followup-box" style="display:none;background:var(--green-bg);border:1px solid rgba(0,168,122,0.2);border-radius:8px;padding:12px 14px;margin-top:4px">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--green-dark);margin-bottom:4px">📅 Follow-up check due</div>
-      <div id="rtr-followup-date" style="font-size:14px;font-weight:700;color:var(--green-dark)"></div>
-      <div style="font-size:11px;color:var(--muted);margin-top:3px">Earliest of: document expiry or 12 months from today's check</div>
-    </div>
-    <div class="fg" style="margin-top:14px"><label>Check date</label>
-      <input type="date" id="rtr-check-date" value="${new Date().toISOString().slice(0,10)}">
-    </div>
-  `, `<button class="btn" onclick="closeMo()">Cancel</button>
-     <button class="btn btn-navy" id="rtr-save-btn" onclick="saveShareCode('${tid}')">💾 Save RTR record</button>`);
-  setTimeout(() => { rtrValidateCode(); rtrCalcFollowUp(); }, 100);
+  window._rtrWiz = {
+    tid, step: 1,
+    code: t.share_code || '',
+    dob: t.date_of_birth || '',
+    result: t.rtr_result || '',
+    expiry: t.rtr_expiry || '',
+    checkDate: new Date().toISOString().slice(0,10),
+    screenshotFile: null, screenshotB64: null
+  };
+  _rtrWizRender(t);
 }
 
-function rtrValidateCode() {
-  const val = document.getElementById('rtr-code')?.value || '';
+function _rtrWizRender(tArg) {
+  const tid = window._rtrWiz.tid;
+  const t = tArg || D.tenants.find(x => String(x.id) === String(tid));
+  if (!t) return;
+
+  // Existing check record banner
+  const hasExisting = t.share_code && t.rtr_check_date;
+  const existingBanner = hasExisting ? `
+    <div style="background:rgba(59,111,232,0.06);border:1px solid rgba(59,111,232,0.2);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--txt)">
+      <strong>Previous check:</strong> ${t.share_code} · checked ${t.rtr_check_date||'unknown'}
+      ${t.rtr_result ? ` · <span style="color:${t.rtr_result==='Valid'?'var(--green-dark)':t.rtr_result==='Time-limited'?'var(--amber)':'var(--red)'}">
+        ${t.rtr_result==='Valid'?'✓':t.rtr_result==='Time-limited'?'⏳':'✗'} ${t.rtr_result}</span>` : ''}
+      ${t.rtr_expiry ? ` · expires ${t.rtr_expiry}` : ''}
+    </div>` : '';
+
+  // Step indicators
+  const steps = ['1. Enter details','2. Check on UKVI','3. Save record'];
+  const stepBar = `<div style="display:flex;gap:0;margin-bottom:20px;border-radius:8px;overflow:hidden;border:1px solid var(--border)">
+    ${steps.map((s,i) => `<div style="flex:1;padding:8px 6px;text-align:center;font-size:11px;font-weight:600;
+      background:${window._rtrWiz.step===i+1?'var(--navy)':window._rtrWiz.step>i+1?'rgba(0,168,122,0.12)':'var(--off)'};
+      color:${window._rtrWiz.step===i+1?'#fff':window._rtrWiz.step>i+1?'var(--green-dark)':'var(--muted)'};
+      border-right:${i<2?'1px solid var(--border)':'none'}">${window._rtrWiz.step>i+1?'✓ ':''}${s}</div>`).join('')}
+  </div>`;
+
+  let body = existingBanner + stepBar;
+
+  if (window._rtrWiz.step === 1) {
+    body += `
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6">
+        Enter the tenant's share code and date of birth. You'll then check the result on GOV.UK — NEXLET will record and store the outcome as audit evidence.
+      </div>
+      <div class="fg"><label>Share Code <span class="req">*</span></label>
+        <input type="text" id="rtr-wiz-code" value="${window._rtrWiz.code}" placeholder="W-XXXX-XXXX-XXXX"
+          style="text-transform:uppercase;letter-spacing:1px;font-family:monospace"
+          oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9-]/g,'');_rtrCodeHint()">
+        <div id="rtr-code-hint" style="font-size:11px;margin-top:4px"></div>
+      </div>
+      <div class="fg"><label>Tenant Date of Birth <span class="req">*</span></label>
+        <input type="date" id="rtr-wiz-dob" value="${window._rtrWiz.dob}">
+        <div style="font-size:11px;color:var(--muted);margin-top:3px">Required by GOV.UK to perform the check</div>
+      </div>
+      <div class="fg"><label>Check date</label>
+        <input type="date" id="rtr-wiz-checkdate" value="${window._rtrWiz.checkDate}">
+      </div>`;
+
+  } else if (window._rtrWiz.step === 2) {
+    const clean = window._rtrWiz.code.replace(/-/g,'');
+    const govUrl = `https://www.gov.uk/view-right-to-rent`;
+    body += `
+      <div style="background:rgba(59,111,232,0.06);border:1px solid rgba(59,111,232,0.15);border-radius:8px;padding:14px;margin-bottom:16px">
+        <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:8px">📋 Check details to enter on GOV.UK</div>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px">
+          <span style="color:var(--muted)">Share code:</span><strong style="font-family:monospace;letter-spacing:1px">${window._rtrWiz.code}</strong>
+          <span style="color:var(--muted)">Date of birth:</span><strong>${window._rtrWiz.dob ? new Date(window._rtrWiz.dob).toLocaleDateString('en-GB') : '—'}</strong>
+        </div>
+        <a href="${govUrl}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;margin-top:12px;background:var(--navy);color:#fff;padding:9px 16px;border-radius:7px;font-size:13px;font-weight:600;text-decoration:none">
+          🔗 Open GOV.UK Right to Rent check ↗
+        </a>
+        <div style="font-size:11px;color:var(--muted);margin-top:8px">Opens in a new tab — enter the details above, then come back and record the result below.</div>
+      </div>
+      <div class="fg"><label>Result from GOV.UK <span class="req">*</span></label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${['Valid','Time-limited','Invalid'].map(r => `
+            <label style="display:flex;align-items:center;gap:7px;padding:10px 14px;border:2px solid ${window._rtrWiz.result===r?
+              (r==='Valid'?'var(--green-dark)':r==='Time-limited'?'var(--amber)':'var(--red)'):'var(--border)'};
+              border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;flex:1;min-width:100px;
+              background:${window._rtrWiz.result===r?
+              (r==='Valid'?'rgba(0,168,122,0.08)':r==='Time-limited'?'rgba(245,158,11,0.08)':'rgba(220,38,38,0.08)'):'var(--white)'}">
+              <input type="radio" name="rtr-result" value="${r}" ${window._rtrWiz.result===r?'checked':''} style="display:none"
+                onchange="window._rtrWiz.result=this.value;_rtrWizRender()">
+              <span>${r==='Valid'?'✓ Valid':r==='Time-limited'?'⏳ Time-limited':'✗ Invalid'}</span>
+            </label>`).join('')}
+        </div>
+      </div>
+      ${window._rtrWiz.result === 'Time-limited' || window._rtrWiz.result === 'Valid' ? `
+      <div class="fg"><label>Expiry date ${window._rtrWiz.result==='Time-limited'?'<span class="req">*</span>':'(if shown)'}</label>
+        <input type="date" id="rtr-wiz-expiry" value="${window._rtrWiz.expiry}"
+          oninput="window._rtrWiz.expiry=this.value">
+        <div style="font-size:11px;color:var(--muted);margin-top:3px">
+          ${window._rtrWiz.result==='Time-limited'?'Required — follow-up reminder will be set automatically':'Leave blank if no expiry shown (e.g. British/Irish nationals)'}
+        </div>
+      </div>` : ''}
+      ${window._rtrWiz.result === 'Invalid' ? `
+      <div style="background:rgba(220,38,38,0.06);border:1px solid rgba(220,38,38,0.2);border-radius:8px;padding:12px 14px;font-size:12px;color:#7f1d1d;line-height:1.6">
+        ⚠ <strong>Invalid result.</strong> You must not allow the tenancy to proceed. Take legal advice before serving any notice. Document everything carefully.
+      </div>` : ''}`;
+
+  } else if (window._rtrWiz.step === 3) {
+    const resultColour = window._rtrWiz.result==='Valid'?'var(--green-dark)':window._rtrWiz.result==='Time-limited'?'var(--amber)':'var(--red)';
+    const in12months = new Date(); in12months.setFullYear(in12months.getFullYear()+1);
+    let followUp = null;
+    if (window._rtrWiz.expiry) {
+      const exp = new Date(window._rtrWiz.expiry);
+      followUp = (!isNaN(exp) && exp < in12months) ? window._rtrWiz.expiry : in12months.toISOString().slice(0,10);
+    } else if (window._rtrWiz.result === 'Time-limited') {
+      followUp = in12months.toISOString().slice(0,10);
+    }
+    window._rtrWiz._followUp = followUp;
+
+    body += `
+      <div style="background:var(--off);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:16px">
+        <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:10px">📋 Record summary</div>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:5px 14px;font-size:13px">
+          <span style="color:var(--muted)">Tenant:</span><strong>${t.name}</strong>
+          <span style="color:var(--muted)">Share code:</span><strong style="font-family:monospace">${window._rtrWiz.code}</strong>
+          <span style="color:var(--muted)">Date of birth:</span><strong>${window._rtrWiz.dob ? new Date(window._rtrWiz.dob).toLocaleDateString('en-GB') : '—'}</strong>
+          <span style="color:var(--muted)">Check date:</span><strong>${window._rtrWiz.checkDate}</strong>
+          <span style="color:var(--muted)">Result:</span><strong style="color:${resultColour}">${window._rtrWiz.result==='Valid'?'✓':window._rtrWiz.result==='Time-limited'?'⏳':'✗'} ${window._rtrWiz.result}</strong>
+          ${window._rtrWiz.expiry ? `<span style="color:var(--muted)">Expires:</span><strong>${window._rtrWiz.expiry}</strong>` : ''}
+          ${followUp ? `<span style="color:var(--muted)">Follow-up due:</span><strong style="color:var(--amber)">📅 ${new Date(followUp).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}</strong>` : ''}
+        </div>
+      </div>
+      <div class="fg">
+        <label>Upload screenshot of GOV.UK result <span style="font-size:11px;color:var(--muted);font-weight:400">(recommended for audit)</span></label>
+        <label style="display:flex;align-items:center;gap:10px;padding:12px 14px;border:2px dashed var(--border);border-radius:8px;cursor:pointer;font-size:13px;color:var(--muted)">
+          <span style="font-size:22px">📸</span>
+          <span id="rtr-ss-label">${window._rtrWiz.screenshotFile ? `✓ ${window._rtrWiz.screenshotFile.name}` : 'Click to attach screenshot (JPG, PNG or PDF)'}</span>
+          <input type="file" accept=".jpg,.jpeg,.png,.pdf" style="display:none" onchange="_rtrWizSetScreenshot(this)">
+        </label>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">Stored securely against the tenant record — admissible as evidence if the tenancy is disputed</div>
+      </div>
+      ${window._rtrWiz.result === 'Time-limited' ? `
+      <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:10px 14px;font-size:12px;color:#92400E">
+        ⏳ A calendar reminder will be added for the follow-up check date automatically.
+      </div>` : ''}`;
+  }
+
+  const footerBtns = window._rtrWiz.step === 1
+    ? `<button class="btn" onclick="closeMo()">Cancel</button>
+       <button class="btn btn-navy" onclick="_rtrWizNext()">Next: Check on UKVI →</button>`
+    : window._rtrWiz.step === 2
+    ? `<button class="btn" onclick="_rtrWizBack()">← Back</button>
+       <button class="btn btn-navy" onclick="_rtrWizNext()" ${!window._rtrWiz.result?'disabled':''}>Next: Save record →</button>`
+    : `<button class="btn" onclick="_rtrWizBack()">← Back</button>
+       <button class="btn btn-navy" id="rtr-save-btn" onclick="_rtrWizSave()">💾 Save RTR record</button>`;
+
+  openMo('🔍 Right to Rent Check', t.name, body, footerBtns);
+  setTimeout(() => _rtrCodeHint(), 80);
+}
+
+function _rtrCodeHint() {
+  const val = document.getElementById('rtr-wiz-code')?.value || '';
   const hint = document.getElementById('rtr-code-hint');
   if (!hint) return;
-  // Accept W-XXXX-XXXX-XXXX or 9-char alphanumeric
   const clean = val.replace(/-/g,'');
   if (!val) { hint.textContent = ''; return; }
-  if (clean.length >= 9) {
-    hint.innerHTML = '<span style="color:var(--green-dark)">✓ Valid format</span>';
-  } else {
-    hint.innerHTML = `<span style="color:var(--amber)">${9-clean.length} more characters needed</span>`;
-  }
+  hint.innerHTML = clean.length >= 9
+    ? '<span style="color:var(--green-dark)">✓ Valid format</span>'
+    : `<span style="color:var(--amber)">${9-clean.length} more characters needed</span>`;
 }
 
-function rtrCalcFollowUp() {
-  const expiryVal = document.getElementById('rtr-doc-expiry')?.value;
-  const box = document.getElementById('rtr-followup-box');
-  const dateEl = document.getElementById('rtr-followup-date');
-  if (!box || !dateEl) return;
-  const in12months = new Date(); in12months.setFullYear(in12months.getFullYear() + 1);
-  let followUp = in12months;
-  if (expiryVal) {
-    const expiry = new Date(expiryVal);
-    if (!isNaN(expiry) && expiry < in12months) followUp = expiry;
-  }
-  box.style.display = 'block';
-  dateEl.textContent = followUp.toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
-  box.dataset.followup = followUp.toISOString().slice(0,10);
+function _rtrWizSetScreenshot(input) {
+  const file = input.files[0];
+  if (!file) return;
+  window._rtrWiz.screenshotFile = file;
+  const reader = new FileReader();
+  reader.onload = e => { window._rtrWiz.screenshotB64 = e.target.result; };
+  reader.readAsDataURL(file);
+  const lbl = document.getElementById('rtr-ss-label');
+  if (lbl) lbl.textContent = `✓ ${file.name}`;
 }
 
-async function saveShareCode(tid) {
+function _rtrWizNext() {
+  if (window._rtrWiz.step === 1) {
+    const code = document.getElementById('rtr-wiz-code')?.value.trim();
+    const dob  = document.getElementById('rtr-wiz-dob')?.value;
+    const checkDate = document.getElementById('rtr-wiz-checkdate')?.value;
+    if (!code || code.replace(/-/g,'').length < 9) { toast('Enter a valid share code', true); return; }
+    if (!dob) { toast('Enter the tenant\'s date of birth', true); return; }
+    window._rtrWiz.code = code.toUpperCase();
+    window._rtrWiz.dob  = dob;
+    window._rtrWiz.checkDate = checkDate || new Date().toISOString().slice(0,10);
+    window._rtrWiz.step = 2;
+  } else if (window._rtrWiz.step === 2) {
+    if (!window._rtrWiz.result) { toast('Select a result from GOV.UK', true); return; }
+    const expiry = document.getElementById('rtr-wiz-expiry')?.value;
+    if (expiry) window._rtrWiz.expiry = expiry;
+    if (window._rtrWiz.result === 'Time-limited' && !window._rtrWiz.expiry) {
+      toast('Enter the expiry date for a time-limited result', true); return;
+    }
+    window._rtrWiz.step = 3;
+  }
+  _rtrWizRender();
+}
+
+function _rtrWizBack() {
+  window._rtrWiz.step = Math.max(1, window._rtrWiz.step - 1);
+  _rtrWizRender();
+}
+
+async function _rtrWizSave() {
   const btn = document.getElementById('rtr-save-btn');
-  const code = document.getElementById('rtr-code')?.value.trim();
-  const docExpiry = document.getElementById('rtr-doc-expiry')?.value || null;
-  const checkDate = document.getElementById('rtr-check-date')?.value || new Date().toISOString().slice(0,10);
-  const followUp = document.getElementById('rtr-followup-box')?.dataset?.followup || null;
-  if (!code) { toast('Please enter a share code', true); return; }
-  const clean = code.replace(/-/g,'');
-  if (clean.length < 9) { toast('Share code must be at least 9 characters', true); return; }
-  btn.disabled = true; btn.textContent = 'Saving…';
-  const updates = {
-    share_code: code,
-    rtr_expiry: followUp,
-    rtr_check_date: checkDate,
-  };
-  const { error } = await sb.from('tenants').update(updates).eq('id', tid);
-  if (error) { toast('Save failed: ' + error.message, true); btn.disabled = false; btn.textContent = '💾 Save RTR record'; return; }
-  const t = D.tenants.find(x => String(x.id) === String(tid));
-  if (t) Object.assign(t, updates);
-  await logAudit('RTR_SHARE_CODE', 'tenants', tid, `RTR share code recorded · follow-up: ${followUp||'none'}`);
-  closeMo();
-  toast('✓ Right to Rent record saved');
-  nav(window._currentPage, window._currentParam);
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  const { tid, code, dob, result, expiry, checkDate, screenshotFile, screenshotB64, _followUp } = window._rtrWiz;
+
+  try {
+    // Upload screenshot to Supabase storage if provided
+    let screenshotPath = null;
+    if (screenshotFile && screenshotB64) {
+      const ext = screenshotFile.name.split('.').pop();
+      const fileName = `rtr-evidence/${tid}-${Date.now()}.${ext}`;
+      const base64Data = screenshotB64.split(',')[1];
+      const byteChars = atob(base64Data);
+      const byteArr = new Uint8Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
+      const blob = new Blob([byteArr], { type: screenshotFile.type });
+      const { error: upErr } = await sb.storage.from('tenant-documents').upload(fileName, blob, { upsert: true });
+      if (!upErr) screenshotPath = fileName;
+    }
+
+    // Save to tenant record
+    const updates = {
+      share_code: code,
+      date_of_birth: dob || null,
+      rtr_result: result,
+      rtr_expiry: expiry || null,
+      rtr_check_date: checkDate,
+      rtr_followup_date: _followUp || null,
+      rtr_evidence_path: screenshotPath,
+    };
+    const { error } = await sb.from('tenants').update(updates).eq('id', tid);
+    if (error) throw error;
+
+    // Update local cache
+    const t = D.tenants.find(x => String(x.id) === String(tid));
+    if (t) Object.assign(t, updates);
+
+    // Add follow-up calendar reminder if time-limited
+    if (_followUp && result === 'Time-limited') {
+      const propId = t?.prop_id;
+      if (propId) {
+        await sb.from('calendar_events').insert({
+          prop_id: propId,
+          title: `RTR re-check due — ${t?.name || 'Tenant'}`,
+          event_date: _followUp,
+          category: 'compliance',
+          notes: `Right to Rent time-limited check expires. Share code: ${code}. Re-check on GOV.UK with tenant's updated share code.`
+        });
+      }
+    }
+
+    await logAudit('RTR_CHECK', 'tenants', tid,
+      `RTR check recorded · result: ${result} · share code: ${code} · check date: ${checkDate}${_followUp ? ' · follow-up: '+_followUp : ''}${screenshotPath ? ' · evidence uploaded' : ''}`);
+
+    closeMo();
+    toast(`✓ RTR record saved${screenshotPath ? ' with evidence' : ''}${_followUp ? ' — reminder set' : ''}`);
+    nav(window._currentPage, window._currentParam);
+  } catch(e) {
+    _logError('_rtrWizSave', e);
+    toast('Save failed — ' + (e.message || 'please try again'), true);
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Save RTR record'; }
+  }
 }
 
 // ── In-app document viewer ──
@@ -15776,11 +15961,6 @@ function moEsign(pid, tid) {
 // Download a DRAFT watermarked copy of the generated document
 function _esignDownloadDraft() {
   if (!_esignDocHtml) { toast('No document generated yet', true); return; }
-  // Extract body content only — strip outer html/head/body/style tags if AI returned full doc
-  let bodyContent = _esignDocHtml;
-  const bodyMatch = _esignDocHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-  if (bodyMatch) bodyContent = bodyMatch[1];
-  bodyContent = bodyContent.replace(/<style[\s\S]*?<\/style>/gi, '');
   const draftHtml = `<!DOCTYPE html>
 <html>
 <head>
@@ -15806,7 +15986,7 @@ function _esignDownloadDraft() {
 </head>
 <body>
   <div class="draft-banner">⚠ DRAFT ONLY — NOT FOR SIGNING — Review carefully before sending to tenants</div>
-  ${bodyContent}
+  ${_esignDocHtml}
 </body>
 </html>`;
   const blob = new Blob([draftHtml], { type: 'text/html' });
@@ -15921,8 +16101,12 @@ Rules:
     });
     if (!res.ok) throw new Error('API error');
     const data = await res.json();
-    const updated = (data.content?.[0]?.text || '').replace(/^```html\s*/i,'').replace(/^```\s*/i,'').replace(/```\s*$/i,'').trim();
-    if (!updated) throw new Error('Empty response');
+    let updated = (data.content?.[0]?.text || '').replace(/^```html\s*/i,'').replace(/^```\s*/i,'').replace(/```\s*$/i,'').trim();
+    if (!updated || updated.length < 100) throw new Error('Empty response');
+    if (updated.length > 200000) throw new Error('Response appears corrupt — please try again');
+    const _bm = updated.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    if (_bm) updated = _bm[1];
+    updated = updated.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<style[\s\S]*?<\/style>/gi, '').trim();
     _esignDocHtml = updated;
     const preview = document.getElementById('esign-doc-preview');
     if (preview) {
@@ -16085,7 +16269,17 @@ Return only the HTML content, no preamble or markdown.`
     });
     if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error?.message || `API error ${res.status}`); }
     const data = await res.json();
-    _esignDocHtml = (data.content?.[0]?.text || '').replace(/^```html\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
+    let _rawHtml = (data.content?.[0]?.text || '').replace(/^```html\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
+    // Validate — reject if suspiciously large (binary/PDF leak) or missing HTML tags
+    if (_rawHtml.length > 200000 || (!_rawHtml.includes('<') && !_rawHtml.includes('>'))) {
+      throw new Error('Generated document appears corrupt — please try again');
+    }
+    // Extract body content if full HTML doc returned, strip any embedded style/script tags
+    const _bodyMatch = _rawHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    if (_bodyMatch) _rawHtml = _bodyMatch[1];
+    _rawHtml = _rawHtml.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<style[\s\S]*?<\/style>/gi, '').trim();
+    if (!_rawHtml || _rawHtml.length < 100) throw new Error('Generated document was empty — please try again');
+    _esignDocHtml = _rawHtml;
     _esignSaveDraft(pid, tid, _esignDocHtml);
     document.getElementById('esign-doc-preview').innerHTML = '<div style="all:initial;font-family:Georgia,serif;font-size:13px;line-height:1.8;color:#1a2332;padding:4px">' + _esignDocHtml + '</div>';
     document.getElementById('esign-doc-editor').value = _esignDocHtml;
