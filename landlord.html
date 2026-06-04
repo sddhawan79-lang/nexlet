@@ -4085,9 +4085,12 @@ function _checklistRowHtml(tenant, itemDef) {
           <div style="font-size:11px;font-weight:600;color:var(--txt)">${latestDoc ? `📎 ${latestDoc.doc_label||latestDoc.file_name||'File uploaded'}` : 'No document uploaded yet'}</div>
           <div style="font-size:10px;color:var(--blue);font-weight:600;margin-top:1px">✦ AI will auto-scan on upload</div>
         </div>
-        <label class="btn btn-sm btn-navy" style="cursor:pointer;margin:0;font-size:11px;flex-shrink:0" id="cl-upload-lbl-${tid}-${itemDef.key}">${latestDoc?'↺ Replace':'Upload'}
-          <input type="file" style="display:none" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onchange="uploadTenantDoc('${tid}','${uploadSlot.slot}',this);moTenantDetail('${tid}')">
-        </label>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+          ${latestDoc ? `<button class="btn btn-sm" style="font-size:11px;padding:3px 8px" onclick="event.stopPropagation();viewDocInline(\`${SUPABASE_URL}/storage/v1/object/public/tenant-documents/${latestDoc.file_name}\`,\`${(latestDoc.doc_label||latestDoc.file_name||'Document').replace(/`/g,"'")}\`)">👁 View</button>` : ''}
+          <label class="btn btn-sm btn-navy" style="cursor:pointer;margin:0;font-size:11px" id="cl-upload-lbl-${tid}-${itemDef.key}">${latestDoc?'↺ Replace':'Upload'}
+            <input type="file" style="display:none" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onchange="uploadTenantDoc('${tid}','${uploadSlot.slot}',this);moTenantDetail('${tid}')">
+          </label>
+        </div>
       </div>
       ${scanSnippet}
     </div>` : ''}
@@ -8714,6 +8717,58 @@ function pgTenantDetail(tid) {
 
   // ── UNIFIED DOCUMENTS & COMPLIANCE PANEL ──
   const _complianceRows = CHECKLIST_ITEMS.map(item => _checklistRowHtml(t, item)).join('');
+
+  // ── KYC document card renderer (must be defined before _kycUploadRows uses it) ──
+  const renderDocCard = (doc, isLast) => {
+    const url = getDocUrl(doc);
+    const uploadedDate = doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '';
+    let extractedHtml = '';
+    if (doc.extracted_name) {
+      const mismatch = doc.name_mismatch;
+      const verified = doc.verified;
+      const fields = [
+        doc.extracted_name       && ['Name',    doc.extracted_name],
+        doc.doc_type_extracted   && ['Type',    doc.doc_type_extracted],
+        doc.extracted_doc_number && ['Ref',     doc.extracted_doc_number],
+        doc.issuing_authority    && ['Issued by', doc.issuing_authority],
+        doc.extracted_expiry     && ['Expiry',  doc.extracted_expiry],
+        doc.extracted_address    && ['Address', doc.extracted_address],
+        doc.share_code           && ['Share code', doc.share_code],
+      ].filter(Boolean);
+      extractedHtml = `
+        <div style="margin-top:6px;padding:8px 10px;background:${mismatch?'rgba(229,62,62,0.05)':'var(--off)'};border:1px solid ${mismatch?'rgba(229,62,62,0.2)':'var(--border)'};border-radius:6px">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:5px">✦ AI Extracted</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px 16px">
+            ${fields.map(([l,v])=>`<span style="font-size:11px"><span style="color:var(--muted)">${l}:</span> <strong>${v}</strong></span>`).join('')}
+          </div>
+          ${mismatch ? `<div style="margin-top:6px;font-size:11px;font-weight:600;color:var(--red)">⚠ Name mismatch — extracted "<em>${doc.extracted_name}</em>" vs tenant record "${t.name}"</div>` : ''}
+          <div style="margin-top:6px;display:flex;align-items:center;gap:8px">
+            ${verified
+              ? `<span style="font-size:11px;font-weight:700;color:var(--green-dark);background:var(--green-bg);padding:2px 9px;border-radius:100px">✓ Verified</span>`
+              : `<button class="btn btn-sm" style="font-size:11px;padding:3px 10px;background:var(--green-bg);color:var(--green-dark);border-color:var(--green-bg)" onclick="verifyTenantDoc('${doc.id}','${tid}')">✓ Mark as verified</button>
+                 <span style="font-size:11px;color:var(--muted)">Not yet verified</span>`}
+          </div>
+        </div>`;
+    } else {
+      extractedHtml = `<div style="margin-top:4px;font-size:11px;color:var(--muted)">⏳ Scanning… refresh in a moment</div>`;
+    }
+    return `
+      <div style="padding:10px 12px;border:1px solid ${doc.name_mismatch?'rgba(229,62,62,0.3)':doc.verified?'var(--green-bg)':'var(--border)'};border-radius:6px;background:var(--white);${isLast?'':'margin-bottom:6px'}">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:13px">📎</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${doc.doc_label||doc.file_name||'File'}</div>
+            <div style="font-size:10px;color:var(--muted)">${uploadedDate}${doc.doc_type_extracted?' · '+doc.doc_type_extracted:''}</div>
+          </div>
+          <div style="display:flex;gap:4px;flex-shrink:0">
+            <a href="#" onclick="viewDocInline('${url}','${(doc.doc_label||doc.file_name||'File').replace(/'/g,"\\'")}');return false" class="btn btn-sm" style="font-size:10px;padding:3px 8px;text-decoration:none">View</a>
+            <button class="btn btn-sm" style="font-size:10px;padding:3px 8px;color:var(--red);border-color:rgba(229,62,62,0.3)" onclick="deleteTenantDoc('${doc.id}','${tid}')">✕</button>
+          </div>
+        </div>
+        ${extractedHtml}
+      </div>`;
+  };
+
   const _kycUploadRows = KYC_SLOTS.map(s => {
     const slotDocs = docs.filter(d => d.slot === s.slot);
     const hasDocs = slotDocs.length > 0;
@@ -8798,88 +8853,6 @@ function pgTenantDetail(tid) {
       </div>`;
     }
   } catch(e) { portalCard = ''; }
-
-  // ── KYC document rows (multi-doc per slot) ──
-  const renderDocCard = (doc, isLast) => {
-    const url = getDocUrl(doc);
-    const uploadedDate = doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '';
-    let extractedHtml = '';
-    if (doc.extracted_name) {
-      const mismatch = doc.name_mismatch;
-      const verified = doc.verified;
-      const fields = [
-        doc.extracted_name       && ['Name',    doc.extracted_name],
-        doc.doc_type_extracted   && ['Type',    doc.doc_type_extracted],
-        doc.extracted_doc_number && ['Ref',     doc.extracted_doc_number],
-        doc.issuing_authority    && ['Issued by', doc.issuing_authority],
-        doc.extracted_expiry     && ['Expiry',  doc.extracted_expiry],
-        doc.extracted_address    && ['Address', doc.extracted_address],
-        doc.share_code           && ['Share code', doc.share_code],
-      ].filter(Boolean);
-      extractedHtml = `
-        <div style="margin-top:6px;padding:8px 10px;background:${mismatch?'rgba(229,62,62,0.05)':'var(--off)'};border:1px solid ${mismatch?'rgba(229,62,62,0.2)':'var(--border)'};border-radius:6px">
-          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:5px">✦ AI Extracted</div>
-          <div style="display:flex;flex-wrap:wrap;gap:4px 16px">
-            ${fields.map(([l,v])=>`<span style="font-size:11px"><span style="color:var(--muted)">${l}:</span> <strong>${v}</strong></span>`).join('')}
-          </div>
-          ${mismatch ? `<div style="margin-top:6px;font-size:11px;font-weight:600;color:var(--red)">⚠ Name mismatch — extracted "<em>${doc.extracted_name}</em>" vs tenant record "${t.name}"</div>` : ''}
-          <div style="margin-top:6px;display:flex;align-items:center;gap:8px">
-            ${verified
-              ? `<span style="font-size:11px;font-weight:700;color:var(--green-dark);background:var(--green-bg);padding:2px 9px;border-radius:100px">✓ Verified</span>`
-              : `<button class="btn btn-sm" style="font-size:11px;padding:3px 10px;background:var(--green-bg);color:var(--green-dark);border-color:var(--green-bg)" onclick="verifyTenantDoc('${doc.id}','${tid}')">✓ Mark as verified</button>
-                 <span style="font-size:11px;color:var(--muted)">Not yet verified</span>`}
-          </div>
-        </div>`;
-    } else {
-      extractedHtml = `<div style="margin-top:4px;font-size:11px;color:var(--muted)">⏳ Scanning… refresh in a moment</div>`;
-    }
-    return `
-      <div style="padding:10px 12px;border:1px solid ${doc.name_mismatch?'rgba(229,62,62,0.3)':doc.verified?'var(--green-bg)':'var(--border)'};border-radius:6px;background:var(--white);${isLast?'':'margin-bottom:6px'}">
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="font-size:13px">📎</span>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${doc.doc_label||doc.file_name||'File'}</div>
-            <div style="font-size:10px;color:var(--muted)">${uploadedDate}${doc.doc_type_extracted?' · '+doc.doc_type_extracted:''}</div>
-          </div>
-          <div style="display:flex;gap:4px;flex-shrink:0">
-            <a href="#" onclick="viewDocInline('${url}','${(doc.doc_label||doc.file_name||'File').replace(/'/g,"\\'")}');return false" class="btn btn-sm" style="font-size:10px;padding:3px 8px;text-decoration:none">View</a>
-            <button class="btn btn-sm" style="font-size:10px;padding:3px 8px;color:var(--red);border-color:rgba(229,62,62,0.3)" onclick="deleteTenantDoc('${doc.id}','${tid}')">✕</button>
-          </div>
-        </div>
-        ${extractedHtml}
-      </div>`;
-  };
-
-  const kycRows = KYC_SLOTS.map(s => {
-    const slotDocs = docs.filter(d => d.slot === s.slot);
-    const hasDocs = slotDocs.length > 0;
-    return `
-      <div style="padding:12px 14px;border:1px solid ${hasDocs?'var(--border)':'rgba(229,62,62,0.2)'};border-radius:8px;margin-bottom:8px;background:${hasDocs?'var(--white)':'rgba(229,62,62,0.02)'}">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:${hasDocs?'10px':'0'}">
-          <div style="font-size:20px;width:32px;text-align:center;flex-shrink:0">${s.icon}</div>
-          <div style="flex:1;min-width:0">
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-              <span style="font-size:13px;font-weight:600">${s.label}</span>
-              ${s.mandatory
-                ? `<span style="font-size:10px;font-weight:700;color:var(--red);background:var(--red-bg);padding:1px 6px;border-radius:100px">Required</span>`
-                : `<span style="font-size:10px;color:var(--muted);background:var(--off);padding:1px 6px;border-radius:100px">Optional</span>`}
-              ${hasDocs ? `<span style="font-size:11px;color:var(--muted)">${slotDocs.length} document${slotDocs.length!==1?'s':''}</span>` : ''}
-            </div>
-            ${!hasDocs ? `<div style="font-size:11px;color:var(--red);margin-top:2px">Not uploaded</div>` : ''}
-          </div>
-          <div style="flex-shrink:0">
-            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-              <!-- RULE: KYC upload — AI scan fires automatically via uploadTenantDoc → scanTenantDoc. Do NOT remove or simplify this slot. -->
-              <label class="btn btn-sm btn-navy" style="cursor:pointer;margin:0;font-size:11px">${hasDocs ? '+ Add another' : 'Upload'}
-                <input type="file" style="display:none" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onchange="uploadTenantDoc('${tid}','${s.slot}',this)">
-              </label>
-              <div style="font-size:10px;color:var(--blue);font-weight:600;white-space:nowrap">✦ AI auto-scan</div>
-            </div>
-          </div>
-        </div>
-        ${hasDocs ? slotDocs.map((d,i) => renderDocCard(d, i === slotDocs.length - 1)).join('') : ''}
-      </div>`;
-  }).join('');
 
   // ── Journey Cards ──
   const propLog    = D.emailLog.filter(e => String(e.prop_id) === String(t.prop_id));

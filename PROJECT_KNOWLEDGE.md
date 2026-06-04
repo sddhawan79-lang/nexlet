@@ -3574,3 +3574,21 @@ Used by `agreement`, `deposit_protection` blocks.
 
 All schema changes were in Session 33. Session 34 changes are UI/logic only.
 
+
+---
+
+#### 10. Compliance rows — Upload + AI scanner added (landlord.html)
+
+**Problem:** Deposit protected, Rent Guarantee Insurance, Buildings/Contents Insurance had no upload or AI scan option — violating the standing rule that every doc section must have both.
+
+**Fix:** Added three entries to `CHECKLIST_UPLOAD_SLOTS`:
+```js
+deposit_protection: { slot: 'deposit_cert',       label: 'Upload deposit certificate' },
+rent_guarantee:     { slot: 'rent_guarantee_doc',  label: 'Upload RGI policy' },
+insurance:          { slot: 'insurance_doc',       label: 'Upload insurance certificate' },
+```
+
+All three fall through to the `other` AI scan prompt (extracts doc type, reference number, expiry, issuing authority). No bespoke prompt needed.
+
+`deposit_cert` slot already existed in the system (line 846, AI scan field map line 1078) — consistent. `rent_guarantee_doc` and `insurance_doc` are new slot names, no conflicts.
+
