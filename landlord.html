@@ -3953,8 +3953,6 @@ async function _saveTenantSetupToDB() {
 
 // ── COMPLIANCE CHECKLIST ──
 const CHECKLIST_ITEMS = [
-  { key:'rtr',                label:'Right to Rent check',       icon:'🔍' },
-  { key:'id_docs',            label:'ID documents (2 required)', icon:'🪪' },
   { key:'agreement',          label:'Tenancy agreement',         icon:'📝' },
   { key:'deposit_protection', label:'Deposit protected',         icon:'🏦' },
   { key:'rent_guarantee',     label:'Rent Guarantee Insurance',  icon:'🛡️' },
@@ -3977,7 +3975,7 @@ function _checklistRAG(tenant, key) {
     if (tenant?.rtr_skipped)   return { ra:'amber', status:'Deferred',  detail:'RTR check skipped', date:'' };
   }
   if (key === 'id_docs') {
-    const mandatorySlots = ['passport', 'right_to_rent', 'address_1', 'address_2', 'reference'];
+    const mandatorySlots = ['passport', 'address_1', 'address_2', 'reference'];
     const uploaded = D.tenantDocs?.filter(d => String(d.tenant_id) === String(tenant?.id) && mandatorySlots.includes(d.slot)).length || 0;
     const total = mandatorySlots.length;
     if (uploaded >= total) return { ra:'green', status:'Verified', detail:`All ${total} documents uploaded`, date:'' };
@@ -4078,6 +4076,7 @@ function _checklistRowHtml(tenant, itemDef) {
       </div>
       ${scanSnippet}
     </div>` : ''}
+    ${itemDef.key === 'rtr' ? `<div style="margin-top:8px"><button class="btn btn-sm" style="font-size:11px;border-color:var(--blue);color:var(--blue)" onclick="event.stopPropagation();moShareCodeWizard('${tid}')">🔍 Run Share Code Wizard</button><span style="font-size:10px;color:var(--muted);margin-left:8px">Check on UKVI &amp; save result</span></div>` : ''}
   </div>`;
 }
 
@@ -8636,8 +8635,8 @@ function pgTenantDetail(tid) {
     { slot: 'address_1',     icon: '📬', label: 'Address Proof 1',        mandatory: true  },
     { slot: 'address_2',     icon: '📬', label: 'Address Proof 2',        mandatory: true  },
     { slot: 'reference',     icon: '📋', label: 'Reference Check',        mandatory: true  },
-    { slot: 'guarantor',     icon: '🤝', label: 'Guarantor Check',        mandatory: false },
-    { slot: 'other',         icon: '📎', label: 'Other Document',          mandatory: false },
+    { slot: 'guarantor',     icon: '🤝', label: 'Guarantor Check',        mandatory: false, note: 'Upload signed guarantor agreement — generate one via Documents library' },
+    { slot: 'other',         icon: '📎', label: 'Other Document',          mandatory: false, note: 'Any additional supporting document — use AI assistant to draft if needed' },
   ];
 
   const SUPABASE_URL = 'https://mahtcfukgzbonwibtsxz.supabase.co';
@@ -8662,7 +8661,7 @@ function pgTenantDetail(tid) {
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0">
         ${totalDocs > 0 ? `<button class="btn btn-sm" onclick="viewAllDocs('${tid}')">🖼 View all docs</button>` : ''}
-        <button class="btn btn-sm btn-navy" onclick="document.getElementById('kyc-docs-section').scrollIntoView({behavior:'smooth'})">
+        <button class="btn btn-sm btn-navy" onclick="document.getElementById('unified-docs-section').scrollIntoView({behavior:'smooth'})">
           ${allDone ? '✓ All uploaded' : 'Upload documents ↓'}
         </button>
       </div>
@@ -8698,8 +8697,56 @@ function pgTenantDetail(tid) {
       </div>
     </div>`;
 
-  // ── COMPLIANCE CHECKLIST PANEL ──
-  const checklistHtml = CHECKLIST_ITEMS.map(item => _checklistRowHtml(t, item)).join('');
+  // ── UNIFIED DOCUMENTS & COMPLIANCE PANEL ──
+  const _complianceRows = CHECKLIST_ITEMS.map(item => _checklistRowHtml(t, item)).join('');
+  const _kycUploadRows = KYC_SLOTS.map(s => {
+    const slotDocs = docs.filter(d => d.slot === s.slot);
+    const hasDocs = slotDocs.length > 0;
+    const isRTR = s.slot === 'right_to_rent';
+    return `
+      <div style="padding:12px 14px;border:1px solid ${hasDocs?'var(--border)':'rgba(229,62,62,0.2)'};border-radius:8px;margin-bottom:8px;background:${hasDocs?'var(--white)':'rgba(229,62,62,0.02)'}">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:${hasDocs||isRTR?'10px':'0'}">
+          <div style="font-size:20px;width:32px;text-align:center;flex-shrink:0">${s.icon}</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span style="font-size:13px;font-weight:600">${s.label}</span>
+              ${s.mandatory
+                ? `<span style="font-size:10px;font-weight:700;color:var(--red);background:var(--red-bg);padding:1px 6px;border-radius:100px">Required</span>`
+                : `<span style="font-size:10px;color:var(--muted);background:var(--off);padding:1px 6px;border-radius:100px">Optional</span>`}
+              ${hasDocs ? `<span style="font-size:11px;color:var(--muted)">${slotDocs.length} document${slotDocs.length!==1?'s':''}</span>` : ''}
+            </div>
+            ${!hasDocs ? `<div style="font-size:11px;color:var(--red);margin-top:2px">Not uploaded</div>` : ''}
+            ${s.note ? `<div style="font-size:10px;color:var(--muted);margin-top:3px;font-style:italic">(${s.note})</div>` : ''}
+          </div>
+          <div style="flex-shrink:0">
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+              <label class="btn btn-sm btn-navy" style="cursor:pointer;margin:0;font-size:11px">${hasDocs ? '+ Add another' : 'Upload'}
+                <input type="file" style="display:none" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onchange="uploadTenantDoc('${tid}','${s.slot}',this)">
+              </label>
+              <div style="font-size:10px;color:var(--blue);font-weight:600;white-space:nowrap">✦ AI auto-scan</div>
+            </div>
+          </div>
+        </div>
+        ${hasDocs ? slotDocs.map((d,i) => renderDocCard(d, i === slotDocs.length - 1)).join('') : ''}
+        ${isRTR ? `<div style="margin-top:8px"><button class="btn btn-sm" style="font-size:11px;border-color:var(--blue);color:var(--blue)" onclick="moShareCodeWizard('${tid}')">🔍 Run Share Code Wizard</button><span style="font-size:10px;color:var(--muted);margin-left:8px">Check on UKVI &amp; save result</span></div>` : ''}
+      </div>`;
+  }).join('');
+
+  const unifiedDocsCard = `
+    <div id="unified-docs-section" class="panel" style="margin-bottom:16px;border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)">
+      <div class="ph2" style="padding:14px 18px 10px">
+        <div><h2>🗂 Documents &amp; Compliance</h2><p>KYC identity docs, then tenancy compliance</p></div>
+      </div>
+      <div style="padding:0 18px 12px">
+        ${_kycUploadRows}
+        <div style="margin:14px 0 10px;display:flex;align-items:center;gap:10px">
+          <div style="flex:1;height:1px;background:var(--border)"></div>
+          <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)">Tenancy Compliance</span>
+          <div style="flex:1;height:1px;background:var(--border)"></div>
+        </div>
+        ${_complianceRows}
+      </div>
+    </div>`;
 
   // ── Portal invite status ──
   let portalCard = '';
@@ -8976,15 +9023,11 @@ function pgTenantDetail(tid) {
         </div>
       </div>
 
+      ${tenancyCard}
       ${stickyCard}
       ${(()=>{ const g8=getGround8Status(t.id); if(!g8||!g8.warning) return ''; const isHit=g8.threshold; return `<div style="background:${isHit?'rgba(229,62,62,0.07)':'rgba(217,119,6,0.06)'};border:1px solid ${isHit?'rgba(229,62,62,0.3)':'rgba(217,119,6,0.3)'};border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><div style="font-size:13px;font-weight:700;color:${isHit?'var(--red)':'var(--amber)'};margin-bottom:4px">${isHit?'🔴 Ground 8 threshold reached':'⚠️ Rent arrears warning'}</div><div style="font-size:12px;color:var(--txt);line-height:1.6">${g8.monthsArrears} month${g8.monthsArrears!==1?'s':''} in arrears · £${g8.totalUnpaid.toLocaleString()} unpaid across ${g8.unpaidCount} payment${g8.unpaidCount!==1?'s':''}${isHit?' · Ground 8 requires 2+ months — you may now serve a Section 8 notice':' · Ground 8 triggers at 2 months'}</div></div><button class="btn btn-sm" style="${isHit?'border-color:var(--red);color:var(--red)':'border-color:var(--amber);color:var(--amber)'}" onclick="moSection8('${t.prop_id}')">⚖️ Section 8 →</button></div>`; })()}
-      ${checklistCard}
+      ${unifiedDocsCard}
       ${portalCard}
-      ${tenancyCard}
-
-      <div id="kyc-docs-section" class="panel" style="margin-bottom:16px;border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)">
-        <div style="padding:14px 18px">${kycRows}</div>
-      </div>
 
       ${journeyCards}
 
