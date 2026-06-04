@@ -3412,3 +3412,165 @@ ALTER TABLE tenants ADD COLUMN IF NOT EXISTS rtr_evidence_path text;
 
 RTR evidence screenshots are stored in the existing `tenant-documents` bucket under path prefix `rtr-evidence/`. No new bucket required.
 
+
+---
+
+## Session 34 — Dashboard Bugs, Tenant Detail UX Overhaul & Compliance Wiring (4 June 2026)
+
+### Features & Changes
+
+---
+
+#### 1. Portfolio Health Score — two bug fixes (landlord.html)
+
+**Bug 1 — Every click routed to Compliance:**
+Outer `<div>` had blanket `onclick="nav('compliance')"`. All clicks — bars, "View full report →" — fired same handler.
+
+**Fix:** Removed blanket onclick. Each element routes independently:
+- Score ring → `nav('compliance')`
+- Certificates bar → `nav('compliance')`
+- Rent bar → `nav('finance')`
+- Maintenance bar → `nav('maintenance')`
+- KYC bar → `nav('tenants')`
+- "View full report →" → `nav('compliance')`
+
+**Bug 2 — Maintenance bar green before login:**
+`maintScore` scored 20 (green) when `D.maintenance` empty — same as zero open jobs.
+
+**Fix:**
+```js
+const _maintHasData = D.properties.length > 0;
+const maintScore = !_maintHasData ? 0 : _awaabO>0 ? 0 : _urgO>0 ? 8 : open>3 ? 12 : open>0 ? 16 : 20;
+```
+Bar renders grey (`var(--border)`) when no property data exists.
+
+---
+
+#### 2. RTR Share Code Wizard — surfaced in Compliance Checklist (landlord.html)
+
+Wizard existed only in KYC doc section. Now also appears inside the expanded RTR checklist row (`_checklistRowHtml`). Button calls `moShareCodeWizard(tid)` with "Check on UKVI & save result" hint.
+
+---
+
+#### 3. Day 1 / Day 30 Pack restructure (landlord.html)
+
+**Problem:** `moWelcomeKit` was duplicated as both a standalone button and an item inside Day 1 Pack.
+
+**Day 1 Pack changes:**
+- Removed "Welcome Kit sent" checklist row — absorbed into Dispatch button
+- Added "📖 How to Rent guide served" item
+- Inventory moved to Day 30 (legally correct)
+- "📦 Dispatch Day 1 Pack" button → calls `moWelcomeKit` → marks `welcome_kit_done`
+- Once dispatched: button → "✓ Day 1 Pack dispatched"
+
+**Day 30 Pack — legally expanded:**
+- Added: Inventory / schedule of condition signed
+- Added: Legionella risk assessment completed
+- Added: Pet agreement signed (conditional on `t.pet_allowed || t.has_pet`)
+- "📨 Dispatch Day 30 Pack" button → routes to Communications Hub
+- Dispatched detection: `day30_pack` template_id in email log
+
+**`moWelcomeKit` and `welcome_kit_done` unchanged** — all other call sites unaffected.
+
+---
+
+#### 4. Tenant Detail Page — full UX restructure (landlord.html)
+
+**Problem:** Three separate sections owned the same data — sticky KYC bar, Compliance Checklist panel, KYC Documents section. Documents listed twice. Page order wrong.
+
+**CHECKLIST_ITEMS reduced:**
+Removed `rtr` and `id_docs` keys. Now contains only: `agreement`, `deposit_protection`, `rent_guarantee`, `insurance`.
+
+**New unified panel — `unifiedDocsCard` (`#unified-docs-section`):**
+Replaces both `checklistCard` and `kyc-docs-section`. Single panel, two visual groups:
+- *KYC Identity Documents* — Passport, RTR (+ wizard inline), Address 1, Address 2, Reference, Guarantor, Other — Upload + AI auto-scan each
+- *Tenancy Compliance* (divider) — Written Statement, Deposit Protected, Rent Guarantee, Buildings/Contents Insurance — RAG + expand
+
+**New page order (top to bottom):**
+1. Tenancy Details — always first
+2. KYC sticky bar — scrolls to `#unified-docs-section`
+3. Ground 8 alert (if triggered)
+4. Documents & Compliance unified panel
+5. Tenant Portal
+6. Day 1 / Day 30 Packs
+7. Communications
+
+**Removed:** `checklistCard`, `kyc-docs-section`, `checklistHtml`, `kycRows` (dead code, not rendered).
+
+---
+
+#### 5. Guarantor & Other Document — contextual notes (landlord.html)
+
+Added `note` field to KYC_SLOTS optional slots. Renders as small italic hint when slot empty:
+- **Guarantor Check** — *(Upload signed guarantor agreement — generate one via Documents library)*
+- **Other Document** — *(Any additional supporting document — use AI assistant to draft if needed)*
+
+Note disappears once document uploaded.
+
+---
+
+#### 6. Written Statement label + e-sign auto-detection (landlord.html)
+
+**Label change:** "Tenancy agreement" → "Written Statement" throughout `CHECKLIST_ITEMS` and `CHECKLIST_UPLOAD_SLOTS`. Correct post-RRA 2025 terminology.
+
+**E-sign auto-detection added to `_checklistRAG` for `agreement` key:**
+```js
+const req = (D.esignReq||[]).find(r => String(r.tenant_id)===String(tenant?.id) && r.document_type==='written_statement');
+if (req?.status === 'signed')  → green  "Signed"
+if (req?.status === 'sent')    → amber  "Awaiting signature"
+// fallback: email log esign send → amber
+```
+No manual RAG change needed — status reflects real e-sign state automatically.
+
+---
+
+#### 7. Co-tenant shared compliance items (landlord.html)
+
+**Problem:** Property-level compliance items (deposit, insurance) were blank for co-tenants because they read from `tenant.scheme` which is only set on the lead tenant row.
+
+**Fix — `_checklistRAG` deposit_protection key:**
+```js
+const _lead = D.tenants.find(t => String(t.prop_id)===String(_propId) && t.is_lead && t.status==='Active') || tenant;
+// resolves scheme/deposit from lead tenant — co-tenants now inherit correct status
+```
+
+**Insurance/rent_guarantee:** Already used `prop_id` — co-tenants already worked correctly, confirmed.
+
+**Agreement (e-sign):** Each co-tenant has their own `esign_requests` record with their own `tenant_id` — tracked individually, correctly.
+
+**New shared variable `_propId`** set at top of `_checklistRAG`:
+```js
+const _propId = tenant?.prop_id;
+```
+Used by `agreement`, `deposit_protection` blocks.
+
+---
+
+#### 8. Known Issues — updated
+
+| # | Issue | Status |
+|---|---|---|
+| 1 | ICO number placeholder in legal docs | Pending registration |
+| 2 | MX record for inbound email | Parked post-launch |
+| 3 | `login.html` newsletter signup checkbox | Not built |
+| 4 | `moFinancials` PDF export — jsPDF needed | Post-launch backlog |
+| 5 | Section 8 UX handoff to Form 3A | Post-launch backlog |
+| 6 | WhatsApp reminders | Post-launch backlog |
+| 7 | Free public compliance checker | Marketing priority |
+| 8 | Blog / content hub | Marketing priority |
+| 9 | Postcode finder — replace with getAddress.io | Post-launch backlog |
+| 10 | `stripe_price_id` NULL — sandbox only | Closed |
+| 11 | `newsletter_opted_in` column missing from user_profiles | Pending SQL |
+| 12 | favicon.ico missing | Post-launch backlog |
+| 13 | `relet_prepared` column needed on tenants | Pending SQL |
+| 14 | `portal_enabled` column needed on tenants | ✅ SQL run Session 32 |
+| 15 | RTR new columns needed on tenants | ✅ SQL run Session 33 |
+| 16 | `day30_pack` email template not yet built | Dispatch routes to comms hub — dedicated template pending |
+| 17 | `kycRows` dead code still in `pgTenantDetail` | Harmless — remove next session |
+
+---
+
+#### 9. No new SQL migrations required this session
+
+All schema changes were in Session 33. Session 34 changes are UI/logic only.
+
