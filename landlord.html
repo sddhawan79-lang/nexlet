@@ -8784,12 +8784,6 @@ function pgTenantDetail(tid) {
     }
   } catch(e) { portalCard = ''; }
 
-  const checklistCard = `
-    <div class="panel" style="margin-bottom:16px;border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)">
-      <div class="ph2"><div><h2>📋 Compliance Checklist</h2><p>5 items — click to expand and update</p></div></div>
-      <div style="padding:0 18px 12px">${checklistHtml}</div>
-    </div>`;
-
   // ── KYC document rows (multi-doc per slot) ──
   const renderDocCard = (doc, isLast) => {
     const url = getDocUrl(doc);
