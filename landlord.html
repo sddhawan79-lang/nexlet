@@ -9423,7 +9423,7 @@ function _rtrWizRender(tArg) {
           <span id="rtr-ss-label">${window._rtrWiz.screenshotFile ? `✓ ${window._rtrWiz.screenshotFile.name}` : 'Click to attach screenshot (JPG, PNG or PDF)'}</span>
           <input type="file" accept=".jpg,.jpeg,.png,.pdf" style="display:none" onchange="_rtrWizSetScreenshot(this)">
         </label>
-        ${window._rtrWiz.screenshotFile && window._rtrWiz.screenshotB64 ? `<button class="btn btn-sm" style="margin-top:6px;font-size:11px" onclick="dvoOpen(window._rtrWiz.screenshotB64,'RTR Evidence — ${t.name}','GOV.UK screenshot')">👁 View uploaded doc</button>` : ''}
+        ${window._rtrWiz.screenshotFile && window._rtrWiz.screenshotB64 ? `<button class="btn btn-sm" style="margin-top:6px;font-size:11px" onclick="(function(){const b64=window._rtrWiz.screenshotB64;const mime=window._rtrWiz.screenshotFile.type||'image/png';const bin=atob(b64.split(',')[1]);const arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);const blob=new Blob([arr],{type:mime});const objUrl=URL.createObjectURL(blob);dvoOpen(objUrl,'RTR Evidence — ${t.name}','GOV.UK screenshot');})()">👁 View uploaded doc</button>` : ''}
         <div style="font-size:11px;color:var(--muted);margin-top:4px">Stored securely against the tenant record — admissible as evidence if the tenancy is disputed</div>
       </div>
       ${window._rtrWiz.result === 'Time-limited' ? `
@@ -9525,7 +9525,20 @@ async function _rtrWizSave() {
       rtr_followup_date: _followUp || null,
       rtr_evidence_path: screenshotPath,
     };
-    const { error } = await sb.from('tenants').update(updates).eq('id', tid);
+    let { error } = await sb.from('tenants').update(updates).eq('id', tid);
+
+    // If RTR columns don't exist yet, retry with only share_code (most likely to exist)
+    if (error?.message?.includes('schema cache') || error?.message?.includes('column')) {
+      const fallback = {};
+      // Try each column individually to save what we can
+      const cols = Object.entries(updates);
+      for (const [k, v] of cols) {
+        const { error: ce } = await sb.from('tenants').update({ [k]: v }).eq('id', tid);
+        if (!ce) fallback[k] = v;
+      }
+      error = null; // swallow — partial save done, will show which succeeded
+      toast('⚠ Some RTR fields not saved — run the DB migration below', true);
+    }
     if (error) throw error;
 
     // Update local cache
@@ -17167,6 +17180,12 @@ function _dvoType(url) {
   const ext = _dvoExt(url);
   if (['pdf'].includes(ext)) return 'pdf';
   if (['jpg','jpeg','png','gif','webp','bmp','svg'].includes(ext)) return 'image';
+  // blob: URLs have no extension — check against known in-memory file type
+  if (url.startsWith('blob:')) {
+    const mime = window._rtrWiz?.screenshotFile?.type || '';
+    if (mime === 'application/pdf') return 'pdf';
+    if (mime.startsWith('image/')) return 'image';
+  }
   return 'other';
 }
 
