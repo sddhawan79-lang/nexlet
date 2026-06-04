@@ -4007,6 +4007,9 @@ function _checklistRAG(tenant, key) {
       if (buildings.expiry && new Date(buildings.expiry) < today) return { ra:'red', status:'Expired', detail:'Buildings insurance expired', date: buildings.expiry };
       return { ra:'green', status:'Active', detail:`Buildings insurance · ${buildings.expiry ? 'Renews '+FMS(buildings.expiry) : 'No expiry set'}`, date: buildings.expiry || '' };
     }
+    // Fallback — doc uploaded to insurance_doc slot counts as amber evidence
+    const _insDoc = (D.tenantDocs||[]).find(d => String(d.tenant_id)===String(tenant?.id) && d.slot==='insurance_doc');
+    if (_insDoc) return { ra:'amber', status:'Document uploaded', detail:'Add policy details via Insurance tab to complete', date:'' };
   }
   if (key === 'rent_guarantee') {
     const propIns = D.insurance.filter(i => String(i.prop_id) === String(tenant?.prop_id));
@@ -4016,6 +4019,9 @@ function _checklistRAG(tenant, key) {
       if (rgi.expiry && new Date(rgi.expiry) < today) return { ra:'red', status:'Expired', detail:'Rent guarantee insurance expired', date: rgi.expiry };
       return { ra:'green', status:'Active', detail:`Rent guarantee insurance · ${rgi.expiry ? 'Renews '+FMS(rgi.expiry) : 'No expiry set'}`, date: rgi.expiry || '' };
     }
+    // Fallback — doc uploaded to rent_guarantee_doc slot counts as amber evidence
+    const _rgiDoc = (D.tenantDocs||[]).find(d => String(d.tenant_id)===String(tenant?.id) && d.slot==='rent_guarantee_doc');
+    if (_rgiDoc) return { ra:'amber', status:'Document uploaded', detail:'Add policy details via Insurance tab to complete', date:'' };
   }
   return item;
 }
@@ -8735,25 +8741,39 @@ function pgTenantDetail(tid) {
         doc.extracted_address    && ['Address', doc.extracted_address],
         doc.share_code           && ['Share code', doc.share_code],
       ].filter(Boolean);
+      const _overrideReasons = ['Joint certificate','Name abbreviated or informal','Typo on document','Other'];
       extractedHtml = `
-        <div style="margin-top:6px;padding:8px 10px;background:${mismatch?'rgba(229,62,62,0.05)':'var(--off)'};border:1px solid ${mismatch?'rgba(229,62,62,0.2)':'var(--border)'};border-radius:6px">
+        <div style="margin-top:6px;padding:8px 10px;background:${mismatch && !verified?'rgba(229,62,62,0.05)':verified?'rgba(0,168,122,0.05)':'var(--off)'};border:1px solid ${mismatch && !verified?'rgba(229,62,62,0.2)':verified?'rgba(0,168,122,0.2)':'var(--border)'};border-radius:6px">
           <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:5px">✦ AI Extracted</div>
           <div style="display:flex;flex-wrap:wrap;gap:4px 16px">
             ${fields.map(([l,v])=>`<span style="font-size:11px"><span style="color:var(--muted)">${l}:</span> <strong>${v}</strong></span>`).join('')}
           </div>
-          ${mismatch ? `<div style="margin-top:6px;font-size:11px;font-weight:600;color:var(--red)">⚠ Name mismatch — extracted "<em>${doc.extracted_name}</em>" vs tenant record "${t.name}"</div>` : ''}
-          <div style="margin-top:6px;display:flex;align-items:center;gap:8px">
-            ${verified
-              ? `<span style="font-size:11px;font-weight:700;color:var(--green-dark);background:var(--green-bg);padding:2px 9px;border-radius:100px">✓ Verified</span>`
-              : `<button class="btn btn-sm" style="font-size:11px;padding:3px 10px;background:var(--green-bg);color:var(--green-dark);border-color:var(--green-bg)" onclick="verifyTenantDoc('${doc.id}','${tid}')">✓ Mark as verified</button>
-                 <span style="font-size:11px;color:var(--muted)">Not yet verified</span>`}
-          </div>
+          ${mismatch && !verified ? `
+            <div style="margin-top:8px;padding:8px 10px;background:rgba(229,62,62,0.04);border:1px solid rgba(229,62,62,0.2);border-radius:6px">
+              <div style="font-size:11px;font-weight:600;color:var(--red);margin-bottom:8px">⚠ Name mismatch — extracted "<em>${doc.extracted_name}</em>" vs tenant record "${t.name}"</div>
+              <div style="font-size:11px;color:var(--muted);margin-bottom:6px">If this is correct, select a reason and verify:</div>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <select id="mmr-${doc.id}" style="font-size:11px;padding:4px 8px;border-radius:5px;border:1px solid var(--border);font-family:var(--font);flex:1;min-width:160px">
+                  <option value="">Select reason…</option>
+                  ${_overrideReasons.map(r=>`<option value="${r}">${r}</option>`).join('')}
+                </select>
+                <button class="btn btn-sm" style="font-size:11px;padding:3px 10px;background:var(--green-bg);color:var(--green-dark);border-color:var(--green-bg);white-space:nowrap" onclick="verifyTenantDocOverride('${doc.id}','${tid}')">✓ Verify anyway</button>
+              </div>
+            </div>` : ''}
+          ${verified ? `
+            <div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span style="font-size:11px;font-weight:700;color:var(--green-dark);background:var(--green-bg);padding:2px 9px;border-radius:100px">✓ Verified${doc.name_mismatch_reason?' · '+doc.name_mismatch_reason:''}</span>
+            </div>` : (!mismatch ? `
+            <div style="margin-top:6px;display:flex;align-items:center;gap:8px">
+              <button class="btn btn-sm" style="font-size:11px;padding:3px 10px;background:var(--green-bg);color:var(--green-dark);border-color:var(--green-bg)" onclick="verifyTenantDoc('${doc.id}','${tid}')">✓ Mark as verified</button>
+              <span style="font-size:11px;color:var(--muted)">Not yet verified</span>
+            </div>` : '')}
         </div>`;
     } else {
       extractedHtml = `<div style="margin-top:4px;font-size:11px;color:var(--muted)">⏳ Scanning… refresh in a moment</div>`;
     }
     return `
-      <div style="padding:10px 12px;border:1px solid ${doc.name_mismatch?'rgba(229,62,62,0.3)':doc.verified?'var(--green-bg)':'var(--border)'};border-radius:6px;background:var(--white);${isLast?'':'margin-bottom:6px'}">
+      <div style="padding:10px 12px;border:1px solid ${doc.name_mismatch && !doc.verified?'rgba(229,62,62,0.3)':doc.verified?'var(--green-bg)':'var(--border)'};border-radius:6px;background:var(--white);${isLast?'':'margin-bottom:6px'}">
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-size:13px">📎</span>
           <div style="flex:1;min-width:0">
@@ -9064,8 +9084,11 @@ async function uploadTenantDoc(tid, slot, input) {
   if (insErr) { toast('Save failed — ' + insErr.message, true); return; }
   if (data) D.tenantDocs.push(data);
 
-  const savedDoc = D.tenantDocs.find(d => String(d.tenant_id) === String(tid) && d.slot === slot && d.file_name === path);
+  const savedDoc = data; // use insert result directly — avoids string/number id mismatch
   toast('✓ Uploaded' + (savedDoc?.id ? ' — scanning document…' : ''));
+
+  // Re-render immediately so slot shows uploaded without waiting for scan
+  nav(window._currentPage, window._currentParam);
 
   // Trigger AI scan in background
   if (savedDoc?.id) scanTenantDoc(savedDoc.id, tid, slot, file, t?.name || '');
@@ -9117,8 +9140,10 @@ async function scanTenantDoc(docId, tid, slot, file, tenantName) {
     const doc_type_extracted = ext.doc_type_extracted || ext.doc_type || null;
 
     // Name mismatch check — normalise to lowercase, trim
+    // Match if tenant name appears anywhere in extracted name (handles joint certs, middle names, order differences)
+    const _norm = s => s.trim().toLowerCase().replace(/\s+/g,' ');
     const nameMismatch = extracted_name
-      ? extracted_name.trim().toLowerCase() !== tenantName.trim().toLowerCase()
+      ? !_norm(extracted_name).includes(_norm(tenantName)) && !_norm(tenantName).split(' ').every(part => _norm(extracted_name).includes(part))
       : false;
 
     const updates = {
@@ -9150,6 +9175,20 @@ async function verifyTenantDoc(docId, tid) {
   await sb.from('tenant_documents').update({ verified: true }).eq('id', docId);
   D.tenantDocs = D.tenantDocs.map(d => String(d.id) === String(docId) ? { ...d, verified: true } : d);
   toast('✓ Document verified');
+  nav('tenant-detail', tid);
+}
+
+async function verifyTenantDocOverride(docId, tid) {
+  const reason = document.getElementById('mmr-' + docId)?.value;
+  if (!reason) { toast('Select a reason before verifying', true); return; }
+  const updates = { verified: true, name_mismatch_reason: reason };
+  const { error } = await sb.from('tenant_documents').update(updates).eq('id', docId);
+  if (error) { toast('Save failed — ' + error.message, true); return; }
+  D.tenantDocs = D.tenantDocs.map(d => String(d.id) === String(docId) ? { ...d, ...updates } : d);
+  const doc = D.tenantDocs.find(d => String(d.id) === String(docId));
+  await logAudit('VERIFY_DOC_OVERRIDE', 'tenant_documents', docId,
+    `Name mismatch overridden · reason: ${reason} · extracted: "${doc?.extracted_name}" · tenant: "${D.tenants.find(t=>String(t.id)===String(tid))?.name}"`);
+  toast('✓ Verified — ' + reason + ' · logged to audit trail');
   nav('tenant-detail', tid);
 }
 
@@ -9265,7 +9304,10 @@ async function moTenantDocsScan(tid, slot) {
     const text = aiData.content?.[0]?.text || '';
     let parsed = {};
     try { parsed = JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] || '{}'); } catch(e) {}
-    const nameMismatch = parsed.full_name && t?.name ? parsed.full_name.toLowerCase().trim() !== t.name.toLowerCase().trim() : false;
+    const _normN = s => s.trim().toLowerCase().replace(/\s+/g,' ');
+    const nameMismatch = parsed.full_name && t?.name
+      ? !_normN(parsed.full_name).includes(_normN(t.name)) && !_normN(t.name).split(' ').every(part => _normN(parsed.full_name).includes(part))
+      : false;
     const updates = {
       extracted_name: parsed.full_name || null,
       extracted_doc_number: parsed.doc_number || null,
