@@ -3956,7 +3956,6 @@ const CHECKLIST_ITEMS = [
   { key:'agreement',          label:'Written Statement',         icon:'📝' },
   { key:'deposit_protection', label:'Deposit protected',         icon:'🏦' },
   { key:'rent_guarantee',     label:'Rent Guarantee Insurance',  icon:'🛡️' },
-  { key:'insurance',          label:'Buildings/Contents Insurance', icon:'🏠' },
 ];
 const RAG_COLORS = { red:'#E53E3E', amber:'#D97706', green:'var(--green)' };
 const RAG_LABELS = { red:'red', amber:'amber', green:'green' };
@@ -3999,18 +3998,6 @@ function _checklistRAG(tenant, key) {
     if (_lead?.scheme) return { ra:'amber', status:'Partial', detail:'Scheme set but no reference number', date:'' };
     if (!_lead?.deposit || parseFloat(_lead.deposit) === 0) return { ra:'green', status:'N/A', detail:'No deposit taken', date:'' };
   }
-  if (key === 'insurance') {
-    const propIns = D.insurance.filter(i => String(i.prop_id) === String(tenant?.prop_id));
-    const buildings = propIns.find(i => (i.type||'').toLowerCase().includes('buildings'));
-    if (buildings) {
-      const today = new Date(); today.setHours(0,0,0,0);
-      if (buildings.expiry && new Date(buildings.expiry) < today) return { ra:'red', status:'Expired', detail:'Buildings insurance expired', date: buildings.expiry };
-      return { ra:'green', status:'Active', detail:`Buildings insurance · ${buildings.expiry ? 'Renews '+FMS(buildings.expiry) : 'No expiry set'}`, date: buildings.expiry || '' };
-    }
-    // Fallback — doc uploaded to insurance_doc slot counts as amber evidence
-    const _insDoc = (D.tenantDocs||[]).find(d => String(d.tenant_id)===String(tenant?.id) && d.slot==='insurance_doc');
-    if (_insDoc) return { ra:'amber', status:'Document uploaded', detail:'Add policy details via Insurance tab to complete', date:'' };
-  }
   if (key === 'rent_guarantee') {
     const propIns = D.insurance.filter(i => String(i.prop_id) === String(tenant?.prop_id));
     const rgi = propIns.find(i => (i.type||'').toLowerCase().includes('rent guarantee') || (i.type||'').toLowerCase().includes('rgi'));
@@ -4021,7 +4008,7 @@ function _checklistRAG(tenant, key) {
     }
     // Fallback — doc uploaded to rent_guarantee_doc slot counts as amber evidence
     const _rgiDoc = (D.tenantDocs||[]).find(d => String(d.tenant_id)===String(tenant?.id) && d.slot==='rent_guarantee_doc');
-    if (_rgiDoc) return { ra:'amber', status:'Document uploaded', detail:'Add policy details via Insurance tab to complete', date:'' };
+    if (_rgiDoc) return { ra:'amber', status:'Document uploaded', detail:'Document uploaded — add policy via Property → Insurance to complete', date:'' };
   }
   return item;
 }
@@ -4034,7 +4021,6 @@ const CHECKLIST_UPLOAD_SLOTS = {
   agreement:          { slot: 'agreement',         label: 'Upload Written Statement' },
   deposit_protection: { slot: 'deposit_cert',      label: 'Upload deposit certificate' },
   rent_guarantee:     { slot: 'rent_guarantee_doc',label: 'Upload RGI policy' },
-  insurance:          { slot: 'insurance_doc',     label: 'Upload insurance certificate' },
 };
 
 function _checklistRowHtml(tenant, itemDef) {
