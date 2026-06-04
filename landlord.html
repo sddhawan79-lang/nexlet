@@ -3953,7 +3953,7 @@ async function _saveTenantSetupToDB() {
 
 // ── COMPLIANCE CHECKLIST ──
 const CHECKLIST_ITEMS = [
-  { key:'agreement',          label:'Tenancy agreement',         icon:'📝' },
+  { key:'agreement',          label:'Written Statement',         icon:'📝' },
   { key:'deposit_protection', label:'Deposit protected',         icon:'🏦' },
   { key:'rent_guarantee',     label:'Rent Guarantee Insurance',  icon:'🛡️' },
   { key:'insurance',          label:'Buildings/Contents Insurance', icon:'🏠' },
@@ -3970,6 +3970,16 @@ function _checklistRAG(tenant, key) {
   const cl = tenant?.compliance_checklist || {};
   const item = cl[key] || _checklistDefault(null);
   // Auto-detect from tenant data as fallback
+  // For co-tenants, property-level items resolve via their prop_id
+  const _propId = tenant?.prop_id;
+  if (key === 'agreement') {
+    const req = (D.esignReq || []).find(r => String(r.tenant_id) === String(tenant?.id) && r.document_type === 'written_statement');
+    if (req?.status === 'signed')  return { ra:'green', status:'Signed',         detail:'Written Statement counter-signed by tenant', date: req.updated_at || req.created_at || '' };
+    if (req?.status === 'sent')    return { ra:'amber', status:'Awaiting signature', detail:'Sent — awaiting tenant counter-signature', date: req.created_at || '' };
+    // fallback: check email log for esign send
+    const esignSent = (D.emailLog || []).some(e => (String(e.prop_id)===String(_propId)||String(e.tenant_id)===String(tenant?.id)) && (e.template_id?.includes('esign')||e.template_id?.includes('sign')));
+    if (esignSent) return { ra:'amber', status:'Awaiting signature', detail:'Sent — awaiting tenant counter-signature', date:'' };
+  }
   if (key === 'rtr') {
     if (tenant?.rtr_check_date) return { ra:'green', status:'Complete', detail:'Checked ' + new Date(tenant.rtr_check_date).toLocaleDateString('en-GB'), date:tenant.rtr_check_date };
     if (tenant?.rtr_skipped)   return { ra:'amber', status:'Deferred',  detail:'RTR check skipped', date:'' };
@@ -3983,9 +3993,11 @@ function _checklistRAG(tenant, key) {
     if (uploaded === 1)    return { ra:'amber', status:'Started',  detail:'1 document uploaded', date:'' };
   }
   if (key === 'deposit_protection') {
-    if (tenant?.scheme && tenant?.scheme_ref) return { ra:'green', status:'Protected', detail:`${tenant.scheme} · Ref: ${tenant.scheme_ref}`, date:'' };
-    if (tenant?.scheme) return { ra:'amber', status:'Partial', detail:'Scheme set but no reference number', date:'' };
-    if (!tenant?.deposit || parseFloat(tenant.deposit) === 0) return { ra:'green', status:'N/A', detail:'No deposit taken', date:'' };
+    // scheme/deposit stored on lead tenant — co-tenants resolve via lead
+    const _lead = D.tenants.find(t => String(t.prop_id)===String(_propId) && t.is_lead && t.status==='Active') || tenant;
+    if (_lead?.scheme && _lead?.scheme_ref) return { ra:'green', status:'Protected', detail:`${_lead.scheme} · Ref: ${_lead.scheme_ref}`, date:'' };
+    if (_lead?.scheme) return { ra:'amber', status:'Partial', detail:'Scheme set but no reference number', date:'' };
+    if (!_lead?.deposit || parseFloat(_lead.deposit) === 0) return { ra:'green', status:'N/A', detail:'No deposit taken', date:'' };
   }
   if (key === 'insurance') {
     const propIns = D.insurance.filter(i => String(i.prop_id) === String(tenant?.prop_id));
@@ -4013,7 +4025,7 @@ function _checklistRAG(tenant, key) {
 const CHECKLIST_UPLOAD_SLOTS = {
   rtr:        { slot: 'right_to_rent', label: 'Upload R2R doc' },
   id_docs:    { slot: 'passport',      label: 'Upload ID doc' },
-  agreement:  { slot: 'agreement',     label: 'Upload agreement' },
+  agreement:  { slot: 'agreement',     label: 'Upload Written Statement' },
 };
 
 function _checklistRowHtml(tenant, itemDef) {
