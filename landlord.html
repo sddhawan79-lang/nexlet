@@ -8632,6 +8632,78 @@ function pgTenants(){
 }
 
 // ── PAGE: TENANT DETAIL ──
+
+// ── Global doc card renderer — used by pgTenantDetail and scanTenantDoc DOM updates ──
+function renderTenantDocCard(doc, isLast, tid, tenantName) {
+  const SUPABASE_URL = 'https://mahtcfukgzbonwibtsxz.supabase.co';
+  const url = doc.file_name ? `${SUPABASE_URL}/storage/v1/object/public/tenant-documents/${doc.file_name}` : '#';
+  const uploadedDate = doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '';
+  let extractedHtml = '';
+  if (doc.extracted_name) {
+    const mismatch = doc.name_mismatch;
+    const verified = doc.verified;
+    const fields = [
+      doc.extracted_name       && ['Name',    doc.extracted_name],
+      doc.doc_type_extracted   && ['Type',    doc.doc_type_extracted],
+      doc.extracted_doc_number && ['Ref',     doc.extracted_doc_number],
+      doc.issuing_authority    && ['Issued by',doc.issuing_authority],
+      doc.extracted_expiry     && ['Expiry',  doc.extracted_expiry],
+      doc.extracted_address    && ['Address', doc.extracted_address],
+      doc.share_code           && ['Share code',doc.share_code],
+    ].filter(Boolean);
+    const _overrideReasons = ['Joint certificate','Name abbreviated or informal','Typo on document','Other'];
+    extractedHtml = `
+      <div style="margin-top:6px;padding:8px 10px;background:${mismatch && !verified?'rgba(229,62,62,0.05)':verified?'rgba(0,168,122,0.05)':'var(--off)'};border:1px solid ${mismatch && !verified?'rgba(229,62,62,0.2)':verified?'rgba(0,168,122,0.2)':'var(--border)'};border-radius:6px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:5px">✦ AI Extracted</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px 16px">
+          ${fields.map(([l,v])=>`<span style="font-size:11px"><span style="color:var(--muted)">${l}:</span> <strong>${v}</strong></span>`).join('')}
+        </div>
+        ${mismatch && !verified ? `
+          <div style="margin-top:8px;padding:8px 10px;background:rgba(229,62,62,0.04);border:1px solid rgba(229,62,62,0.2);border-radius:6px">
+            <div style="font-size:11px;font-weight:600;color:var(--red);margin-bottom:8px">⚠ Name mismatch — extracted "<em>${doc.extracted_name}</em>" vs tenant record "${tenantName}"</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:6px">If this is correct, select a reason and verify:</div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <select id="mmr-${doc.id}" style="font-size:11px;padding:4px 8px;border-radius:5px;border:1px solid var(--border);font-family:var(--font);flex:1;min-width:160px">
+                <option value="">Select reason…</option>
+                ${_overrideReasons.map(r=>`<option value="${r}">${r}</option>`).join('')}
+              </select>
+              <button class="btn btn-sm" style="font-size:11px;padding:3px 10px;background:var(--green-bg);color:var(--green-dark);border-color:var(--green-bg);white-space:nowrap" onclick="verifyTenantDocOverride('${doc.id}','${tid}')">✓ Verify anyway</button>
+            </div>
+          </div>` : ''}
+        ${verified ? `
+          <div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-size:11px;font-weight:700;color:var(--green-dark);background:var(--green-bg);padding:2px 9px;border-radius:100px">✓ Verified${doc.name_mismatch_reason?' · '+doc.name_mismatch_reason:''}</span>
+          </div>` : (!mismatch ? `
+          <div style="margin-top:6px;display:flex;align-items:center;gap:8px">
+            <button class="btn btn-sm" style="font-size:11px;padding:3px 10px;background:var(--green-bg);color:var(--green-dark);border-color:var(--green-bg)" onclick="verifyTenantDoc('${doc.id}','${tid}')">✓ Mark as verified</button>
+            <span style="font-size:11px;color:var(--muted)">Not yet verified</span>
+          </div>` : '')}
+      </div>`;
+  } else {
+    extractedHtml = window._scanningDocs?.has(String(doc.id))
+      ? `<div style="margin-top:4px;font-size:11px;color:var(--muted)">&#9203; Scanning…</div>`
+      : `<div style="margin-top:4px;display:flex;align-items:center;gap:8px">
+           <span style="font-size:11px;color:var(--muted)">Not scanned</span>
+           <button class="btn btn-sm" style="font-size:10px;padding:2px 8px" onclick="event.stopPropagation();_rescanDoc('${doc.id}','${tid}','${doc.slot}')">Re-scan</button>
+         </div>`;
+  }
+  return `
+    <div id="doc-card-${doc.id}" style="padding:10px 12px;border:1px solid ${doc.name_mismatch && !doc.verified?'rgba(229,62,62,0.3)':doc.verified?'var(--green-bg)':'var(--border)'};border-radius:6px;background:var(--white);${isLast?'':'margin-bottom:6px'}">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:13px">📎</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${doc.doc_label||doc.file_name||'File'}</div>
+          <div style="font-size:10px;color:var(--muted)">${uploadedDate}${doc.doc_type_extracted?' · '+doc.doc_type_extracted:''}</div>
+        </div>
+        <div style="display:flex;gap:4px;flex-shrink:0">
+          <a href="#" onclick="viewDocInline('${url}','${(doc.doc_label||doc.file_name||'File').replace(/'/g,"\\'")}');return false" class="btn btn-sm" style="font-size:10px;padding:3px 8px;text-decoration:none">View</a>
+          <button class="btn btn-sm" style="font-size:10px;padding:3px 8px;color:var(--red);border-color:rgba(229,62,62,0.3)" onclick="deleteTenantDoc('${doc.id}','${tid}')">✕</button>
+        </div>
+      </div>
+      ${extractedHtml}
+    </div>`;
+}
+
 function pgTenantDetail(tid) {
   try {
   const t = D.tenants.find(x => String(x.id) === String(tid));
@@ -8655,9 +8727,11 @@ function pgTenantDetail(tid) {
   const getDocUrl = d => d?.file_name ? `${SUPABASE_URL}/storage/v1/object/public/tenant-documents/${d.file_name}` : '#';
 
   const mandatorySlots = KYC_SLOTS.filter(s => s.mandatory);
-  const uploadedCount  = mandatorySlots.filter(s => docs.some(d => d.slot === s.slot)).length;
+  // RTR slot: wizard completion counts as uploaded even without a physical doc
+  const _rtrComplete = !!(t.rtr_check_date);
+  const uploadedCount  = mandatorySlots.filter(s => s.slot === 'right_to_rent' ? (_rtrComplete || docs.some(d => d.slot === s.slot)) : docs.some(d => d.slot === s.slot)).length;
   const total          = mandatorySlots.length;
-  const missing        = mandatorySlots.filter(s => !docs.some(d => d.slot === s.slot));
+  const missing        = mandatorySlots.filter(s => s.slot === 'right_to_rent' ? (!_rtrComplete && !docs.some(d => d.slot === s.slot)) : !docs.some(d => d.slot === s.slot));
   const allDone        = uploadedCount === total;
   const totalDocs      = docs.length;
 
@@ -8713,74 +8787,9 @@ function pgTenantDetail(tid) {
   const _complianceRows = CHECKLIST_ITEMS.map(item => _checklistRowHtml(t, item)).join('');
 
   // ── KYC document card renderer (must be defined before _kycUploadRows uses it) ──
-  const renderDocCard = (doc, isLast) => {
-    const url = getDocUrl(doc);
-    const uploadedDate = doc.uploaded_at ? new Date(doc.uploaded_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '';
-    let extractedHtml = '';
-    if (doc.extracted_name) {
-      const mismatch = doc.name_mismatch;
-      const verified = doc.verified;
-      const fields = [
-        doc.extracted_name       && ['Name',    doc.extracted_name],
-        doc.doc_type_extracted   && ['Type',    doc.doc_type_extracted],
-        doc.extracted_doc_number && ['Ref',     doc.extracted_doc_number],
-        doc.issuing_authority    && ['Issued by', doc.issuing_authority],
-        doc.extracted_expiry     && ['Expiry',  doc.extracted_expiry],
-        doc.extracted_address    && ['Address', doc.extracted_address],
-        doc.share_code           && ['Share code', doc.share_code],
-      ].filter(Boolean);
-      const _overrideReasons = ['Joint certificate','Name abbreviated or informal','Typo on document','Other'];
-      extractedHtml = `
-        <div style="margin-top:6px;padding:8px 10px;background:${mismatch && !verified?'rgba(229,62,62,0.05)':verified?'rgba(0,168,122,0.05)':'var(--off)'};border:1px solid ${mismatch && !verified?'rgba(229,62,62,0.2)':verified?'rgba(0,168,122,0.2)':'var(--border)'};border-radius:6px">
-          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:5px">✦ AI Extracted</div>
-          <div style="display:flex;flex-wrap:wrap;gap:4px 16px">
-            ${fields.map(([l,v])=>`<span style="font-size:11px"><span style="color:var(--muted)">${l}:</span> <strong>${v}</strong></span>`).join('')}
-          </div>
-          ${mismatch && !verified ? `
-            <div style="margin-top:8px;padding:8px 10px;background:rgba(229,62,62,0.04);border:1px solid rgba(229,62,62,0.2);border-radius:6px">
-              <div style="font-size:11px;font-weight:600;color:var(--red);margin-bottom:8px">⚠ Name mismatch — extracted "<em>${doc.extracted_name}</em>" vs tenant record "${t.name}"</div>
-              <div style="font-size:11px;color:var(--muted);margin-bottom:6px">If this is correct, select a reason and verify:</div>
-              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                <select id="mmr-${doc.id}" style="font-size:11px;padding:4px 8px;border-radius:5px;border:1px solid var(--border);font-family:var(--font);flex:1;min-width:160px">
-                  <option value="">Select reason…</option>
-                  ${_overrideReasons.map(r=>`<option value="${r}">${r}</option>`).join('')}
-                </select>
-                <button class="btn btn-sm" style="font-size:11px;padding:3px 10px;background:var(--green-bg);color:var(--green-dark);border-color:var(--green-bg);white-space:nowrap" onclick="verifyTenantDocOverride('${doc.id}','${tid}')">✓ Verify anyway</button>
-              </div>
-            </div>` : ''}
-          ${verified ? `
-            <div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-              <span style="font-size:11px;font-weight:700;color:var(--green-dark);background:var(--green-bg);padding:2px 9px;border-radius:100px">✓ Verified${doc.name_mismatch_reason?' · '+doc.name_mismatch_reason:''}</span>
-            </div>` : (!mismatch ? `
-            <div style="margin-top:6px;display:flex;align-items:center;gap:8px">
-              <button class="btn btn-sm" style="font-size:11px;padding:3px 10px;background:var(--green-bg);color:var(--green-dark);border-color:var(--green-bg)" onclick="verifyTenantDoc('${doc.id}','${tid}')">✓ Mark as verified</button>
-              <span style="font-size:11px;color:var(--muted)">Not yet verified</span>
-            </div>` : '')}
-        </div>`;
-    } else {
-      extractedHtml = window._scanningDocs?.has(String(doc.id))
-        ? `<div style="margin-top:4px;font-size:11px;color:var(--muted)">&#9203; Scanning… refresh in a moment</div>`
-        : `<div style="margin-top:4px;display:flex;align-items:center;gap:8px">
-             <span style="font-size:11px;color:var(--muted)">Not scanned</span>
-             <button class="btn btn-sm" style="font-size:10px;padding:2px 8px" onclick="event.stopPropagation();_rescanDoc('${doc.id}','${tid}','${doc.slot}')">Re-scan</button>
-           </div>`;
-    }
-    return `
-      <div style="padding:10px 12px;border:1px solid ${doc.name_mismatch && !doc.verified?'rgba(229,62,62,0.3)':doc.verified?'var(--green-bg)':'var(--border)'};border-radius:6px;background:var(--white);${isLast?'':'margin-bottom:6px'}">
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="font-size:13px">📎</span>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${doc.doc_label||doc.file_name||'File'}</div>
-            <div style="font-size:10px;color:var(--muted)">${uploadedDate}${doc.doc_type_extracted?' · '+doc.doc_type_extracted:''}</div>
-          </div>
-          <div style="display:flex;gap:4px;flex-shrink:0">
-            <a href="#" onclick="viewDocInline('${url}','${(doc.doc_label||doc.file_name||'File').replace(/'/g,"\\'")}');return false" class="btn btn-sm" style="font-size:10px;padding:3px 8px;text-decoration:none">View</a>
-            <button class="btn btn-sm" style="font-size:10px;padding:3px 8px;color:var(--red);border-color:rgba(229,62,62,0.3)" onclick="deleteTenantDoc('${doc.id}','${tid}')">✕</button>
-          </div>
-        </div>
-        ${extractedHtml}
-      </div>`;
-  };
+  const renderDocCard = (doc, isLast) => renderTenantDocCard(doc, isLast, tid, t.name);
+
+
 
   const _kycUploadRows = KYC_SLOTS.map(s => {
     const slotDocs = docs.filter(d => d.slot === s.slot);
@@ -9065,27 +9074,25 @@ function pgTenantDetail(tid) {
       </div>
     </div>`;
 
-  // Auto-rescan any docs that have no extracted_name — runs silently in background
+  // Auto-rescan docs with no extracted_name — one-shot, no re-render loop
   const _unscanned = docs.filter(d => !d.extracted_name && !window._scanningDocs?.has(String(d.id)));
   if (_unscanned.length) {
-    setTimeout(async () => {
-      for (const d of _unscanned) {
-        if (window._scanningDocs?.has(String(d.id))) continue; // already queued
-        const tObj = D.tenants.find(x => String(x.id) === String(tid));
+    const _tObj = D.tenants.find(x => String(x.id) === String(tid));
+    setTimeout(() => {
+      _unscanned.forEach(async d => {
+        if (window._scanningDocs?.has(String(d.id))) return;
         try {
-          const url = `https://mahtcfukgzbonwibtsxz.supabase.co/storage/v1/object/public/tenant-documents/${d.file_name}`;
-          const resp = await fetch(url);
-          if (!resp.ok) continue;
+          const resp = await fetch(`https://mahtcfukgzbonwibtsxz.supabase.co/storage/v1/object/public/tenant-documents/${d.file_name}`);
+          if (!resp.ok) return;
           const blob = await resp.blob();
           const file = new File([blob], d.doc_label || d.file_name, { type: blob.type || 'application/pdf' });
           window._scanningDocs.add(String(d.id));
-          await scanTenantDoc(d.id, tid, d.slot, file, tObj?.name || '');
+          scanTenantDoc(d.id, tid, d.slot, file, _tObj?.name || ''); // no await — fire and forget, DOM update handles refresh
         } catch(e) {
-          window._scanningDocs?.delete(String(d.id));
           console.warn('Auto-rescan failed for doc', d.id, e);
         }
-      }
-    }, 800); // slight delay so page renders first
+      });
+    }, 800);
   }
 
   } catch(pgErr) {
@@ -9127,6 +9134,14 @@ async function uploadTenantDoc(tid, slot, input) {
     file_name:   path,
     uploaded_at: new Date().toISOString(),
   };
+
+  // If replacing an existing doc for this slot, delete the old one first to avoid duplicate key
+  const existingDoc = D.tenantDocs.find(d => String(d.tenant_id) === String(tid) && d.slot === slot);
+  if (existingDoc) {
+    if (existingDoc.file_name) await sb.storage.from('tenant-documents').remove([existingDoc.file_name]).catch(()=>{});
+    await sb.from('tenant_documents').delete().eq('id', existingDoc.id);
+    D.tenantDocs = D.tenantDocs.filter(d => String(d.id) !== String(existingDoc.id));
+  }
 
   const { data, error: insErr } = await sb.from('tenant_documents').insert(record).select().single();
   if (insErr) { toast('Save failed — ' + insErr.message, true); return; }
@@ -9211,14 +9226,23 @@ async function scanTenantDoc(docId, tid, slot, file, tenantName) {
     D.tenantDocs = D.tenantDocs.map(d => String(d.id) === String(docId) ? { ...d, ...updates } : d);
 
     window._scanningDocs.delete(String(docId));
+    // Targeted DOM update — replace just the doc card, no full page re-render
+    const _updatedDoc = D.tenantDocs.find(d => String(d.id) === String(docId));
+    const _tObj = D.tenants.find(x => String(x.id) === String(tid));
+    const _cardEl = document.getElementById('doc-card-' + docId);
+    if (_cardEl && _updatedDoc && _tObj) {
+      const _newCard = renderTenantDocCard(_updatedDoc, !_cardEl.nextElementSibling, tid, _tObj.name);
+      _cardEl.outerHTML = _newCard;
+    } else {
+      nav('tenant-detail', tid); // fallback only if DOM element not found
+    }
     toast(nameMismatch ? '⚠ Scan done — name mismatch detected' : '✦ Document scanned successfully');
-    nav('tenant-detail', tid);
 
   } catch(e) {
     console.warn('KYC scan failed:', e);
     window._scanningDocs.delete(String(docId));
     toast('⚠ Could not scan — document saved, fill details manually');
-    nav('tenant-detail', tid);
+    // Don't nav — leave page as-is, doc is saved
   }
 }
 
