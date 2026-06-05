@@ -4867,6 +4867,7 @@ async function sendWelcomeKit(pid) {
   </body></html>`;
 
   try {
+    // Build PDF attachments from stored cert files
     const attachments = [];
     const certsToAttach = [
       { cert: gasCert,  label: 'Gas_Safety_Certificate' },
@@ -4884,10 +4885,14 @@ async function sendWelcomeKit(pid) {
         attachments.push({ filename: `${label}_${propAddr.replace(/[^a-z0-9]/gi,'_')}.${ext}`, content: b64 });
       } catch(fe) { /* skip if fetch fails */ }
     }
+
+    // Send the email — check response
     const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ type:'send_email', to: tenantEmail, subject: `Your tenancy welcome pack — ${propAddr}`, html, ...(attachments.length ? { attachments } : {}) })
     });
+    const resData = await res.json().catch(()=>({}));
+    if (!res.ok || resData.error) throw new Error(resData.error || resData.message || `Send failed (${res.status})`);
 
     // Log to email_log
     const tenant2 = D.tenants.find(t => String(t.prop_id) === String(pid) && t.status === 'Active');
