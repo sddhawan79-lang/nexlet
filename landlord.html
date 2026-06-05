@@ -3995,9 +3995,12 @@ function _checklistRAG(tenant, key) {
     if (uploaded === 1)    return { ra:'amber', status:'Started',  detail:'1 document uploaded', date:'' };
   }
   if (key === 'deposit_protection') {
-    // scheme/deposit stored on lead tenant — co-tenants resolve via lead
     const _lead = D.tenants.find(t => String(t.prop_id)===String(_propId) && t.is_lead && t.status==='Active') || tenant;
     if (_lead?.scheme && _lead?.scheme_ref) return { ra:'green', status:'Protected', detail:`${_lead.scheme} · Ref: ${_lead.scheme_ref}`, date:'' };
+    // Certificate uploaded — treat as amber even without scheme/ref in tenant record
+    const _depDoc = (D.tenantDocs||[]).find(d => String(d.tenant_id)===String(tenant?.id) && d.slot==='deposit_cert');
+    if (_depDoc && _lead?.scheme) return { ra:'green', status:'Protected', detail:`${_lead.scheme} · Certificate uploaded`, date:'' };
+    if (_depDoc) return { ra:'amber', status:'Certificate uploaded', detail:'Add scheme & reference in tenant details to complete', date:'' };
     if (_lead?.scheme) return { ra:'amber', status:'Partial', detail:'Scheme set but no reference number', date:'' };
     if (!_lead?.deposit || parseFloat(_lead.deposit) === 0) return { ra:'green', status:'N/A', detail:'No deposit taken', date:'' };
   }
@@ -8795,9 +8798,11 @@ function pgTenantDetail(tid) {
     const slotDocs = docs.filter(d => d.slot === s.slot);
     const hasDocs = slotDocs.length > 0;
     const isRTR = s.slot === 'right_to_rent';
+    const rtrWizardDone = isRTR && !!(t.rtr_check_date);
+    const slotDone = hasDocs || rtrWizardDone;
     return `
-      <div style="padding:12px 14px;border:1px solid ${hasDocs?'var(--border)':'rgba(229,62,62,0.2)'};border-radius:8px;margin-bottom:8px;background:${hasDocs?'var(--white)':'rgba(229,62,62,0.02)'}">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:${hasDocs||isRTR?'10px':'0'}">
+      <div style="padding:12px 14px;border:1px solid ${slotDone?'var(--border)':'rgba(229,62,62,0.2)'};border-radius:8px;margin-bottom:8px;background:${slotDone?'var(--white)':'rgba(229,62,62,0.02)'}">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:${slotDone||isRTR?'10px':'0'}">
           <div style="font-size:20px;width:32px;text-align:center;flex-shrink:0">${s.icon}</div>
           <div style="flex:1;min-width:0">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -8807,7 +8812,7 @@ function pgTenantDetail(tid) {
                 : `<span style="font-size:10px;color:var(--muted);background:var(--off);padding:1px 6px;border-radius:100px">Optional</span>`}
               ${hasDocs ? `<span style="font-size:11px;color:var(--muted)">${slotDocs.length} document${slotDocs.length!==1?'s':''}</span>` : ''}
             </div>
-            ${!hasDocs ? `<div style="font-size:11px;color:var(--red);margin-top:2px">Not uploaded</div>` : ''}
+            ${!slotDone ? `<div style="font-size:11px;color:var(--red);margin-top:2px">Not uploaded</div>` : ''}
             ${s.note ? `<div style="font-size:10px;color:var(--muted);margin-top:3px;font-style:italic">(${s.note})</div>` : ''}
           </div>
           <div style="flex-shrink:0">
@@ -9168,6 +9173,9 @@ async function scanTenantDoc(docId, tid, slot, file, tenantName) {
     address_2:     'This is an address proof document. Extract: full_name (account holder name), address (full address as single string including postcode), issuing_authority (company or organisation name), doc_type_extracted (e.g. Utility Bill, Bank Statement, Council Tax Bill), doc_date (YYYY-MM-DD or null). Return JSON only, no other text.',
     reference:     'This is a tenant reference or credit check report. Extract: full_name (applicant name), outcome (Pass/Fail/Conditional/Refer — pick closest), issuing_authority (referencing agency or company name e.g. Homelet, Rent4Sure, OpenRent), doc_type_extracted (e.g. Reference Report, Credit Check, Employment Reference), reference_date (YYYY-MM-DD or null). Return JSON only, no other text.',
     guarantor:     'This is a guarantor document or ID. Extract: full_name (guarantor name), address (full address as single string), doc_type_extracted (e.g. Guarantor Agreement, Passport, Driving Licence), expiry (YYYY-MM-DD or null), issuing_authority (issuer name). Return JSON only, no other text.',
+    deposit_cert:  'This is a UK deposit protection certificate. Extract: full_name (tenant name(s) as printed), issuing_authority (scheme name e.g. DPS, TDS, MyDeposits), doc_number (deposit protection reference or certificate number), extracted_expiry (protection expiry or tenancy end date YYYY-MM-DD or null), address (full property address). Do NOT flag name mismatch for joint tenancy names. Return JSON only, no other text.',
+    deposit_protection: 'This is a UK deposit protection certificate. Extract: full_name (tenant name(s) as printed), issuing_authority (scheme name e.g. DPS, TDS, MyDeposits), doc_number (deposit protection reference or certificate number), extracted_expiry (protection expiry or tenancy end date YYYY-MM-DD or null), address (full property address). Return JSON only, no other text.',
+    rent_guarantee_doc: 'This is a rent guarantee insurance policy. Extract: issuing_authority (insurer name), doc_number (policy number), extracted_expiry (policy expiry date YYYY-MM-DD or null), full_name (policyholder name), address (property address). Return JSON only, no other text.',
   };
 
   const prompt = prompts[slot] || 'Extract all key information from this document. Include: full_name if present, doc_number if present, expiry (YYYY-MM-DD or null), address if present, issuing_authority (issuing organisation), doc_type_extracted (describe the document type). Return JSON only, no other text.';
@@ -9189,8 +9197,17 @@ async function scanTenantDoc(docId, tid, slot, file, tenantName) {
     const res  = await fetch(EDGE, { method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ model:'claude-sonnet-4-5', max_tokens:400, messages:[{ role:'user', content:msgContent }] }) });
     const data = await res.json();
-    const raw  = (data.content?.[0]?.text || '{}').replace(/```json|```/g,'').trim();
+
+    // Check for API-level errors before parsing
+    if (data.error || (!data.content && !data.content?.[0]?.text)) {
+      const errMsg = data.error?.message || data.message || 'API error';
+      throw new Error('Scan API error: ' + errMsg);
+    }
+
+    const raw  = (data.content?.[0]?.text || '').replace(/```json|```/g,'').trim();
+    if (!raw || raw === '{}' || raw === '') throw new Error('Empty response from scan API');
     const ext  = JSON.parse(raw);
+    if (!ext || typeof ext !== 'object') throw new Error('Invalid JSON from scan API');
 
     // Map extracted fields to table columns
     const extracted_name    = ext.full_name || ext.applicant_name || null;
@@ -9239,10 +9256,21 @@ async function scanTenantDoc(docId, tid, slot, file, tenantName) {
     toast(nameMismatch ? '⚠ Scan done — name mismatch detected' : '✦ Document scanned successfully');
 
   } catch(e) {
-    console.warn('KYC scan failed:', e);
+    console.error('KYC scan failed:', e.message || e);
     window._scanningDocs.delete(String(docId));
-    toast('⚠ Could not scan — document saved, fill details manually');
-    // Don't nav — leave page as-is, doc is saved
+    // Update doc in memory to mark scan attempted so Re-scan shows correctly
+    D.tenantDocs = D.tenantDocs.map(d => String(d.id) === String(docId)
+      ? { ...d, scan_attempted: true }
+      : d
+    );
+    // Update the card in DOM directly
+    const _cardEl = document.getElementById('doc-card-' + docId);
+    const _failDoc = D.tenantDocs.find(d => String(d.id) === String(docId));
+    const _tObj = D.tenants.find(x => String(x.id) === String(tid));
+    if (_cardEl && _failDoc && _tObj) {
+      _cardEl.outerHTML = renderTenantDocCard(_failDoc, !_cardEl.nextElementSibling, tid, _tObj.name);
+    }
+    toast('⚠ Scan failed — ' + (e.message || 'please use Re-scan button'), true);
   }
 }
 
