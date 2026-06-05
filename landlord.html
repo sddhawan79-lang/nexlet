@@ -8827,6 +8827,7 @@ function pgTenantDetail(tid) {
               </div>
               <div style="font-size:10px;color:var(--blue);font-weight:600;white-space:nowrap">✦ AI auto-scan</div>
             </div>
+          </div>
         </div>
         ${hasDocs ? slotDocs.map((d,i) => renderDocCard(d, i === slotDocs.length - 1)).join('') : ''}
         ${isRTR ? (() => {
