@@ -9393,7 +9393,7 @@ function moTenantDocs(tenantId, propId) {
           <input type="file" style="display:none" accept=".pdf,.jpg,.jpeg,.png" onchange="moTenantDocsUpload('${tenantId}','${s.slot}',this)">
         </label>
         ${slotDocs.length
-          ? `<button class="btn btn-sm" style="font-size:11px" onclick="viewDocInline('${SUPABASE_URL}/storage/v1/object/public/tenant-documents/${slotDocs[slotDocs.length-1].file_name}','${(slotDocs[slotDocs.length-1].doc_label||'Document').replace(/'/g,\"\\\\'\")}')">👁 View</button><button class="btn btn-sm" style="font-size:11px" onclick="moTenantDocsScan('${tenantId}','${s.slot}')">✦ Re-scan</button>`
+          ? `<button class="btn btn-sm" style="font-size:11px" onclick="viewDocInline('${SUPABASE_URL}/storage/v1/object/public/tenant-documents/${slotDocs[slotDocs.length-1].file_name}','')">👁 View</button><button class="btn btn-sm" style="font-size:11px" onclick="moTenantDocsScan('${tenantId}','${s.slot}')">✦ Re-scan</button>`
           : `<div style="font-size:10px;color:var(--blue);font-weight:600;white-space:nowrap">✦ AI auto-scan</div>`
         ${s.slot === 'right_to_rent' ? `<button class="btn btn-sm" style="font-size:11px;border-color:var(--blue);color:var(--blue)" onclick="moShareCodeWizard('${tenantId}')">🔍 Share Code</button>` : ''}
       </div>
