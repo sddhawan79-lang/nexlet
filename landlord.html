@@ -9027,7 +9027,7 @@ function pgTenantDetail(tid) {
       done: propCerts.some(c=>c.type&&(c.type.toLowerCase().includes('smoke')||c.type.toLowerCase().includes('co alarm')||c.type.toLowerCase().includes('carbon monoxide'))),
       action:`moBulkScan('${t.prop_id}')`, btnLabel:'Upload test record' },
     { icon:'📋', label:'Inventory / schedule of condition signed',
-      done: propCerts.some(c=>c.type&&(c.type.toLowerCase().includes('inventory')||c.type.toLowerCase().includes('schedule of condition'))),
+      done: propCerts.some(c=>c.type&&(c.type.toLowerCase().includes('inventory')||c.type.toLowerCase().includes('schedule of condition')))||(D._invReports||[]).some(r=>String(r.propId)===String(t.prop_id)),
       action:`moInventoryReport('${t.prop_id}')`, btnLabel:'Create Inventory' },
     { icon:'🧪', label:'Legionella risk assessment completed',
       done: propCerts.some(c=>c.type&&c.type.toLowerCase().includes('legionella')),
@@ -16005,10 +16005,16 @@ function moInventoryReport(pid){
 }
 
 function invPhotosSelected(input){
-  const files=[...input.files];
-  window._invFiles = files;
+  const newFiles=[...input.files];
+  const existing = window._invFiles || [];
+  const merged = [...existing];
+  for (const f of newFiles) {
+    if (!merged.some(e=>e.name===f.name&&e.size===f.size)) merged.push(f);
+  }
+  window._invFiles = merged;
+  input.value = '';
   const box=document.getElementById('inv-photo-info');
-  if(box) box.innerHTML=`<div style="font-size:13px;color:var(--green-dark);font-weight:600;margin-top:6px">✓ ${files.length} photo${files.length!==1?'s':''} selected — AI will identify rooms and assess condition</div><div style="font-size:11px;color:var(--muted);margin-top:3px">${files.map(f=>f.name).slice(0,4).join(', ')}${files.length>4?' +'+(files.length-4)+' more':''}</div>`;
+  if(box) box.innerHTML=`<div style="font-size:13px;color:var(--green-dark);font-weight:600;margin-top:6px">✓ ${merged.length} photo${merged.length!==1?'s':''} selected — AI will identify rooms and assess condition</div><div style="font-size:11px;color:var(--muted);margin-top:3px">${merged.map(f=>f.name).slice(0,4).join(', ')}${merged.length>4?' +'+(merged.length-4)+' more':''}</div>`;
 }
 
 async function generateInventoryReport(){
