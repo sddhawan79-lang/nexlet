@@ -8537,7 +8537,7 @@ async function testReminder(id) {
 function openTenantPanel(tid) {
   const t = D.tenants.find(x => String(x.id) === String(tid));
   if (!t) return;
-  const p = P(t.prop_id) || { address:'—', city:'' };
+  const raw = P(t.prop_id) || {}; const p = { address: raw.address || '—', city: raw.city || '', postcode: raw.postcode || '' };
   const certs = D.certs.filter(c => String(c.prop_id) === String(t.prop_id));
   const today = new Date(); today.setHours(0,0,0,0);
   const expiring = certs.filter(c => c.expiry && new Date(c.expiry) > today && new Date(c.expiry) - today <= 60*864e5);
@@ -8603,7 +8603,7 @@ function pgTenants(){
   const rows = visibleList.length
     ? `<div class="panel"><div class="tw"><table>
       <thead><tr><th>Name</th><th>Start</th><th>Deposit</th><th>Compliance</th><th>Docs</th><th>Status</th></tr></thead>
-      <tbody>${visibleList.map(t=>{const p=P(t.prop_id)||{address:'—'};const isEnded=t.status==='Ended'||t.archived;
+      <tbody>${visibleList.map(t=>{const raw=P(t.prop_id)||{};const p={address:raw.address||'—',city:raw.city||'',postcode:raw.postcode||''};const isEnded=t.status==='Ended'||t.archived;
         const ragDots = CHECKLIST_ITEMS.map(item => {
           const cl = _checklistRAG(t, item.key);
           return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${RAG_COLORS[cl.ra]};margin:0 1px" title="${item.label}: ${cl.status}"></span>`;
@@ -8716,7 +8716,7 @@ function pgTenantDetail(tid) {
   if (!t) return pgTenants();
   // Auto-mark tenant_docs_done on progress bar when landlord visits tenant detail
   if (t.prop_id) setTimeout(() => _markTenancyStep(String(t.prop_id), 'tenant_docs_done', false), 300);
-  const p = P(t.prop_id) || { address: '—', city: '' };
+  const rawP = P(t.prop_id) || {}; const p = { address: rawP.address || '—', city: rawP.city || '', postcode: rawP.postcode || '' };
   const docs = D.tenantDocs.filter(d => String(d.tenant_id) === String(tid));
 
   const KYC_SLOTS = [
