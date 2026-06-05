@@ -3968,6 +3968,8 @@ function _checklistDefault(cl) {
 function _checklistRAG(tenant, key) {
   const cl = tenant?.compliance_checklist || {};
   const item = cl[key] || _checklistDefault(null);
+  // If user manually marked green/complete, respect it — auto-detect never downgrades a manual green
+  if (item.ra === 'green') return item;
   // Auto-detect from tenant data as fallback
   // For co-tenants, property-level items resolve via their prop_id
   const _propId = tenant?.prop_id;
