@@ -4864,10 +4864,15 @@ async function sendWelcomeKit(pid) {
       { cert: eicrCert, filename: `EICR_${propAddr.replace(/[^a-z0-9]/gi,'_')}` },
       { cert: epcCert,  filename: `EPC_${propAddr.replace(/[^a-z0-9]/gi,'_')}` },
     ];
+    const missingFileUrl = [];
     for (const { cert, filename } of certsToAttach) {
-      if (!cert?.file_url) continue;
+      if (!cert) continue;
+      if (!cert.file_url) { missingFileUrl.push(cert.type || filename); continue; }
       const ext = cert.file_url.split('.').pop().split('?')[0] || 'pdf';
       attachment_urls.push({ url: cert.file_url, filename: `${filename}.${ext}` });
+    }
+    if (missingFileUrl.length) {
+      toast(`⚠ ${missingFileUrl.length} cert${missingFileUrl.length!==1?'s':''} have no stored file — sending without attachment. Re-upload via bulk scan to fix.`, true);
     }
 
     // Send email — edge function fetches files and attaches them
@@ -11942,7 +11947,8 @@ function moPrescribedInfo(tid) {
       The deposit is held by <strong>${t.scheme}</strong> under the Tenancy Deposit Protection scheme as required by the Housing Act 2004. The tenant may dispute deductions via the scheme's free Alternative Dispute Resolution (ADR) service — contact: <strong>${schemeInfo.dispute}</strong>.
     </div>
   `, `<button class="btn" onclick="closeMo()">Close</button>
-     <button class="btn btn-navy" onclick="generatePrescribedInfoPDF('${tid}')">📥 Download PDF</button>`);
+     <button class="btn" onclick="generatePrescribedInfoPDF('${tid}')">📥 Download PDF</button>
+     <button class="btn btn-navy" id="pi-send-btn" onclick="sendPrescribedInfo('${tid}')">📧 Send to Tenant</button>`);
 }
 
 // ── DEPOSIT CERTIFICATE MODAL — focused 2-section modal ──
@@ -12195,14 +12201,19 @@ async function sendDay30Kit(pid, tid) {
 
   // Build attachment_urls from certs that have file_url
   const attachment_urls = [];
+  const missingFileUrl30 = [];
   for (const { cert, filename } of [
     { cert: smokeCert, filename: `Smoke_CO_Test_Record_${propAddr.replace(/[^a-z0-9]/gi,'_')}` },
     { cert: legCert,   filename: `Legionella_Assessment_${propAddr.replace(/[^a-z0-9]/gi,'_')}` },
     { cert: invCert,   filename: `Inventory_${propAddr.replace(/[^a-z0-9]/gi,'_')}` },
   ]) {
-    if (!cert?.file_url) continue;
+    if (!cert) continue;
+    if (!cert.file_url) { missingFileUrl30.push(cert.type || filename); continue; }
     const ext = cert.file_url.split('.').pop().split('?')[0] || 'pdf';
     attachment_urls.push({ url: cert.file_url, filename: `${filename}.${ext}` });
+  }
+  if (missingFileUrl30.length) {
+    toast(`⚠ ${missingFileUrl30.length} cert${missingFileUrl30.length!==1?'s':''} have no stored file — sending without attachment. Re-upload via bulk scan to fix.`, true);
   }
 
   try {
@@ -12335,9 +12346,139 @@ function generatePrescribedInfoPDF(tid) {
       email_body: `PDF generated ${date}`
     }).then(() => {}).catch(() => {});
 
+    return doc.output('blob');
+
   } catch(err) {
     _logError('generatePrescribedInfoPDF', err);
     toast('PDF error: ' + err.message, true);
+    return null;
+  }
+}
+
+async function sendPrescribedInfo(tid) {
+  const btn = document.getElementById('pi-send-btn');
+  const t = D.tenants.find(x => String(x.id) === String(tid));
+  if (!t) return;
+  if (!t.email) { toast('No email address on record for this tenant', true); return; }
+  const p = P(t.prop_id) || { address: '—', city: '', postcode: '' };
+  const propAddr = [p.address, p.city, p.postcode].filter(Boolean).join(', ');
+  const date = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+  const si = { DPS: { url: 'www.depositprotection.com', dispute: '0330 303 0030', full: 'Deposit Protection Service (DPS)' }, MyDeposits: { url: 'www.mydeposits.co.uk', dispute: '0333 321 9401', full: 'MyDeposits' }, TDS: { url: 'www.tenancydepositscheme.com', dispute: '0300 037 1000', full: 'Tenancy Deposit Scheme (TDS)' } }[t.scheme] || { url: '', dispute: '', full: t.scheme || '—' };
+
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Sending…'; }
+
+  try {
+    // 1. Generate PDF blob
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const W = doc.internal.pageSize.getWidth();
+    let y = 0;
+    const chk = () => { if (y > 272) { doc.addPage(); y = 20; } };
+    const ln = (text, size=11, bold=false, color=[40,40,40]) => {
+      doc.setFontSize(size); doc.setFont('helvetica', bold ? 'bold' : 'normal');
+      doc.setTextColor(...color);
+      const lines = doc.splitTextToSize(String(text||''), W - 30);
+      lines.forEach(l => { chk(); doc.text(l, 15, y); y += size * 0.45; });
+      y += 1;
+    };
+    const rule = () => { chk(); doc.setDrawColor(210,215,225); doc.setLineWidth(0.3); doc.line(15, y, W-15, y); y += 5; };
+    const row2 = (left, right) => {
+      chk();
+      doc.setFontSize(10); doc.setFont('helvetica','normal'); doc.setTextColor(100,110,130);
+      doc.text(left, 15, y);
+      doc.setFont('helvetica','bold'); doc.setTextColor(30,40,55);
+      doc.text(String(right||'—'), W-15, y, { align: 'right' });
+      y += 6;
+    };
+    doc.setFillColor(11,30,61); doc.rect(0, 0, W, 42, 'F');
+    doc.setFillColor(0,200,150); doc.rect(0, 40, W, 3, 'F');
+    doc.setFontSize(18); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
+    doc.text('NexLet', 15, 16);
+    doc.setFontSize(10); doc.setFont('helvetica','normal'); doc.setTextColor(160,205,190);
+    doc.text('Prescribed Information — Tenancy Deposit', 15, 25);
+    doc.setFontSize(9); doc.setTextColor(180,200,220);
+    doc.text('Housing Act 2004, s.213(5) & The Housing (Tenancy Deposits)(Prescribed Information) Order 2007', 15, 33);
+    y = 54;
+    ln('Prescribed Information', 14, true, [11,30,61]); y += 2; rule();
+    ln('The Parties', 11, true, [11,30,61]); y += 1;
+    row2('Landlord name', _profileName());
+    row2('Tenant name(s)', t.name);
+    row2('Rental property', propAddr);
+    row2('Tenancy start date', FMS(t.start_date));
+    y += 2; rule();
+    ln('Deposit Details', 11, true, [11,30,61]); y += 1;
+    row2('Deposit amount', t.deposit ? '£' + Number(t.deposit).toLocaleString() : '—');
+    row2('Deposit scheme', si.full);
+    row2('Protection reference', t.scheme_ref);
+    row2('Scheme website', si.url);
+    row2('Dispute helpline', si.dispute);
+    y += 2; rule();
+    ln('About the Deposit Scheme', 11, true, [11,30,61]); y += 2;
+    ln(`The deposit of £${t.deposit ? Number(t.deposit).toLocaleString() : '—'} has been protected with ${si.full} as required by the Housing Act 2004. The deposit will be held for the duration of the tenancy and returned at the end, subject to any agreed deductions for unpaid rent, damage beyond fair wear and tear, or other breaches of the tenancy agreement.`, 10, false, [50,55,65]); y += 3;
+    ln('Dispute Resolution', 11, true, [11,30,61]); y += 2;
+    ln(`If there is a dispute over the return of the deposit at the end of the tenancy, the tenant may use the free Alternative Dispute Resolution (ADR) service provided by ${si.full}. Contact the scheme at ${si.url} or ${si.dispute}. Both landlord and tenant must consent to ADR. If ADR is not agreed, either party may apply to the county court.`, 10, false, [50,55,65]); y += 3; rule();
+    ln('Signatures', 11, true, [11,30,61]); y += 4;
+    doc.setFontSize(10); doc.setFont('helvetica','normal'); doc.setTextColor(50,50,50);
+    doc.text('Landlord signature:', 15, y); doc.setDrawColor(180,180,180); doc.line(60, y+1, W-15, y+1); y += 10;
+    doc.text('Tenant signature:', 15, y); doc.line(55, y+1, W-15, y+1); y += 10;
+    doc.text('Date of service:', 15, y); doc.line(45, y+1, W-15, y+1); y += 10;
+    rule();
+    doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(150,150,160);
+    doc.text(`Generated by NexLet · ${date} · Keep a signed copy as proof of service`, W/2, 287, { align: 'center' });
+    const pdfBlob = doc.output('blob');
+
+    // 2. Upload to Supabase storage
+    const filename = `Prescribed_Information_${t.name.replace(/[^a-zA-Z0-9]/g,'_')}_${new Date().toISOString().slice(0,10)}.pdf`;
+    const storagePath = `prescribed/${currentUser.id}/${t.id}_${Date.now()}.pdf`;
+    const { error: upErr } = await sb.storage.from('documents').upload(storagePath, pdfBlob, { contentType: 'application/pdf', upsert: true });
+    if (upErr) throw new Error('Storage upload failed: ' + upErr.message);
+    const { data: urlData } = sb.storage.from('documents').getPublicUrl(storagePath);
+    const fileUrl = urlData?.publicUrl;
+    if (!fileUrl) throw new Error('Could not get public URL for PDF');
+
+    // 3. Build email HTML
+    const html = `<!DOCTYPE html><html><body style="font-family:DM Sans,Arial,sans-serif;color:#1A2B45;max-width:620px;margin:0 auto;padding:0">
+      <div style="background:#0B1E3D;padding:24px 28px;border-radius:12px 12px 0 0">
+        <div style="font-size:20px;font-weight:700;color:#fff">NEXLET</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.5);margin-top:4px">Prescribed Information — Tenancy Deposit</div>
+      </div>
+      <div style="background:#fff;border:1px solid #E4EAF1;border-top:none;border-radius:0 0 12px 12px;padding:28px">
+        <h2 style="font-size:18px;font-weight:700;margin:0 0 16px">Prescribed Information enclosed</h2>
+        <p style="font-size:13px;color:#1A2B45;line-height:1.7;margin:0 0 16px">Dear ${t.name},<br><br>Please find attached the Prescribed Information regarding your tenancy deposit for <strong>${propAddr}</strong>. This document is required by law under the Housing Act 2004 and confirms how your deposit of <strong>£${t.deposit ? Number(t.deposit).toLocaleString() : '—'}</strong> is protected.</p>
+        <div style="background:#F6F8FB;border-radius:8px;padding:16px;margin-bottom:20px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            ${[['Deposit scheme', si.full],['Reference', t.scheme_ref||'—'],['Deposit amount', t.deposit?'£'+Number(t.deposit).toLocaleString():'—'],['Dispute helpline', si.dispute]]
+              .map(([l,v])=>`<div><div style="font-size:11px;color:#7A8FA6;margin-bottom:2px">${l}</div><div style="font-size:13px;font-weight:600;color:#1A2B45">${v}</div></div>`).join('')}
+          </div>
+        </div>
+        <p style="font-size:12px;color:#7A8FA6;line-height:1.6;margin:0">Please keep a signed copy of this document. Served on <strong>${date}</strong> as required under the Housing Act 2004.</p>
+      </div>
+      <div style="padding:16px;text-align:center;font-size:11px;color:#999">Sent via NEXLET · nexlet.co.uk · documents@nexlet.co.uk</div>
+    </body></html>`;
+
+    // 4. Send via edge function with PDF attached
+    const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'send_email', to: t.email, subject: `Prescribed Information — ${propAddr}`, html, attachment_urls: [{ url: fileUrl, filename }] })
+    });
+    const resData = await res.json().catch(() => ({}));
+    if (!res.ok || resData.error) throw new Error(resData.error || resData.message || `Send failed (${res.status})`);
+
+    // 5. Log to email_log
+    const logEntry = { user_id: currentUser.id, tenant_id: t.id, prop_id: String(t.prop_id), template_id: 'prescribed_info', template_name: 'Prescribed Information (Deposit)', sent_to: t.email, subject: `Prescribed Information — ${propAddr}`, status: 'Sent', email_body: `Sent ${date} · file: ${fileUrl}` };
+    const { data: logData } = await sb.from('email_log').insert(logEntry).select().single();
+    if (logData) D.emailLog.unshift(logData);
+
+    await logAudit('PRESCRIBED_INFO_SENT', 'tenants', t.id, `Prescribed Information sent to ${t.email} for ${propAddr} · ref: ${t.scheme_ref||'—'}`);
+
+    closeMo();
+    toast('✓ Prescribed Information sent to ' + t.email);
+    if (window._currentPage === 'tenant-detail') nav('tenant-detail', String(t.id));
+
+  } catch(err) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '📧 Send to Tenant'; }
+    _logError('sendPrescribedInfo', err);
+    toast('Send failed: ' + err.message, true);
   }
 }
 
