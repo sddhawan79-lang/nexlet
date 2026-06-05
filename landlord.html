@@ -4448,8 +4448,9 @@ function moWelcomeKit(pid) {
   const p = P(pid);
   if (!p) { toast('Property not found', true); return; }
   const tenant = D.tenants.find(
-    t => String(t.prop_id)===String(pid)
-      && t.status==='Active'
+    t => String(t.prop_id)===String(pid) && t.is_lead && t.status==='Active'
+  ) || D.tenants.find(
+    t => String(t.prop_id)===String(pid) && t.status==='Active'
   );
   const pCerts = CF(pid);
   const pIns = D.insurance.filter(
@@ -4574,17 +4575,11 @@ function moWelcomeKit(pid) {
 
   // ── RENDER DOC ROWS ──
   const docRows = enriched.map(doc => {
-    // Determine row styling
-    const rowBorder = doc.hasIssue && doc.mandatory
-      ? 'rgba(229,62,62,0.25)'
-      : doc.hasIssue
-      ? 'rgba(217,119,6,0.25)'
-      : 'var(--border)';
-    const rowBg = doc.hasIssue && doc.mandatory
-      ? 'rgba(229,62,62,0.03)'
-      : doc.hasIssue
-      ? 'rgba(217,119,6,0.03)'
-      : 'var(--white)';
+    // Determine row styling — red only for expired, amber for missing
+    const isExpired = doc.st.lbl === 'EXPIRED' || doc.st.lbl === 'URGENT';
+    const isMissing = doc.hasIssue && !isExpired;
+    const rowBorder = isExpired ? 'rgba(229,62,62,0.25)' : isMissing ? 'rgba(217,119,6,0.2)' : 'var(--border)';
+    const rowBg = isExpired ? 'rgba(229,62,62,0.03)' : isMissing ? 'rgba(217,119,6,0.02)' : 'var(--white)';
 
     // Status badge — only shows when there is
     // actually a problem or confirmation needed
@@ -4601,16 +4596,12 @@ function moWelcomeKit(pid) {
         font-weight:700;color:#00A87A;
         background:var(--green-bg);padding:1px 7px;
         border-radius:100px">✓ Ready</span>`;
+    } else if (isExpired && doc.mandatory) {
+      statusBadge = `<span style="font-size:10px;font-weight:700;color:var(--red);background:var(--red-bg);padding:1px 7px;border-radius:100px">⚠ Expired</span>`;
     } else if (doc.hasIssue && doc.mandatory) {
-      statusBadge = `<span style="font-size:10px;
-        font-weight:700;color:var(--red);
-        background:var(--red-bg);padding:1px 7px;
-        border-radius:100px">⚠ Action needed</span>`;
+      statusBadge = `<span style="font-size:10px;font-weight:700;color:#D97706;background:rgba(217,119,6,0.1);padding:1px 7px;border-radius:100px">Not uploaded</span>`;
     } else if (doc.hasIssue) {
-      statusBadge = `<span style="font-size:10px;
-        font-weight:700;color:var(--amber);
-        background:rgba(217,119,6,0.1);padding:1px 7px;
-        border-radius:100px">Attention</span>`;
+      statusBadge = `<span style="font-size:10px;font-weight:700;color:var(--amber);background:rgba(217,119,6,0.1);padding:1px 7px;border-radius:100px">To do</span>`;
     }
 
     // Mandatory pill — only shown when missing
@@ -4654,8 +4645,7 @@ function moWelcomeKit(pid) {
             ${mandatoryPill}
             ${groupPill}
           </div>
-          <div style="font-size:11px;color:var(--muted);
-            line-height:1.45">${doc.note}</div>
+          <div style="font-size:12px;color:var(--muted);line-height:1.5">${doc.note}</div>
           ${doc.statusNote
             ? `<div style="font-size:11px;
                 color:${doc.mandatory && doc.hasIssue
@@ -4867,29 +4857,23 @@ async function sendWelcomeKit(pid) {
   </body></html>`;
 
   try {
-    // Build PDF attachments from stored cert files
-    const attachments = [];
+    // Build attachment_urls — edge function fetches files server-side (no browser memory limit)
+    const attachment_urls = [];
     const certsToAttach = [
-      { cert: gasCert,  label: 'Gas_Safety_Certificate' },
-      { cert: eicrCert, label: 'EICR' },
-      { cert: epcCert,  label: 'EPC' },
+      { cert: gasCert,  filename: `Gas_Safety_Certificate_${propAddr.replace(/[^a-z0-9]/gi,'_')}` },
+      { cert: eicrCert, filename: `EICR_${propAddr.replace(/[^a-z0-9]/gi,'_')}` },
+      { cert: epcCert,  filename: `EPC_${propAddr.replace(/[^a-z0-9]/gi,'_')}` },
     ];
-    for (const { cert, label } of certsToAttach) {
+    for (const { cert, filename } of certsToAttach) {
       if (!cert?.file_url) continue;
-      try {
-        const r = await fetch(cert.file_url);
-        if (!r.ok) continue;
-        const buf = await r.arrayBuffer();
-        const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
-        const ext = cert.file_url.split('.').pop().split('?')[0] || 'pdf';
-        attachments.push({ filename: `${label}_${propAddr.replace(/[^a-z0-9]/gi,'_')}.${ext}`, content: b64 });
-      } catch(fe) { /* skip if fetch fails */ }
+      const ext = cert.file_url.split('.').pop().split('?')[0] || 'pdf';
+      attachment_urls.push({ url: cert.file_url, filename: `${filename}.${ext}` });
     }
 
-    // Send the email — check response
+    // Send email — edge function fetches files and attaches them
     const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ type:'send_email', to: tenantEmail, subject: `Your tenancy welcome pack — ${propAddr}`, html, ...(attachments.length ? { attachments } : {}) })
+      body: JSON.stringify({ type:'send_email', to: tenantEmail, subject: `Your tenancy welcome pack — ${propAddr}`, html, ...(attachment_urls.length ? { attachment_urls } : {}) })
     });
     const resData = await res.json().catch(()=>({}));
     if (!res.ok || resData.error) throw new Error(resData.error || resData.message || `Send failed (${res.status})`);
