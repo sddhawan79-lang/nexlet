@@ -4002,7 +4002,7 @@ function _checklistRAG(tenant, key) {
     // Certificate uploaded — treat as amber even without scheme/ref in tenant record
     const _depDoc = (D.tenantDocs||[]).find(d => String(d.tenant_id)===String(tenant?.id) && d.slot==='deposit_cert');
     if (_depDoc && _lead?.scheme) return { ra:'green', status:'Protected', detail:`${_lead.scheme} · Certificate uploaded`, date:'' };
-    if (_depDoc) return { ra:'amber', status:'Certificate uploaded', detail:'Add scheme & reference in tenant details to complete', date:'' };
+    if (_depDoc) return { ra:'amber', status:'Certificate uploaded', detail:'Certificate uploaded. Add deposit scheme & reference to complete.', date:'' };
     if (_lead?.scheme) return { ra:'amber', status:'Partial', detail:'Scheme set but no reference number', date:'' };
     if (!_lead?.deposit || parseFloat(_lead.deposit) === 0) return { ra:'green', status:'N/A', detail:'No deposit taken', date:'' };
   }
@@ -4094,6 +4094,7 @@ function _checklistRowHtml(tenant, itemDef) {
       ${scanSnippet}
     </div>` : ''}
     ${itemDef.key === 'rtr' ? `<div style="margin-top:8px"><button class="btn btn-sm" style="font-size:11px;border-color:var(--blue);color:var(--blue)" onclick="event.stopPropagation();moShareCodeWizard('${tid}')">🔍 Run Share Code Wizard</button><span style="font-size:10px;color:var(--muted);margin-left:8px">Check on UKVI &amp; save result</span></div>` : ''}
+    ${itemDef.key === 'deposit_protection' && item.ra !== 'green' ? `<div style="margin-top:8px"><button class="btn btn-sm btn-navy" style="font-size:11px" onclick="event.stopPropagation();moTenantDetail('${tid}')">✎ Add deposit scheme &amp; reference →</button></div>` : ''}
   </div>`;
 }
 
@@ -8819,12 +8820,14 @@ function pgTenantDetail(tid) {
           </div>
           <div style="flex-shrink:0">
             <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-              <label class="btn btn-sm btn-navy" style="cursor:pointer;margin:0;font-size:11px">${hasDocs ? '+ Add another' : 'Upload'}
-                <input type="file" style="display:none" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onchange="uploadTenantDoc('${tid}','${s.slot}',this)">
-              </label>
+              <div style="display:flex;gap:4px;align-items:center">
+                ${hasDocs ? `<button class="btn btn-sm" style="font-size:11px" onclick="event.stopPropagation();viewDocInline('${SUPABASE_URL}/storage/v1/object/public/tenant-documents/${slotDocs[slotDocs.length-1].file_name}','${(slotDocs[slotDocs.length-1].doc_label||'Document').replace(/'/g,\"\\\\'\")}')">👁 View</button>` : ''}
+                <label class="btn btn-sm btn-navy" style="cursor:pointer;margin:0;font-size:11px">${hasDocs ? '+ Add another' : 'Upload'}
+                  <input type="file" style="display:none" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onchange="uploadTenantDoc('${tid}','${s.slot}',this)">
+                </label>
+              </div>
               <div style="font-size:10px;color:var(--blue);font-weight:600;white-space:nowrap">✦ AI auto-scan</div>
             </div>
-          </div>
         </div>
         ${hasDocs ? slotDocs.map((d,i) => renderDocCard(d, i === slotDocs.length - 1)).join('') : ''}
         ${isRTR ? (() => {
@@ -9244,6 +9247,21 @@ async function scanTenantDoc(docId, tid, slot, file, tenantName) {
     await sb.from('tenant_documents').update(updates).eq('id', docId);
     D.tenantDocs = D.tenantDocs.map(d => String(d.id) === String(docId) ? { ...d, ...updates } : d);
 
+    // ── Auto-write extracted data back to tenant record for relevant slots ──
+    const _tForUpdate = D.tenants.find(x => String(x.id) === String(tid));
+    if (slot === 'deposit_cert' && issuing_authority && extracted_doc_num && _tForUpdate) {
+      // Map scheme name to known UK schemes
+      const _schemeMap = { 'dps':'DPS', 'deposit protection service':'DPS', 'tds':'TDS', 'tenancy deposit scheme':'TDS', 'mydeposits':'MyDeposits', 'my deposits':'MyDeposits' };
+      const _schemeName = _schemeMap[issuing_authority.toLowerCase().trim()] || issuing_authority;
+      const _tenantUpdates = { scheme: _schemeName, scheme_ref: extracted_doc_num };
+      await sb.from('tenants').update(_tenantUpdates).eq('id', tid);
+      Object.assign(_tForUpdate, _tenantUpdates);
+      // Also update compliance_checklist to green
+      if (!_tForUpdate.compliance_checklist) _tForUpdate.compliance_checklist = {};
+      _tForUpdate.compliance_checklist.deposit_protection = { ra:'green', status:'Protected', detail:`${_schemeName} · Ref: ${extracted_doc_num}`, date: extracted_expiry || new Date().toISOString().slice(0,10) };
+      await sb.from('tenants').update({ compliance_checklist: _tForUpdate.compliance_checklist }).eq('id', tid);
+    }
+
     window._scanningDocs.delete(String(docId));
     // Targeted DOM update — replace just the doc card, no full page re-render
     const _updatedDoc = D.tenantDocs.find(d => String(d.id) === String(docId));
@@ -9375,8 +9393,8 @@ function moTenantDocs(tenantId, propId) {
           <input type="file" style="display:none" accept=".pdf,.jpg,.jpeg,.png" onchange="moTenantDocsUpload('${tenantId}','${s.slot}',this)">
         </label>
         ${slotDocs.length
-          ? `<button class="btn btn-sm" style="font-size:11px" onclick="moTenantDocsScan('${tenantId}','${s.slot}')">✦ Re-scan</button>`
-          : `<div style="font-size:10px;color:var(--blue);font-weight:600;white-space:nowrap">✦ AI auto-scan</div>`}
+          ? `<button class="btn btn-sm" style="font-size:11px" onclick="viewDocInline('${SUPABASE_URL}/storage/v1/object/public/tenant-documents/${slotDocs[slotDocs.length-1].file_name}','${(slotDocs[slotDocs.length-1].doc_label||'Document').replace(/'/g,\"\\\\'\")}')">👁 View</button><button class="btn btn-sm" style="font-size:11px" onclick="moTenantDocsScan('${tenantId}','${s.slot}')">✦ Re-scan</button>`
+          : `<div style="font-size:10px;color:var(--blue);font-weight:600;white-space:nowrap">✦ AI auto-scan</div>`
         ${s.slot === 'right_to_rent' ? `<button class="btn btn-sm" style="font-size:11px;border-color:var(--blue);color:var(--blue)" onclick="moShareCodeWizard('${tenantId}')">🔍 Share Code</button>` : ''}
       </div>
     </div>`;
