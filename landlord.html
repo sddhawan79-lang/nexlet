@@ -9064,6 +9064,30 @@ function pgTenantDetail(tid) {
         <div>${logRows}</div>
       </div>
     </div>`;
+
+  // Auto-rescan any docs that have no extracted_name — runs silently in background
+  const _unscanned = docs.filter(d => !d.extracted_name && !window._scanningDocs?.has(String(d.id)));
+  if (_unscanned.length) {
+    setTimeout(async () => {
+      for (const d of _unscanned) {
+        if (window._scanningDocs?.has(String(d.id))) continue; // already queued
+        const tObj = D.tenants.find(x => String(x.id) === String(tid));
+        try {
+          const url = `https://mahtcfukgzbonwibtsxz.supabase.co/storage/v1/object/public/tenant-documents/${d.file_name}`;
+          const resp = await fetch(url);
+          if (!resp.ok) continue;
+          const blob = await resp.blob();
+          const file = new File([blob], d.doc_label || d.file_name, { type: blob.type || 'application/pdf' });
+          window._scanningDocs.add(String(d.id));
+          await scanTenantDoc(d.id, tid, d.slot, file, tObj?.name || '');
+        } catch(e) {
+          window._scanningDocs?.delete(String(d.id));
+          console.warn('Auto-rescan failed for doc', d.id, e);
+        }
+      }
+    }, 800); // slight delay so page renders first
+  }
+
   } catch(pgErr) {
     const _msg = pgErr instanceof Error ? pgErr.message : (pgErr ? String(pgErr) : 'Unknown error (undefined thrown)');
     const _stack = pgErr instanceof Error ? (pgErr.stack||'') : '';
