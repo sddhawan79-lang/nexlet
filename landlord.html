@@ -4891,7 +4891,9 @@ async function sendWelcomeKit(pid) {
         tenant_id: tenant2.id,
         tenant_name: tenantName,
         template_id: 'welcome_kit',
+        template_name: 'Day 1 Welcome Kit',
         subject: `Tenancy welcome pack — ${propAddr}`,
+        sent_to: tenantEmail,
         status: 'Sent',
         user_id: currentUser.id,
       };
@@ -9094,16 +9096,46 @@ function pgTenantDetail(tid) {
     </div>`;
 
   // ── Email log ──
-  const tenantLog = D.emailLog.filter(e => String(e.tenant_id)===String(tid) || String(e.prop_id)===String(t.prop_id)).slice(0,20);
+  const tenantLog = D.emailLog
+    .filter(e => String(e.tenant_id)===String(tid) || String(e.prop_id)===String(t.prop_id))
+    .sort((a,b) => new Date(b.sent_at||b.created_at||0) - new Date(a.sent_at||a.created_at||0))
+    .slice(0, 50);
+
+  const _kitMeta = {
+    'welcome_kit':              { label:'Day 1 Kit',           color:'#0B1E3D', bg:'rgba(11,30,61,0.07)',  icon:'📦' },
+    'day30_pack':               { label:'Day 30 Kit',          color:'#7C3AED', bg:'rgba(124,58,237,0.07)', icon:'📋' },
+    'prescribed_info':          { label:'Prescribed Info',     color:'#D97706', bg:'rgba(217,119,6,0.08)', icon:'🏦' },
+    'rra_info_sheet':           { label:'RRA Info Sheet',      color:'#0369A1', bg:'rgba(3,105,161,0.07)', icon:'📄' },
+    'how_to_rent':              { label:'How to Rent',         color:'#0369A1', bg:'rgba(3,105,161,0.07)', icon:'🏠' },
+    'section8_notice':          { label:'Section 8',           color:'#DC2626', bg:'rgba(220,38,38,0.07)', icon:'⚖️' },
+    'section13':                { label:'Section 13',          color:'#DC2626', bg:'rgba(220,38,38,0.07)', icon:'📈' },
+    'maintenance_notification': { label:'Maintenance',         color:'#D97706', bg:'rgba(217,119,6,0.07)', icon:'🔧' },
+  };
+
+  const _fmtCommTs = ts => {
+    if (!ts) return '—';
+    const d = new Date(ts);
+    return d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) + ' · ' + d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  };
+
   const logRows = tenantLog.length
-    ? tenantLog.map(e=>`
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:1px solid var(--border);gap:10px">
-          <div style="min-width:0">
-            <div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.subject||e.template_id||'Email'}</div>
-            <div style="font-size:11px;color:var(--muted);margin-top:1px">${e.sent_at?new Date(e.sent_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):''}</div>
+    ? tenantLog.map(e => {
+        const meta = _kitMeta[e.template_id] || { label: e.template_name || e.template_id || 'Email', color:'var(--navy)', bg:'rgba(11,30,61,0.05)', icon:'✉️' };
+        const hasAttachment = !!(e.email_body && e.email_body.includes('file:'));
+        return `
+        <div style="display:flex;align-items:flex-start;gap:12px;padding:12px 18px;border-bottom:1px solid var(--border)">
+          <div style="width:34px;height:34px;border-radius:8px;background:${meta.bg};display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;margin-top:1px">${meta.icon}</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px">
+              <span style="font-size:11px;font-weight:700;padding:1px 7px;border-radius:100px;background:${meta.bg};color:${meta.color}">${meta.label}</span>
+              ${hasAttachment ? `<span style="font-size:10px;padding:1px 6px;border-radius:100px;background:rgba(0,168,122,0.08);color:var(--green-dark)">📎 Attachment</span>` : ''}
+            </div>
+            <div style="font-size:12px;font-weight:500;color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.subject||'—'}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">${_fmtCommTs(e.sent_at||e.created_at)} ${e.sent_to?'· '+e.sent_to:''}</div>
           </div>
-          <span style="font-size:11px;padding:2px 8px;border-radius:100px;background:var(--green-bg);color:var(--green-dark);flex-shrink:0">Sent</span>
-        </div>`).join('')
+          <span style="font-size:11px;padding:2px 8px;border-radius:100px;background:var(--green-bg);color:var(--green-dark);flex-shrink:0;margin-top:2px">${e.status||'Sent'}</span>
+        </div>`;
+      }).join('')
     : `<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">No emails sent yet</div>`;
 
   return `
@@ -12252,7 +12284,7 @@ async function sendDay30Kit(pid, tid) {
     if (!res.ok || resData.error) throw new Error(resData.error || resData.message || `Send failed (${res.status})`);
 
     // Log to email_log
-    const logEntry = { prop_id: String(pid), tenant_id: t.id, tenant_name: toName, template_id: 'day30_pack', subject: `Day 30 tenancy documents — ${propAddr}`, status: 'Sent', user_id: currentUser.id };
+    const logEntry = { prop_id: String(pid), tenant_id: t.id, tenant_name: toName, template_id: 'day30_pack', template_name: 'Day 30 Kit', subject: `Day 30 tenancy documents — ${propAddr}`, sent_to: toEmail, status: 'Sent', user_id: currentUser.id };
     const { data: logData } = await sb.from('email_log').insert(logEntry).select().single();
     if (logData) D.emailLog.unshift(logData);
 
