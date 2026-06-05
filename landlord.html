@@ -10666,36 +10666,50 @@ function invReportDownloadPDF(id) {
 
 async function _saveInventoryToDb(reportId) {
   const r = D._invReports?.find(x => x.id === reportId);
-  if (!r || r._fromDb) return;
-  try {
-    // Upload photos to storage and collect paths
-    const photoPaths = [];
-    for (let i = 0; i < (r.photos||[]).length; i++) {
-      const ph = r.photos[i];
+  if (!r || r._fromDb) return null;
+  // Upload photos to storage first — URLs only stored in DB (no b64 in rows)
+  const photoPaths = [];
+  for (let i = 0; i < (r.photos||[]).length; i++) {
+    const ph = r.photos[i];
+    try {
       const ext = (ph.name||'photo.jpg').split('.').pop();
-      const path = `inventory/${currentUser.id}/${reportId}/${i}_${Date.now()}.${ext}`;
+      const path = `inventory/${currentUser.id}/${reportId}/${i}.${ext}`;
       const blob = await fetch(`data:${ph.type};base64,${ph.b64}`).then(res => res.blob());
       const { error: upErr } = await sb.storage.from('documents').upload(path, blob, { contentType: ph.type, upsert: true });
       if (!upErr) {
         const { data: urlData } = sb.storage.from('documents').getPublicUrl(path);
         photoPaths.push({ name: ph.name, type: ph.type, url: urlData.publicUrl, path });
       }
-    }
+    } catch(pe) { /* skip this photo — don't abort save */ }
+  }
+  const { error } = await sb.from('inventory_reports').insert({
+    user_id: currentUser.id,
+    prop_id: r.propId || null,
+    type: r.type,
+    report_text: r.text,
+    photos: photoPaths,
+    notes: r.notes || null
+  });
+  if (!error) { r._fromDb = true; return true; }
+  return error;
+}
 
-    const { error } = await sb.from('inventory_reports').insert({
-      user_id: currentUser.id,
-      prop_id: r.propId || null,
-      type: r.type,
-      report_text: r.text,
-      photos: photoPaths.length ? photoPaths : r.photos.map(p=>({name:p.name,type:p.type,b64:p.b64})),
-      notes: r.notes || null
-    });
-    if (!error) {
-      r._fromDb = true;
-      console.debug('Inventory report saved to DB:', reportId);
-    }
-  } catch(e) {
-    // Non-critical — report still available in session
+async function saveInventoryReport(reportId) {
+  const btn = document.getElementById('inv-save-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Saving…'; }
+  const result = await _saveInventoryToDb(reportId);
+  if (result === null) {
+    // Already saved
+    if (btn) { btn.disabled = false; btn.innerHTML = '✓ Already saved'; }
+    return;
+  }
+  if (result === true) {
+    toast('✓ Inventory report saved');
+    if (btn) { btn.innerHTML = '✓ Saved'; btn.style.background = 'var(--green)'; }
+    if (window._currentPage === 'tenant-detail') nav('tenant-detail', window._currentParam);
+  } else {
+    if (btn) { btn.disabled = false; btn.innerHTML = '💾 Save Report'; }
+    toast('Save failed: ' + (result.message || 'Unknown error'), true);
   }
 }
 let _mview = 'kanban';
@@ -16277,12 +16291,11 @@ Be specific and factual. Note exact defects visible in photos. Never invent defe
     document.getElementById('mo-f').innerHTML=`
       <button class="btn" onclick="closeMo()">Close</button>
       <button class="btn" onclick="navigator.clipboard.writeText(document.getElementById('inv-report').textContent);toast('✓ Copied!')">📋 Copy</button>
-      <button class="btn btn-navy" onclick="closeMo();nav('inventory-report','${reportId}');return false">📄 View Full Report</button>`;
+      <button class="btn" onclick="closeMo();nav('inventory-report','${reportId}');return false">📄 View Full Report</button>
+      <button class="btn btn-navy" id="inv-save-btn" onclick="saveInventoryReport('${reportId}')">💾 Save Report</button>`;
 
-    // Auto-save to DB in background
-    _saveInventoryToDb(reportId);
     await logAudit('GENERATE_INVENTORY','maintenance',propId,`${type} generated`);
-    toast('✓ Inventory report generated!');
+    toast('✓ Report generated — click Save Report to store it');
   }catch(e){
     btn.disabled=false; btn.innerHTML='✦ Generate report';
     toast('Error generating report — please try again',true);
