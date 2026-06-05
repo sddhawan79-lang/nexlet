@@ -3421,13 +3421,22 @@ async function runBulkScan() {
     if (statusEl) statusEl.innerHTML = '<span style="color:var(--blue)">⏳ Scanning…</span>';
 
     await new Promise(resolve => {
+      let resolved = false;
       scanAndFill(f, (parsed) => {
+        if (resolved) return;
+        resolved = true;
         results.push({ file:f, parsed, idx:i });
         if (statusEl) statusEl.innerHTML = '<span style="color:var(--green-dark);font-weight:600">✓ Done</span>';
         if (itemEl) itemEl.style.background = 'var(--green-bg)';
         resolve();
       });
-      setTimeout(resolve, 8000); // timeout safety
+      setTimeout(() => {
+        if (resolved) return;
+        resolved = true;
+        results.push({ file:f, parsed:{}, idx:i });
+        if (statusEl) statusEl.innerHTML = '<span style="color:var(--amber,#D97706);font-weight:600">⚠ Fill manually</span>';
+        resolve();
+      }, 30000);
     });
   }
 
@@ -3442,7 +3451,7 @@ function _renderBulkResults(results) {
   const saveBtn = document.getElementById('bulk-save-btn');
   if (!container||!list) return;
 
-  const certTypeOpts = ['Gas Safety Certificate (GSC)','Electrical Installation Condition Report (EICR)','Energy Performance Certificate (EPC)','How to Rent Guide','Deposit Certificate','Tenancy Agreement','Property Licence','Other'];
+  const certTypeOpts = ['Gas Safety Certificate (GSC)','Electrical Installation Condition Report (EICR)','Energy Performance Certificate (EPC)','Smoke & CO Alarm Test Record','Legionella Risk Assessment','How to Rent Guide','Deposit Certificate','Tenancy Agreement','Property Licence','Other'];
 
   list.innerHTML = results.map((r,i)=>`<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
@@ -3485,11 +3494,11 @@ async function saveBulkResults() {
     const cert = { prop_id:pid, type, expiry:expiry||null, engineer:eng, status, has_file:true, served:false, user_id:currentUser.id };
 
     const { data, error } = await sb.from('certificates').insert(cert).select().single();
-    if (!error && data) {
-      // Upload the actual file to storage and save file_url
+    if (error) { toast(`Save failed: ${error.message}`, true); continue; }
+    if (data) {
       let fileUrl = null;
       try {
-        const file = results[i].file;
+        const file = results[i]?.file;
         if (file) {
           const ext = file.name.split('.').pop() || 'pdf';
           const fpath = `certs/${currentUser.id}/${data.id}.${ext}`;
@@ -4858,7 +4867,6 @@ async function sendWelcomeKit(pid) {
   </body></html>`;
 
   try {
-    // Build PDF attachments from stored cert files
     const attachments = [];
     const certsToAttach = [
       { cert: gasCert,  label: 'Gas_Safety_Certificate' },
@@ -4874,10 +4882,8 @@ async function sendWelcomeKit(pid) {
         const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
         const ext = cert.file_url.split('.').pop().split('?')[0] || 'pdf';
         attachments.push({ filename: `${label}_${propAddr.replace(/[^a-z0-9]/gi,'_')}.${ext}`, content: b64 });
-      } catch(fe) { /* skip file if fetch fails — email still sends */ }
+      } catch(fe) { /* skip if fetch fails */ }
     }
-
-    // Send the email
     const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ type:'send_email', to: tenantEmail, subject: `Your tenancy welcome pack — ${propAddr}`, html, ...(attachments.length ? { attachments } : {}) })
@@ -4915,6 +4921,7 @@ async function sendWelcomeKit(pid) {
     closeMo();
     toast('✓ Welcome kit sent to ' + tenantEmail);
     _markTenancyStep(String(pid), 'welcome_kit_done', false);
+    _pollEsignSigned(String(pid));
 
     // Show confirmation
     openMo('✅ Welcome kit sent!', `${tenantName} · ${propAddr}`, `
@@ -4934,12 +4941,45 @@ async function sendWelcomeKit(pid) {
           <div>✓ Tenant portal link included</div>
         </div>
       </div>
-    `, `<button class="btn btn-navy" onclick="closeMo()">Done</button>`);
+    `, `<button class="btn btn-navy" onclick="closeMo();nav(window._currentPage,window._currentParam)">Done</button>`);
 
   } catch(err) {
     if (btn) { btn.disabled = false; btn.textContent = '📦 Send welcome kit'; }
     toast('Error sending welcome kit: ' + err.message, true);
   }
+}
+
+// ── ESIGN POLL ──
+function _pollEsignSigned(pid) {
+  const propTenants = D.tenants.filter(t => String(t.prop_id) === String(pid) && t.status === 'Active' && t.email);
+  if (!propTenants.length) return;
+  const hasPending = propTenants.some(t =>
+    (D.esignReq || []).some(r => String(r.tenant_id) === String(t.id) && r.document_type === 'written_statement' && r.status !== 'signed')
+  );
+  if (!hasPending) return;
+  let attempts = 0;
+  const interval = setInterval(async () => {
+    if (++attempts > 20) { clearInterval(interval); return; }
+    const tenantIds = propTenants.map(t => t.id);
+    const { data, error } = await sb.from('esign_requests').select('*').in('tenant_id', tenantIds).eq('document_type', 'written_statement');
+    if (error || !data) return;
+    data.forEach(row => {
+      const idx = (D.esignReq || []).findIndex(r => r.id === row.id);
+      if (idx >= 0) D.esignReq[idx] = row;
+      else { D.esignReq = D.esignReq || []; D.esignReq.push(row); }
+    });
+    const allSigned = propTenants.every(t =>
+      (D.esignReq || []).some(r => String(r.tenant_id) === String(t.id) && r.document_type === 'written_statement' && r.status === 'signed')
+    );
+    if (allSigned) {
+      clearInterval(interval);
+      _markTenancyStep(pid, 'written_statement_done', false);
+      const names = propTenants.map(t => t.first_name || t.name || 'Tenant').join(', ');
+      toast(`✓ Written Statement signed by ${names}`);
+      await logAudit('ESIGN_SIGNED', 'esign_requests', pid, `Written Statement signed by all tenants for prop ${pid}`);
+      if (window._currentPage === 'tenant-detail' && window._currentParam) nav('tenant-detail', window._currentParam);
+    }
+  }, 30000);
 }
 
 // ── MODAL: MAINTENANCE ISSUE ──
@@ -8968,16 +9008,16 @@ function pgTenantDetail(tid) {
       done: propLog.some(e=>(e.template_id||'').includes('how_to_rent')||(e.subject||'').toLowerCase().includes('how to rent'))||tenantLog2.some(e=>(e.template_id||'').includes('how_to_rent')||(e.subject||'').toLowerCase().includes('how to rent')),
       action:`moCommunicationsHub('${tid}')`, btnLabel:'Send guide' },
     { icon:'🔥', label:'Gas Safety Certificate served',
-      done: propCerts.some(c=>c.type&&c.type.toLowerCase().includes('gas')&&(c.served_to_tenant||c.served)),
+      done: propCerts.some(c=>c.type&&c.type.toLowerCase().includes('gas')),
       action:`moBulkScan('${t.prop_id}')`, btnLabel:'Upload GSC' },
     { icon:'⚡', label:'EICR served to tenant',
-      done: propCerts.some(c=>c.type&&(c.type.toLowerCase().includes('eicr')||c.type.toLowerCase().includes('electrical'))&&(c.served_to_tenant||c.served)),
+      done: propCerts.some(c=>c.type&&(c.type.toLowerCase().includes('eicr')||c.type.toLowerCase().includes('electrical'))),
       action:`moBulkScan('${t.prop_id}')`, btnLabel:'Upload EICR' },
     { icon:'🏷', label:'EPC served to tenant',
-      done: propCerts.some(c=>c.type&&(c.type.toLowerCase().includes('epc')||c.type.toLowerCase().includes('energy'))&&(c.served_to_tenant||c.served)),
+      done: propCerts.some(c=>c.type&&(c.type.toLowerCase().includes('epc')||c.type.toLowerCase().includes('energy'))),
       action:`moBulkScan('${t.prop_id}')`, btnLabel:'Upload EPC' },
     { icon:'✍️', label:'Written Statement e-signed',
-      done: propLog.some(e=>e.template_id?.includes('esign')||e.template_id?.includes('sign'))||tenantLog2.some(e=>e.template_id?.includes('esign')||e.template_id?.includes('sign')),
+      done: (D.esignReq||[]).some(r=>String(r.tenant_id)===String(t.id)&&r.document_type==='written_statement'&&r.status==='signed'),
       action:`moEsign('${t.prop_id}','${t.id}')`, btnLabel:'Send for signing' },
     { icon:'🔗', label:'Portal invite sent',
       done: !!(t.invite_used||propLog.some(e=>e.template_id?.includes('portal')||e.template_id?.includes('invite'))||tenantLog2.some(e=>e.template_id?.includes('portal')||e.template_id?.includes('invite'))),
@@ -8995,8 +9035,8 @@ function pgTenantDetail(tid) {
       done: !!(t.scheme&&t.scheme_ref),
       action:`moTenantDetail('${t.id}')`, btnLabel:'Add scheme ref' },
     { icon:'🔔', label:'Smoke & CO alarm tested',
-      done: propLog.some(e=>(e.subject||'').toLowerCase().includes('smoke')||(e.template_id||'').toLowerCase().includes('smoke')),
-      action:`moCommunicationsHub('${tid}')`, btnLabel:'Log test' },
+      done: propCerts.some(c=>c.type&&(c.type.toLowerCase().includes('smoke')||c.type.toLowerCase().includes('co alarm')||c.type.toLowerCase().includes('carbon monoxide'))),
+      action:`moBulkScan('${t.prop_id}')`, btnLabel:'Upload test record' },
     { icon:'📋', label:'Inventory / schedule of condition signed',
       done: propCerts.some(c=>c.type&&(c.type.toLowerCase().includes('inventory')||c.type.toLowerCase().includes('schedule of condition'))),
       action:`nav('inventory-reports')`, btnLabel:'Create Inventory' },
