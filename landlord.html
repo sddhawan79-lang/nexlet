@@ -3693,7 +3693,7 @@ async function _markTenancyStep(pid, stepKey, navToPropDetail) {
   prog[stepKey] = true;
   lead.tenancy_setup_progress = prog;
   try {
-    await SB.from('tenants').update({ tenancy_setup_progress: prog }).eq('id', lead.id);
+    await sb.from('tenants').update({ tenancy_setup_progress: prog }).eq('id', lead.id);
   } catch(e) { console.warn('Progress save failed', e); }
   if (navToPropDetail) nav('prop-detail', pid);
   else { const el = document.getElementById('tenancy-setup-bar-' + pid); if (el) el.outerHTML = _renderTenancySetupBar(pid); }
@@ -8821,7 +8821,6 @@ function pgTenantDetail(tid) {
           <div style="flex-shrink:0">
             <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
               <div style="display:flex;gap:4px;align-items:center">
-                ${hasDocs ? `<button class="btn btn-sm" style="font-size:11px" onclick="event.stopPropagation();viewDocInline('${SUPABASE_URL}/storage/v1/object/public/tenant-documents/${slotDocs[slotDocs.length-1].file_name}','${(slotDocs[slotDocs.length-1].doc_label||'Document').replace(/'/g,"\\'")}')">👁 View</button>` : ''}
                 <label class="btn btn-sm btn-navy" style="cursor:pointer;margin:0;font-size:11px">${hasDocs ? '+ Add another' : 'Upload'}
                   <input type="file" style="display:none" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onchange="uploadTenantDoc('${tid}','${s.slot}',this)">
                 </label>
@@ -16125,7 +16124,7 @@ function moEsign(pid, tid) {
         <div class="fg"><label>Tenant(s) full name(s) <span style="color:var(--red)">*</span></label><input type="text" id="esign-tname" value="${_esignTenantNames}" readonly style="background:var(--off);color:var(--muted)"></div>
         <div class="fg"><label>Landlord full name <span style="color:var(--red)">*</span></label><input type="text" id="esign-landlord-name" value="${_profileName()}" placeholder="e.g. John Smith"></div>
         <div class="fg"><label>Landlord address <span style="color:var(--red)">*</span></label><input type="text" id="esign-landlord-addr" value="${D.userProfile?.landlord_address||''}" placeholder="Full UK address including postcode"></div>
-        <div class="fg"><label>Tenancy start date <span style="color:var(--red)">*</span></label><input type="date" id="esign-start" value="${t.start_date||''}"></div>
+        <div class="fg"><label>Tenancy start date <span style="color:var(--red)">*</span></label><input type="date" id="esign-start" value="${t.start_date ? t.start_date.slice(0,10) : ''}"></div>
         <div class="fg"><label>Monthly rent (£) <span style="color:var(--red)">*</span></label><input type="number" id="esign-rent" value="${t.rent||p.rent||''}" placeholder="e.g. 1200"></div>
         <div class="fg"><label>Rent due day <span style="color:var(--red)">*</span></label><select id="esign-rentday">${Array.from({length:31},(_,i)=>i+1).map(d=>`<option value="${d}"${(t.rent_day||1)==d?' selected':''}>${d}${['','st','nd','rd'][d]||'th'} of the month${d>=29?' ⚠':''}${d===29?' (Feb: 28th/29th)':d===30?' (Feb: last day)':d===31?' (long months only)':''}</option>`).join('')}</select></div>
         <div class="fg"><label>Deposit amount (£) <span style="color:var(--red)">*</span></label><input type="number" id="esign-deposit" value="${t.deposit||''}" placeholder="e.g. 1800"></div>
