@@ -3343,7 +3343,7 @@ window._bulkScan = { files:[], results:[], pid:'' };
 function moBulkScan(pid) {
   const propOpts = activeProperties().map(p=>`<option value="${p.id}"${String(p.id)===String(pid||'')?' selected':''}>${p.address}, ${p.city}</option>`).join('');
   if (!D.properties.length) { toast('Add a property first', true); return; }
-  window._bulkScan = { files:[], results:[], pid: pid||String(D.properties[0]?.id||'') };
+  window._bulkScan = { files:[], results:[], pid: pid||String(D.properties[0]?.id||''), returnPage: window._currentPage, returnParam: window._currentParam };
 
   openMo('✦ Bulk document scan','Upload multiple certs — AI scans and fills all details',`
     <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Drop up to 10 documents at once — Gas Safety, EICR, EPC, licences. AI reads each one and creates records automatically.</div>
@@ -3521,7 +3521,7 @@ async function saveBulkResults() {
 
   closeMo();
   toast(`✓ ${saved} certificate${saved!==1?'s':''} saved from bulk scan`);
-  nav(window._currentPage, window._currentParam);
+  nav(window._bulkScan?.returnPage || window._currentPage, window._bulkScan?.returnParam || window._currentParam);
 }
 // ── MODAL: INSPECTION ──
 function moInspection(pid){
@@ -9019,7 +9019,7 @@ function pgTenantDetail(tid) {
   const day30Items = [
     { icon:'🏦', label:'Deposit prescribed info served',
       done: propLog.some(e=>e.template_id==='prescribed'||e.template_id?.includes('prescribed'))||tenantLog2.some(e=>e.template_id?.includes('prescribed')),
-      action:`moCommunicationsHub('${tid}')`, btnLabel:'Send now' },
+      action:`moPrescribedInfo('${tid}')`, btnLabel:'Generate & Send' },
     { icon:'💰', label:'Deposit scheme protected',
       done: !!(t.scheme&&t.scheme_ref),
       action:`moDepositCertModal('${t.id}')`, btnLabel:'Record deposit' },
@@ -9028,7 +9028,7 @@ function pgTenantDetail(tid) {
       action:`moBulkScan('${t.prop_id}')`, btnLabel:'Upload test record' },
     { icon:'📋', label:'Inventory / schedule of condition signed',
       done: propCerts.some(c=>c.type&&(c.type.toLowerCase().includes('inventory')||c.type.toLowerCase().includes('schedule of condition'))),
-      action:`nav('inventory-reports')`, btnLabel:'Create Inventory' },
+      action:`moInventoryReport('${t.prop_id}')`, btnLabel:'Create Inventory' },
     { icon:'🧪', label:'Legionella risk assessment completed',
       done: propCerts.some(c=>c.type&&c.type.toLowerCase().includes('legionella')),
       action:`moBulkScan('${t.prop_id}')`, btnLabel:'Upload assessment' },
