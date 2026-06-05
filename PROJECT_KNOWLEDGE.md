@@ -3851,3 +3851,185 @@ Now throws properly → catch block fires → shows actual error message in toas
 | 16 | `day30_pack` email template not yet built | Post-launch backlog |
 | 17 | `kycRows` dead code — ✅ removed Session 35 | Closed |
 | 18 | Block 4 `new Function()` syntax check fails | Likely false positive — all individual functions test clean. Confirm in browser. |
+
+---
+
+## Session 36 — 5 June 2026 — Syntax Errors, Bug Fixes & KYC Layout Fix
+
+**Date:** 5 June 2026
+**Files modified:** `landlord.html`
+
+### Bug Fixes
+
+#### 1. Syntax error — over-escaped `replace()` in KYC slot View button onclick (line 9396)
+**Problem:** `SyntaxError: Invalid or unexpected token` — the View button `onclick` passed doc label via `replace(/'/g, \\"\\\\\\\\'\\"`)` inside a single-quoted JS arg. The `\\"` broke out of the `onclick="..."` HTML attribute, causing the browser to see a premature attribute close.
+**Fix:** Removed label arg entirely — passes `''` as second arg to `viewDocInline`. Function already handles empty label gracefully. No quote escaping needed.
+
+#### 2. Missing `}` closing ternary in KYC slot renderer (line 9395)
+**Problem:** `SyntaxError: Missing } in template expression` — the ternary `${slotDocs.length ? ... : ...}` was missing its closing `}` after the false branch.
+**Fix:** Added `}` after the AI auto-scan div closing backtick.
+
+#### 3. `SB is not defined` in `_markTenancyStep` (line 3697)
+**Problem:** `ReferenceError: SB is not defined` — Supabase client is `sb` (lowercase) throughout the file. `_markTenancyStep` was using `SB` (uppercase).
+**Fix:** `SB.from(...)` → `sb.from(...)`.
+
+#### 4. `start_date` ISO timestamp failing `<input type="date">` validation (line 13139)
+**Problem:** `"2026-06-03T23:50:46.054501+00:00" does not conform to required format "yyyy-MM-dd"` — Supabase returns `start_date` as a full ISO timestamp but the e-sign modal date input requires `yyyy-MM-dd` only.
+**Fix:** `value="${t.start_date||''}"` → `value="${t.start_date ? t.start_date.slice(0,10) : ''}"`.
+
+#### 5. Duplicate `calToday` function declaration (lines 11424/11430)
+**Problem:** `SyntaxError: Identifier 'calToday' has already been declared` — exact duplicate function body back-to-back. Killed entire JS block before any code ran, causing full page layout failure (no styles, no nav, nothing).
+**Fix:** Removed the duplicate definition. Single `calToday` at line 11424 retained.
+
+#### 6. Duplicate View button in KYC slot header
+**Problem:** Each slot had a `👁 View` button in the slot header row (left side) AND a View button inside each doc card (right side) — two View buttons per uploaded document.
+**Fix:** Removed the slot-header View button. View remains only inside individual doc cards via `renderTenantDocCard`.
+
+#### 7. Missing `</div>` for `flex-shrink:0` wrapper in `_kycUploadRows` (line ~8831)
+**Problem:** The `<div style="flex-shrink:0">` wrapping the Upload button and AI auto-scan badge was never closed. Doc cards rendered inside the flex wrapper instead of below it — causing the entire KYC slot layout to collapse (icon, label, badge, and button all stacking vertically in a narrow column).
+**Fix:** Added the missing `</div>` closing the `flex-shrink:0` div, before the `${hasDocs ? slotDocs.map...}` doc cards.
+
+### DB Migrations Run This Session
+None.
+
+### Known Issues — Updated
+
+| # | Issue | Status |
+|---|---|---|
+| 1 | ICO number placeholder in legal docs | Pending registration |
+| 2 | MX record for inbound email | Parked post-launch |
+| 3 | `login.html` newsletter signup checkbox | Not built |
+| 4 | `moFinancials` PDF export — jsPDF needed | Post-launch backlog |
+| 5 | Section 8 UX handoff to Form 3A | Post-launch backlog |
+| 6 | WhatsApp reminders | Post-launch backlog |
+| 7 | Free public compliance checker | Marketing priority |
+| 8 | Blog / content hub | Marketing priority |
+| 9 | Postcode finder — replace with getAddress.io | Post-launch backlog |
+| 10 | `stripe_price_id` NULL — sandbox only | Closed |
+| 11 | `newsletter_opted_in` column missing from user_profiles | Pending SQL |
+| 12 | favicon.ico missing | Post-launch backlog |
+| 13 | `relet_prepared` column needed on tenants | Pending SQL |
+| 14 | `portal_enabled` column — ✅ run Session 32 | Closed |
+| 15 | RTR columns on tenants — ✅ run Session 35 | Closed |
+| 16 | `day30_pack` email template not yet built | Post-launch backlog |
+| 17 | `kycRows` dead code — ✅ removed Session 35 | Closed |
+| 18 | Block 4 `new Function()` false positive | Closed — confirmed browser-only issue |
+| 19 | `start_date` ISO timestamp on date input | ✅ Fixed Session 36 |
+| 20 | Duplicate `calToday` declaration | ✅ Fixed Session 36 |
+
+---
+
+## Session 37 — 5 June 2026 — Day 1/30 Kit Overhaul, PDF Attachments, Bulk Scan Fix
+
+**Date:** 5 June 2026
+**Files modified:** `landlord.html`, `ai-proxy.ts` (edge function)
+
+---
+
+### Overview
+Major overhaul of the Day 1 and Day 30 compliance pack system. Root causes identified and fixed: docs not ticking, wrong tenant selected, email sending doc names not actual PDFs, bulk scan not storing files, Day 30 dispatch not working.
+
+---
+
+### Bug Fixes
+
+#### 1. Welcome kit "Done" button — page not refreshing after send
+**Problem:** After sending the welcome kit, the "Done" button only called `closeMo()`. The DOM never re-rendered, so Day 1 journey card ticks stayed stale even though `D.certs` was updated in memory with `served: true`.
+**Fix:** Done button now calls `closeMo();nav(window._currentPage,window._currentParam)` — forces re-render of current page using updated in-memory data.
+
+#### 2. Written Statement tick — checking wrong data source
+**Problem:** The Day 1 "Written Statement e-signed" done check read `email_log` for entries with `'sign'` in the template ID. This fires when the request is *sent*, not when it's *signed*. So the tick never appeared even after the tenant signed.
+**Fix:** Done check now reads `D.esignReq` directly: `(D.esignReq||[]).some(r=>String(r.tenant_id)===String(t.id)&&r.document_type==='written_statement'&&r.status==='signed')`.
+
+#### 3. Gas/EICR/EPC Day 1 ticks — required `served: true` which was never set on upload
+**Problem:** All three cert done checks required `c.served || c.served_to_tenant === true`. `served: true` is only ever set when the welcome kit is dispatched (lines 4868–4870). If EICR/EPC were uploaded after the welcome kit was already sent, they'd never tick.
+**Fix:** Removed `&& (c.served_to_tenant || c.served)` from all three. Tick fires as soon as cert exists in `D.certs` for that property.
+
+#### 4. Bulk scan 8s timeout — scan results silently lost
+**Problem:** `scanAndFill` AI call raced against an 8-second `setTimeout(resolve, 8000)`. Edge function calls routinely take longer. When timeout fired first, `resolve()` was called with nothing in `results[]`. User saw "0 documents saved" toast.
+**Fix:** Timeout increased to 30s. `resolved` flag prevents double-resolve race condition. If AI genuinely times out, file still appears in results with blank fields and "⚠ Fill manually" label so landlord can type details and save.
+
+#### 5. `saveBulkResults` — insert errors swallowed silently + file never stored
+**Problem 1:** `if (!error && data)` silently skipped on insert failure — user saw no feedback.
+**Problem 2:** Bulk scan only saved cert metadata (type, expiry) — never uploaded the actual file to Supabase storage. `file_url` was always null, so attachments could never work.
+**Fix:** Added `if (error) { toast(...); continue; }` to surface failures. After successful insert, file is now uploaded to `documents/certs/{userId}/{certId}.{ext}` bucket, public URL retrieved and saved back to cert row as `file_url`. Degrades gracefully if file upload fails — cert metadata still saved.
+
+#### 6. Welcome kit email — document names sent, not actual PDFs
+**Problem:** Frontend tried to fetch cert files and convert to base64 using `btoa(String.fromCharCode(...new Uint8Array(buf)))`. This crashes silently for files over ~1MB — the spread operator hits browser call stack limits. Email sent successfully but with zero attachments.
+**Fix (two parts):**
+- **Frontend:** Changed to send `attachment_urls: [{url, filename}]` — just the storage URLs, no browser-side file fetching.
+- **Edge function (`ai-proxy.ts`):** Added `attachment_urls` handler — Deno fetches each file server-side (no memory constraints), converts to base64 using a safe loop, passes to Resend `attachments[]`. Old `attachments` (base64) path kept for inventory report and RRA sheet sends.
+
+#### 7. Welcome kit — wrong tenant selected
+**Problem:** `moWelcomeKit` used `D.tenants.find(t => t.prop_id===pid && t.status==='Active')` — returns first active tenant. With multiple tenants on a property, this picked the wrong person.
+**Fix:** Now finds `is_lead` tenant first: `D.tenants.find(t => t.prop_id===pid && t.is_lead && t.status==='Active') || D.tenants.find(t => t.prop_id===pid && t.status==='Active')`.
+
+#### 8. Welcome kit modal — everything showing red for missing docs
+**Problem:** Any doc with `hasIssue: true` (including simply "not yet uploaded") showed red `⚠ Action needed` badge with red border/background. Looked like a crisis even for normal pre-tenancy state.
+**Fix:** Split into two states — `isExpired` (red, only for `st.lbl === 'EXPIRED'/'URGENT'`) vs `isMissing` (amber). Missing mandatory docs now show amber "Not uploaded" badge. Note font increased 11px → 12px.
+
+#### 9. Smoke & CO alarm test — not wired to cert system
+**Problem:** Day 30 "Smoke & CO alarm tested" done check read `email_log` for emails with "smoke" in subject — fragile and wrong. No upload path existed.
+**Fix:** Done check now reads `propCerts` for type containing "smoke"/"co alarm"/"carbon monoxide". Button changed from `moCommunicationsHub` → `moBulkScan`. "Smoke & CO Alarm Test Record" and "Legionella Risk Assessment" added to bulk scan cert type dropdown.
+
+#### 10. `_pollEsignSigned` — new function for post-kit esign monitoring
+**New function added** before `moIssue`. Triggered after welcome kit dispatch. Polls `esign_requests` every 30s (max 20 attempts / 10 mins) for all active tenants on property. When all have `status === 'signed'`: calls `_markTenancyStep('written_statement_done')`, toasts landlord, writes audit log, re-renders tenant detail page if currently open.
+
+#### 11. Day 30 pack — Dispatch button not working, no dedicated send function
+**Problem:** "Dispatch Day 30 Pack" button and all Day 30 individual action buttons called `moCommunicationsHub` — a generic comms menu with no Day 30 logic.
+**Fix:** Built `moDay30Kit(tid)` and `sendDay30Kit(tid)` functions:
+- `moDay30Kit`: Opens modal showing readiness checklist (Prescribed Info, Inventory, Smoke/CO, Legionella). Always shows send button — non-blocking.
+- `sendDay30Kit`: Generates Prescribed Information PDF using jsPDF (same logic as `generatePrescribedInfoPDF`). If inventory report exists for property, generates that PDF too. Sends both as `attachments[]` via edge function. Logs `template_id: 'day30_pack'`. Re-renders page on success.
+- Deposit "Send now" row action wired to `moDay30Kit`. "Dispatch Day 30 Pack" button wired to `moDay30Kit`.
+
+---
+
+### Edge Function Changes
+
+#### `ai-proxy.ts` — new `attachment_urls` handler
+```
+if (body.attachment_urls && Array.isArray(body.attachment_urls)) {
+  for (const a of body.attachment_urls) {
+    // fetch file server-side, convert to base64, push to attachments[]
+  }
+}
+```
+- Old `attachments` (direct base64) path preserved for inventory report and RRA sheet
+- Returns Resend response status correctly (was always returning 200 previously)
+- **Must be deployed to Supabase for PDF attachments to work**
+
+---
+
+### DB Migrations Run This Session
+None.
+
+---
+
+### Known Issues — Updated
+
+| # | Issue | Status |
+|---|---|---|
+| 1 | ICO number placeholder in legal docs | Pending registration |
+| 2 | MX record for inbound email | Parked post-launch |
+| 3 | `login.html` newsletter signup checkbox | Not built |
+| 4 | `moFinancials` PDF export — jsPDF needed | Post-launch backlog |
+| 5 | Section 8 UX handoff to Form 3A | Post-launch backlog |
+| 6 | WhatsApp reminders | Post-launch backlog |
+| 7 | Free public compliance checker | Marketing priority |
+| 8 | Blog / content hub | Marketing priority |
+| 9 | Postcode finder — replace with getAddress.io | Post-launch backlog |
+| 10 | `stripe_price_id` NULL — sandbox only | Closed |
+| 11 | `newsletter_opted_in` column missing from user_profiles | Pending SQL |
+| 12 | favicon.ico missing | Post-launch backlog |
+| 13 | `relet_prepared` column needed on tenants | Pending SQL |
+| 14 | `portal_enabled` column — ✅ run Session 32 | Closed |
+| 15 | RTR columns on tenants — ✅ run Session 35 | Closed |
+| 16 | `day30_pack` email template | ✅ Built Session 37 |
+| 17 | `kycRows` dead code — ✅ removed Session 35 | Closed |
+| 18 | Block 4 `new Function()` false positive | Closed |
+| 19 | `start_date` ISO timestamp on date input | ✅ Fixed Session 36 |
+| 20 | Duplicate `calToday` declaration | ✅ Fixed Session 36 |
+| 21 | Welcome kit PDF attachments not arriving | ✅ Fixed Session 37 — requires `ai-proxy.ts` deploy |
+| 22 | Existing certs have no `file_url` — won't attach until re-uploaded | Known — landlords must re-upload via bulk scan |
+| 23 | Day 30 kit modal behaviour — needs live test | Pending test Session 38 |
+| 24 | `start_date` amber warning in `nav()` — second date input not yet traced | Carry forward |

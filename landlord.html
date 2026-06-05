@@ -9022,7 +9022,7 @@ function pgTenantDetail(tid) {
       action:`moCommunicationsHub('${tid}')`, btnLabel:'Send now' },
     { icon:'💰', label:'Deposit scheme protected',
       done: !!(t.scheme&&t.scheme_ref),
-      action:`moTenantDetail('${t.id}')`, btnLabel:'Add scheme ref' },
+      action:`moDepositCertModal('${t.id}')`, btnLabel:'Record deposit' },
     { icon:'🔔', label:'Smoke & CO alarm tested',
       done: propCerts.some(c=>c.type&&(c.type.toLowerCase().includes('smoke')||c.type.toLowerCase().includes('co alarm')||c.type.toLowerCase().includes('carbon monoxide'))),
       action:`moBulkScan('${t.prop_id}')`, btnLabel:'Upload test record' },
@@ -9041,7 +9041,7 @@ function pgTenantDetail(tid) {
     const col = item.done ? 'var(--green-dark)' : 'var(--muted)';
     const bg  = item.done ? 'var(--green-bg)'   : 'var(--off)';
     return `
-      <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);${!item.done?'cursor:pointer':''}" ${!item.done?`onclick="${item.action}"`:''}">
+      <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);${!item.done?'cursor:pointer':''}" ${!item.done?`onclick="${item.action}"`:''}>
         <span style="width:22px;height:22px;border-radius:50%;background:${bg};color:${col};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">${item.done?'✓':'○'}</span>
         <span style="font-size:12px;flex:1;${item.done?'text-decoration:line-through;opacity:0.6':''}">${item.icon} ${item.label}</span>
         ${!item.done?`<button class="btn btn-sm btn-navy" style="font-size:11px;padding:2px 9px;flex-shrink:0" onclick="event.stopPropagation();${item.action}">${item.btnLabel}</button>`:''}
@@ -9081,7 +9081,7 @@ function pgTenantDetail(tid) {
         <div style="padding:8px 16px 14px;border-top:1px solid var(--border)">
           ${_day30Dispatched
             ? `<div style="font-size:11px;color:var(--green-dark);font-weight:600">✓ Day 30 Pack dispatched</div>`
-            : `<button class="btn btn-navy" style="width:100%;font-size:12px;padding:7px 0" onclick="moCommunicationsHub('${tid}')">📨 Dispatch Day 30 Pack</button>
+            : `<button class="btn btn-navy" style="width:100%;font-size:12px;padding:7px 0" onclick="moDay30Kit('${t.prop_id}','${tid}')">📨 Dispatch Day 30 Pack</button>
                <div style="font-size:10px;color:var(--muted);margin-top:5px;text-align:center">Sends deposit prescribed info + inventory to tenant</div>`
           }
         </div>
@@ -11943,6 +11943,291 @@ function moPrescribedInfo(tid) {
     </div>
   `, `<button class="btn" onclick="closeMo()">Close</button>
      <button class="btn btn-navy" onclick="generatePrescribedInfoPDF('${tid}')">📥 Download PDF</button>`);
+}
+
+// ── DEPOSIT CERTIFICATE MODAL — focused 2-section modal ──
+// Upload cert via AI scanner OR manually enter scheme+ref
+function moDepositCertModal(tid) {
+  const t = D.tenants.find(x => String(x.id) === String(tid));
+  if (!t) return;
+  const p = P(t.prop_id) || { address: '—' };
+  const schemeOpts = ['','DPS','TDS','MyDeposits'].map(s =>
+    `<option value="${s}"${(t.scheme||'')===s?' selected':''}>${s||'— Not set —'}</option>`).join('');
+
+  openMo('🏦 Deposit Protection', `${t.name} · ${p.address}`,`
+    <div style="background:rgba(11,30,61,0.04);border:1px solid rgba(11,30,61,0.1);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:var(--txt);line-height:1.6">
+      Register the deposit with <strong>DPS, MyDeposits or TDS</strong> within <strong>30 days</strong> of receipt, then upload or record the certificate here. Fine: up to <strong>3× the deposit</strong> if missed.
+    </div>
+
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:10px">Option 1 — Upload certificate (AI auto-fills)</div>
+    <div id="dep-scan-box" style="border:2px dashed var(--border);border-radius:8px;padding:20px;text-align:center;cursor:pointer;background:var(--off)" onclick="document.getElementById('dep-file-input').click()">
+      <div style="font-size:22px;margin-bottom:6px">📄</div>
+      <div style="font-size:13px;font-weight:600;color:var(--txt)">Upload deposit certificate</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:3px">DPS, TDS, MyDeposits — AI auto-fills scheme + ref</div>
+      <input type="file" id="dep-file-input" accept="image/*,.pdf" style="display:none" onchange="_scanDepositCertModal(this,'${tid}')">
+    </div>
+    <div id="dep-scan-result" style="margin-top:6px;min-height:18px"></div>
+
+    <div style="display:flex;align-items:center;gap:10px;margin:16px 0 12px"><div style="flex:1;height:1px;background:var(--border)"></div><span style="font-size:11px;color:var(--muted);flex-shrink:0">or enter manually</span><div style="flex:1;height:1px;background:var(--border)"></div></div>
+
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:10px">Option 2 — Already registered? Record the details</div>
+    <div class="fg-row" style="margin-bottom:0">
+      <div class="fg">
+        <label>Deposit scheme <span class="req">*</span></label>
+        <select id="dep-scheme" class="fi">${schemeOpts}</select>
+      </div>
+      <div class="fg">
+        <label>Scheme reference <span class="req">*</span></label>
+        <input id="dep-ref" class="fi" value="${t.scheme_ref||''}" placeholder="e.g. DPS12345678">
+      </div>
+    </div>
+    <div class="fg" style="margin-top:10px">
+      <label>Deposit amount (£)</label>
+      <input id="dep-amount" class="fi" type="number" min="0" value="${t.deposit||''}" placeholder="e.g. 2500">
+    </div>
+  `,`<button class="btn" onclick="closeMo()">Cancel</button>
+   <button class="btn btn-navy" id="dep-save-btn" onclick="_saveDepositScheme('${tid}')">✓ Save deposit details</button>`);
+}
+
+async function _scanDepositCertModal(input, tid) {
+  if (!input.files[0]) return;
+  const file = input.files[0];
+  const box = document.getElementById('dep-scan-box');
+  const result = document.getElementById('dep-scan-result');
+  if (box) box.innerHTML = '<div style="font-size:22px">⏳</div><div style="font-size:13px;font-weight:600;color:var(--blue)">Scanning certificate…</div>';
+  if (result) result.innerHTML = '';
+  try {
+    await scanAndFill(file, (parsed) => {
+      const schemeEl = document.getElementById('dep-scheme');
+      const refEl = document.getElementById('dep-ref');
+      const amountEl = document.getElementById('dep-amount');
+      const rawScheme = parsed.scheme || parsed.type || parsed.engineer || parsed.issuing_authority || '';
+      if (rawScheme && schemeEl) {
+        const match = ['DPS','MyDeposits','TDS'].find(s => rawScheme.toLowerCase().includes(s.toLowerCase()));
+        if (match) schemeEl.value = match;
+      }
+      const ref = parsed.ref || parsed.reference || parsed.doc_number || '';
+      if (ref && refEl) refEl.value = ref;
+      const amt = parseFloat(parsed.amount || parsed.deposit) || 0;
+      if (amt > 0 && amountEl) amountEl.value = amt;
+      if (box) box.innerHTML = '<div style="font-size:22px">✅</div><div style="font-size:13px;font-weight:600;color:var(--green-dark)">Certificate scanned — check details below</div>';
+      if (result) result.innerHTML = `<span style="color:var(--green-dark);font-size:11px">✓ AI extracted: ${[rawScheme,ref?'ref '+ref:'',amt?'£'+amt:''].filter(Boolean).join(' · ')}</span>`;
+    }, 'UK tenancy deposit protection certificate. Extract: scheme name (DPS, MyDeposits, or TDS), deposit amount in GBP (number only), protection reference number. Return JSON only, keys: scheme, amount, ref.');
+  } catch(e) {
+    if (result) result.innerHTML = '<span style="color:var(--red);font-size:11px">Scan failed — enter details manually below</span>';
+    if (box) box.innerHTML = '<div style="font-size:22px">⚠️</div><div style="font-size:13px;color:var(--txt)">Upload deposit certificate</div><div style="font-size:11px;color:var(--muted)">DPS, TDS, MyDeposits</div><input type="file" accept="image/*,.pdf" style="display:none" id="dep-file-input" onchange="_scanDepositCertModal(this,\''+tid+'\')">';
+  }
+}
+
+async function _saveDepositScheme(tid) {
+  const t = D.tenants.find(x => String(x.id) === String(tid));
+  if (!t) return;
+  const btn = document.getElementById('dep-save-btn');
+  const scheme = document.getElementById('dep-scheme')?.value;
+  const ref = document.getElementById('dep-ref')?.value.trim();
+  const amount = parseFloat(document.getElementById('dep-amount')?.value) || t.deposit;
+  if (!scheme || !ref) { toast('Deposit scheme and reference are required', true); return; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Saving…'; }
+  try {
+    const updates = { scheme, scheme_ref: ref, deposit: amount || t.deposit };
+    const { error } = await sb.from('tenants').update(updates).eq('id', tid);
+    if (error) throw new Error(error.message);
+    Object.assign(t, updates);
+    await logAudit('DEPOSIT_SCHEME_SET', 'tenants', tid, `Deposit scheme set: ${scheme} · Ref: ${ref} · £${amount||t.deposit}`);
+    closeMo();
+    toast(`✓ Deposit scheme saved — ${scheme} · ${ref}`);
+    if (window._currentPage === 'tenant-detail') nav('tenant-detail', String(tid));
+  } catch(err) {
+    if (btn) { btn.disabled = false; btn.textContent = '✓ Save deposit details'; }
+    toast('Error saving: ' + err.message, true);
+  }
+}
+
+// ── DAY 30 KIT MODAL ──
+function moDay30Kit(pid, tid) {
+  const p = P(pid);
+  if (!p) { toast('Property not found', true); return; }
+  const t = D.tenants.find(x => String(x.id) === String(tid)) ||
+            D.tenants.find(x => String(x.prop_id) === String(pid) && x.status === 'Active');
+  if (!t) { toast('No active tenant found', true); return; }
+  const propAddr = [p.address, p.city].filter(Boolean).join(', ');
+  const tenantName = t.name || 'Tenant';
+  const pCerts = CF(pid);
+  const propLog = D.emailLog.filter(e => String(e.prop_id) === String(pid));
+  const tenantLog = D.emailLog.filter(e => String(e.tenant_id) === String(t.id));
+
+  // Check status of each item
+  const depCertDoc = (D.tenantDocs||[]).find(d => String(d.tenant_id) === String(t.id) && d.slot === 'deposit_cert');
+  const depStatus = depCertDoc ? 'green' : (t.scheme && t.scheme_ref) ? 'amber' : 'red';
+  const piSent = propLog.some(e => e.template_id==='prescribed_info'||e.template_id?.includes('prescribed')) ||
+                 tenantLog.some(e => e.template_id==='prescribed_info'||e.template_id?.includes('prescribed'));
+  const smokeCert = pCerts.some(c => c.type && (c.type.toLowerCase().includes('smoke') || c.type.toLowerCase().includes('co alarm') || c.type.toLowerCase().includes('carbon monoxide')));
+  const legCert = pCerts.some(c => c.type && c.type.toLowerCase().includes('legionella'));
+  const inventoryCert = pCerts.some(c => c.type && (c.type.toLowerCase().includes('inventory') || c.type.toLowerCase().includes('schedule of condition')));
+  const hasPet = !!(t.has_pet || (t.notes||'').toLowerCase().includes('pet'));
+  const petDone = propLog.some(e=>(e.subject||'').toLowerCase().includes('pet')) || tenantLog.some(e=>(e.subject||'').toLowerCase().includes('pet'));
+
+  const statusBadge = (done, mandatory) => {
+    if (done) return `<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:100px;background:var(--green-bg);color:var(--green-dark)">✓ Done</span>`;
+    if (mandatory) return `<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:100px;background:var(--red-bg);color:var(--red)">Required</span>`;
+    return `<span style="font-size:10px;font-weight:600;padding:1px 7px;border-radius:100px;background:var(--off);color:var(--muted)">Optional</span>`;
+  };
+
+  const itemRow = (icon, label, note, done, mandatory, actionHtml) => `
+    <div style="border:1px solid ${done?'var(--border)':mandatory?'rgba(229,62,62,0.2)':'var(--border)'};border-radius:8px;padding:11px 14px;margin-bottom:8px;background:${done?'var(--white)':mandatory?'rgba(229,62,62,0.02)':'var(--white)'}">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:${(done||!actionHtml)?'0':'8px'}">
+        <span style="font-size:16px">${done?'✅':'⚪'}</span>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600;${done?'text-decoration:line-through;opacity:0.6':''}">${icon} ${label}</div>
+          ${note?`<div style="font-size:11px;color:var(--muted);margin-top:1px">${note}</div>`:''}
+        </div>
+        ${statusBadge(done,mandatory)}
+      </div>
+      ${(!done && actionHtml)?`<div style="margin-top:6px">${actionHtml}</div>`:''}
+    </div>`;
+
+  const depNote = depStatus==='green' ? `${t.scheme} · Ref: ${t.scheme_ref}` : t.scheme ? `Scheme set (${t.scheme}) — upload certificate` : 'Not registered — record details first';
+  const depAction = `<button class="btn btn-sm btn-navy" style="font-size:11px" onclick="closeMo();moDepositCertModal('${t.id}')">🏦 Record deposit scheme →</button>`;
+  const piAction = `<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-sm btn-navy" style="font-size:11px" onclick="closeMo();moPrescribedInfo('${t.id}')">📄 Generate Prescribed Info →</button><span style="font-size:11px;color:var(--muted);align-self:center">Requires deposit scheme set first</span></div>`;
+  const scanAction = `<button class="btn btn-sm btn-navy" style="font-size:11px" onclick="closeMo();moBulkScan('${pid}')">📎 Upload via AI scanner →</button>`;
+  const inventoryAction = `<button class="btn btn-sm btn-navy" style="font-size:11px" onclick="closeMo();nav('inventory-reports')">📋 Create inventory report →</button>`;
+
+  const mandatoryCount = [depStatus!=='green'?1:0, !piSent?1:0, !smokeCert?1:0, !legCert?1:0].reduce((a,b)=>a+b,0);
+
+  openMo(`📆 Day 30 Pack`, `${propAddr} · ${tenantName}`, `
+    <div style="font-size:13px;color:var(--muted);margin-bottom:14px">
+      Documents legally required within <strong>30 days</strong> of deposit receipt (Housing Act 2004 + RRA 2025). Tick items off and send the pack to your tenant.
+    </div>
+
+    ${mandatoryCount > 0
+      ? `<div style="background:rgba(229,62,62,0.07);border:1px solid rgba(229,62,62,0.2);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--red);margin-bottom:14px;display:flex;gap:8px">
+          <span style="flex-shrink:0;font-size:16px">⚠️</span>
+          <div><strong>${mandatoryCount} mandatory item${mandatoryCount!==1?'s':''} outstanding</strong> — complete these before sending the pack.</div>
+        </div>`
+      : `<div style="background:var(--green-bg);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--green-dark);margin-bottom:14px">✅ All mandatory items complete — ready to send.</div>`
+    }
+
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px">Mandatory (within 30 days of deposit receipt)</div>
+    ${itemRow('🏦','Deposit Protection Certificate', depNote, depStatus==='green', true, depAction)}
+    ${itemRow('📋','Prescribed Information', piSent?'Already sent':'Formal notice of deposit protection details', piSent, true, (!t.scheme||!t.scheme_ref)?`<span style="font-size:11px;color:var(--amber)">⚠ Set deposit scheme first, then generate Prescribed Info</span>`:piAction)}
+    ${itemRow('🔔','Smoke & CO Alarm Test Record', 'Day 1 test record signed by tenant', smokeCert, true, scanAction)}
+    ${itemRow('🧪','Legionella Risk Assessment', 'Low-risk self-assessment acceptable for single-let', legCert, true, scanAction)}
+
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:14px 0 8px">Recommended</div>
+    ${itemRow('📦','Inventory / Schedule of Condition', 'Signed by tenant — essential for deposit disputes', inventoryCert, false, inventoryAction)}
+    ${hasPet ? itemRow('🐾','Pet Agreement', 'Signed agreement covering pet responsibilities', petDone, false, `<button class="btn btn-sm btn-navy" style="font-size:11px" onclick="closeMo();moCommunicationsHub('${t.id}')">📨 Send pet agreement →</button>`) : ''}
+
+    <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:14px;margin-top:4px">
+      <div style="font-size:12px;font-weight:700;color:var(--txt);margin-bottom:10px">Send to tenant</div>
+      <div class="fg-row" style="margin-bottom:0">
+        <div class="fg"><label>Tenant name</label><input type="text" id="d30-name" value="${tenantName}" class="fi"></div>
+        <div class="fg"><label>Tenant email <span class="req">*</span></label><input type="email" id="d30-email" value="${t.email||''}" class="fi" placeholder="tenant@example.com"></div>
+      </div>
+    </div>
+  `, `<button class="btn" onclick="closeMo()">Cancel</button>
+     <button class="btn btn-navy" id="d30-send-btn" onclick="sendDay30Kit('${pid}','${t.id}')">📨 Send Day 30 Pack</button>`);
+}
+
+async function sendDay30Kit(pid, tid) {
+  if (_expiredGuard('Send Day 30 Pack')) return;
+  const btn = document.getElementById('d30-send-btn');
+  const toEmail = document.getElementById('d30-email')?.value.trim();
+  const toName  = document.getElementById('d30-name')?.value.trim();
+  if (!toEmail) { toast('Tenant email is required', true); return; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Sending…'; }
+
+  const p = P(pid);
+  const t = D.tenants.find(x => String(x.id) === String(tid));
+  const propAddr = [p?.address, p?.city].filter(Boolean).join(', ');
+  const pCerts = CF(pid);
+  const today = new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' });
+
+  const piSent = D.emailLog.some(e => (String(e.prop_id)===String(pid)||String(e.tenant_id)===String(tid)) && (e.template_id==='prescribed_info'||e.template_id?.includes('prescribed')));
+  const smokeCert = pCerts.find(c => c.type && (c.type.toLowerCase().includes('smoke')||c.type.toLowerCase().includes('co alarm')||c.type.toLowerCase().includes('carbon monoxide')));
+  const legCert   = pCerts.find(c => c.type && c.type.toLowerCase().includes('legionella'));
+  const invCert   = pCerts.find(c => c.type && (c.type.toLowerCase().includes('inventory')||c.type.toLowerCase().includes('schedule of condition')));
+
+  const statusRow = (icon, label, done, detail) => `
+    <tr>
+      <td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px">${icon} ${label}</td>
+      <td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px;font-weight:600;color:${done?'#00A87A':'#D97706'}">${done?'✓ Provided':'⚠ Pending'}</td>
+      <td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:12px;color:#7A8FA6">${detail}</td>
+    </tr>`;
+
+  const html = `<!DOCTYPE html><html><body style="font-family:DM Sans,Arial,sans-serif;color:#1A2B45;max-width:620px;margin:0 auto;padding:0">
+    <div style="background:#0B1E3D;padding:24px 28px;border-radius:12px 12px 0 0">
+      <div style="font-size:20px;font-weight:700;color:#fff">NEXLET</div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.5);margin-top:4px">Day 30 Compliance Pack</div>
+    </div>
+    <div style="background:#fff;border:1px solid #E4EAF1;border-top:none;border-radius:0 0 12px 12px;padding:28px">
+      <h2 style="font-size:18px;font-weight:700;margin:0 0 6px">Important tenancy documents</h2>
+      <p style="font-size:13px;color:#7A8FA6;margin:0 0 6px">Property: <strong style="color:#1A2B45">${propAddr}</strong></p>
+      <p style="font-size:13px;color:#1A2B45;margin:0 0 20px">Your landlord is required by law to provide the following documents within 30 days of receiving your deposit. Please keep copies for your records.</p>
+
+      <h3 style="font-size:14px;font-weight:700;margin:0 0 10px">Compliance documents</h3>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:20px;border:1px solid #E4EAF1;border-radius:8px;overflow:hidden">
+        <thead><tr style="background:#F6F8FB">
+          <th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:#7A8FA6;text-transform:uppercase">Document</th>
+          <th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:#7A8FA6;text-transform:uppercase">Status</th>
+          <th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:#7A8FA6;text-transform:uppercase">Details</th>
+        </tr></thead>
+        <tbody>
+          ${statusRow('🏦','Deposit Protection Certificate', !!(t?.scheme&&t?.scheme_ref), t?.scheme?`${t.scheme} · Ref: ${t.scheme_ref||'—'} · £${(t.deposit||0).toLocaleString()}`:'Scheme not yet registered')}
+          ${statusRow('📋','Prescribed Information', piSent, piSent?'Served — see previous correspondence':'Will be provided separately')}
+          ${statusRow('🔔','Smoke & CO Alarm Test Record', !!smokeCert, smokeCert?`Tested ${smokeCert.issued?new Date(smokeCert.issued).toLocaleDateString('en-GB'):''}`.trim():'To be confirmed')}
+          ${statusRow('🧪','Legionella Risk Assessment', !!legCert, legCert?`Assessed ${legCert.issued?new Date(legCert.issued).toLocaleDateString('en-GB'):''}`.trim():'To be confirmed')}
+          ${statusRow('📦','Inventory / Schedule of Condition', !!invCert, invCert?'Signed inventory on file':'Pending')}
+        </tbody>
+      </table>
+
+      <div style="background:#F6F8FB;border-radius:8px;padding:16px;margin-bottom:20px">
+        <div style="font-size:12px;font-weight:700;color:#7A8FA6;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Your deposit details</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          ${[['Deposit scheme', t?.scheme||'To be confirmed'],['Reference', t?.scheme_ref||'Pending'],['Deposit amount', t?.deposit?`£${t.deposit.toLocaleString()}`:'—'],['Property', propAddr]]
+            .map(([l,v])=>`<div><div style="font-size:11px;color:#7A8FA6;margin-bottom:2px">${l}</div><div style="font-size:13px;font-weight:600;color:#1A2B45">${v}</div></div>`).join('')}
+        </div>
+      </div>
+
+      <p style="font-size:12px;color:#7A8FA6;line-height:1.6;margin:0">These documents were served on <strong>${today}</strong> as required under the Housing Act 2004 and the Renters Rights Act 2025. A timestamped record has been created.</p>
+    </div>
+    <div style="padding:16px;text-align:center;font-size:11px;color:#999">Sent via NEXLET · nexlet.co.uk · documents@nexlet.co.uk</div>
+  </body></html>`;
+
+  // Build attachment_urls from certs that have file_url
+  const attachment_urls = [];
+  for (const { cert, filename } of [
+    { cert: smokeCert, filename: `Smoke_CO_Test_Record_${propAddr.replace(/[^a-z0-9]/gi,'_')}` },
+    { cert: legCert,   filename: `Legionella_Assessment_${propAddr.replace(/[^a-z0-9]/gi,'_')}` },
+    { cert: invCert,   filename: `Inventory_${propAddr.replace(/[^a-z0-9]/gi,'_')}` },
+  ]) {
+    if (!cert?.file_url) continue;
+    const ext = cert.file_url.split('.').pop().split('?')[0] || 'pdf';
+    attachment_urls.push({ url: cert.file_url, filename: `${filename}.${ext}` });
+  }
+
+  try {
+    const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ type:'send_email', to: toEmail, subject: `Your Day 30 tenancy documents — ${propAddr}`, html, ...(attachment_urls.length ? { attachment_urls } : {}) })
+    });
+    const resData = await res.json().catch(()=>({}));
+    if (!res.ok || resData.error) throw new Error(resData.error || resData.message || `Send failed (${res.status})`);
+
+    // Log to email_log
+    const logEntry = { prop_id: String(pid), tenant_id: t.id, tenant_name: toName, template_id: 'day30_pack', subject: `Day 30 tenancy documents — ${propAddr}`, status: 'Sent', user_id: currentUser.id };
+    const { data: logData } = await sb.from('email_log').insert(logEntry).select().single();
+    if (logData) D.emailLog.unshift(logData);
+
+    await logAudit('DAY30_PACK_SENT', 'tenants', t.id, `Day 30 pack sent to ${toEmail} for ${propAddr}. Deposit: ${t?.scheme||'unset'}·${t?.scheme_ref||'—'}, PI: ${piSent?'sent':'pending'}, Smoke/CO: ${smokeCert?'✓':'pending'}, Legionella: ${legCert?'✓':'pending'}, Inventory: ${invCert?'✓':'pending'}`);
+
+    closeMo();
+    toast('✓ Day 30 Pack sent to ' + toEmail);
+    if (window._currentPage === 'tenant-detail') nav('tenant-detail', String(t.id));
+
+  } catch(err) {
+    if (btn) { btn.disabled = false; btn.textContent = '📨 Send Day 30 Pack'; }
+    toast('Error sending Day 30 Pack: ' + err.message, true);
+  }
 }
 
 function generatePrescribedInfoPDF(tid) {
