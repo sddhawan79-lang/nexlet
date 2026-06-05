@@ -3486,8 +3486,26 @@ async function saveBulkResults() {
 
     const { data, error } = await sb.from('certificates').insert(cert).select().single();
     if (!error && data) {
+      // Upload the actual file to storage and save file_url
+      let fileUrl = null;
+      try {
+        const file = results[i].file;
+        if (file) {
+          const ext = file.name.split('.').pop() || 'pdf';
+          const fpath = `certs/${currentUser.id}/${data.id}.${ext}`;
+          const { error: upErr } = await sb.storage.from('documents').upload(fpath, file, { contentType: file.type, upsert: true });
+          if (!upErr) {
+            const { data: urlData } = sb.storage.from('documents').getPublicUrl(fpath);
+            if (urlData?.publicUrl) {
+              fileUrl = urlData.publicUrl;
+              await sb.from('certificates').update({ file_url: fileUrl }).eq('id', data.id);
+              data.file_url = fileUrl;
+            }
+          }
+        }
+      } catch(ue) { /* file upload failed — cert metadata still saved */ }
       D.certs.push({...data, file:true});
-      await logAudit('BULK_SCAN_CERT','certificates',data.id,`Bulk scan: ${type} · ${expiry||'no expiry'}`);
+      await logAudit('BULK_SCAN_CERT','certificates',data.id,`Bulk scan: ${type} · ${expiry||'no expiry'}${fileUrl?' · file stored':''}`);
       saved++;
     }
   }
@@ -4840,10 +4858,29 @@ async function sendWelcomeKit(pid) {
   </body></html>`;
 
   try {
+    // Build PDF attachments from stored cert files
+    const attachments = [];
+    const certsToAttach = [
+      { cert: gasCert,  label: 'Gas_Safety_Certificate' },
+      { cert: eicrCert, label: 'EICR' },
+      { cert: epcCert,  label: 'EPC' },
+    ];
+    for (const { cert, label } of certsToAttach) {
+      if (!cert?.file_url) continue;
+      try {
+        const r = await fetch(cert.file_url);
+        if (!r.ok) continue;
+        const buf = await r.arrayBuffer();
+        const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+        const ext = cert.file_url.split('.').pop().split('?')[0] || 'pdf';
+        attachments.push({ filename: `${label}_${propAddr.replace(/[^a-z0-9]/gi,'_')}.${ext}`, content: b64 });
+      } catch(fe) { /* skip file if fetch fails — email still sends */ }
+    }
+
     // Send the email
     const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ type:'send_email', to: tenantEmail, subject: `Your tenancy welcome pack — ${propAddr}`, html })
+      body: JSON.stringify({ type:'send_email', to: tenantEmail, subject: `Your tenancy welcome pack — ${propAddr}`, html, ...(attachments.length ? { attachments } : {}) })
     });
 
     // Log to email_log
@@ -8931,13 +8968,13 @@ function pgTenantDetail(tid) {
       done: propLog.some(e=>(e.template_id||'').includes('how_to_rent')||(e.subject||'').toLowerCase().includes('how to rent'))||tenantLog2.some(e=>(e.template_id||'').includes('how_to_rent')||(e.subject||'').toLowerCase().includes('how to rent')),
       action:`moCommunicationsHub('${tid}')`, btnLabel:'Send guide' },
     { icon:'🔥', label:'Gas Safety Certificate served',
-      done: propCerts.some(c=>c.type&&c.type.toLowerCase().includes('gas')),
+      done: propCerts.some(c=>c.type&&c.type.toLowerCase().includes('gas')&&(c.served_to_tenant||c.served)),
       action:`moBulkScan('${t.prop_id}')`, btnLabel:'Upload GSC' },
     { icon:'⚡', label:'EICR served to tenant',
-      done: propCerts.some(c=>c.type&&(c.type.toLowerCase().includes('eicr')||c.type.toLowerCase().includes('electrical'))),
+      done: propCerts.some(c=>c.type&&(c.type.toLowerCase().includes('eicr')||c.type.toLowerCase().includes('electrical'))&&(c.served_to_tenant||c.served)),
       action:`moBulkScan('${t.prop_id}')`, btnLabel:'Upload EICR' },
     { icon:'🏷', label:'EPC served to tenant',
-      done: propCerts.some(c=>c.type&&(c.type.toLowerCase().includes('epc')||c.type.toLowerCase().includes('energy'))),
+      done: propCerts.some(c=>c.type&&(c.type.toLowerCase().includes('epc')||c.type.toLowerCase().includes('energy'))&&(c.served_to_tenant||c.served)),
       action:`moBulkScan('${t.prop_id}')`, btnLabel:'Upload EPC' },
     { icon:'✍️', label:'Written Statement e-signed',
       done: propLog.some(e=>e.template_id?.includes('esign')||e.template_id?.includes('sign'))||tenantLog2.some(e=>e.template_id?.includes('esign')||e.template_id?.includes('sign')),
