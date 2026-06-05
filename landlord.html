@@ -10682,6 +10682,7 @@ async function _saveInventoryToDb(reportId) {
       }
     } catch(pe) { /* skip this photo — don't abort save */ }
   }
+  // First attempt — full row with photos
   const { error } = await sb.from('inventory_reports').insert({
     user_id: currentUser.id,
     prop_id: r.propId || null,
@@ -10691,6 +10692,18 @@ async function _saveInventoryToDb(reportId) {
     notes: r.notes || null
   });
   if (!error) { r._fromDb = true; return true; }
+  // Fallback — photos column may not exist yet, save without it
+  if (error.message && error.message.includes('photos')) {
+    const { error: e2 } = await sb.from('inventory_reports').insert({
+      user_id: currentUser.id,
+      prop_id: r.propId || null,
+      type: r.type,
+      report_text: r.text,
+      notes: r.notes || null
+    });
+    if (!e2) { r._fromDb = true; return true; }
+    return e2;
+  }
   return error;
 }
 
