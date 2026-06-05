@@ -4878,6 +4878,7 @@ async function sendWelcomeKit(pid) {
     closeMo();
     toast('✓ Welcome kit sent to ' + tenantEmail);
     _markTenancyStep(String(pid), 'welcome_kit_done', false);
+    _pollEsignSigned(String(pid));
 
     // Show confirmation
     openMo('✅ Welcome kit sent!', `${tenantName} · ${propAddr}`, `
@@ -4903,6 +4904,59 @@ async function sendWelcomeKit(pid) {
     if (btn) { btn.disabled = false; btn.textContent = '📦 Send welcome kit'; }
     toast('Error sending welcome kit: ' + err.message, true);
   }
+}
+
+// ── ESIGN POLL: watches for tenant signature after welcome kit sent ──
+function _pollEsignSigned(pid) {
+  const propTenants = D.tenants.filter(t => String(t.prop_id) === String(pid) && t.status === 'Active' && t.email);
+  if (!propTenants.length) return;
+
+  // Only poll if at least one tenant has a sent (not yet signed) esign request
+  const hasPending = propTenants.some(t =>
+    (D.esignReq || []).some(r => String(r.tenant_id) === String(t.id) && r.document_type === 'written_statement' && r.status !== 'signed')
+  );
+  if (!hasPending) return;
+
+  let attempts = 0;
+  const MAX = 20;       // 20 × 30s = 10 minutes max
+  const INTERVAL = 30000;
+
+  const interval = setInterval(async () => {
+    attempts++;
+    if (attempts > MAX) { clearInterval(interval); return; }
+
+    const tenantIds = propTenants.map(t => t.id);
+    const { data, error } = await sb
+      .from('esign_requests')
+      .select('*')
+      .in('tenant_id', tenantIds)
+      .eq('document_type', 'written_statement');
+
+    if (error || !data) return;
+
+    // Update D.esignReq with fresh rows
+    data.forEach(row => {
+      const idx = (D.esignReq || []).findIndex(r => r.id === row.id);
+      if (idx >= 0) D.esignReq[idx] = row;
+      else { D.esignReq = D.esignReq || []; D.esignReq.push(row); }
+    });
+
+    // Check if all tenants have now signed
+    const allSigned = propTenants.every(t =>
+      (D.esignReq || []).some(r => String(r.tenant_id) === String(t.id) && r.document_type === 'written_statement' && r.status === 'signed')
+    );
+
+    if (allSigned) {
+      clearInterval(interval);
+      _markTenancyStep(pid, 'written_statement_done', false);
+      const names = propTenants.map(t => t.first_name || t.name || 'Tenant').join(', ');
+      toast(`✓ Written Statement signed by ${names}`);
+      await logAudit('ESIGN_SIGNED', 'esign_requests', pid, `Written Statement signed by all tenants for prop ${pid}`);
+      // Re-render tenant detail if currently visible
+      const param = window._currentParam;
+      if (window._currentPage === 'tenant-detail' && param) nav('tenant-detail', param);
+    }
+  }, INTERVAL);
 }
 
 // ── MODAL: MAINTENANCE ISSUE ──

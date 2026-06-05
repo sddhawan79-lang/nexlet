@@ -3592,3 +3592,262 @@ All three fall through to the `other` AI scan prompt (extracts doc type, referen
 
 `deposit_cert` slot already existed in the system (line 846, AI scan field map line 1078) — consistent. `rent_guarantee_doc` and `insurance_doc` are new slot names, no conflicts.
 
+
+---
+
+## Session 35 — Bug Fixes & Tenant Document Pipeline Overhaul (June 2026)
+
+### Summary
+Extensive bug-fix session focused on the tenant detail page document upload/scan/display pipeline, RTR wizard, compliance RAG logic, and UI correctness. No new features — all changes are fixes and UX improvements.
+
+---
+
+#### 1. `renderDocCard` Temporal Dead Zone Crash (landlord.html)
+
+**Problem:** `ReferenceError: Cannot access 'renderDocCard' before initialization` on tenant detail page load. `const renderDocCard` was defined at line ~8803 but called at line ~8745.
+
+**Fix:** Moved `renderDocCard` definition above its first call site (`_kycUploadRows` map). Also removed `kycRows` dead code block (83 lines, never referenced).
+
+---
+
+#### 2. Onboarding Wizard Continue → Non-Responsive (landlord.html)
+
+**Problem:** "Tenant documents" step in the onboarding wizard had `action: () => {...}` (arrow function). The button renderer only handles `typeof action === 'string'` — rendered with no `onclick`, appeared clickable but did nothing.
+
+**Fix:** Converted to IIFE string: `action: "(function(){ ... })()"`. Both sticky bar and dashboard card use same `actionAttr` logic — both fixed.
+
+---
+
+#### 3. RTR Wizard — `date_of_birth` Schema Error (landlord.html)
+
+**Problem:** `Save failed — Could not find the 'date_of_birth' column of 'tenants' in the schema cache`. Column doesn't exist on `tenants` table.
+
+**Fix:** Removed `date_of_birth` from `_rtrWizSave` update payload. DOB still collected in wizard for GOV.UK check but not persisted.
+
+---
+
+#### 4. RTR Wizard — View Screenshot Non-Responsive (landlord.html)
+
+**Root cause 1:** `dvoOpen` called with raw base64 string — `_dvoType` checks URL extension, base64 has none → fell through to `'other'` → "Preview not available".
+
+**Root cause 2:** Inline IIFE `onclick` had nested template literal quote collapse — button silently did nothing.
+
+**Fix:**
+- Added `_rtrWizViewScreenshot()` global helper — converts base64 to Blob with correct MIME type, creates Object URL, calls `dvoOpen`
+- Extended `_dvoType` to handle `blob:` URLs via `window._rtrWiz._previewMime`
+- `_rtrWizSetScreenshot` now calls `_rtrWizRender()` on file load so View button appears immediately
+
+---
+
+#### 5. RTR Columns SQL Migration (Supabase)
+
+**Migration run:**
+```sql
+ALTER TABLE tenants
+  ADD COLUMN IF NOT EXISTS share_code text,
+  ADD COLUMN IF NOT EXISTS rtr_result text,
+  ADD COLUMN IF NOT EXISTS rtr_expiry date,
+  ADD COLUMN IF NOT EXISTS rtr_check_date date,
+  ADD COLUMN IF NOT EXISTS rtr_followup_date date,
+  ADD COLUMN IF NOT EXISTS rtr_evidence_path text;
+```
+
+Removed the per-column fallback retry loop from `_rtrWizSave` — no longer needed.
+
+---
+
+#### 6. `name_mismatch_reason` Column + Override UX (landlord.html + Supabase)
+
+**Migration run:**
+```sql
+ALTER TABLE tenant_documents ADD COLUMN IF NOT EXISTS name_mismatch_reason text;
+```
+
+**New UX — mismatch override flow:**
+When AI scan detects name mismatch, instead of just flagging red, landlord sees:
+- Reason dropdown: `Joint certificate / Name abbreviated or informal / Typo on document / Other`
+- `✓ Verify anyway` button — requires reason selected
+- On confirm: saves `verified=true` + `name_mismatch_reason` to DB, logs full override to audit trail
+- Card border flips green, shows `✓ Verified · [reason]`
+
+**New function:** `verifyTenantDocOverride(docId, tid)`
+
+**Card border logic:** Red = mismatch AND unverified. Green = verified (even if mismatch existed).
+
+---
+
+#### 7. `_checklistRAG` — Manual Green Never Overridden (landlord.html)
+
+**Problem:** User manually sets compliance item to Complete/green via status dropdown → saves to `compliance_checklist[key].ra = 'green'` → but `_checklistRAG` runs auto-detect which returns early and ignores the manual value. Item stays red.
+
+**Fix:** Added early return at top of `_checklistRAG`:
+```js
+if (item.ra === 'green') return item; // manual green always respected
+```
+Auto-detect now only runs when status is red/amber — can only improve, never downgrade a manual green.
+
+---
+
+#### 8. Insurance & RGI Removed from Tenant CHECKLIST_ITEMS (landlord.html)
+
+**Decision:** Buildings/Contents Insurance and Rent Guarantee Insurance are property-level records, not tenant-facing compliance items. Already fully tracked on property compliance tab.
+
+**Changes:**
+- Removed `insurance` from `CHECKLIST_ITEMS`, `CHECKLIST_UPLOAD_SLOTS`, `_checklistRAG`
+- Removed `rent_guarantee` from `CHECKLIST_ITEMS` and `CHECKLIST_UPLOAD_SLOTS`
+
+**`CHECKLIST_ITEMS` now contains only:** `agreement`, `deposit_protection`
+
+RGI and buildings insurance remain tracked on property compliance tab unchanged.
+
+---
+
+#### 9. RTR KYC Slot — Two-Step UX (landlord.html)
+
+**Problem:** RTR slot showed "Not uploaded" even after wizard was complete. Wizard saves to `tenants.rtr_check_date` but KYC slot only checked `tenant_documents` for `slot='right_to_rent'`.
+
+**Fix — `slotDone` logic:**
+```js
+const rtrWizardDone = isRTR && !!(t.rtr_check_date);
+const slotDone = hasDocs || rtrWizardDone;
+```
+All four display checks (border, background, margin, "Not uploaded" text) now use `slotDone`.
+
+**Sticky bar count fix:**
+```js
+const _rtrComplete = !!(t.rtr_check_date);
+uploadedCount = ...slot === 'right_to_rent' ? (_rtrComplete || hasDocs) : hasDocs
+```
+
+**New two-step RTR card UI:**
+| State | Display |
+|---|---|
+| Nothing | 🔴 "Right to Rent check required" + navy wizard button |
+| Doc uploaded, wizard not run | 🟠 "Step 2 of 2 — Run the UKVI check" + explanation |
+| Wizard complete | 🟢 "Right to Rent check complete" + result/date + Re-check button |
+
+**`_rtrWizSave` cache update:** After save, sets `compliance_checklist.rtr = green` in local cache before `nav()` re-renders.
+
+---
+
+#### 10. Deposit Protection — AI Auto-Fill (landlord.html)
+
+**Problem:** AI scan of deposit cert extracted `issuing_authority` and `doc_number` into `tenant_documents` but `_checklistRAG` reads `scheme`/`scheme_ref` from `tenants` table — two never connected.
+
+**Fix:** After successful scan of `deposit_cert` slot, `scanTenantDoc` auto-writes extracted data back to tenant:
+```js
+if (slot === 'deposit_cert' && issuing_authority && extracted_doc_num) {
+  await sb.from('tenants').update({ scheme: _schemeName, scheme_ref: extracted_doc_num }).eq('id', tid);
+  // Also sets compliance_checklist.deposit_protection = green
+}
+```
+Scheme name normalised via map: `'deposit protection service' → 'DPS'`, `'tenancy deposit scheme' → 'TDS'`, `'mydeposits' → 'MyDeposits'`.
+
+**New slot-specific scan prompts added:**
+- `deposit_cert` / `deposit_protection` — extracts scheme name, reference, expiry, address
+- `rent_guarantee_doc` — extracts insurer, policy number, expiry
+
+---
+
+#### 11. `uploadTenantDoc` — Replace Duplicate Key Fix (landlord.html)
+
+**Problem:** `uploadTenantDoc` always did a blind `INSERT` — when replacing existing doc for a slot, hit unique constraint → `duplicate key value violates unique constraint`.
+
+**Fix:** Before inserting, check for existing doc in same slot:
+```js
+const existingDoc = D.tenantDocs.find(d => d.slot === slot && String(d.tenant_id) === String(tid));
+if (existingDoc) {
+  await sb.storage.from('tenant-documents').remove([existingDoc.file_name]);
+  await sb.from('tenant_documents').delete().eq('id', existingDoc.id);
+}
+// then INSERT fresh
+```
+
+---
+
+#### 12. `scanTenantDoc` — No More `nav()` (landlord.html)
+
+**Root cause of cascading bugs:** `scanTenantDoc` called `nav('tenant-detail', tid)` on completion → full page re-render → `pgTenantDetail` ran again → auto-rescan `setTimeout` fired again → potential infinite cycle.
+
+**Fix — targeted DOM update:**
+- Each doc card now has `id="doc-card-{docId}"`
+- On scan complete: `document.getElementById('doc-card-' + docId).outerHTML = renderTenantDocCard(...)`
+- No full page re-render
+- `catch` block also updates DOM and shows actual error message (not silent fail)
+
+---
+
+#### 13. `renderTenantDocCard` — Extracted as Global Function (landlord.html)
+
+Was a local `const` inside `pgTenantDetail` — inaccessible to `scanTenantDoc` for DOM updates.
+
+**Now:** `function renderTenantDocCard(doc, isLast, tid, tenantName)` defined globally before `pgTenantDetail`. Local `renderDocCard` is a thin wrapper: `(doc, isLast) => renderTenantDocCard(doc, isLast, tid, t.name)`.
+
+---
+
+#### 14. `_scanningDocs` Session Set — Correct "Scanning…" Display (landlord.html)
+
+**Problem:** Any doc without `extracted_name` showed "Scanning… refresh in a moment" forever, including on every page reload after a failed scan.
+
+**Fix:** `window._scanningDocs = new Set()` — in-memory, cleared on page reload.
+- Doc ID added to Set when `uploadTenantDoc` triggers scan
+- Removed from Set on scan success or failure
+- "Scanning…" only shows if doc ID is in Set
+- On reload: Set empty → unscanned docs show "Not scanned — Re-scan" immediately
+
+**Auto-rescan:** On `pgTenantDetail` load, unscanned docs (no `extracted_name`, not in Set) are fire-and-forget rescanned via storage fetch. DOM update only — no `nav()`.
+
+---
+
+#### 15. `_viewLatestSlotDoc` and `_viewDoc` Global Helpers (landlord.html)
+
+Added to avoid nested template literal quote issues in inline `onclick` handlers:
+
+```js
+function _viewLatestSlotDoc(slot, tid) {
+  // finds latest doc for slot from D.tenantDocs, calls viewDocInline
+}
+function _viewDoc(url, label) {
+  viewDocInline(url, label);
+}
+```
+
+View buttons added/fixed across: KYC slot header, compliance checklist rows, `moTenantDocs` modal, individual doc cards (`renderTenantDocCard`), RTR wizard screenshot.
+
+---
+
+#### 16. Scan API Error Handling (landlord.html)
+
+**Problem:** If AI API returned error response, `data.content?.[0]?.text` was undefined → fell back to `'{}'` → parsed as empty object → wrote all nulls to DB → "Not scanned" shown but no error toast.
+
+**Fix:**
+```js
+if (data.error || !data.content?.[0]?.text) throw new Error('Scan API error: ' + errMsg);
+if (!raw || raw === '{}') throw new Error('Empty response from scan API');
+```
+Now throws properly → catch block fires → shows actual error message in toast.
+
+---
+
+#### 17. Known Issues — Updated
+
+| # | Issue | Status |
+|---|---|---|
+| 1 | ICO number placeholder in legal docs | Pending registration |
+| 2 | MX record for inbound email | Parked post-launch |
+| 3 | `login.html` newsletter signup checkbox | Not built |
+| 4 | `moFinancials` PDF export — jsPDF needed | Post-launch backlog |
+| 5 | Section 8 UX handoff to Form 3A | Post-launch backlog |
+| 6 | WhatsApp reminders | Post-launch backlog |
+| 7 | Free public compliance checker | Marketing priority |
+| 8 | Blog / content hub | Marketing priority |
+| 9 | Postcode finder — replace with getAddress.io | Post-launch backlog |
+| 10 | `stripe_price_id` NULL — sandbox only | Closed |
+| 11 | `newsletter_opted_in` column missing from user_profiles | Pending SQL |
+| 12 | favicon.ico missing | Post-launch backlog |
+| 13 | `relet_prepared` column needed on tenants | Pending SQL |
+| 14 | `portal_enabled` column — ✅ run Session 32 | Closed |
+| 15 | RTR columns on tenants — ✅ run Session 35 | Closed |
+| 16 | `day30_pack` email template not yet built | Post-launch backlog |
+| 17 | `kycRows` dead code — ✅ removed Session 35 | Closed |
+| 18 | Block 4 `new Function()` syntax check fails | Likely false positive — all individual functions test clean. Confirm in browser. |
