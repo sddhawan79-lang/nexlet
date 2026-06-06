@@ -4108,11 +4108,23 @@ function _checklistRowHtml(tenant, itemDef) {
     <div style="padding:8px 10px;background:var(--off);border:1px solid var(--border);border-radius:6px">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
         <div>
-          <div style="font-size:11px;font-weight:600;color:var(--txt)">${latestDoc ? `📎 ${latestDoc.doc_label||latestDoc.file_name||'File uploaded'}` : 'No document uploaded yet'}</div>
-          <div style="font-size:10px;color:var(--blue);font-weight:600;margin-top:1px">✦ AI will auto-scan on upload</div>
+          ${(() => {
+            // For agreement slot — check esign signed PDF first
+            if (itemDef.key === 'agreement' && !latestDoc) {
+              const esignRec = (D.esignReq||[]).find(r => String(r.tenant_id)===String(tid) && r.document_type==='written_statement' && r.status==='signed' && r.signed_pdf_url);
+              if (esignRec) return `<div style="font-size:11px;font-weight:600;color:var(--txt)">📎 Signed Written Statement (e-sign)</div><div style="font-size:10px;color:var(--green-dark);font-weight:600;margin-top:1px">✓ Signed ${new Date(esignRec.signed_at||esignRec.updated_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</div>`;
+            }
+            return `<div style="font-size:11px;font-weight:600;color:var(--txt)">${latestDoc ? `📎 ${latestDoc.doc_label||latestDoc.file_name||'File uploaded'}` : 'No document uploaded yet'}</div><div style="font-size:10px;color:var(--blue);font-weight:600;margin-top:1px">✦ AI will auto-scan on upload</div>`;
+          })()}
         </div>
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-          ${latestDoc ? `<button class="btn btn-sm" style="font-size:11px;padding:3px 8px" onclick="event.stopPropagation();viewDocInline(\`${SUPABASE_URL}/storage/v1/object/public/tenant-documents/${latestDoc.file_name}\`,\`${(latestDoc.doc_label||latestDoc.file_name||'Document').replace(/`/g,"'")}\`)">👁 View</button>` : ''}
+          ${(() => {
+            if (itemDef.key === 'agreement' && !latestDoc) {
+              const esignRec = (D.esignReq||[]).find(r => String(r.tenant_id)===String(tid) && r.document_type==='written_statement' && r.status==='signed' && r.signed_pdf_url);
+              if (esignRec) return `<button class="btn btn-sm" style="font-size:11px;padding:3px 8px" onclick="event.stopPropagation();dvoOpen('${esignRec.signed_pdf_url}','Signed Written Statement','Signed by ${(tenant?.name||'Tenant').replace(/'/g,"\\'")}')">👁 View</button><a href="${esignRec.signed_pdf_url}" download class="btn btn-sm" style="font-size:11px;text-decoration:none;padding:3px 8px">⬇ Download</a>`;
+            }
+            return latestDoc ? `<button class="btn btn-sm" style="font-size:11px;padding:3px 8px" onclick="event.stopPropagation();viewDocInline(\`${SUPABASE_URL}/storage/v1/object/public/tenant-documents/${latestDoc.file_name}\`,\`${(latestDoc.doc_label||latestDoc.file_name||'Document').replace(/\`/g,"'")}\`)">👁 View</button>` : '';
+          })()}
           <label class="btn btn-sm btn-navy" style="cursor:pointer;margin:0;font-size:11px" id="cl-upload-lbl-${tid}-${itemDef.key}">${latestDoc?'↺ Replace':'Upload'}
             <input type="file" style="display:none" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onchange="uploadTenantDoc('${tid}','${uploadSlot.slot}',this)">
           </label>
@@ -9050,7 +9062,7 @@ function pgTenantDetail(tid) {
       action:`moRRASheet()`, btnLabel:'Send RRA' },
     { icon:'📖', label:'How to Rent guide served',
       done: propLog.some(e=>(e.template_id||'').includes('how_to_rent')||(e.subject||'').toLowerCase().includes('how to rent'))||tenantLog2.some(e=>(e.template_id||'').includes('how_to_rent')||(e.subject||'').toLowerCase().includes('how to rent')),
-      action:`moCommunicationsHub('${tid}')`, btnLabel:'Send guide' },
+      action:`sendH2RGuide('${tid}')`, btnLabel:'Send guide' },
     { icon:'🔥', label:'Gas Safety Certificate served',
       done: propCerts.some(c=>c.type&&c.type.toLowerCase().includes('gas')),
       action:`moBulkScan('${t.prop_id}')`, btnLabel:'Upload GSC' },
@@ -16001,6 +16013,44 @@ const RRA_PDF_B64 = 'JVBERi0xLjcNJeLjz9MNCjE4OCAwIG9iag08PC9MaW5lYXJpemVkIDEvTCA
 // ══════════════════════════════════════════════════
 // RRA INFORMATION SHEET MANAGER
 // ══════════════════════════════════════════════════
+
+async function sendH2RGuide(tid) {
+  const h2rUrl = D.userProfile?.h2r_doc_url;
+  if (!h2rUrl) {
+    toast('⚠ How to Rent guide not uploaded yet — go to Compliance > System Documents to upload it first.', true);
+    nav('compliance');
+    return;
+  }
+  const t = D.tenants.find(x => String(x.id) === String(tid));
+  if (!t?.email) { toast('No email address for this tenant', true); return; }
+  const p = P(t.prop_id) || { address: '[Property address]' };
+  toast('Sending How to Rent guide…');
+  try {
+    const html = `<div style="font-family:sans-serif;max-width:680px;margin:0 auto;padding:32px 24px;color:#1A2B45">
+      <div style="border-bottom:2px solid #0B1E3D;padding-bottom:14px;margin-bottom:24px">
+        <span style="font-size:18px;font-weight:700;color:#0B1E3D">NexLet</span>
+        <span style="color:#999;font-size:12px;margin-left:8px">How to Rent Guide</span>
+      </div>
+      <p style="font-size:14px;line-height:1.7">Dear ${t.name},</p>
+      <p style="font-size:13px;line-height:1.7">Please find attached the government's official <strong>How to Rent</strong> guide for your tenancy at <strong>${p.address}</strong>.</p>
+      <p style="font-size:13px;line-height:1.7">This guide explains your rights and responsibilities as a tenant. We are required to provide this to you by law.</p>
+      <p style="font-size:13px;line-height:1.7">Kind regards,<br>${_profileName()}</p>
+      <div style="margin-top:24px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#999">Sent via NexLet · documents@nexlet.co.uk</div>
+    </div>`;
+    const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'send_email', to: t.email, subject: `How to Rent Guide — ${p.address}`, html, attachment_urls: [{ url: h2rUrl, filename: 'How_to_Rent_Guide.pdf' }] })
+    });
+    const rd = await res.json().catch(() => ({}));
+    if (!res.ok || rd.error) throw new Error(rd.error || `Send failed (${res.status})`);
+    // Log to email_log
+    await sb.from('email_log').insert({ prop_id: String(t.prop_id), tenant_id: String(t.id), template_id: 'how_to_rent_guide', subject: `How to Rent Guide — ${p.address}`, status: 'Sent', sent_at: new Date().toISOString() }).catch(() => {});
+    toast('✓ How to Rent guide sent to ' + t.name);
+    nav('tenant-detail', tid);
+  } catch(e) {
+    toast('Send failed: ' + e.message, true);
+  }
+}
 
 async function moRRASheet() {
   if (!D.tenants.filter(t=>t.status==='Active').length) {
