@@ -95,14 +95,14 @@ Saurabh Dhawan (featured on landing page, `index.html` founder story section)
 > There is **no build step, no `node_modules`, no `package.json`, no `src/` folder**.
 > All files live at the repository root and are served directly by GitHub Pages.
 
-```
+``` 
 rentsafeai/
 ├── index.html                      Marketing landing page
 ├── login.html                      Auth page (login / signup / password reset)
 ├── signup.html                     Sign-up page (Sprint 11)
 ├── profile.html                    Account & Billing page (Sprint 13)
 ├── feedback.html                   Feedback & Suggestions page (Session 19)
-├── landlord.html                   Main SPA app (~10,070 lines) — entire landlord dashboard
+├── landlord.html                   Main SPA app (~11,200 lines) — entire landlord dashboard
 ├── tenant.html                     Tenant portal (~1,200+ lines)
 ├── esign.html                       Standalone e-sign page — landlord signs first, tenant counter-signs
 ├── mtd.html                        Making Tax Digital standalone page (~1,500+ lines)
@@ -114,6 +114,12 @@ rentsafeai/
 ├── cookies.html                    Cookie policy
 ├── dpa.html                        GDPR / Data Protection Act page
 ├── nav_snippet.html                Dev snippet: MTD nav item code (copy-paste reference)
+├── email-welcome.html              Email template: welcome / onboarding (Session 20)
+├── email-trial-expiry.html         Email template: trial expiry countdown (Session 20)
+├── email-compliance-digest.html    Email template: weekly compliance digest (Session 20)
+├── email-cert-expiry.html          Email template: cert expiry alert (Session 20)
+├── sidebar-hybrid-comparison.html  Email template: sidebar comparison (Session 20)
+├── sidebar-hybrid-preview.html     Email template: sidebar preview (Session 20)
 ├── og-image.png                    OpenGraph social share image (1200×630)
 ├── CNAME                           GitHub Pages custom domain: nexlet.co.uk
 ├── email-alerts-index.ts           Supabase Edge Function source (Sprint 10 → rebuilt Session 20)
@@ -123,25 +129,36 @@ rentsafeai/
 ├── sprint10_step1_db.sql           SQL migration: Sprint 10 DB setup
 ├── sprint10_step1_fix.sql          SQL migration: Sprint 10 patch/fix
 ├── sprint10_step2_cron.sql         SQL: pg_cron scheduled jobs
+├── sprint10_fix_cron_key.sql       SQL: re-creates cron jobs with real service role key
+├── cron_setup.sql                  SQL: updated pg_cron jobs (Session 20 — replaces sprint10_step2_cron)
 ├── sprint13_db.sql                 SQL migration: Sprint 13 (user_profiles, stripe_subscriptions)
-├── session7_tenant_documents.sql   SQL migration: Session 7 (tenant_documents table + RLS) — run in Supabase SQL Editor
+├── session7_tenant_documents.sql   SQL migration: Session 7 (tenant_documents table + RLS)
 ├── session10_multi_doc.sql          SQL migration: Session 10 (multi-doc KYC — drop slot unique, add columns)
-├── session10_tenants_columns.sql    SQL migration: Session 10 (add missing tenants columns — rtr, rent_day, scheme_ref, etc.)
+├── session10_tenants_columns.sql    SQL migration: Session 10 (add missing tenants columns)
 ├── session10_esign_requests.sql     SQL migration: Session 10 (esign_requests table + RLS)
-├── session11_landlord_sig.sql       SQL migration: Session 11 (landlord signature columns on esign_requests)
+├── session11_landlord_sig.sql       SQL migration: Session 11 (landlord signature columns)
 ├── sprint11_feedback_table.sql      SQL migration: Sprint 11 (feedback table)
-├── session18_feedback_v2.sql        SQL migration: Session 18 (urgency + files columns on feedback — superseded by session19_user_reports.sql)
-├── session19_user_reports.sql       SQL migration: Session 19 (user_reports table — standalone bug/feature reporting)
+├── session13_inventory_reports.sql  SQL migration: Session 13 (inventory_reports table + RLS)
+├── session14_tenant_checklist.sql   SQL migration: Session 14 (compliance_checklist JSONB on tenants)
+├── session14_trial_fields.sql       SQL migration: Session 14 (trial fields on user_profiles)
+├── session14_rent_payments.sql      SQL migration: Session 14 (rent_payments table + RLS)
+├── session18_feedback_v2.sql        SQL migration: Session 18 (urgency + files — superseded by session19)
+├── session19_user_reports.sql       SQL migration: Session 19 (user_reports table)
+├── session_archive.sql              SQL migration: Session 11 (archive + deleted_at columns)
+├── session_property_status.sql      SQL migration: Session 18 (property status columns)
+├── fix_rent_payments.sql            SQL migration: Session 22 (month + notes columns on rent_payments)
 ├── SPRINT10_DEPLOY.md              Sprint 10 deployment guide
 ├── PROJECT_KNOWLEDGE.md            THIS FILE — agent initialization reference
 ├── fix.py                          Python patching script (landlord.html fixes)
 ├── fix.b64                         Binary patch (base64 encoded)
-└── fix.patch                       Git patch file
+├── fix.patch                       Git patch file
+├── landlord_backup.html            Backup copy of landlord.html (dev artifact)
+├── landlord.txt.html               Text-only export of landlord.html (dev artifact)
+├── js/landlord.html                Dev artifact (JS file misnamed as .html)
+└── .claude/                        Claude AI dev config directory
 ```
 
-> **Session 20 files listed below** (`cron_setup.sql`, `email-*.html`, `sidebar-*.html`) are referenced in the change log but do not yet exist in the repo. Same for `session14_*.sql`, `session13_inventory_reports.sql`.
-
-> **`supabase/functions/`** directories exist for: `ai-proxy`, `stripe-checkout`, `stripe-webhook`.
+> **`supabase/functions/`** exists for: `ai-proxy`, `stripe-checkout`, `stripe-webhook`, `stripe-cancel`, `email-alerts`.
 
 ### HTML File Responsibilities
 
@@ -438,6 +455,10 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...';
 - **Webhook URL:** `https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/stripe-webhook`
 - **Full details:** See [Section 14](#14-stripe-integration-guide)
 
+#### `stripe-cancel`
+- **Source:** `supabase/functions/stripe-cancel/index.ts` — exists in repo
+- **Purpose:** Handles subscription cancellation requests from `profile.html`
+
 ---
 
 ## 7. Email Alert System (Sprint 10)
@@ -526,15 +547,25 @@ All migrations run manually in **Supabase → SQL Editor** (no automated migrati
 | `sprint10_step1_db.sql` | Creates `email_log`, `property_insurance`, `mtd_periods` tables; adds `next_rent_due` to `tenancies`; creates `get_compliance_score()` and `purge_old_email_logs()` functions | Run first |
 | `sprint10_step1_fix.sql` | Patch/fix for Sprint 10 DB setup | Run after step1 |
 | `sprint10_step2_cron.sql` | Sets up 3 pg_cron jobs — **must replace `YOUR_SERVICE_ROLE_KEY`** (2 occurrences) with actual service role key before running | Run last |
+| `cron_setup.sql` | Updated pg_cron jobs (Session 20) — replaces `sprint10_step2_cron.sql` | Run independently |
+| `sprint10_fix_cron_key.sql` | Re-creates cron jobs with real service role key (Session 11) | Patch |
 | `mtd_tables.sql` | Creates MTD module tables | Independent |
+| `sprint13_db.sql` | Creates `user_profiles` and `stripe_subscriptions` tables with RLS | Independent |
 | `session7_tenant_documents.sql` | Creates `tenant_documents` table with RLS | Independent |
 | `session10_multi_doc.sql` | Drops `tenant_documents_slot_unique` index; adds `issuing_authority`, `doc_type_extracted` columns | Already run |
-| `session10_tenants_columns.sql` | Adds 13 missing columns to `tenants`: `type`, `rent_day`, `scheme_ref`, `rtr_*` (6), `addr_proof_*` (2), `is_lead`, `invite_used` | Run now |
+| `session10_tenants_columns.sql` | Adds 13 missing columns to `tenants`: `type`, `rent_day`, `scheme_ref`, `rtr_*` (6), `addr_proof_*` (2), `is_lead`, `invite_used` | Already run |
+| `session10_esign_requests.sql` | Creates `esign_requests` table + RLS (Session 13) | Independent |
 | `session11_landlord_sig.sql` | Adds landlord signature columns to `esign_requests`: `landlord_name`, `landlord_signed_at`, `landlord_sig_png` | Independent |
+| `session_archive.sql` | Adds `user_profiles.deleted_at`, `tenants.archived`, `tenants.archived_at`, `tenants.end_reason` | Independent |
 | `sprint11_feedback_table.sql` | Creates `feedback` table for in-app feedback | Independent |
+| `session13_inventory_reports.sql` | Creates `inventory_reports` table + RLS | Independent |
+| `session14_tenant_checklist.sql` | Adds `compliance_checklist` JSONB column to `tenants` (Session 14) | Independent |
+| `session14_trial_fields.sql` | Adds trial fields to `user_profiles`: `trial_started_at`, `trial_expires_at`, `plan`, `plan_activated_at` (Session 14) | Independent |
+| `session14_rent_payments.sql` | Creates `rent_payments` table + RLS (Session 14) | Independent |
+| `session18_feedback_v2.sql` | Adds urgency + files columns to legacy `feedback` table — superseded by `session19_user_reports.sql` | Superseded |
 | `session19_user_reports.sql` | Creates `user_reports` table for bug reports and feature suggestions with full RLS | Independent |
-
-> **Note:** `session14_tenant_checklist.sql`, `session14_trial_fields.sql`, `session14_rent_payments.sql`, and `session13_inventory_reports.sql` are referenced in the change log below but do not yet exist as files in the repo. They must be created before the corresponding DB features can be deployed.
+| `session_property_status.sql` | Adds property status columns: `status`, `archive_reason`, `archived_at`, `vacant_since`, `tenancy_started_at`, `tenancy_ended_at` | Independent |
+| `fix_rent_payments.sql` | Adds `month` and `notes` columns to `rent_payments` (Session 22) | Independent |
 
 **Service role key location:** Supabase → Settings → API → `service_role` (secret key)
 
@@ -669,7 +700,11 @@ Session 8 introduced a 3-checkbox pre-generation consent gate for 4 legal docume
 | 13 | `tenant-documents` Storage bucket RLS — uploads fail with "row-level security policy" | Storage | **FIXED** — INSERT + SELECT policies added via SQL Editor |
 | 42 | Back button exits app (no browser history in SPA) | Navigation | **FIXED Session 18** — `nav()` uses `history.pushState` + `popstate` listener |
 | 43 | `certificates` table missing `amount` column — EICR save fails | Database | **FIXED Session 18** — code-side fallback removes `amount` + `cert_ref` on schema error. Pending DB: `ALTER TABLE certificates ADD COLUMN IF NOT EXISTS amount numeric;` |
-| 44 | `properties` table missing `status`, `archive_reason`, `archived_at`, `vacant_since`, `tenancy_started_at`, `tenancy_ended_at` columns | Database | Pending — run: `ALTER TABLE properties ADD COLUMN IF NOT EXISTS status text, ADD COLUMN IF NOT EXISTS archive_reason text, ADD COLUMN IF NOT EXISTS archived_at timestamptz, ADD COLUMN IF NOT EXISTS vacant_since timestamptz, ADD COLUMN IF NOT EXISTS tenancy_started_at timestamptz, ADD COLUMN IF NOT EXISTS tenancy_ended_at timestamptz;` |
+| 44 | `properties` table missing `status`, `archive_reason`, `archived_at`, `vacant_since`, `tenancy_started_at`, `tenancy_ended_at` columns | Database | **SQL created** — run `session_property_status.sql` in Supabase SQL Editor |
+| 54 | `esign_requests` table not yet created via SQL migration | Database | **SQL created** — run `session10_esign_requests.sql` in Supabase SQL Editor |
+| 55 | `certificates` table missing `amount` column — EICR save fails on schema error | Database | Code-side fallback exists (drops `amount` + `cert_ref` on schema error). Pending DB: `ALTER TABLE certificates ADD COLUMN IF NOT EXISTS amount numeric;` |
+| 56 | `tenant-documents` Storage bucket RLS — uploads fail for some users | Storage | Policies need recreation (see Session 18 Storage RLS Fix steps in change log) |
+| 57 | `js/landlord.html` — misnamed dev artifact in `js/` directory | Cleanup | Remove from repo |
 | 45 | `esign_requests` RLS too permissive — anon UPDATE on any row | Security | **FIXED** — policy tightened to `USING (token IS NOT NULL)`; run SQL in Editor |
 | 46 | Missing cert types: Boiler Service, Fire Extinguisher, Emergency Lighting, Pest Control | Compliance | **FIXED Session 18** — added to all cert lists + compliance grid |
 | 47 | AI scan skips fields without warning — missing data silently dropped | AI / UX | **FIXED Session 18** — missing-field detection + amber warning banner in scan results |
