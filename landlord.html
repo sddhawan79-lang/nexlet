@@ -2295,6 +2295,8 @@ async function scanDoc(input){
       docPrompt = 'UK PAT (Portable Appliance Testing) certificate. Extract: engineer full name, company name, certificate reference number, test date (YYYY-MM-DD), next test due date (YYYY-MM-DD), number of items tested, full property address. Return JSON only, keys: engineer, ref, issued, expiry, issuing_authority, address, amount.';
     else if (certTypeVal.includes('boiler') || certTypeVal.includes('heating'))
       docPrompt = 'UK boiler service or heating system certificate. Extract: engineer full name, Gas Safe register number if present, company name, service date (YYYY-MM-DD), next service due date (YYYY-MM-DD), reference number, full property address. Return JSON only, keys: engineer, ref, issued, expiry, issuing_authority, address, amount.';
+    else if (certTypeVal.includes('deposit') || certTypeVal.includes('dps') || certTypeVal.includes('tds') || certTypeVal.includes('mydeposit'))
+      docPrompt = 'UK tenancy deposit protection certificate. Extract: scheme name (must be one of: DPS, MyDeposits, TDS), deposit protection reference number, deposit amount in GBP (number only), tenant full name(s), tenancy start date (YYYY-MM-DD), tenancy end date or protection expiry (YYYY-MM-DD), full property address. Return JSON only, keys: type, scheme, ref, amount, engineer, issued, expiry, address.';
     else
       docPrompt = 'UK property compliance certificate or document. Extract: certificate type, reference number, issue date (YYYY-MM-DD), expiry date (YYYY-MM-DD), engineer or provider full name and registration number if present, issuing company or authority, full property address, cost in GBP if present. Return JSON only, keys: type, ref, issued, expiry, engineer, issuing_authority, address, amount.';
     await scanAndFill(file, (parsed)=>{
@@ -2308,7 +2310,26 @@ async function scanDoc(input){
       const warnHtml=warnings.length?`<div style="background:var(--amber-bg);border:1px solid rgba(217,119,6,0.25);border-radius:6px;padding:8px 10px;margin-bottom:8px;font-size:11px;color:var(--amber)">⚠ Could not determine: ${warnings.join(', ')} — please review</div>`:'';
       document.getElementById('arg').innerHTML=warnHtml+[['Type',parsed.type],['Issue date',parsed.issued],['Expiry',parsed.expiry],['Engineer',parsed.engineer],['Reference',parsed.reference||parsed.ref||parsed.cert_number],['Amount',parsed.amount||parsed.premium||parsed.cost],['Address',parsed.address]].map(([l,v])=>`<div class="ai-res-f"><span>${l}</span><strong style="color:${v&&v!=='Not detected'?'var(--txt)':'var(--amber)'}">${v||'Not detected'}</strong></div>`).join('');
       document.getElementById('ar').style.display='block';
-      sb2.innerHTML=`<div style="font-size:13px;color:var(--green-dark);font-weight:600">✓ Scanned — fields filled below</div><div style="font-size:12px;color:var(--muted);margin-top:4px">${file.name}</div><button onclick="if(window._lastScanFile)dvoOpen(URL.createObjectURL(window._lastScanFile),window._lastScanFile.name,'AI-scanned document')" style="margin-top:8px;background:var(--white);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;color:var(--navy);cursor:pointer;font-family:var(--font)">👁 View</button>`;
+      sb2.innerHTML=`<div style="font-size:13px;color:var(--green-dark);font-weight:600">✓ Scanned — fields filled below</div><div style="font-size:12px;color:var(--muted);margin-top:4px">${file.name}</div><button onclick="if(window._lastScanFile)dvoOpen(URL.createObjectURL(window._lastScanFile),window._lastScanFile.name,'AI-scanned document')" style="margin-top:8px;background:var(--white);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;color:var(--navy);cursor:pointer;font-family:var(--font)">👁️ View</button>`;
+      // If deposit cert — auto write scheme/ref/amount to lead tenant row
+      if (certTypeVal.includes('deposit') || certTypeVal.includes('dps') || certTypeVal.includes('tds') || certTypeVal.includes('mydeposit') || (parsed.scheme)) {
+        const _pid = document.getElementById('cp')?.value || window._currentParam;
+        const _lead = _pid ? (D.tenants.find(t => String(t.prop_id)===String(_pid) && t.is_lead && t.status==='Active') || D.tenants.find(t => String(t.prop_id)===String(_pid) && t.status==='Active')) : null;
+        if (_lead) {
+          const schemeVal = parsed.scheme || '';
+          const refVal = parsed.ref || parsed.reference || parsed.cert_number || '';
+          const amtVal = parseFloat(parsed.amount||0) || null;
+          const patch = {};
+          if (schemeVal) patch.scheme = schemeVal;
+          if (refVal)    patch.scheme_ref = refVal;
+          if (amtVal)    patch.deposit = amtVal;
+          if (Object.keys(patch).length) {
+            sb.from('tenants').update(patch).eq('id', _lead.id).then(() => {});
+            Object.assign(_lead, patch);
+            toast('✓ Deposit scheme & reference saved to tenant record');
+          }
+        }
+      }
     }, docPrompt);
   }catch(e){sb2.innerHTML=`<div style="font-size:13px;color:var(--amber);font-weight:500">Could not scan — please fill in manually</div>`;}
 }
