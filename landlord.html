@@ -15102,6 +15102,7 @@ function s8Step4() {
 
   // Core fields
   const coreFields = `
+    <div class="fg"><label>Landlord full name <span class="req">*</span></label><input type="text" id="s8_landlord_name" value="${_profileName()}" placeholder="e.g. John Smith" style="max-width:360px"></div>
     <div class="fg-row">
       <div class="fg"><label>Date of this notice <span class="req">*</span></label><input type="date" id="s8_notice_date" value="${today}"></div>
       <div class="fg"><label>Method of service</label><select id="s8_service"><option>First class post</option><option>Hand delivered to tenant</option><option>Email (and post)</option><option>All methods — post, email and hand delivery</option></select></div>
@@ -15144,6 +15145,7 @@ function s8Step5() {
   const today = new Date().toISOString().slice(0,10);
   const noticeDate = document.getElementById('s8_notice_date')?.value || today;
   const serviceMethod = document.getElementById('s8_service')?.value || 'First class post';
+  const landlordName = document.getElementById('s8_landlord_name')?.value.trim() || _profileName();
   const selectedData = S8_GROUNDS.filter(g => _s8.selectedGrounds.includes(g.num));
   const maxDays = selectedData.reduce((m,g) => Math.max(m, g.days), 14);
   const expiry = new Date(new Date(noticeDate).getTime() + maxDays * 864e5).toISOString().slice(0,10);
@@ -15157,10 +15159,12 @@ function s8Step5() {
   });
   _s8.noticeDate = noticeDate;
   _s8.serviceMethod = serviceMethod;
+  _s8.landlordName = landlordName;
   _s8.expiryDate = expiry;
   _s8.maxDays = maxDays;
 
   const rows = [
+    ['Landlord', landlordName],
     ['Property', `${p.address}, ${p.city}, ${p.postcode}`],
     ['Tenant', t ? t.name : 'Not linked'],
     ['Tenant email', t?.email || '—'],
@@ -15307,7 +15311,7 @@ Evidence required: ${g.evidence}`;
 PROPERTY & TENANCY DETAILS:
 Property: ${p.address}, ${p.city}, ${p.postcode}
 Monthly rent: £${p.rent || '[unknown]'}
-Landlord name: ${_profileName()}
+Landlord name: ${_s8.landlordName}
 Tenant name: ${t ? t.name : '[Tenant name]'}
 Tenant email: ${t?.email || '[unknown]'}
 Tenancy start date: ${FMS(t?.start_date) || '[unknown]'}
@@ -15324,7 +15328,7 @@ INSTRUCTIONS:
 2. Include a proper header with "SECTION 8 NOTICE — NOTICE SEEKING POSSESSION" and all property/tenant details.
 3. For each ground, include the full legal wording (as required by Form 3A) plus the specific facts stated above.
 4. Calculate and state the notice period and expiry date clearly.
-5. Include a proper signature block at the end.
+5. Do NOT include a signature block — one will be appended separately.
 6. End with this disclaimer in full: "IMPORTANT: This is a draft particulars statement prepared using NexLet. Before serving, this must be transferred to the official Form 3A available from GOV.UK (published 1 May 2026). This document does not constitute legal advice. The landlord takes full responsibility for serving a valid notice."
 7. Use plain text formatting. No markdown bold markers in dates or names.`;
 
@@ -15478,6 +15482,27 @@ function s8DownloadPDF() {
       const splits = doc.splitTextToSize(line.replace(/\*\*/g,''), W-32);
       for (const s of splits) { if (y > 270) { doc.addPage(); y = 18; } doc.text(s, 16, y); y += 5.5; }
     }
+
+    // ── Signature block ──
+    y += 12;
+    if (y > 240) { doc.addPage(); y = 18; }
+    doc.setFontSize(10); doc.setTextColor(26,43,69); doc.setFont(undefined, 'normal');
+    doc.text('Signed:', 16, y);
+    doc.setDrawColor(120,120,120);
+    doc.line(40, y+1, W-16, y+1);
+    y += 10;
+    doc.text('Name:', 16, y);
+    doc.setFont(undefined, 'bold');
+    doc.text(_s8.landlordName || '___________________________', 40, y);
+    doc.setFont(undefined, 'normal');
+    y += 8;
+    doc.text('Capacity:', 16, y);
+    doc.text('Landlord', 40, y);
+    y += 8;
+    doc.text('Date:', 16, y);
+    doc.setDrawColor(120,120,120);
+    doc.line(40, y+1, 100, y+1);
+    y += 10;
 
     // ── Footer ──
     y += 6;
