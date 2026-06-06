@@ -4939,25 +4939,131 @@ async function sendWelcomeKit(pid) {
     _markTenancyStep(String(pid), 'welcome_kit_done', false);
     _pollEsignSigned(String(pid));
 
-    // Show confirmation
-    openMo('✅ Welcome kit sent!', `${tenantName} · ${propAddr}`, `
-      <div style="text-align:center;padding:16px 0">
-        <div style="font-size:48px;margin-bottom:12px">📦</div>
-        <div style="font-size:15px;font-weight:600;margin-bottom:6px">Welcome pack delivered</div>
-        <div style="font-size:13px;color:var(--muted);margin-bottom:20px">Sent to <strong>${tenantEmail}</strong> · All certs marked as served · Audit log updated</div>
-        <div style="background:var(--off);border-radius:8px;padding:14px;text-align:left;font-size:12px;color:var(--muted)">
-          <div style="font-weight:600;color:var(--txt);margin-bottom:8px">What was sent</div>
-          <div style="margin-bottom:4px">✓ RRA 2025 Information Sheet (GOV.UK link)</div>
-          <div style="margin-bottom:4px">✓ How to Rent Guide (GOV.UK link)</div>
-          <div style="margin-bottom:4px">${gasCert?'✓':'⚠'} Gas Safety Certificate</div>
-          <div style="margin-bottom:4px">${eicrCert?'✓':'⚠'} EICR</div>
-          <div style="margin-bottom:4px">${epcCert?'✓':'⚠'} EPC</div>
-          <div style="margin-bottom:4px">${tenant2?.scheme?'✓':'⚠'} Deposit protection + Prescribed Information</div>
-          <div style="margin-bottom:4px">⚠ Smoke & CO alarm test — confirm on move-in day</div>
-          <div>✓ Tenant portal link included</div>
-        </div>
-      </div>
-    `, `<button class="btn btn-navy" onclick="closeMo();nav(window._currentPage,window._currentParam)">Done</button>`);
+    // ── NEXT STEP FLOW ──
+    // Work out what comes next: co-tenants → KYC → property compliance
+    const allPropTenants = D.tenants.filter(t => String(t.prop_id)===String(pid) && t.status==='Active');
+    const sentTids = new Set(D.emailLog.filter(e=>e.template_id==='welcome_kit').map(e=>String(e.tenant_id)));
+    sentTids.add(String(tenant2?.id)); // include the one just sent
+    const pendingKitTenants = allPropTenants.filter(t => !sentTids.has(String(t.id)));
+
+    // Check KYC completeness across all tenants
+    const mandatoryKycSlots = ['passport','address_1','address_2','reference'];
+    const tenantsNeedingKyc = allPropTenants.filter(t => {
+      const uploaded = (D.tenantDocs||[]).filter(d => String(d.tenant_id)===String(t.id) && mandatoryKycSlots.includes(d.slot)).length;
+      return uploaded < mandatoryKycSlots.length;
+    });
+
+    // Check property compliance completeness
+    const propCertsAll = D.certs.filter(c => String(c.prop_id)===String(pid));
+    const hasGas  = propCertsAll.some(c=>(c.type||'').toLowerCase().includes('gas'));
+    const hasEicr = propCertsAll.some(c=>(c.type||'').toLowerCase().includes('eicr')||(c.type||'').toLowerCase().includes('electrical'));
+    const hasEpc  = propCertsAll.some(c=>(c.type||'').toLowerCase().includes('epc')||(c.type||'').toLowerCase().includes('energy'));
+    const propComplianceDone = hasGas && hasEicr && hasEpc;
+
+    // Determine next step
+    let nextTitle, nextSub, nextBody, nextBtns;
+
+    if (pendingKitTenants.length > 0) {
+      // Still co-tenants to send kit to
+      const next = pendingKitTenants[0];
+      const remaining = pendingKitTenants.length;
+      nextTitle = '✅ Kit sent!';
+      nextSub = `${tenantName} · ${propAddr}`;
+      nextBody = `
+        <div style="text-align:center;padding:8px 0 16px">
+          <div style="font-size:36px;margin-bottom:10px">📦</div>
+          <div style="font-size:14px;font-weight:600;margin-bottom:4px">Welcome kit sent to ${tenantName}</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:20px">${remaining} co-tenant${remaining!==1?'s':''} still need${remaining===1?'s':''} their kit</div>
+          <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:14px 16px;text-align:left">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Next up</div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <div class="t-av">${INI(next.name)}</div>
+              <div>
+                <div style="font-size:13px;font-weight:600">${next.name}</div>
+                <div style="font-size:11px;color:var(--muted)">${next.email||'⚠ No email set'}</div>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      nextBtns = `<button class="btn" onclick="closeMo();nav('tenant-detail','${pid}')">Later</button><button class="btn btn-navy" onclick="closeMo();moWelcomeKit('${pid}')">Send kit to ${next.name} →</button>`;
+
+    } else if (tenantsNeedingKyc.length > 0) {
+      // All kits sent — now KYC
+      const next = tenantsNeedingKyc[0];
+      nextTitle = '✅ All kits sent!';
+      nextSub = propAddr;
+      nextBody = `
+        <div style="text-align:center;padding:8px 0 16px">
+          <div style="font-size:36px;margin-bottom:10px">🎉</div>
+          <div style="font-size:14px;font-weight:600;margin-bottom:4px">Day 1 kits sent to all tenants</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:20px">Next step: collect KYC identity documents</div>
+          <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:14px 16px;text-align:left">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Start with</div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <div class="t-av">${INI(next.name)}</div>
+              <div>
+                <div style="font-size:13px;font-weight:600">${next.name}</div>
+                <div style="font-size:11px;color:var(--muted)">Passport · Address proof · Reference check needed</div>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      nextBtns = `<button class="btn" onclick="closeMo();nav('tenant-detail','${pid}')">Later</button><button class="btn btn-navy" onclick="closeMo();nav('tenant-detail','${next.id}')">Upload KYC for ${next.name} →</button>`;
+
+    } else if (!propComplianceDone) {
+      // KYC done — property compliance
+      nextTitle = '✅ KYC complete!';
+      nextSub = propAddr;
+      nextBody = `
+        <div style="text-align:center;padding:8px 0 16px">
+          <div style="font-size:36px;margin-bottom:10px">🛡</div>
+          <div style="font-size:14px;font-weight:600;margin-bottom:4px">All tenant docs collected</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:20px">Next: upload property compliance certificates</div>
+          <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:12px 16px;text-align:left;font-size:12px">
+            ${!hasGas  ? `<div style="margin-bottom:6px;color:var(--red)">⚠ Gas Safety Certificate missing</div>` : ''}
+            ${!hasEicr ? `<div style="margin-bottom:6px;color:var(--red)">⚠ EICR missing</div>` : ''}
+            ${!hasEpc  ? `<div style="margin-bottom:6px;color:var(--red)">⚠ EPC missing</div>` : ''}
+          </div>
+        </div>`;
+      nextBtns = `<button class="btn" onclick="closeMo();nav('tenant-detail','${pid}')">Later</button><button class="btn btn-navy" onclick="closeMo();moBulkScan('${pid}')">Upload certs →</button>`;
+
+    } else {
+      // Everything done — add Day 30 to calendar + feature tour
+      const startDate = tenant2?.start_date ? new Date(tenant2.start_date) : new Date();
+      const day30Date = new Date(startDate);
+      day30Date.setDate(day30Date.getDate() + 30);
+      const day30Str = day30Date.toISOString().slice(0,10);
+      // Auto-add Day 30 reminder to calendar
+      sb.from('calendar_events').insert({
+        user_id: currentUser.id,
+        title: `Day 30 pack due — ${propAddr}`,
+        date: day30Str,
+        prop_id: String(pid),
+        notes: `Send deposit prescribed info, inventory and smoke/CO test record to tenant`
+      }).select().single().then(({data}) => { if (data) D.calEvents.push(data); });
+
+      nextTitle = '🎉 Tenancy setup complete!';
+      nextSub = propAddr;
+      nextBody = `
+        <div style="text-align:center;padding:8px 0 16px">
+          <div style="font-size:36px;margin-bottom:10px">🎉</div>
+          <div style="font-size:14px;font-weight:600;margin-bottom:4px">All done for move-in!</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Day 30 reminder added to your calendar · ${day30Str}</div>
+          <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:14px 16px;text-align:left">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">What's next on NEXLET</div>
+            <div style="display:flex;flex-direction:column;gap:8px;font-size:12px">
+              <div>📅 <strong>Calendar</strong> — all compliance deadlines auto-tracked</div>
+              <div>💰 <strong>Rent & Finance</strong> — log payments, track arrears</div>
+              <div>🔧 <strong>Maintenance</strong> — log issues, assign contractors</div>
+              <div>📋 <strong>Documents</strong> — Section 8, rent increase notices, templates</div>
+              <div>📦 <strong>Day 30 pack</strong> — due ${day30Str}, reminder set</div>
+            </div>
+          </div>
+        </div>`;
+      nextBtns = `<button class="btn btn-navy" onclick="closeMo();nav('dashboard')">Go to dashboard →</button>`;
+    }
+
+    openMo(nextTitle, nextSub, nextBody, nextBtns);
 
   } catch(err) {
     if (btn) { btn.disabled = false; btn.textContent = '📦 Send welcome kit'; }
