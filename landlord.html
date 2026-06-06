@@ -4477,314 +4477,59 @@ async function sendTenantComms(tid) {
 // ── MODAL: WELCOME KIT ──
 // Auto-compiled document pack sent to tenant at tenancy start.
 // Mandatory items cannot be silently removed — they show a warning if missing.
-function moWelcomeKit(pid) {
+function moWelcomeKit(pid, targetTid) {
   const p = P(pid);
   if (!p) { toast('Property not found', true); return; }
-  const tenant = D.tenants.find(
-    t => String(t.prop_id)===String(pid) && t.is_lead && t.status==='Active'
-  ) || D.tenants.find(
-    t => String(t.prop_id)===String(pid) && t.status==='Active'
-  );
+  const tenant = (targetTid ? D.tenants.find(t => String(t.id)===String(targetTid)) : null)
+    || D.tenants.find(t => String(t.prop_id)===String(pid) && t.is_lead && t.status==='Active')
+    || D.tenants.find(t => String(t.prop_id)===String(pid) && t.status==='Active');
   const pCerts = CF(pid);
   const pIns = D.insurance.filter(
     i => String(i.prop_id)===String(pid)
   );
 
-  // Check RRA already sent via email log
-  const rraSent = D.emailLog.some(e =>
-    String(e.prop_id)===String(pid) && (
-      e.template_id==='rra_info_sheet' ||
-      (e.subject||'').toLowerCase()
-        .includes('renters rights')
-    )
-  );
-
-  // ── BUILD DOC LIST FROM COMPLIANCE_DOCS ──
-  // Combines movein group + tenancy group
-  // Both are required at tenancy start
-  const propDocs = getDocsForProperty(pid);
-
-  // Merge tenancy + movein docs into one list
-  // Add extra metadata for welcome kit context
-  const allServeDocs = [
-    ...propDocs.tenancy.docs,
-    ...propDocs.movein.docs,
-  ];
-
-  // Deduplicate by id in case any overlap
-  const seen = new Set();
-  const wkDocs = allServeDocs.filter(doc => {
-    if (seen.has(doc.id)) return false;
-    seen.add(doc.id);
-    return true;
-  });
-
-  // Get status and enrich each doc for display
-  const enriched = wkDocs.map(doc => {
-    const st = getDocStatus(doc, pCerts, pIns);
-
-    // Special cases for welcome kit context
-    let statusNote = null;
-    let alreadySent = false;
-
-    if (doc.id === 'rra_sheet') {
-      alreadySent = rraSent;
-      if (rraSent) statusNote = 'Already sent';
-    }
-
-    if (doc.id === 'deposit_cert' ||
-        doc.id === 'deposit_info') {
-      if (!tenant?.scheme) {
-        statusNote = 'Deposit scheme not set — ' +
-          'add via tenant details';
-      }
-    }
-
-    if (doc.id === 'written_statement') {
-      statusNote = 'Use the e-sign tool to send ' +
-        'and get a signed copy';
-    }
-
-    if (doc.id === 'movein_gas') {
-      const gasCert = pCerts.find(c =>
-        (c.type||'').toLowerCase().includes('gas')
-      );
-      if (!gasCert) {
-        statusNote = 'No Gas Safety Certificate ' +
-          'on file — upload before sending';
-      } else if (gasCert.status==='Expired') {
-        statusNote = 'Certificate EXPIRED — ' +
-          'renew before serving';
-      }
-    }
-
-    if (doc.id === 'movein_eicr') {
-      const eicrCert = pCerts.find(c =>
-        (c.type||'').toLowerCase().includes('eicr') ||
-        (c.type||'').toLowerCase()
-          .includes('electrical')
-      );
-      if (!eicrCert) {
-        statusNote = 'No EICR on file — ' +
-          'upload before sending';
-      } else if (eicrCert.status==='Expired') {
-        statusNote = 'Certificate EXPIRED — ' +
-          'renew before serving';
-      }
-    }
-
-    if (doc.id === 'movein_epc') {
-      const epcCert = pCerts.find(c =>
-        (c.type||'').toLowerCase().includes('epc') ||
-        (c.type||'').toLowerCase()
-          .includes('energy')
-      );
-      if (!epcCert) {
-        statusNote = 'No EPC on file — ' +
-          'upload before sending';
-      } else if (epcCert.status==='Expired') {
-        statusNote = 'Certificate EXPIRED — ' +
-          'renew before serving';
-      }
-    }
-
-    // hasIssue = doc needs attention before sending
-    const hasIssue = st.overdue ||
-      (statusNote && !alreadySent);
-
-    return {
-      ...doc, st, statusNote, alreadySent, hasIssue
-    };
-  });
-
-  const issueCount = enriched.filter(
-    d => d.hasIssue && d.mandatory
-  ).length;
-
-  const propAddr = [p.address, p.city]
-    .filter(Boolean).join(', ');
+  const pCerts = CF(pid);
+  const propAddr = [p.address, p.city].filter(Boolean).join(', ');
   const tenantName = tenant?.name || 'Tenant';
   const tenantEmail = tenant?.email || '';
 
-  // ── RENDER DOC ROWS ──
-  const docRows = enriched.map(doc => {
-    // Determine row styling — red only for expired, amber for missing
-    const isExpired = doc.st.lbl === 'EXPIRED' || doc.st.lbl === 'URGENT';
-    const isMissing = doc.hasIssue && !isExpired;
-    const rowBorder = isExpired ? 'rgba(229,62,62,0.25)' : isMissing ? 'rgba(217,119,6,0.2)' : 'var(--border)';
-    const rowBg = isExpired ? 'rgba(229,62,62,0.03)' : isMissing ? 'rgba(217,119,6,0.02)' : 'var(--white)';
+  // Glance-confirm: just show what's ready/missing at a glance
+  const gasCert  = pCerts.find(c => c.type && c.type.toLowerCase().includes('gas'));
+  const eicrCert = pCerts.find(c => c.type && (c.type.toLowerCase().includes('eicr') || c.type.toLowerCase().includes('electrical')));
+  const epcCert  = pCerts.find(c => c.type && (c.type.toLowerCase().includes('epc') || c.type.toLowerCase().includes('energy')));
+  const rraOk    = !!D.userProfile?.rra_doc_url;
+  const h2rOk    = !!D.userProfile?.h2r_doc_url;
 
-    // Status badge — only shows when there is
-    // actually a problem or confirmation needed
-    // NOT shown on every row
-    let statusBadge = '';
-    if (doc.alreadySent) {
-      statusBadge = `<span style="font-size:10px;
-        font-weight:700;color:var(--green-dark);
-        background:var(--green-bg);padding:1px 7px;
-        border-radius:100px">✓ Sent</span>`;
-    } else if (doc.st.lbl === 'VALID' ||
-               doc.st.lbl === '✓ SERVED') {
-      statusBadge = `<span style="font-size:10px;
-        font-weight:700;color:#00A87A;
-        background:var(--green-bg);padding:1px 7px;
-        border-radius:100px">✓ Ready</span>`;
-    } else if (isExpired && doc.mandatory) {
-      statusBadge = `<span style="font-size:10px;font-weight:700;color:var(--red);background:var(--red-bg);padding:1px 7px;border-radius:100px">⚠ Expired</span>`;
-    } else if (doc.hasIssue && doc.mandatory) {
-      statusBadge = `<span style="font-size:10px;font-weight:700;color:#D97706;background:rgba(217,119,6,0.1);padding:1px 7px;border-radius:100px">Not uploaded</span>`;
-    } else if (doc.hasIssue) {
-      statusBadge = `<span style="font-size:10px;font-weight:700;color:var(--amber);background:rgba(217,119,6,0.1);padding:1px 7px;border-radius:100px">To do</span>`;
-    }
-
-    // Mandatory pill — only shown when missing
-    // or has issue, not on every row
-    const mandatoryPill = doc.mandatory &&
-      doc.hasIssue
-      ? `<span style="font-size:10px;font-weight:700;
-          color:var(--red);background:var(--red-bg);
-          padding:1px 7px;border-radius:100px">
-          Mandatory</span>`
-      : doc.mandatory && !doc.hasIssue
-      ? '' // already shows ✓ Ready — no need for pill
-      : `<span style="font-size:10px;font-weight:600;
-          color:var(--muted);background:var(--off);
-          padding:1px 7px;border-radius:100px">
-          Optional</span>`;
-
-    // Group label pill to help orientate landlord
-    const groupPill = propDocs.tenancy.docs
-      .find(d => d.id === doc.id)
-      ? `<span style="font-size:9px;font-weight:600;
-          color:var(--muted);background:var(--off);
-          padding:1px 6px;border-radius:100px">
-          Tenancy doc</span>`
-      : `<span style="font-size:9px;font-weight:600;
-          color:var(--muted);background:var(--off);
-          padding:1px 6px;border-radius:100px">
-          Move-in doc</span>`;
-
-    return `
-      <div style="display:flex;align-items:flex-start;
-        gap:12px;padding:11px 14px;border:1px solid
-        ${rowBorder};border-radius:8px;margin-bottom:6px;
-        background:${rowBg}">
-        <div style="flex:1;min-width:0">
-          <div style="display:flex;align-items:center;
-            gap:6px;flex-wrap:wrap;margin-bottom:3px">
-            <span style="font-size:13px;font-weight:600;
-              color:var(--txt)">${doc.label}</span>
-            ${statusBadge}
-            ${mandatoryPill}
-            ${groupPill}
-          </div>
-          <div style="font-size:12px;color:var(--muted);line-height:1.5">${doc.note}</div>
-          ${doc.statusNote
-            ? `<div style="font-size:11px;
-                color:${doc.mandatory && doc.hasIssue
-                  ?'var(--red)':'var(--amber)'};
-                font-weight:600;margin-top:3px">
-                ⚠ ${doc.statusNote}</div>`
-            : ''}
-        </div>
-        <div style="flex-shrink:0;display:flex;
-          align-items:center;gap:8px">
-          ${!doc.mandatory
-            ? `<label style="display:flex;
-                align-items:center;gap:5px;cursor:pointer;
-                font-size:11px;color:var(--muted)">
-                <input type="checkbox" id="wk-${doc.id}"
-                  checked
-                  style="width:14px;height:14px;
-                  cursor:pointer">
-                Include
-              </label>`
-            : `<span style="font-size:18px">
-                ${doc.hasIssue ? '⚠️' : '✅'}</span>`}
-        </div>
-      </div>`;
-  }).join('');
+  const ck = (ok, label) => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+    <span style="font-size:14px">${ok ? '✅' : '⚠️'}</span>
+    <span style="font-size:13px;flex:1">${label}</span>
+    <span style="font-size:11px;font-weight:700;color:${ok?'var(--green-dark)':'#D97706'}">${ok?'Ready':'Missing'}</span>
+  </div>`;
 
   openMo(
-    '📦 Welcome kit',
+    '📦 Day 1 Kit',
     `${propAddr} · ${tenantName}`,
-    `
-    <div style="font-size:13px;color:var(--muted);
-      margin-bottom:16px">
-      Auto-compiled from your property records.
-      Review before sending. Mandatory items shown
-      when action is needed — green means ready.
-    </div>
-
-    ${issueCount
-      ? `<div style="background:rgba(229,62,62,0.07);
-          border:1px solid rgba(229,62,62,0.2);
-          border-radius:8px;padding:10px 14px;
-          font-size:12px;color:var(--red);
-          margin-bottom:14px;display:flex;gap:8px">
-          <span style="flex-shrink:0;font-size:16px">
-            ⚠️</span>
-          <div>
-            <strong>${issueCount} mandatory item
-            ${issueCount!==1?'s':''} need attention
-            </strong> — you can still send but these
-            will be flagged. Fix them first for full
-            compliance.
-          </div>
-        </div>`
-      : `<div style="background:var(--green-bg);
-          border:1px solid var(--green-bg);
-          border-radius:8px;padding:10px 14px;
-          font-size:12px;color:var(--green-dark);
-          margin-bottom:14px">
-          ✅ All mandatory documents are ready
-          — good to send.
-        </div>`}
-
-    <div style="margin-bottom:16px">${docRows}</div>
-
-    <div style="background:var(--off);
-      border:1px solid var(--border);
-      border-radius:10px;padding:14px">
-      <div style="font-size:12px;font-weight:700;
-        color:var(--txt);margin-bottom:10px">
-        Send to</div>
-      <div class="fg-row" style="margin-bottom:0">
-        <div class="fg">
-          <label>Tenant name</label>
-          <input type="text" id="wk-tenant-name"
-            value="${tenantName}"
-            placeholder="Tenant name">
-        </div>
-        <div class="fg">
-          <label>Tenant email
-            <span class="req">*</span></label>
-          <input type="email" id="wk-tenant-email"
-            value="${tenantEmail}"
-            placeholder="tenant@example.com">
-        </div>
+    `<div style="margin-bottom:14px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Sending to <strong>${tenantEmail||'⚠ No email set'}</strong></div>
+      <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:2px 14px 2px">
+        ${ck(rraOk, 'RRA 2025 Prescribed Particulars')}
+        ${ck(h2rOk, 'How to Rent Guide')}
+        ${ck(!!gasCert, 'Gas Safety Certificate')}
+        ${ck(!!eicrCert, 'EICR')}
+        ${ck(!!epcCert, 'EPC')}
       </div>
-    </div>
-  `,
-  `<button class="btn" onclick="closeMo()">
-    Cancel</button>
-   <button class="btn btn-navy" id="wk-send-btn"
-    onclick="sendWelcomeKit('${pid}')">
-    📦 Send welcome kit</button>`
+      ${(!rraOk||!h2rOk) ? `<div style="margin-top:10px;font-size:11px;color:#D97706">⚠ Missing system docs — <a href="#" onclick="closeMo();nav('compliance')" style="color:var(--navy);font-weight:600">upload in Compliance →</a></div>` : ''}
+    </div>`,
+    `<button class="btn" onclick="closeMo()">Cancel</button>
+     <button class="btn btn-navy" id="wk-send-btn" onclick="sendWelcomeKit('${pid}')">📦 Send kit</button>`
   );
 }
+
 
 async function sendWelcomeKit(pid) {
   if (_expiredGuard('Send welcome kit')) return;
   const btn = document.getElementById('wk-send-btn');
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Sending…'; }
-
-  const tenantEmail = document.getElementById('wk-tenant-email')?.value.trim();
-  const tenantName  = document.getElementById('wk-tenant-name')?.value.trim();
-  if (!tenantEmail) {
-    if (btn) { btn.disabled = false; btn.textContent = '📦 Send welcome kit'; }
-    toast('Tenant email is required to send', true); return;
-  }
 
   const p = P(pid);
   const propAddr = [p?.address, p?.city].filter(Boolean).join(', ');
@@ -4793,11 +4538,17 @@ async function sendWelcomeKit(pid) {
   const gasCert  = findCert('gas');
   const eicrCert = findCert('eicr') || findCert('electrical');
   const epcCert  = findCert('epc')  || findCert('energy');
-  const tenant   = D.tenants.find(t => String(t.prop_id) === String(pid) && t.status === 'Active');
+  const tenant   = D.tenants.find(t => String(t.prop_id) === String(pid) && t.is_lead && t.status === 'Active')
+                || D.tenants.find(t => String(t.prop_id) === String(pid) && t.status === 'Active');
+  const tenantEmail = tenant?.email || '';
+  const tenantName  = tenant?.name  || 'Tenant';
+  if (!tenantEmail) {
+    if (btn) { btn.disabled = false; btn.textContent = '📦 Send kit'; }
+    toast('No email address for this tenant — add one in tenant details first', true); return;
+  }
 
-  // Determine which optional items to include
-  const includeDeposit  = document.getElementById('wk-deposit')?.checked ?? true;
-  const includeTenancy  = document.getElementById('wk-tenancy')?.checked ?? false;
+  const includeDeposit = true;
+  const includeTenancy = false;
 
   // Build cert rows for email
   const certRow = (icon, label, cert) => cert ? `
@@ -5006,7 +4757,7 @@ async function sendWelcomeKit(pid) {
             </div>
           </div>
         </div>`;
-      nextBtns = `<button class="btn" onclick="closeMo();nav('tenant-detail','${pid}')">Later</button><button class="btn btn-navy" onclick="closeMo();moWelcomeKit('${pid}')">Send kit to ${next.name} →</button>`;
+      nextBtns = `<button class="btn" onclick="closeMo();nav('tenant-detail','${pid}')">Later</button><button class="btn btn-navy" onclick="closeMo();moWelcomeKit('${pid}','${next.id}')">Send kit to ${next.name} →</button>`;
 
     } else if (tenantsNeedingKyc.length > 0) {
       // All kits sent — now KYC
@@ -12328,88 +12079,48 @@ function moDay30Kit(pid, tid) {
   const propLog = D.emailLog.filter(e => String(e.prop_id) === String(pid));
   const tenantLog = D.emailLog.filter(e => String(e.tenant_id) === String(t.id));
 
-  // Check status of each item
-  const depCertDoc = (D.tenantDocs||[]).find(d => String(d.tenant_id) === String(t.id) && d.slot === 'deposit_cert');
-  const depStatus = depCertDoc ? 'green' : (t.scheme && t.scheme_ref) ? 'amber' : 'red';
-  const piSent = propLog.some(e => e.template_id==='prescribed_info'||e.template_id?.includes('prescribed')) ||
-                 tenantLog.some(e => e.template_id==='prescribed_info'||e.template_id?.includes('prescribed'));
-  const smokeCert = pCerts.some(c => c.type && (c.type.toLowerCase().includes('smoke') || c.type.toLowerCase().includes('co alarm') || c.type.toLowerCase().includes('carbon monoxide')));
-  const legCert = pCerts.some(c => c.type && c.type.toLowerCase().includes('legionella'));
-  const inventoryCert = pCerts.some(c => c.type && (c.type.toLowerCase().includes('inventory') || c.type.toLowerCase().includes('schedule of condition')));
-  const hasPet = !!(t.has_pet || (t.notes||'').toLowerCase().includes('pet'));
-  const petDone = propLog.some(e=>(e.subject||'').toLowerCase().includes('pet')) || tenantLog.some(e=>(e.subject||'').toLowerCase().includes('pet'));
+  // Glance-confirm items
+  const piSent    = propLog.some(e=>e.template_id==='prescribed_info'||e.template_id?.includes('prescribed')) || tenantLog.some(e=>e.template_id==='prescribed_info'||e.template_id?.includes('prescribed'));
+  const depOk     = !!(t.scheme && t.scheme_ref);
+  const smokeDone = pCerts.some(c=>c.type&&(c.type.toLowerCase().includes('smoke')||c.type.toLowerCase().includes('co alarm')||c.type.toLowerCase().includes('carbon monoxide')));
+  const legDone   = pCerts.some(c=>c.type&&c.type.toLowerCase().includes('legionella'));
+  const invDone   = pCerts.some(c=>c.type&&(c.type.toLowerCase().includes('inventory')||c.type.toLowerCase().includes('schedule of condition')));
 
-  const statusBadge = (done, mandatory) => {
-    if (done) return `<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:100px;background:var(--green-bg);color:var(--green-dark)">✓ Done</span>`;
-    if (mandatory) return `<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:100px;background:var(--red-bg);color:var(--red)">Required</span>`;
-    return `<span style="font-size:10px;font-weight:600;padding:1px 7px;border-radius:100px;background:var(--off);color:var(--muted)">Optional</span>`;
-  };
+  const ck = (ok, label) => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+    <span style="font-size:14px">${ok ? '\u2705' : '\u26a0\ufe0f'}</span>
+    <span style="font-size:13px;flex:1">${label}</span>
+    <span style="font-size:11px;font-weight:700;color:${ok?'var(--green-dark)':'#D97706'}">${ok?'Ready':'Missing'}</span>
+  </div>`;
 
-  const itemRow = (icon, label, note, done, mandatory, actionHtml) => `
-    <div style="border:1px solid ${done?'var(--border)':mandatory?'rgba(229,62,62,0.2)':'var(--border)'};border-radius:8px;padding:11px 14px;margin-bottom:8px;background:${done?'var(--white)':mandatory?'rgba(229,62,62,0.02)':'var(--white)'}">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:${(done||!actionHtml)?'0':'8px'}">
-        <span style="font-size:16px">${done?'✅':'⚪'}</span>
-        <div style="flex:1">
-          <div style="font-size:13px;font-weight:600;${done?'text-decoration:line-through;opacity:0.6':''}">${icon} ${label}</div>
-          ${note?`<div style="font-size:11px;color:var(--muted);margin-top:1px">${note}</div>`:''}
-        </div>
-        ${statusBadge(done,mandatory)}
+  openMo(
+    '\U0001f4c6 Day 30 Pack',
+    `${propAddr} · ${tenantName}`,
+    `<div style="margin-bottom:14px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Sending to <strong>${t.email||'\u26a0 No email set'}</strong></div>
+      <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:2px 14px 2px">
+        ${ck(depOk, 'Deposit scheme & reference')}
+        ${ck(piSent, 'Prescribed Information')}
+        ${ck(smokeDone, 'Smoke & CO Alarm Test Record')}
+        ${ck(legDone, 'Legionella Risk Assessment')}
+        ${ck(invDone, 'Inventory / Schedule of Condition')}
       </div>
-      ${(!done && actionHtml)?`<div style="margin-top:6px">${actionHtml}</div>`:''}
-    </div>`;
-
-  const depNote = depStatus==='green' ? `${t.scheme} · Ref: ${t.scheme_ref}` : t.scheme ? `Scheme set (${t.scheme}) — upload certificate` : 'Not registered — record details first';
-  const depAction = `<button class="btn btn-sm btn-navy" style="font-size:11px" onclick="closeMo();moDepositCertModal('${t.id}')">🏦 Record deposit scheme →</button>`;
-  const piAction = `<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-sm btn-navy" style="font-size:11px" onclick="closeMo();moPrescribedInfo('${t.id}')">📄 Generate Prescribed Info →</button><span style="font-size:11px;color:var(--muted);align-self:center">Requires deposit scheme set first</span></div>`;
-  const scanAction = `<button class="btn btn-sm btn-navy" style="font-size:11px" onclick="closeMo();moBulkScan('${pid}')">📎 Upload via AI scanner →</button>`;
-  const inventoryAction = `<button class="btn btn-sm btn-navy" style="font-size:11px" onclick="closeMo();nav('inventory-reports')">📋 Create inventory report →</button>`;
-
-  const mandatoryCount = [depStatus!=='green'?1:0, !piSent?1:0, !smokeCert?1:0, !legCert?1:0].reduce((a,b)=>a+b,0);
-
-  openMo(`📆 Day 30 Pack`, `${propAddr} · ${tenantName}`, `
-    <div style="font-size:13px;color:var(--muted);margin-bottom:14px">
-      Documents legally required within <strong>30 days</strong> of deposit receipt (Housing Act 2004 + RRA 2025). Tick items off and send the pack to your tenant.
-    </div>
-
-    ${mandatoryCount > 0
-      ? `<div style="background:rgba(229,62,62,0.07);border:1px solid rgba(229,62,62,0.2);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--red);margin-bottom:14px;display:flex;gap:8px">
-          <span style="flex-shrink:0;font-size:16px">⚠️</span>
-          <div><strong>${mandatoryCount} mandatory item${mandatoryCount!==1?'s':''} outstanding</strong> — complete these before sending the pack.</div>
-        </div>`
-      : `<div style="background:var(--green-bg);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--green-dark);margin-bottom:14px">✅ All mandatory items complete — ready to send.</div>`
-    }
-
-    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px">Mandatory (within 30 days of deposit receipt)</div>
-    ${itemRow('🏦','Deposit Protection Certificate', depNote, depStatus==='green', true, depAction)}
-    ${itemRow('📋','Prescribed Information', piSent?'Already sent':'Formal notice of deposit protection details', piSent, true, (!t.scheme||!t.scheme_ref)?`<span style="font-size:11px;color:var(--amber)">⚠ Set deposit scheme first, then generate Prescribed Info</span>`:piAction)}
-    ${itemRow('🔔','Smoke & CO Alarm Test Record', 'Day 1 test record signed by tenant', smokeCert, true, scanAction)}
-    ${itemRow('🧪','Legionella Risk Assessment', 'Low-risk self-assessment acceptable for single-let', legCert, true, scanAction)}
-
-    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:14px 0 8px">Recommended</div>
-    ${itemRow('📦','Inventory / Schedule of Condition', 'Signed by tenant — essential for deposit disputes', inventoryCert, false, inventoryAction)}
-    ${hasPet ? itemRow('🐾','Pet Agreement', 'Signed agreement covering pet responsibilities', petDone, false, `<button class="btn btn-sm btn-navy" style="font-size:11px" onclick="closeMo();moCommunicationsHub('${t.id}')">📨 Send pet agreement →</button>`) : ''}
-
-    <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:14px;margin-top:4px">
-      <div style="font-size:12px;font-weight:700;color:var(--txt);margin-bottom:10px">Send to tenant</div>
-      <div class="fg-row" style="margin-bottom:0">
-        <div class="fg"><label>Tenant name</label><input type="text" id="d30-name" value="${tenantName}" class="fi"></div>
-        <div class="fg"><label>Tenant email <span class="req">*</span></label><input type="email" id="d30-email" value="${t.email||''}" class="fi" placeholder="tenant@example.com"></div>
-      </div>
-    </div>
-  `, `<button class="btn" onclick="closeMo()">Cancel</button>
-     <button class="btn btn-navy" id="d30-send-btn" onclick="sendDay30Kit('${pid}','${t.id}')">📨 Send Day 30 Pack</button>`);
+    </div>`,
+    `<button class="btn" onclick="closeMo()">Cancel</button>
+     <button class="btn btn-navy" id="d30-send-btn" onclick="sendDay30Kit('${pid}','${t.id}')">\U0001f4e8 Send Day 30 Pack</button>`
+  );
 }
+
 
 async function sendDay30Kit(pid, tid) {
   if (_expiredGuard('Send Day 30 Pack')) return;
   const btn = document.getElementById('d30-send-btn');
-  const toEmail = document.getElementById('d30-email')?.value.trim();
-  const toName  = document.getElementById('d30-name')?.value.trim();
-  if (!toEmail) { toast('Tenant email is required', true); return; }
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Sending…'; }
 
   const p = P(pid);
   const t = D.tenants.find(x => String(x.id) === String(tid));
+  const toEmail = t?.email || '';
+  const toName  = t?.name  || 'Tenant';
+  if (!toEmail) { if(btn){btn.disabled=false;btn.textContent='📨 Send Day 30 Pack';} toast('No email address for this tenant', true); return; }
   const propAddr = [p?.address, p?.city].filter(Boolean).join(', ');
   const pCerts = CF(pid);
   const today = new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' });
