@@ -8940,12 +8940,13 @@ function pgTenantDetail(tid) {
           </div>
           <div style="flex-shrink:0">
             <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+              ${isRTR && rtrWizardDone ? '' : `
               <div style="display:flex;gap:4px;align-items:center">
                 <label class="btn btn-sm btn-navy" style="cursor:pointer;margin:0;font-size:11px">${hasDocs ? '+ Add another' : 'Upload'}
                   <input type="file" style="display:none" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onchange="uploadTenantDoc('${tid}','${s.slot}',this)">
                 </label>
               </div>
-              <div style="font-size:10px;color:var(--blue);font-weight:600;white-space:nowrap">✦ AI auto-scan</div>
+              <div style="font-size:10px;color:var(--blue);font-weight:600;white-space:nowrap">✦ AI auto-scan</div>`}
             </div>
           </div>
         </div>
