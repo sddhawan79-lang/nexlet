@@ -4033,3 +4033,139 @@ None.
 | 22 | Existing certs have no `file_url` — won't attach until re-uploaded | Known — landlords must re-upload via bulk scan |
 | 23 | Day 30 kit modal behaviour — needs live test | Pending test Session 38 |
 | 24 | `start_date` amber warning in `nav()` — second date input not yet traced | Carry forward |
+
+---
+
+## Session 38 — 6 June 2026
+
+### Summary
+Post-launch bug fixes and UX improvements. Focus: system documents, kit send flow, next-step guidance, written statement wiring, deposit cert scan, and kit modal simplification.
+
+---
+
+### Changes
+
+#### 1. System Documents — upload once, attach to all Day 1 kits
+**New feature.** Two new columns on `user_profiles`: `rra_doc_url TEXT`, `h2r_doc_url TEXT`.
+
+**SQL run:**
+```sql
+ALTER TABLE user_profiles
+  ADD COLUMN IF NOT EXISTS rra_doc_url TEXT,
+  ADD COLUMN IF NOT EXISTS h2r_doc_url TEXT;
+```
+
+**New "System Documents" card** added to top of `pgCompliance()`. Shows upload slots for:
+- RRA 2025 Prescribed Particulars (GOV.UK link)
+- How to Rent Guide (GOV.UK link)
+
+Each slot shows ✓ Uploaded / ⚠ Not uploaded, View link, Upload/Replace button. Badge shows "Both uploaded" / "1 of 2" / "Not uploaded".
+
+**New function `uploadSystemDoc(key, input)`:** Uploads to `property-documents/system/{key}-{uid}.pdf` in `documents` bucket (upsert). Writes public URL to `user_profiles`. Updates `D.userProfile` in memory. Refreshes compliance page.
+
+**Day 1 kit send (`sendWelcomeKit`):** After cert attachments built, both `rra_doc_url` and `h2r_doc_url` injected into `attachment_urls`. If either missing, amber toast with link to Compliance > System Documents — kit still sends.
+
+---
+
+#### 2. "Send guide" button wired up
+**Problem:** "How to Rent guide served · Send guide" button on Day 1 pack called `moCommunicationsHub` — did nothing useful.
+
+**Fix:** New function `sendH2RGuide(tid)`:
+- Checks `D.userProfile.h2r_doc_url` — if missing, toasts and redirects to Compliance
+- Sends email directly to tenant with H2R PDF as attachment
+- Logs `template_id: 'how_to_rent_guide'` to `email_log` so Day 1 tick fires
+- Button now calls `sendH2RGuide('${tid}')` instead of `moCommunicationsHub`
+
+---
+
+#### 3. Next-step flow after Day 1 kit send
+**New behaviour.** After `sendWelcomeKit` succeeds, instead of a static "Kit sent!" confirmation, a smart next-step modal fires:
+
+1. **Co-tenants pending kit** → "Send kit to [name] →" (passes `targetTid` so correct tenant shown)
+2. **All kits sent, KYC incomplete** → "Upload KYC for [first tenant needing docs] →"
+3. **KYC done, certs missing** → Shows which certs missing → opens Bulk Scan
+4. **Everything done** → "Tenancy setup complete!" · Auto-adds Day 30 reminder to `calendar_events` (start_date + 30 days) · Feature tour (Calendar, Rent & Finance, Maintenance, Documents) · Go to dashboard
+
+All steps have a "Later" button — dismisses modal, progress bar handles state.
+
+`moWelcomeKit(pid, targetTid)` — second param added so co-tenant flow passes correct tenant ID.
+
+---
+
+#### 4. RTR upload button hidden when wizard complete
+When `rtrWizardDone === true`, Upload button and AI auto-scan label hidden from RTR KYC slot. Re-check button in green wizard card still available.
+
+---
+
+#### 5. Written Statement — esign PDF shown in checklist slot
+**Problem:** After e-sign flow completed, Written Statement checklist slot showed "No document uploaded yet" even though signed PDF existed in `esign_requests.signed_pdf_url`.
+
+**Fix:** `_checklistRowHtml` for `agreement` slot now checks `D.esignReq` for signed record with `signed_pdf_url` first. When found: shows "📎 Signed Written Statement (e-sign)" + signed date + View + Download buttons. Manual Upload button still present for override.
+
+---
+
+#### 6. Deposit cert scan — proper prompt + write-back to tenant
+**Problem:** Deposit certs scanned via `moCert` / `scanDoc` used generic prompt → all fields "Not detected". Scheme/ref not written to tenant row so property page showed "Unprotected".
+
+**Fix 1:** Added deposit cert branch to `scanDoc` prompt selector. Triggers when type includes "deposit", "dps", "tds", "mydeposit". Uses specific prompt extracting: scheme name (DPS/MyDeposits/TDS), reference, amount, tenant name, dates, address.
+
+**Fix 2:** After scan callback, if deposit cert detected (`parsed.scheme` present), auto-writes `scheme`, `scheme_ref`, `deposit` to lead tenant row via `sb.from('tenants').update(patch)` and updates `D.tenants` in memory. Toast confirms write-back. Property page "Deposit" stat card then shows "Protected" immediately.
+
+---
+
+#### 7. Day 1 and Day 30 kit modals — simplified to glance-confirm
+**Problem:** Both kit modals were showing full checklist with instructions, notes, action buttons — overwhelming at point of send.
+
+**Fix:** Both modals rebuilt as 5-line glance-confirm:
+- Sending to `[email]`
+- 5 items: each shows ✅ Ready or ⚠ Missing — nothing else
+- Cancel / Send button only
+
+**Day 1 items:** RRA Prescribed Particulars, How to Rent Guide, Gas Safety Certificate, EICR, EPC.
+**Day 30 items:** Deposit scheme & reference, Prescribed Information, Smoke & CO Alarm Test Record, Legionella Risk Assessment, Inventory.
+
+Both send functions (`sendWelcomeKit`, `sendDay30Kit`) now pull `email` and `name` directly from `D.tenants` — no form inputs in modal.
+
+---
+
+### DB Migrations Run This Session
+```sql
+ALTER TABLE user_profiles
+  ADD COLUMN IF NOT EXISTS rra_doc_url TEXT,
+  ADD COLUMN IF NOT EXISTS h2r_doc_url TEXT;
+```
+
+---
+
+### Known Issues — Updated
+
+| # | Issue | Status |
+|---|---|---|
+| 1 | ICO number placeholder in legal docs | Pending registration |
+| 2 | MX record for inbound email | Parked post-launch |
+| 3 | `login.html` newsletter signup checkbox | Not built |
+| 4 | `moFinancials` PDF export — jsPDF needed | Post-launch backlog |
+| 5 | Section 8 UX handoff to Form 3A | Post-launch backlog |
+| 6 | WhatsApp reminders | Post-launch backlog |
+| 7 | Free public compliance checker | Marketing priority |
+| 8 | Blog / content hub | Marketing priority |
+| 9 | Postcode finder — replace with getAddress.io | Post-launch backlog |
+| 10 | `stripe_price_id` NULL — sandbox only | Closed |
+| 11 | `newsletter_opted_in` column missing from user_profiles | Pending SQL |
+| 12 | favicon.ico missing | Post-launch backlog |
+| 13 | `relet_prepared` column needed on tenants | Pending SQL |
+| 14 | `portal_enabled` column — ✅ run Session 32 | Closed |
+| 15 | RTR columns on tenants — ✅ run Session 35 | Closed |
+| 16 | `day30_pack` email template | ✅ Built Session 37 |
+| 17 | `kycRows` dead code — ✅ removed Session 35 | Closed |
+| 18 | Block 4 `new Function()` false positive | Closed |
+| 19 | `start_date` ISO timestamp on date input | ✅ Fixed Session 36 |
+| 20 | Duplicate `calToday` declaration | ✅ Fixed Session 36 |
+| 21 | Welcome kit PDF attachments not arriving | ⚠ Edge function fix pending developer — `ai-proxy.ts` must handle `attachment_urls` |
+| 22 | Existing certs have no `file_url` — won't attach until re-uploaded | Known — landlords must re-upload via bulk scan |
+| 23 | Day 30 kit modal — rebuilt Session 38 | ✅ Rebuilt as glance-confirm |
+| 24 | `start_date` amber warning in `nav()` — second date input not yet traced | Carry forward |
+| 25 | Deposit cert scan all "Not detected" | ✅ Fixed Session 38 — deposit-specific prompt + write-back |
+| 26 | Property page shows "Unprotected" after deposit cert upload | ✅ Fixed Session 38 — auto write-back to tenant row on scan |
+| 27 | Written Statement shows "No document uploaded" after e-sign | ✅ Fixed Session 38 — reads `signed_pdf_url` from `esign_requests` |
+| 28 | "Send guide" button unresponsive | ✅ Fixed Session 38 — `sendH2RGuide(tid)` built and wired |
