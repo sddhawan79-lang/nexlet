@@ -1857,9 +1857,9 @@ async function uploadScanCert(certId, input){
       try {
         const ext = file.name.split('.').pop() || 'pdf';
         const fpath = 'certs/'+currentUser.id+'/'+certId+'.'+ext;
-        const { error: upErr } = await sb.storage.from('documents').upload(fpath, file, { contentType: file.type, upsert: true });
+        const { error: upErr } = await sb.storage.from('property-documents').upload(fpath, file, { contentType: file.type, upsert: true });
         if (!upErr) {
-          const { data: urlData } = sb.storage.from('documents').getPublicUrl(fpath);
+          const { data: urlData } = sb.storage.from('property-documents').getPublicUrl(fpath);
           // Store URL in dedicated field; keep engineer as the person/company name
           if (urlData?.publicUrl) updates.file_url = urlData.publicUrl;
         }
@@ -2030,9 +2030,9 @@ async function _certUploadFile(certId, certType, engineerText) {
   try {
     const ext = file.name.split('.').pop() || 'pdf';
     const path = `certs/${currentUser.id}/${certId}.${ext}`;
-    const { error: upErr } = await sb.storage.from('documents').upload(path, file, { contentType: file.type, upsert: true });
+    const { error: upErr } = await sb.storage.from('property-documents').upload(path, file, { contentType: file.type, upsert: true });
     if (upErr) { console.warn('Cert file upload error:', upErr.message); return; }
-    const { data: urlData } = sb.storage.from('documents').getPublicUrl(path);
+    const { data: urlData } = sb.storage.from('property-documents').getPublicUrl(path);
     if (!urlData?.publicUrl) return;
     const fileUrl = urlData.publicUrl;
     // Try to update file_url column; fall back to has_file only if column missing
@@ -3502,9 +3502,9 @@ async function saveBulkResults() {
         if (file) {
           const ext = file.name.split('.').pop() || 'pdf';
           const fpath = `certs/${currentUser.id}/${data.id}.${ext}`;
-          const { error: upErr } = await sb.storage.from('documents').upload(fpath, file, { contentType: file.type, upsert: true });
+          const { error: upErr } = await sb.storage.from('property-documents').upload(fpath, file, { contentType: file.type, upsert: true });
           if (!upErr) {
-            const { data: urlData } = sb.storage.from('documents').getPublicUrl(fpath);
+            const { data: urlData } = sb.storage.from('property-documents').getPublicUrl(fpath);
             if (urlData?.publicUrl) {
               fileUrl = urlData.publicUrl;
               await sb.from('certificates').update({ file_url: fileUrl }).eq('id', data.id);
@@ -10450,9 +10450,9 @@ async function saveInspection(pid) {
   for (const file of photoFiles) {
     const ext = file.name.split('.').pop();
     const path = `inspections/${propId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-    const { data: upData, error: upErr } = await sb.storage.from('documents').upload(path, file, { upsert: true });
+    const { data: upData, error: upErr } = await sb.storage.from('property-documents').upload(path, file, { upsert: true });
     if (!upErr && upData) {
-      const { data: urlData } = sb.storage.from('documents').getPublicUrl(path);
+      const { data: urlData } = sb.storage.from('property-documents').getPublicUrl(path);
       if (urlData?.publicUrl) photoUrls.push(urlData.publicUrl);
     }
   }
@@ -10707,9 +10707,9 @@ async function _saveInventoryToDb(reportId) {
       const ext = (ph.name||'photo.jpg').split('.').pop();
       const path = `inventory/${currentUser.id}/${reportId}/${i}.${ext}`;
       const blob = await fetch(`data:${ph.type};base64,${ph.b64}`).then(res => res.blob());
-      const { error: upErr } = await sb.storage.from('documents').upload(path, blob, { contentType: ph.type, upsert: true });
+      const { error: upErr } = await sb.storage.from('property-documents').upload(path, blob, { contentType: ph.type, upsert: true });
       if (!upErr) {
-        const { data: urlData } = sb.storage.from('documents').getPublicUrl(path);
+        const { data: urlData } = sb.storage.from('property-documents').getPublicUrl(path);
         photoPaths.push({ name: ph.name, type: ph.type, url: urlData.publicUrl, path });
       }
     } catch(pe) { /* skip this photo — don't abort save */ }
@@ -12489,9 +12489,9 @@ async function sendPrescribedInfo(tid) {
     // 2. Upload to Supabase storage
     const filename = `Prescribed_Information_${t.name.replace(/[^a-zA-Z0-9]/g,'_')}_${new Date().toISOString().slice(0,10)}.pdf`;
     const storagePath = `prescribed/${currentUser.id}/${t.id}_${Date.now()}.pdf`;
-    const { error: upErr } = await sb.storage.from('documents').upload(storagePath, pdfBlob, { contentType: 'application/pdf', upsert: true });
+    const { error: upErr } = await sb.storage.from('property-documents').upload(storagePath, pdfBlob, { contentType: 'application/pdf', upsert: true });
     if (upErr) throw new Error('Storage upload failed: ' + upErr.message);
-    const { data: urlData } = sb.storage.from('documents').getPublicUrl(storagePath);
+    const { data: urlData } = sb.storage.from('property-documents').getPublicUrl(storagePath);
     const fileUrl = urlData?.publicUrl;
     if (!fileUrl) throw new Error('Could not get public URL for PDF');
 
@@ -12878,9 +12878,9 @@ async function dlUpload(){
   toast('Uploading…');
   const ext=file.name.split('.').pop();
   const filename=`docs/${currentUser.id}_${Date.now()}.${ext}`;
-  const{error:upErr}=await sb.storage.from('documents').upload(filename,file,{contentType:file.type});
+  const{error:upErr}=await sb.storage.from('property-documents').upload(filename,file,{contentType:file.type});
   if(upErr){toast('Upload failed: '+upErr.message,true);return;}
-  const{data:urlData}=sb.storage.from('documents').getPublicUrl(filename);
+  const{data:urlData}=sb.storage.from('property-documents').getPublicUrl(filename);
   const cert={prop_id:propId?String(propId):null,type:'__DOC__:'+name,expiry:new Date().toISOString().split('T')[0],engineer:urlData.publicUrl,status:'Uploaded',has_file:true,served:false,user_id:currentUser.id};
   const{data,error}=await sb.from('certificates').insert(cert).select().single();
   if(error){toast('Save failed: '+error.message,true);return;}
