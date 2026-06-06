@@ -2178,6 +2178,22 @@ function closeMo(){
 }
 function closeModal() { closeMo(); }
 
+// ── BLOCKING ALERT MODAL — user must dismiss, used for critical errors ──
+function alertMo(title, message, actionLabel, actionFn) {
+  const btnHtml = actionFn
+    ? `<button class="btn" onclick="closeMo()">Dismiss</button><button class="btn btn-navy" onclick="closeMo();(${actionFn})()">${actionLabel}</button>`
+    : `<button class="btn btn-navy" style="min-width:120px" onclick="closeMo()">OK, got it</button>`;
+  openMo(
+    title,
+    '',
+    `<div style="text-align:center;padding:8px 4px 4px">
+      <div style="font-size:32px;margin-bottom:12px">⚠️</div>
+      <div style="font-size:13px;line-height:1.7;color:var(--txt)">${message}</div>
+    </div>`,
+    `<div style="display:flex;justify-content:center;gap:10px;width:100%">${btnHtml}</div>`
+  );
+}
+
 // ── MODAL: ADD CERTIFICATE ──
 function _toggleCertExpiry() {
   const t = (document.getElementById('ct')?.value||'').toLowerCase();
@@ -4516,7 +4532,13 @@ function moWelcomeKit(pid, targetTid) {
         ${ck(!!eicrCert, 'EICR')}
         ${ck(!!epcCert, 'EPC')}
       </div>
-      ${(!rraOk||!h2rOk) ? `<div style="margin-top:10px;font-size:11px;color:#D97706">⚠ Missing system docs — <a href="#" onclick="closeMo();nav('compliance')" style="color:var(--navy);font-weight:600">upload in Compliance →</a></div>` : ''}
+      ${(!rraOk||!h2rOk) ? `<div style="margin-top:12px;background:rgba(217,119,6,0.08);border:1px solid rgba(217,119,6,0.35);border-radius:8px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px">
+        <div>
+          <div style="font-size:12px;font-weight:700;color:#92400E;margin-bottom:2px">⚠ System documents missing</div>
+          <div style="font-size:11px;color:#92400E;line-height:1.5">${!rraOk && !h2rOk ? 'RRA 2025 Prescribed Particulars and How to Rent Guide are' : !rraOk ? 'RRA 2025 Prescribed Particulars is' : 'How to Rent Guide is'} not yet uploaded. Upload once in Compliance — auto-attached to every kit.</div>
+        </div>
+        <button class="btn" style="white-space:nowrap;font-size:11px;padding:5px 10px;border-color:#D97706;color:#92400E;flex-shrink:0" onclick="closeMo();nav('compliance')">Upload now →</button>
+      </div>` : ''}
     </div>`,
     `<button class="btn" onclick="closeMo()">Cancel</button>
      <button class="btn btn-navy" id="wk-send-btn" onclick="sendWelcomeKit('${pid}')">📦 Send kit</button>`
@@ -4542,7 +4564,8 @@ async function sendWelcomeKit(pid) {
   const tenantName  = tenant?.name  || 'Tenant';
   if (!tenantEmail) {
     if (btn) { btn.disabled = false; btn.textContent = '📦 Send kit'; }
-    toast('No email address for this tenant — add one in tenant details first', true); return;
+    alertMo('No tenant email', 'This tenant has no email address on file.<br><br>Add their email in <strong>Tenant Details</strong> before sending the Day 1 kit.', 'Go to tenant', `function(){nav('tenant-detail','${pid}')}`);
+    return;
   }
 
   const includeDeposit = true;
@@ -4660,10 +4683,23 @@ async function sendWelcomeKit(pid) {
     // Attach system docs (RRA Prescribed Particulars + How to Rent) if uploaded
     const rraUrl = D.userProfile?.rra_doc_url;
     const h2rUrl = D.userProfile?.h2r_doc_url;
+    const missingDocs = [];
+    if (!rraUrl) missingDocs.push('RRA 2025 Prescribed Particulars');
+    if (!h2rUrl) missingDocs.push('How to Rent Guide');
+    if (missingDocs.length) {
+      if (btn) { btn.disabled = false; btn.innerHTML = '📦 Send kit'; }
+      alertMo(
+        'Missing required documents',
+        `The following document${missingDocs.length > 1 ? 's are' : ' is'} not yet uploaded and <strong>must</strong> be attached to the Day 1 kit:<br><br>` +
+        missingDocs.map(d => `• ${d}`).join('<br>') +
+        `<br><br>Go to <strong>Compliance → System Documents</strong> to upload ${missingDocs.length > 1 ? 'them' : 'it'} once — it will auto-attach to every kit.`,
+        'Go to Compliance',
+        `function(){nav('compliance')}`
+      );
+      return;
+    }
     if (rraUrl) attachment_urls.push({ url: rraUrl, filename: 'RRA_2025_Prescribed_Particulars.pdf' });
-    else toast('⚠ RRA Prescribed Particulars not uploaded — go to Compliance > System Documents to add it.', true);
     if (h2rUrl) attachment_urls.push({ url: h2rUrl, filename: 'How_to_Rent_Guide.pdf' });
-    else toast('⚠ How to Rent guide not uploaded — go to Compliance > System Documents to add it.', true);
 
     // Send email — edge function fetches files and attaches them
     const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
@@ -9164,9 +9200,9 @@ async function uploadSystemDoc(key, input) {
   toast('Uploading…');
   const ext = file.name.split('.').pop() || 'pdf';
   const path = `property-documents/system/${key}-${user.id}.${ext}`;
-  const { error: upErr } = await sb.storage.from('documents').upload(path, file, { upsert: true, contentType: file.type || 'application/pdf' });
+  const { error: upErr } = await sb.storage.from('property-documents').upload(path, file, { upsert: true, contentType: file.type || 'application/pdf' });
   if (upErr) { toast('Upload failed: ' + upErr.message, true); return; }
-  const { data: urlData } = sb.storage.from('documents').getPublicUrl(path);
+  const { data: urlData } = sb.storage.from('property-documents').getPublicUrl(path);
   const col = key === 'rra' ? 'rra_doc_url' : 'h2r_doc_url';
   const { error: dbErr } = await sb.from('user_profiles').upsert({ id: user.id, [col]: urlData.publicUrl }, { onConflict: 'id' });
   if (dbErr) { toast('Save failed: ' + dbErr.message, true); return; }
@@ -15878,8 +15914,12 @@ const RRA_PDF_B64 = 'JVBERi0xLjcNJeLjz9MNCjE4OCAwIG9iag08PC9MaW5lYXJpemVkIDEvTCA
 async function sendH2RGuide(tid) {
   const h2rUrl = D.userProfile?.h2r_doc_url;
   if (!h2rUrl) {
-    toast('⚠ How to Rent guide not uploaded yet — go to Compliance > System Documents to upload it first.', true);
-    nav('compliance');
+    alertMo(
+      'How to Rent Guide not uploaded',
+      'The How to Rent Guide has not been uploaded yet.<br><br>Go to <strong>Compliance → System Documents</strong> to upload it once — it will then be available to send to all tenants.',
+      'Go to Compliance',
+      `function(){nav('compliance')}`
+    );
     return;
   }
   const t = D.tenants.find(x => String(x.id) === String(tid));
