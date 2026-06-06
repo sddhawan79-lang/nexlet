@@ -4487,8 +4487,6 @@ function moWelcomeKit(pid, targetTid) {
   const pIns = D.insurance.filter(
     i => String(i.prop_id)===String(pid)
   );
-
-  const pCerts = CF(pid);
   const propAddr = [p.address, p.city].filter(Boolean).join(', ');
   const tenantName = tenant?.name || 'Tenant';
   const tenantEmail = tenant?.email || '';
