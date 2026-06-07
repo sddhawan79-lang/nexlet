@@ -4533,10 +4533,24 @@ function moWelcomeKit(pid, targetTid) {
   const rraOk    = !!D.userProfile?.rra_doc_url;
   const h2rOk    = !!D.userProfile?.h2r_doc_url;
 
-  const ck = (ok, label) => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+  // Written statement — must be signed by this tenant (or all tenants for joint)
+  const allPropTenants = D.tenants.filter(t => String(t.prop_id)===String(pid) && t.status==='Active');
+  const wsOk = allPropTenants.every(t =>
+    (D.esignReq||[]).some(r => String(r.tenant_id)===String(t.id) && r.document_type==='written_statement' && r.status==='signed' && r.signed_pdf_url)
+  );
+
+  // File URL checks — cert exists but no uploaded file
+  const gasFileOk  = !gasCert  || !!gasCert.file_url;
+  const eicrFileOk = !eicrCert || !!eicrCert.file_url;
+  const epcFileOk  = !epcCert  || !!epcCert.file_url;
+
+  // Kit is fully ready only when everything is present
+  const kitReady = rraOk && h2rOk && !!gasCert && gasFileOk && !!eicrCert && eicrFileOk && !!epcCert && epcFileOk && wsOk;
+
+  const ck = (ok, label, warn) => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
     <span style="font-size:14px">${ok ? '✅' : '⚠️'}</span>
     <span style="font-size:13px;flex:1">${label}</span>
-    <span style="font-size:11px;font-weight:700;color:${ok?'var(--green-dark)':'#D97706'}">${ok?'Ready':'Missing'}</span>
+    <span style="font-size:11px;font-weight:700;color:${ok?'var(--green-dark)':'var(--red)'}">${ok?'Ready': warn||'Missing'}</span>
   </div>`;
 
   openMo(
@@ -4545,22 +4559,30 @@ function moWelcomeKit(pid, targetTid) {
     `<div style="margin-bottom:14px">
       <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Sending to <strong>${tenantEmail||'⚠ No email set'}</strong></div>
       <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:2px 14px 2px">
-        ${ck(rraOk, 'RRA 2025 Prescribed Particulars')}
-        ${ck(h2rOk, 'How to Rent Guide')}
-        ${ck(!!gasCert, 'Gas Safety Certificate')}
-        ${ck(!!eicrCert, 'EICR')}
-        ${ck(!!epcCert, 'EPC')}
+        ${ck(wsOk,      'Written Statement (signed by all tenants)')}
+        ${ck(rraOk,     'RRA 2025 Prescribed Particulars')}
+        ${ck(h2rOk,     'How to Rent Guide')}
+        ${ck(!!gasCert && gasFileOk,   'Gas Safety Certificate', !gasCert ? 'Missing' : 'No file — re-upload')}
+        ${ck(!!eicrCert && eicrFileOk, 'EICR',                   !eicrCert ? 'Missing' : 'No file — re-upload')}
+        ${ck(!!epcCert && epcFileOk,   'EPC',                    !epcCert ? 'Missing' : 'No file — re-upload')}
       </div>
-      ${(!rraOk||!h2rOk) ? `<div style="margin-top:12px;background:rgba(217,119,6,0.08);border:1px solid rgba(217,119,6,0.35);border-radius:8px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px">
-        <div>
-          <div style="font-size:12px;font-weight:700;color:#92400E;margin-bottom:2px">⚠ System documents missing</div>
-          <div style="font-size:11px;color:#92400E;line-height:1.5">${!rraOk && !h2rOk ? 'RRA 2025 Prescribed Particulars and How to Rent Guide are' : !rraOk ? 'RRA 2025 Prescribed Particulars is' : 'How to Rent Guide is'} not yet uploaded. Upload once in Compliance — auto-attached to every kit.</div>
+      ${!kitReady ? `<div style="margin-top:12px;background:rgba(229,62,62,0.06);border:1px solid rgba(229,62,62,0.25);border-radius:8px;padding:10px 14px">
+        <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:4px">🔒 Kit is incomplete — resolve all items above before sending</div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.6">
+          ${!wsOk ? '• Written Statement must be signed by all tenants before sending<br>' : ''}
+          ${(!rraOk||!h2rOk) ? '• System documents (RRA / How to Rent) must be uploaded in Compliance → System Documents<br>' : ''}
+          ${(!!gasCert&&!gasFileOk)||(!!eicrCert&&!eicrFileOk)||(!!epcCert&&!epcFileOk) ? '• One or more certs have no file attached — re-upload via the Compliance tab<br>' : ''}
+          ${(!gasCert||!eicrCert||!epcCert) ? '• Missing certificates must be uploaded in the property Compliance tab<br>' : ''}
         </div>
-        <button class="btn" style="white-space:nowrap;font-size:11px;padding:5px 10px;border-color:#D97706;color:#92400E;flex-shrink:0" onclick="closeMo();nav('compliance')">Upload now →</button>
-      </div>` : ''}
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+          ${!wsOk ? `<button class="btn btn-sm" style="font-size:11px" onclick="closeMo();moEsign('${pid}','${tenant?.id||''}')">✍ Send for e-sign →</button>` : ''}
+          ${(!rraOk||!h2rOk) ? `<button class="btn btn-sm" style="font-size:11px" onclick="closeMo();nav('compliance')">Upload system docs →</button>` : ''}
+          ${(!gasCert||!eicrCert||!epcCert||!gasFileOk||!eicrFileOk||!epcFileOk) ? `<button class="btn btn-sm" style="font-size:11px" onclick="closeMo();window._pdTab['${pid}']='compliance';nav('prop-detail','${pid}')">Upload certs →</button>` : ''}
+        </div>
+      </div>` : `<div style="margin-top:10px;background:rgba(0,168,122,0.07);border:1px solid rgba(0,168,122,0.2);border-radius:8px;padding:8px 14px;font-size:12px;color:var(--green-dark);font-weight:600">✅ All documents ready — kit will be sent with full attachments</div>`}
     </div>`,
     `<button class="btn" onclick="closeMo()">Cancel</button>
-     <button class="btn btn-navy" id="wk-send-btn" onclick="sendWelcomeKit('${pid}')">📦 Send kit</button>`
+     <button class="btn btn-navy" id="wk-send-btn" ${!kitReady?'disabled style="opacity:.4;cursor:not-allowed"':''} onclick="${kitReady?`sendWelcomeKit('${pid}')`:''}"}>📦 Send kit</button>`
   );
 }
 
@@ -4681,45 +4703,54 @@ async function sendWelcomeKit(pid) {
   </body></html>`;
 
   try {
-    // Build attachment_urls — edge function fetches files server-side (no browser memory limit)
+    // ── Hard block — all mandatory docs must be present with files before send ──
+    const allTenants = D.tenants.filter(t => String(t.prop_id)===String(pid) && t.status==='Active');
+    const wsSignedAll = allTenants.every(t =>
+      (D.esignReq||[]).some(r => String(r.tenant_id)===String(t.id) && r.document_type==='written_statement' && r.status==='signed' && r.signed_pdf_url)
+    );
+    const rraUrl = D.userProfile?.rra_doc_url;
+    const h2rUrl = D.userProfile?.h2r_doc_url;
+
+    // Build attachment_urls — edge function fetches files server-side
     const attachment_urls = [];
     const certsToAttach = [
       { cert: gasCert,  filename: `Gas_Safety_Certificate_${propAddr.replace(/[^a-z0-9]/gi,'_')}` },
       { cert: eicrCert, filename: `EICR_${propAddr.replace(/[^a-z0-9]/gi,'_')}` },
       { cert: epcCert,  filename: `EPC_${propAddr.replace(/[^a-z0-9]/gi,'_')}` },
     ];
-    const missingFileUrl = [];
-    for (const { cert, filename } of certsToAttach) {
-      if (!cert) continue;
-      if (!cert.file_url) { missingFileUrl.push(cert.type || filename); continue; }
-      const ext = cert.file_url.split('.').pop().split('?')[0] || 'pdf';
-      attachment_urls.push({ url: cert.file_url, filename: `${filename}.${ext}` });
-    }
-    if (missingFileUrl.length) {
-      toast(`⚠ ${missingFileUrl.length} cert${missingFileUrl.length!==1?'s':''} have no stored file — sending without attachment. Re-upload via bulk scan to fix.`, true);
-    }
 
-    // Attach system docs (RRA Prescribed Particulars + How to Rent) if uploaded
-    const rraUrl = D.userProfile?.rra_doc_url;
-    const h2rUrl = D.userProfile?.h2r_doc_url;
-    const missingDocs = [];
-    if (!rraUrl) missingDocs.push('RRA 2025 Prescribed Particulars');
-    if (!h2rUrl) missingDocs.push('How to Rent Guide');
-    if (missingDocs.length) {
+    // Collect every blocking issue before showing one clear alert
+    const blockers = [];
+    if (!wsSignedAll)  blockers.push('Written Statement not yet signed by all tenants — send for e-sign first');
+    if (!rraUrl)       blockers.push('RRA 2025 Prescribed Particulars not uploaded — go to Compliance → System Documents');
+    if (!h2rUrl)       blockers.push('How to Rent Guide not uploaded — go to Compliance → System Documents');
+    if (!gasCert)      blockers.push('Gas Safety Certificate missing — upload in property Compliance tab');
+    else if (!gasCert.file_url) blockers.push('Gas Safety Certificate has no file attached — re-upload in property Compliance tab');
+    if (!eicrCert)     blockers.push('EICR missing — upload in property Compliance tab');
+    else if (!eicrCert.file_url) blockers.push('EICR has no file attached — re-upload in property Compliance tab');
+    if (!epcCert)      blockers.push('EPC missing — upload in property Compliance tab');
+    else if (!epcCert.file_url)  blockers.push('EPC has no file attached — re-upload in property Compliance tab');
+
+    if (blockers.length) {
       if (btn) { btn.disabled = false; btn.innerHTML = '📦 Send kit'; }
       alertMo(
-        'Missing required documents',
-        `The following document${missingDocs.length > 1 ? 's are' : ' is'} not yet uploaded and <strong>must</strong> be attached to the Day 1 kit:<br><br>` +
-        missingDocs.map(d => `• ${d}`).join('<br>') +
-        `<br><br>Go to <strong>Compliance → System Documents</strong> to upload ${missingDocs.length > 1 ? 'them' : 'it'} once — it will auto-attach to every kit.`,
+        'Kit cannot be sent yet',
+        `The following must be resolved before the Day 1 kit can be sent:<br><br>` +
+        blockers.map(b => `• ${b}`).join('<br>'),
         'Go to Compliance',
-        `function(){nav('compliance')}`
+        `function(){nav('prop-detail','${pid}');setTimeout(()=>pdSetTab('${pid}','compliance'),100)}`
       );
       return;
     }
-    if (rraUrl) attachment_urls.push({ url: rraUrl, filename: 'RRA_2025_Prescribed_Particulars.pdf' });
-    if (h2rUrl) attachment_urls.push({ url: h2rUrl, filename: 'How_to_Rent_Guide.pdf' });
 
+    // All clear — build attachment list
+    for (const { cert, filename } of certsToAttach) {
+      if (!cert || !cert.file_url) continue;
+      const ext = cert.file_url.split('.').pop().split('?')[0] || 'pdf';
+      attachment_urls.push({ url: cert.file_url, filename: `${filename}.${ext}` });
+    }
+    attachment_urls.push({ url: rraUrl, filename: 'RRA_2025_Prescribed_Particulars.pdf' });
+    attachment_urls.push({ url: h2rUrl, filename: 'How_to_Rent_Guide.pdf' });
     // Send email — edge function fetches files and attaches them
     const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
       method:'POST', headers:{'Content-Type':'application/json'},
