@@ -2004,9 +2004,18 @@ async function saveCertToDB() {
       const { amount, cert_ref, issued: _iss, ...safeCert } = cert;
       const { data: d2, error: e2 } = await sb.from('certificates').insert(safeCert).select().single();
       if (e2) { toast('Error: ' + e2.message, true); return; }
-      D.certs.push({...d2, file: true});
+      D.certs.push({...d2, file: true, type: certType});
       await _certUploadFile(d2.id, certType, engineer);
       await logAudit('ADD_CERT', 'certificates', d2.id, `Added ${certType}`);
+      if (expiry) {
+        const calTitle = `${certType} expires — ${(P(propId)||{}).address||'Property'}`;
+        const { data: calData } = await sb.from('calendar_events').insert({
+          user_id: currentUser.id, prop_id: String(propId),
+          title: calTitle, date: expiry,
+          notes: `Certificate expiry reminder. Renew before this date.`
+        }).select().single();
+        if (calData) D.calEvents.push(calData);
+      }
       closeMo(); toast('✓ Certificate saved' + (expiry ? ' · 📅 Expiry added to calendar' : '') + '!');
       setTimeout(() => { const hasTenant = D.tenants.filter(t=>t.status==='Active').length>0; const hasWelcome=(D.emailLog||[]).some(e=>e.template_id==='welcome_kit'); if(!hasTenant) toast('💡 Next: add your first tenant → go to Tenants'); else if(!hasWelcome) toast('💡 Next: send the welcome kit to your tenant → go to Tenants'); }, 2800);
       nav(window._currentPage, window._currentParam); return;
@@ -2017,6 +2026,16 @@ async function saveCertToDB() {
   D.certs.push({...data, file: true});
   await _certUploadFile(data.id, certType, engineer);
   await logAudit('ADD_CERT', 'certificates', data.id, `Added ${certType}`);
+  // Insert calendar expiry event if cert has an expiry date
+  if (expiry) {
+    const calTitle = `${certType} expires — ${(P(propId)||{}).address||'Property'}`;
+    const { data: calData } = await sb.from('calendar_events').insert({
+      user_id: currentUser.id, prop_id: String(propId),
+      title: calTitle, date: expiry,
+      notes: `Certificate expiry reminder. Renew before this date.`
+    }).select().single();
+    if (calData) D.calEvents.push(calData);
+  }
   closeMo();
   toast('✓ Certificate saved' + (expiry ? ' · 📅 Expiry added to calendar' : '') + '!');
   setTimeout(() => { const hasTenant = D.tenants.filter(t=>t.status==='Active').length>0; const hasWelcome=(D.emailLog||[]).some(e=>e.template_id==='welcome_kit'); if(!hasTenant) toast('💡 Next: add your first tenant → go to Tenants'); else if(!hasWelcome) toast('💡 Next: send the welcome kit to your tenant → go to Tenants'); }, 2800);
