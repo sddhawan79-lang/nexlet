@@ -6284,7 +6284,7 @@ function propHealthBar(pid, p, t, rag) {
       value: `${rag.score}/100`,
       sub: rag.label,
       status: rag.rag,
-      action: `window._pdTab['${pid}']='compliance'; renderPage()`,
+      action: `window._pdTab['${pid}']='compliance'; nav('prop-detail','${pid}')`,
     },
     {
       icon: certOk === certTotal && certTotal > 0 ? '✅' : certOk === 0 ? '🔴' : '⚠️',
@@ -6292,7 +6292,7 @@ function propHealthBar(pid, p, t, rag) {
       value: certTotal > 0 ? `${certOk}/${certTotal}` : 'None',
       sub: certTotal > 0 ? (certOk === certTotal ? 'All valid' : `${certTotal - certOk} need attention`) : 'Upload certs',
       status: certTotal === 0 ? 'red' : certOk === certTotal ? 'green' : certOk / certTotal >= 0.5 ? 'amber' : 'red',
-      action: `window._pdTab['${pid}']='compliance'; renderPage()`,
+      action: `window._pdTab['${pid}']='compliance'; nav('prop-detail','${pid}')`,
     },
     {
       icon: !t ? '—' : depositOk ? '✅' : '🔴',
@@ -6308,7 +6308,7 @@ function propHealthBar(pid, p, t, rag) {
       value: tenancyVal,
       sub: t ? (t.name.split(' ')[0]) : 'No tenant',
       status: tenancyStatus,
-      action: `window._pdTab['${pid}']='tenant'; renderPage()`,
+      action: `window._pdTab['${pid}']='tenant'; nav('prop-detail','${pid}')`,
     },
   ];
 
@@ -7079,7 +7079,7 @@ function pdTabContent(pid, tab) {
       </div>
 
       <div class="panel" style="border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)">
-        <div class="ph2"><div><h2>🔧 Issues</h2></div><button class="btn btn-sm btn-navy" onclick="moIssue('${pid}')">+ Report issue</button></div>
+        <div class="ph2"><div><h2>🔧 Issues</h2></div><div style="display:flex;gap:6px"><button class="btn btn-sm" onclick="moMaintenanceAuditPDF('${pid}')" style="font-size:11px;border-color:var(--navy);color:var(--navy)">📄 Audit Log PDF</button><button class="btn btn-sm btn-navy" onclick="moIssue('${pid}')">+ Report issue</button></div></div>
         ${allM.length
           ? `<div class="tw"><table><thead><tr><th>Date</th><th>Description</th><th>Priority</th><th>Flags</th><th>Status</th></tr></thead>
               <tbody>${allM.map(m=>`<tr>
@@ -18442,6 +18442,168 @@ function _exportMaintenance(pid) {
       notes: m.notes
     };
   });
+}
+
+// ── MAINTENANCE AUDIT LOG PDF ──
+function moMaintenanceAuditPDF(pid) {
+  const p = P(pid);
+  if (!p) { toast('Property not found', true); return; }
+  const allM = D.maintenance.filter(m => String(m.prop_id) === String(pid));
+  if (!allM.length) { toast('No maintenance records for this property', true); return; }
+
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const W = doc.internal.pageSize.getWidth();
+    const genDate = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    const genTime = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    let y = 18;
+
+    const newPage = () => { doc.addPage(); y = 18; };
+    const checkY = (needed) => { if (y + needed > 272) newPage(); };
+
+    // ── Header ──
+    doc.setFillColor(11, 30, 61);
+    doc.rect(0, 0, W, 26, 'F');
+    doc.setFontSize(13); doc.setTextColor(255, 255, 255); doc.setFont(undefined, 'bold');
+    doc.text('NEXLET', 14, 10);
+    doc.setFontSize(9); doc.setFont(undefined, 'normal');
+    doc.text('Maintenance Audit Log', 14, 17);
+    doc.setFontSize(8); doc.setTextColor(180, 190, 210);
+    doc.text(`Generated: ${genDate} at ${genTime}`, W - 14, 10, { align: 'right' });
+    doc.text('Prepared for council inspection, court or audit purposes', W - 14, 17, { align: 'right' });
+    y = 34;
+
+    // ── Property details ──
+    doc.setFontSize(14); doc.setTextColor(11, 30, 61); doc.setFont(undefined, 'bold');
+    doc.text(p.address + (p.city ? ', ' + p.city : '') + (p.postcode ? ', ' + p.postcode : ''), 14, y);
+    y += 7;
+    doc.setFontSize(9); doc.setTextColor(100, 115, 130); doc.setFont(undefined, 'normal');
+    doc.text(`Total jobs: ${allM.length}  ·  Open: ${allM.filter(m => m.status !== 'Resolved').length}  ·  Resolved: ${allM.filter(m => m.status === 'Resolved').length}  ·  Awaab's Law flagged: ${allM.filter(m => m.awaab).length}`, 14, y);
+    y += 4;
+    doc.setDrawColor(220, 228, 236);
+    doc.line(14, y, W - 14, y);
+    y += 8;
+
+    // ── What this document is ──
+    doc.setFontSize(8.5); doc.setTextColor(80, 90, 110); doc.setFont(undefined, 'italic');
+    const intro = 'This document is a complete record of all maintenance activity logged on the NexLet platform for the above property. It includes every reported issue, its priority, current status, any Awaab\'s Law flags, and the relevant dates. This log may be presented to a local authority, housing officer, court, or tribunal as evidence of landlord responsiveness and repair obligations.';
+    const introLines = doc.splitTextToSize(intro, W - 28);
+    doc.text(introLines, 14, y);
+    y += introLines.length * 4.5 + 8;
+
+    // ── Jobs ──
+    const sorted = [...allM].sort((a, b) => new Date(b.date || b.issue_date || b.created_at) - new Date(a.date || a.issue_date || a.created_at));
+
+    sorted.forEach((m, idx) => {
+      checkY(38);
+      const jobDate = m.date || m.issue_date || m.created_at;
+      const status = m.status || 'Reported';
+      const priority = m.priority || 'Low';
+      const isAwaab = !!m.awaab;
+      const isResolved = status === 'Resolved';
+
+      // Row background
+      const bgR = isAwaab ? [255, 245, 245] : isResolved ? [240, 253, 244] : [248, 250, 252];
+      const borderR = isAwaab ? [229, 62, 62] : isResolved ? [0, 168, 122] : [200, 210, 220];
+      doc.setFillColor(...bgR);
+      doc.setDrawColor(...borderR);
+      doc.setLineWidth(0.3);
+      const blockStart = y;
+
+      // Job number + title
+      doc.setFontSize(10); doc.setTextColor(11, 30, 61); doc.setFont(undefined, 'bold');
+      const titleText = `#${idx + 1}  ${m.title || m.desc || 'Untitled issue'}`;
+      const titleLines = doc.splitTextToSize(titleText, W - 32);
+      doc.text(titleLines, 16, y + 5);
+      y += titleLines.length * 5 + 2;
+
+      // Meta row — date, priority, status, category
+      doc.setFontSize(8.5); doc.setFont(undefined, 'normal'); doc.setTextColor(80, 95, 115);
+      const metaParts = [
+        `Reported: ${jobDate ? new Date(jobDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Unknown'}`,
+        `Priority: ${priority}`,
+        `Status: ${status}`,
+        m.cat ? `Category: ${m.cat}` : null,
+        m.assigned_to ? `Assigned to: ${m.assigned_to}` : null,
+        m.completed_date ? `Completed: ${new Date(m.completed_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : null,
+        m.cost ? `Cost: £${m.cost}` : null,
+      ].filter(Boolean).join('  ·  ');
+      const metaLines = doc.splitTextToSize(metaParts, W - 32);
+      doc.text(metaLines, 16, y + 1);
+      y += metaLines.length * 4 + 2;
+
+      // Description
+      if (m.desc || m.description) {
+        doc.setFontSize(8.5); doc.setTextColor(50, 60, 75); doc.setFont(undefined, 'normal');
+        const descLines = doc.splitTextToSize(m.desc || m.description, W - 32);
+        doc.text(descLines, 16, y + 1);
+        y += descLines.length * 4 + 2;
+      }
+
+      // Notes
+      if (m.notes) {
+        doc.setFontSize(8); doc.setTextColor(100, 110, 125); doc.setFont(undefined, 'italic');
+        const noteLines = doc.splitTextToSize('Notes: ' + m.notes, W - 32);
+        doc.text(noteLines, 16, y + 1);
+        y += noteLines.length * 4 + 2;
+      }
+
+      // Awaab flag
+      if (isAwaab) {
+        doc.setFontSize(8); doc.setTextColor(180, 40, 40); doc.setFont(undefined, 'bold');
+        doc.text("⚠  Awaab's Law flagged — landlord must investigate within 14 days and begin emergency repairs within 24 hours", 16, y + 1);
+        y += 5;
+      }
+
+      y += 4;
+      // Draw border around block
+      doc.setFillColor(...bgR);
+      doc.rect(14, blockStart - 1, W - 28, y - blockStart + 1, 'FD');
+      // Re-draw text on top of filled rect (jsPDF draws rect over text so we re-render)
+      doc.setFontSize(10); doc.setTextColor(11, 30, 61); doc.setFont(undefined, 'bold');
+      doc.text(titleLines, 16, blockStart + 4);
+      let ty = blockStart + titleLines.length * 5 + 3;
+      doc.setFontSize(8.5); doc.setFont(undefined, 'normal'); doc.setTextColor(80, 95, 115);
+      doc.text(metaLines, 16, ty);
+      ty += metaLines.length * 4 + 2;
+      if (m.desc || m.description) {
+        doc.setTextColor(50, 60, 75);
+        const dl = doc.splitTextToSize(m.desc || m.description, W - 32);
+        doc.text(dl, 16, ty);
+        ty += dl.length * 4 + 2;
+      }
+      if (m.notes) {
+        doc.setFontSize(8); doc.setTextColor(100, 110, 125); doc.setFont(undefined, 'italic');
+        const nl = doc.splitTextToSize('Notes: ' + m.notes, W - 32);
+        doc.text(nl, 16, ty);
+        ty += nl.length * 4 + 2;
+      }
+      if (isAwaab) {
+        doc.setFontSize(8); doc.setTextColor(180, 40, 40); doc.setFont(undefined, 'bold');
+        doc.text("⚠  Awaab's Law flagged — landlord must investigate within 14 days and begin emergency repairs within 24 hours", 16, ty);
+      }
+
+      y += 4;
+    });
+
+    // ── Footer on last page ──
+    checkY(20);
+    doc.setDrawColor(220, 228, 236);
+    doc.line(14, y, W - 14, y);
+    y += 5;
+    doc.setFontSize(7.5); doc.setTextColor(140, 150, 165); doc.setFont(undefined, 'normal');
+    doc.text(`Generated by NexLet · ${genDate} · ${p.address} · ${allM.length} maintenance records`, 14, y);
+    y += 4;
+    doc.text('This document reflects data held in the NexLet platform at time of generation. It has not been manually edited.', 14, y);
+
+    const safeName = (p.address || 'property').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    doc.save(`nexlet_maintenance_audit_${safeName}_${new Date().toISOString().slice(0,10)}.pdf`);
+    toast('✓ Maintenance audit log downloaded');
+  } catch(e) {
+    _logError('moMaintenanceAuditPDF', e);
+    toast('PDF generation failed: ' + e.message, true);
+  }
 }
 
 function _exportRent(pid) {
