@@ -8885,25 +8885,39 @@ function pgTenantDetail(tid) {
                 <div>
                   <div style="font-size:12px;font-weight:700;color:var(--green-dark)">&#10003; Right to Rent check complete</div>
                   <div style="font-size:11px;color:var(--muted);margin-top:2px">
+                    ${t.share_code ? `Share code: <strong style="font-family:monospace">${t.share_code}</strong> &middot; ` : `<strong>British/Irish passport</strong> &middot; `}
                     Result: <strong style="color:${resultColour}">${wizardResult}</strong>
                     &middot; Checked ${new Date(t.rtr_check_date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}
                     ${t.rtr_expiry ? ` &middot; Expires ${new Date(t.rtr_expiry).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}` : ''}
                   </div>
                 </div>
-                <button class="btn btn-sm" style="font-size:11px;border-color:var(--blue);color:var(--blue);flex-shrink:0" onclick="moShareCodeWizard('${tid}')">&#8635; Re-check</button>
+                <div style="display:flex;gap:6px;flex-shrink:0">
+                  ${t.share_code
+                    ? `<button class="btn btn-sm" style="font-size:11px;border-color:var(--blue);color:var(--blue)" onclick="moShareCodeWizard('${tid}')">&#8635; Re-check</button>`
+                    : `<button class="btn btn-sm" style="font-size:11px;border-color:var(--blue);color:var(--blue)" onclick="moRTRManualCheck('${tid}')">&#8635; Re-check</button>`}
+                </div>
               </div>`;
           } else {
             return `
-              <div style="margin-top:10px;padding:10px 12px;background:${hasDocs?'rgba(245,158,11,0.06)':'rgba(229,62,62,0.04)'};border:1px solid ${hasDocs?'rgba(245,158,11,0.3)':'rgba(229,62,62,0.2)'};border-radius:8px">
-                <div style="font-size:12px;font-weight:600;color:${hasDocs?'var(--amber)':'var(--red)'};margin-bottom:6px">
-                  ${hasDocs ? '&#9203; Step 2 of 2 &mdash; Run the UKVI check' : '&#9888; Right to Rent check required'}
+              <div style="margin-top:10px;padding:12px 14px;background:${hasDocs?'rgba(245,158,11,0.06)':'rgba(229,62,62,0.04)'};border:1px solid ${hasDocs?'rgba(245,158,11,0.3)':'rgba(229,62,62,0.2)'};border-radius:8px">
+                <div style="font-size:12px;font-weight:600;color:${hasDocs?'var(--amber)':'var(--red)'};margin-bottom:8px">
+                  &#9888; Right to Rent check required
                 </div>
-                <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">
-                  ${hasDocs
-                    ? "Document uploaded. Now verify the tenant's status on GOV.UK using their share code &mdash; takes 2 minutes."
-                    : 'Upload the tenant\'s identity document above, then run the UKVI check to confirm their right to rent in England.'}
+                <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5">
+                  Select the tenant's nationality type — the process differs depending on whether they have a share code.
                 </div>
-                <button class="btn btn-sm btn-navy" style="font-size:11px" onclick="moShareCodeWizard('${tid}')">&#128269; Run Share Code Wizard &rarr;</button>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <div style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--white)">
+                    <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:4px">🇬🇧 British or Irish national</div>
+                    <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">No share code needed. Physically inspect their passport, take a signed and dated copy, then record the check here.</div>
+                    <button class="btn btn-sm btn-navy" style="font-size:11px" onclick="moRTRManualCheck('${tid}')">&#128269; Manual passport check &rarr;</button>
+                  </div>
+                  <div style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--white)">
+                    <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:4px">🌍 All other nationalities (share code)</div>
+                    <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">Tenant has a GOV.UK share code. Verify on UKVI, record the result and save the screenshot as audit evidence.</div>
+                    <button class="btn btn-sm btn-navy" style="font-size:11px" onclick="moShareCodeWizard('${tid}')">&#128269; Share Code Wizard &rarr;</button>
+                  </div>
+                </div>
               </div>`;
           }
         })() : ''}
@@ -9848,6 +9862,102 @@ async function _rtrWizSave() {
     nav(window._currentPage, window._currentParam);
   } catch(e) {
     _logError('_rtrWizSave', e);
+    toast('Save failed — ' + (e.message || 'please try again'), true);
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Save RTR record'; }
+  }
+}
+
+// ── RTR Manual Passport Check (British / Irish nationals) ──
+function moRTRManualCheck(tid) {
+  const t = D.tenants.find(x => String(x.id) === String(tid));
+  if (!t) return;
+  const today = new Date().toISOString().slice(0,10);
+  openMo(
+    '🪪 Manual Right to Rent Check',
+    `${t.name} — British / Irish national`,
+    `<div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.7">
+      British and Irish nationals have an unlimited right to rent in England. No share code or UKVI check is needed.
+      You must inspect the original passport in person, take a copy, then sign and date that copy as the landlord.
+    </div>
+    <div style="background:rgba(59,111,232,0.06);border:1px solid rgba(59,111,232,0.15);border-radius:8px;padding:14px;margin-bottom:16px">
+      <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:10px">📋 Checklist — do this in person</div>
+      <div style="display:flex;flex-direction:column;gap:7px">
+        ${['Inspect the <strong>original</strong> passport — check it is genuine, current and belongs to this tenant',
+           'Take a clear photocopy or scan of the photo page',
+           'Write today\'s date on the copy and sign it as the landlord or agent',
+           'Upload the signed copy below as your compliance evidence'].map((step,i) =>
+          `<div style="display:flex;gap:10px;font-size:12px"><span style="font-weight:700;color:var(--navy);min-width:18px">${i+1}.</span><span>${step}</span></div>`
+        ).join('')}
+      </div>
+    </div>
+    <div class="fg">
+      <label>Date of check <span class="req">*</span></label>
+      <input type="date" id="rtr-manual-date" value="${today}" style="max-width:200px">
+      <div style="font-size:11px;color:var(--muted);margin-top:3px">The date you physically inspected the passport</div>
+    </div>
+    <div class="fg">
+      <label>Upload signed &amp; dated passport copy <span class="req">*</span></label>
+      <label style="display:flex;align-items:center;gap:10px;padding:12px 14px;border:2px dashed var(--border);border-radius:8px;cursor:pointer;font-size:13px;color:var(--muted)">
+        <span style="font-size:22px">📎</span>
+        <span id="rtr-manual-file-label">Click to upload signed copy (JPG, PNG or PDF)</span>
+        <input type="file" id="rtr-manual-file" accept=".jpg,.jpeg,.png,.pdf" style="display:none"
+          onchange="document.getElementById('rtr-manual-file-label').textContent = this.files[0] ? '✓ ' + this.files[0].name : 'Click to upload signed copy'">
+      </label>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">Stored securely as audit evidence — required to demonstrate compliance</div>
+    </div>`,
+    `<button class="btn" onclick="closeMo()">Cancel</button>
+     <button class="btn btn-navy" id="rtr-manual-save-btn" onclick="_rtrManualSave('${tid}')">💾 Save RTR record</button>`
+  );
+}
+
+async function _rtrManualSave(tid) {
+  const btn = document.getElementById('rtr-manual-save-btn');
+  const dateVal = document.getElementById('rtr-manual-date')?.value;
+  const fileInput = document.getElementById('rtr-manual-file');
+  const file = fileInput?.files?.[0];
+
+  if (!dateVal) { toast('Please enter the check date', true); return; }
+  if (!file) { toast('Please upload the signed passport copy', true); return; }
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+  try {
+    // Upload signed copy to storage
+    let evidencePath = null;
+    const ext = file.name.split('.').pop();
+    const fileName = `rtr-evidence/${tid}-manual-${Date.now()}.${ext}`;
+    const { error: upErr } = await sb.storage.from('tenant-documents').upload(fileName, file, { upsert: true });
+    if (upErr) throw upErr;
+    evidencePath = fileName;
+
+    // Save to tenant record — no share code, result is implicitly Valid (unlimited RTR)
+    const updates = {
+      rtr_result: 'Valid',
+      rtr_check_date: dateVal,
+      rtr_expiry: null,
+      rtr_followup_date: null,
+      rtr_evidence_path: evidencePath,
+      share_code: null,
+    };
+    const { error } = await sb.from('tenants').update(updates).eq('id', tid);
+    if (error) throw error;
+
+    // Update local cache
+    const t = D.tenants.find(x => String(x.id) === String(tid));
+    if (t) {
+      Object.assign(t, updates);
+      if (!t.compliance_checklist) t.compliance_checklist = {};
+      t.compliance_checklist.rtr = { ra: 'green', status: 'Complete', detail: 'British/Irish passport · Checked ' + new Date(dateVal).toLocaleDateString('en-GB'), date: dateVal };
+    }
+
+    await logAudit('RTR_CHECK', 'tenants', tid,
+      `RTR manual passport check recorded · British/Irish national · check date: ${dateVal} · signed copy uploaded`);
+
+    closeMo();
+    toast('✓ RTR record saved — British/Irish passport check complete');
+    nav(window._currentPage, window._currentParam);
+  } catch(e) {
+    _logError('_rtrManualSave', e);
     toast('Save failed — ' + (e.message || 'please try again'), true);
     if (btn) { btn.disabled = false; btn.textContent = '💾 Save RTR record'; }
   }
@@ -16701,6 +16811,8 @@ function moEsign(pid, tid) {
         <div class="fg"><label>Deposit scheme <span style="color:var(--red)">*</span></label><input type="text" id="esign-scheme" value="${t.scheme||''}" placeholder="e.g. MyDeposits, DPS, TDS"></div>
         <div class="fg"><label>Bills included <span style="color:var(--red)">*</span></label><input type="text" id="esign-bills" placeholder="e.g. None, or Water, Internet" value=""></div>
         <div class="fg"><label>Pets permitted <span style="color:var(--red)">*</span></label><select id="esign-pets"><option value="No">No</option><option value="Yes">Yes</option></select></div>
+        <div class="fg"><label>Furnished status <span style="color:var(--red)">*</span></label><select id="esign-furnished"><option value="Unfurnished">Unfurnished</option><option value="Part Furnished">Part Furnished</option><option value="Fully Furnished">Fully Furnished</option></select></div>
+        <div class="fg"><label>Parking <span style="color:var(--muted);font-weight:400">(optional)</span></label><select id="esign-parking"><option value="">Not included</option><option value="1 allocated space included">1 space included</option><option value="2 allocated spaces included">2 spaces included</option><option value="On-street parking only">On-street only</option></select></div>
         <div class="fg"><label>Property licence number <span style="color:var(--muted);font-weight:400">(if applicable)</span></label><input type="text" id="esign-licence" value="${p.licence_number||''}" placeholder="e.g. HMO/2024/12345"></div>
       </div>
       <div class="fg" style="margin-top:2px;grid-column:1/-1">
@@ -16716,7 +16828,10 @@ function moEsign(pid, tid) {
             'Communal areas must be kept clear at all times',
             'Noise curfew 11pm–7am in consideration of neighbours',
             'No commercial activity to be carried out at the property',
-            'Tenant to report any maintenance issues within 24 hours of discovery'
+            'Tenant to report any maintenance issues within 24 hours of discovery',
+            'Furnished items must be used with reasonable care and returned in the same condition',
+            'Tenant must not remove any furnished items from the property without written consent',
+            'Any damage to furnished items beyond fair wear and tear may be deducted from the deposit'
           ].map(clause => `<button type="button" onclick="(function(b,c){const t=document.getElementById('esign-terms');t.value=(t.value?t.value+'\\n':'')+c;b.style.opacity='.4';b.style.cursor='default';b.onclick=null;})(this,'${clause.replace(/'/g,"\\'")}') " style="font-size:11px;padding:4px 10px;border:1px solid var(--border);border-radius:20px;background:var(--white);color:var(--txt);cursor:pointer;font-family:var(--font);transition:opacity .15s">${clause}</button>`).join('')}
         </div>
         <textarea id="esign-terms" placeholder="Your selected clauses appear here — or type your own additional terms…" rows="4" style="width:100%;font-size:12px"></textarea>
@@ -17001,6 +17116,8 @@ async function esignGenerateDoc(pid, tid) {
   const scheme        = document.getElementById('esign-scheme').value.trim();
   const bills         = document.getElementById('esign-bills').value.trim() || 'None';
   const pets          = document.getElementById('esign-pets').value;
+  const furnished     = document.getElementById('esign-furnished').value;
+  const parking       = document.getElementById('esign-parking').value || 'Not included';
   const licenceNo     = document.getElementById('esign-licence').value.trim();
   const terms         = document.getElementById('esign-terms').value;
 
@@ -17058,6 +17175,8 @@ Rent review: Section 13 Housing Act 1988 — maximum once per year, 2 months wri
 Deposit: £${deposit} protected with ${scheme}
 Bills included: ${bills}
 Pets: ${pets}
+Furnished status: ${furnished}
+Parking: ${parking}
 ${licenceClause}
 Special terms: ${terms || 'None'}
 
@@ -17075,6 +17194,13 @@ MANDATORY RRA 2025 CLAUSES TO INCLUDE:
 8. Rent increases: Section 13 process only, once per 12 months, 2 months notice
 9. Anti-harassment and quiet enjoyment clause
 10. Subletting prohibited without written landlord consent
+${furnished !== 'Unfurnished' ? `
+FURNISHED PROPERTY CLAUSES TO INCLUDE:
+11. The property is let ${furnished.toLowerCase()} — a full inventory of all landlord-owned items is attached as Schedule 1 to this agreement and forms part of the tenancy
+12. The tenant agrees to keep all furnished items in the same condition as at the start of the tenancy, fair wear and tear excepted
+13. The tenant must not remove, replace or dispose of any furnished item without the landlord's prior written consent
+14. Any damage to furnished items beyond fair wear and tear may be remedied from the deposit at the end of the tenancy, subject to evidence of condition at check-in
+15. The tenant must report any damage to furnished items promptly in writing` : ''}
 
 Format as a professional legal HTML document with:
 - Clear numbered sections and sub-sections
