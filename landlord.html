@@ -4823,7 +4823,7 @@ async function sendWelcomeKit(pid) {
     let nextTitle, nextSub, nextBody, nextBtns;
 
     if (pendingKitTenants.length > 0) {
-      // Still co-tenants to send kit to
+      // Still co-tenants — direct to KYC first, then kit
       const next = pendingKitTenants[0];
       const remaining = pendingKitTenants.length;
       nextTitle = '✅ Kit sent!';
@@ -4832,19 +4832,24 @@ async function sendWelcomeKit(pid) {
         <div style="text-align:center;padding:8px 0 16px">
           <div style="font-size:36px;margin-bottom:10px">📦</div>
           <div style="font-size:14px;font-weight:600;margin-bottom:4px">Welcome kit sent to ${tenantName}</div>
-          <div style="font-size:12px;color:var(--muted);margin-bottom:20px">${remaining} co-tenant${remaining!==1?'s':''} still need${remaining===1?'s':''} their kit</div>
-          <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:14px 16px;text-align:left">
-            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Next up</div>
-            <div style="display:flex;align-items:center;gap:10px">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:20px">${remaining} co-tenant${remaining!==1?'s':''} still need${remaining===1?'s':''} their KYC and kit</div>
+          <div style="background:rgba(59,111,232,0.06);border:1px solid rgba(59,111,232,0.2);border-radius:10px;padding:14px 16px;text-align:left">
+            <div style="font-size:11px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Next — co-tenant</div>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
               <div class="t-av">${INI(next.name)}</div>
               <div>
                 <div style="font-size:13px;font-weight:600">${next.name}</div>
                 <div style="font-size:11px;color:var(--muted)">${next.email||'⚠ No email set'}</div>
               </div>
             </div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--txt)"><span>1️⃣</span><span>Upload KYC documents (passport, RTR, address proof)</span></div>
+              <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--txt)"><span>2️⃣</span><span>Complete Right to Rent check</span></div>
+              <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--txt)"><span>3️⃣</span><span>Send Day 1 kit once KYC is complete</span></div>
+            </div>
           </div>
         </div>`;
-      nextBtns = `<button class="btn" onclick="closeMo();nav('tenant-detail','${pid}')">Later</button><button class="btn btn-navy" onclick="closeMo();moWelcomeKit('${pid}','${next.id}')">Send kit to ${next.name} →</button>`;
+      nextBtns = `<button class="btn" onclick="closeMo();nav('tenant-detail','${pid}')">Later</button><button class="btn btn-navy" onclick="closeMo();nav('tenant-detail','${next.id}')">Start KYC for ${next.name} →</button>`;
 
     } else if (tenantsNeedingKyc.length > 0) {
       // All kits sent — now KYC
@@ -5626,6 +5631,7 @@ function getPropCheckItems(mode){
     {id:'ob2',  group:'Pre-Tenancy',       label:'Tenant referencing & credit check done',     detail:'Employment, previous landlord refs, credit score verified.'},
     {id:'ob3',  group:'Pre-Tenancy',       label:'Holding deposit collected',                  detail:"Max 1 week's rent. Must be refunded or offset at move-in."},
     {id:'ob4',  group:'Pre-Tenancy',       label:'Security deposit collected & capped',        detail:"Max 5 weeks' rent (under £50k/yr). Collected before agreement signed."},
+    {id:'ob4b', group:'Pre-Tenancy',       label:'Guarantor agreement signed (if applicable)',  detail:"If taking a guarantor: give them a copy of the draft tenancy first, then have them sign the guarantor agreement beforehand. Both documents must be signed before tenancy starts."},
     {id:'ob5',  group:'Legal Documents',   label:'Written Statement of Terms served',          detail:'Replaces AST from 1 May 2026. Serve BEFORE tenancy is signed. (RRA 2025)'},
     {id:'ob6',  group:'Legal Documents',   label:'RRA 2025 Information Sheet served',          detail:'Mandatory PDF attachment — a link is NOT valid. Fine up to £7,000 if missed.'},
     {id:'ob7',  group:'Legal Documents',   label:'How to Rent Guide served',                   detail:'Latest edition from GOV.UK. Keep timestamped proof of delivery.'},
@@ -5640,6 +5646,7 @@ function getPropCheckItems(mode){
     {id:'ob16', group:'Move-In Day',       label:'Emergency lighting tested & logged',         detail:'Log date, result, any remedial action taken.'},
     {id:'ob17', group:'Move-In Day',       label:'Pest control check completed',               detail:'Log inspection date and outcome.'},
     {id:'ob18', group:'Move-In Day',       label:'Contact details & repair process provided',  detail:'Landlord name, phone, email, UK address. Emergency repair procedure explained.'},
+    {id:'ob18b',group:'Move-In Day',       label:'Welcome letter given to tenant',              detail:"Give tenants a welcome letter covering: boiler location & operation, stopcock, fuse box, bin collection days, parking rules, meter readings, and who to call in an emergency. Generate one via Documents library."},
     {id:'ob19', group:'Admin',             label:'Insurers notified of new tenancy',           detail:'Update buildings & contents insurance. Policy may be invalid if not notified.'},
   ];
   return [
