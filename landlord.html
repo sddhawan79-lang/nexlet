@@ -1800,8 +1800,42 @@ async function scanAndFill(file, onResult, customPrompt){
   }
 }
 
-// ══════════════════════════════════════════════════════════════════
-// NEXLET DOCUMENT UPLOAD STANDARD — APPLIES TO ALL UPLOAD SECTIONS
+// ── Universal scan box success state — call after every scanAndFill ──
+// Shows filename + View button in the scan box. Works for any box with a known ID.
+function _scanBoxSuccess(boxId, file, parsed) {
+  const box = document.getElementById(boxId);
+  if (!box) return;
+  const name = file?.name || 'Document';
+  const blobUrl = file ? URL.createObjectURL(file) : null;
+  const viewBtn = blobUrl
+    ? `<button type="button" onclick="dvoOpen('${blobUrl}','${name.replace(/'/g,"\\'")}','Uploaded document')" style="margin-top:8px;background:var(--white);border:1px solid var(--navy);border-radius:6px;padding:4px 12px;font-size:11px;font-weight:600;color:var(--navy);cursor:pointer;font-family:var(--font)">👁 View uploaded file</button>`
+    : '';
+  const warnings = parsed?._warnings || [];
+  const warnNote = warnings.length ? `<div style="font-size:10px;color:var(--amber);margin-top:4px">⚠ Could not read: ${warnings.join(', ')}</div>` : '';
+  box.innerHTML = `
+    <div style="font-size:13px;color:var(--green-dark);font-weight:600">✓ Scanned — fields filled below</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:3px;word-break:break-all">${name}</div>
+    ${warnNote}
+    ${viewBtn}`;
+}
+
+// ── Universal scan box scanning state ──
+function _scanBoxScanning(boxId) {
+  const box = document.getElementById(boxId);
+  if (box) box.innerHTML = '<div class="scan-ic">⏳</div><div class="scan-t">Scanning…</div><div class="scan-s">AI is reading your document</div><div class="scan-badge">✦ AI auto-extraction</div>';
+}
+
+// ── Universal scan box error state ──
+function _scanBoxError(boxId, file) {
+  const box = document.getElementById(boxId);
+  if (!box) return;
+  const name = file?.name || 'Document';
+  const blobUrl = file ? URL.createObjectURL(file) : null;
+  const viewBtn = blobUrl
+    ? `<button type="button" onclick="dvoOpen('${blobUrl}','${name.replace(/'/g,"\\'")}','Uploaded document')" style="margin-top:8px;background:var(--white);border:1px solid var(--border);border-radius:6px;padding:4px 12px;font-size:11px;font-weight:600;color:var(--navy);cursor:pointer;font-family:var(--font)">👁 View uploaded file</button>`
+    : '';
+  box.innerHTML = `<div style="font-size:13px;color:var(--amber);font-weight:500">⚠ Could not scan — please fill in manually</div><div style="font-size:11px;color:var(--muted);margin-top:3px">${name}</div>${viewBtn}`;
+}
 // Every document upload in the app MUST follow this pattern:
 //
 //  1. SCAN SLOT     — renderScanSlot() or equivalent scan-box with AI scanner badge
@@ -1907,11 +1941,11 @@ async function scanDepositCert(input) {
         if (amountEl && amt > 0) amountEl.value = amt;
       }
       if (result) result.innerHTML = '<span style="color:var(--green-dark);font-size:11px">✓ AI extracted: ' + [scheme||parsed.scheme||'', parsed.ref?'ref '+parsed.ref:'', (parsed.amount||parsed.deposit)?'£'+(parsed.amount||parsed.deposit):''].filter(Boolean).join(' · ') + '</span>';
-      if (box) box.innerHTML = '<div class="scan-ic">✅</div><div class="scan-t">Deposit certificate scanned</div><div class="scan-badge" style="background:var(--green-bg);color:var(--green-dark)">✓ Auto-filled</div>';
+      _scanBoxSuccess('ts-dep-scan-box', file, parsed);
     }, 'UK tenancy deposit protection certificate. Extract: scheme name (DPS, MyDeposits, or TDS), deposit amount in GBP (number only), protection reference number. Return JSON only, keys: scheme, amount, ref.');
   } catch (e) {
     if (result) result.innerHTML = '<span style="color:var(--red);font-size:11px">Scan failed — enter details manually</span>';
-    if (box) box.innerHTML = '<div class="scan-ic">⚠️</div><div class="scan-t">Upload deposit certificate</div><div class="scan-s">DPS, TDS, MyDeposits</div><input type="file" accept="image/*,.pdf" onchange="scanDepositCert(this)">';
+    _scanBoxError('ts-dep-scan-box', file);
   }
 }
 
@@ -1940,7 +1974,7 @@ async function scanInsDoc(insKey, input) {
       const prem = parseFloat(parsed.premium || parsed.amount) || 0;
       if (premEl && !premEl.value && prem > 0) premEl.value = prem;
       if (result) result.innerHTML = '<span style="color:var(--green-dark);font-size:11px">✓ Auto-filled from scan</span>';
-      if (box) box.innerHTML = '<div style="font-size:11px;color:var(--green-dark);font-weight:600">✅ Scanned — review above</div>';
+      _scanBoxSuccess(boxId, file, parsed);
     }, 'UK landlord insurance policy document. Extract: provider (insurer name), policy number, expiry date (YYYY-MM-DD), annual premium in GBP (number only). Return JSON only, keys: provider, policy_number, expiry, premium.');
   } catch (e) {
     if (result) result.innerHTML = '<span style="color:var(--red);font-size:11px">Scan failed — enter manually</span>';
@@ -2242,7 +2276,7 @@ function moCert(pid){
     <div class="fg-div"></div>
     <div class="fg"><label>Property</label><select id="cp">${opts}</select></div>
     <div class="fg"><label>Document / certificate type</label>
-      <select id="ct" onchange="document.getElementById('ct-other-row').style.display=this.value==='Other'?'block':'none';_toggleCertExpiry();">
+      <select id="ct" onchange="document.getElementById('ct-other-row').style.display=this.value==='Other'?'block':'none';_toggleCertExpiry();if(window._lastScanFile){scanDoc({files:[window._lastScanFile]});}">
         <optgroup label="🛡 Safety Certificates — Mandatory">
           <option>Gas Safety Certificate (GSC)</option>
           <option>EICR (Electrical Installation)</option>
@@ -2312,7 +2346,7 @@ async function scanDoc(input){
   const file=input.files[0];
   window._lastScanFile = file;
   const sb2=document.getElementById('sb-scan');
-  sb2.innerHTML=`<div class="scan-ic">⏳</div><div class="scan-t">Scanning document…</div><div class="scan-s">AI is reading your certificate</div>`;
+  _scanBoxScanning('sb-scan');
   try{
     const certTypeVal = (document.getElementById('ct')?.value || '').toLowerCase();
     let docPrompt;
@@ -2345,7 +2379,7 @@ async function scanDoc(input){
       const warnHtml=warnings.length?`<div style="background:var(--amber-bg);border:1px solid rgba(217,119,6,0.25);border-radius:6px;padding:8px 10px;margin-bottom:8px;font-size:11px;color:var(--amber)">⚠ Could not determine: ${warnings.join(', ')} — please review</div>`:'';
       document.getElementById('arg').innerHTML=warnHtml+[['Type',parsed.type],['Issue date',parsed.issued],['Expiry',parsed.expiry],['Engineer',parsed.engineer],['Reference',parsed.reference||parsed.ref||parsed.cert_number],['Amount',parsed.amount||parsed.premium||parsed.cost],['Address',parsed.address]].map(([l,v])=>`<div class="ai-res-f"><span>${l}</span><strong style="color:${v&&v!=='Not detected'?'var(--txt)':'var(--amber)'}">${v||'Not detected'}</strong></div>`).join('');
       document.getElementById('ar').style.display='block';
-      sb2.innerHTML=`<div style="font-size:13px;color:var(--green-dark);font-weight:600">✓ Scanned — fields filled below</div><div style="font-size:12px;color:var(--muted);margin-top:4px">${file.name}</div><button onclick="if(window._lastScanFile)dvoOpen(URL.createObjectURL(window._lastScanFile),window._lastScanFile.name,'AI-scanned document')" style="margin-top:8px;background:var(--white);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;color:var(--navy);cursor:pointer;font-family:var(--font)">👁️ View</button>`;
+      _scanBoxSuccess('sb-scan', file, parsed);
       // If deposit cert — auto write scheme/ref/amount to lead tenant row
       if (certTypeVal.includes('deposit') || certTypeVal.includes('dps') || certTypeVal.includes('tds') || certTypeVal.includes('mydeposit') || (parsed.scheme)) {
         const _pid = document.getElementById('cp')?.value || window._currentParam;
@@ -2366,7 +2400,7 @@ async function scanDoc(input){
         }
       }
     }, docPrompt);
-  }catch(e){sb2.innerHTML=`<div style="font-size:13px;color:var(--amber);font-weight:500">Could not scan — please fill in manually</div>`;}
+  }catch(e){_scanBoxError('sb-scan', file);}
 }
 
 // ── MODAL: ADD PROPERTY (5-step guided flow) ──
@@ -3254,9 +3288,8 @@ function scanSetupLicence(input) {
         if (lt.includes(key) && sel) { sel.value = val; window._psetup.licType = val; break; }
       }
     }
-    const result = document.getElementById('lic-ai-result');
     if (result) result.style.display = 'block';
-    if (box) box.innerHTML = `<div style="font-size:13px;color:var(--green-dark);font-weight:600">✓ Licence scanned — fields filled below</div><div style="font-size:11px;color:var(--muted);margin-top:3px">${file.name}</div>`;
+    _scanBoxSuccess('lic-scan-box', file, parsed);
     toast('✓ Licence scanned — check the fields below');
   }, 'UK property licence document (Selective, Mandatory HMO, Additional HMO, Article 4, or Short-term Let licence). Extract: licence type, licence reference or application number, expiry date (YYYY-MM-DD), issuing council or local authority full name, full property address, licence holder name. Return JSON only, keys: type, ref, expiry, council, address, holder.');
 }
@@ -3287,7 +3320,7 @@ function scanSetupCert(certType, input) {
         if (rating) { const sel = document.getElementById('s-epc-rating'); if(sel) sel.value = rating; window._psetup.epcRating = rating; }
       }
     }
-    if (box) box.innerHTML = `<div style="font-size:12px;font-weight:600;color:var(--green-dark)">✓ Scanned — fields filled below</div><div style="font-size:11px;color:var(--muted);margin-top:2px">${file.name}</div>`;
+    _scanBoxSuccess(`${certType}-scan-box`, file, parsed);
     toast('✓ Certificate scanned — check fields below');
   }, certPrompts[certType]);
 }
@@ -3334,10 +3367,10 @@ function scanIDDoc(num, input) {
         result.style.display = 'block';
         result.innerHTML = `✦ Detected: <strong>${parsed.doc_type||'Unknown'}</strong>${parsed.issuing_authority?` · Issued by ${parsed.issuing_authority}`:''}${parsed.expiry?` · Expires ${parsed.expiry}`:''}${parsed.nationality?' · '+parsed.nationality:''} — confirm below`;
       }
-      if (box) box.innerHTML = `<div style="font-size:13px;color:var(--green-dark);font-weight:600">✓ Document scanned — fields filled below</div><div style="font-size:11px;color:var(--muted);margin-top:3px">${file.name}</div>`;
+      if (box) _scanBoxSuccess(`ts-id${num}-scan-box`, file, parsed);
       toast('✓ ID document scanned');
     } catch(e) {
-      if (box) box.innerHTML = `<div style="font-size:13px;color:var(--amber)">⚠ Could not scan — fill in manually</div>`;
+      _scanBoxError(`ts-id${num}-scan-box`, file);
     }
   };
   reader.readAsDataURL(file);
@@ -3383,10 +3416,10 @@ function scanRTRDoc(input) {
         result.style.display = 'block';
         result.innerHTML = `✦ Detected: <strong>${parsed.doc_type||'Unknown'}</strong>${parsed.issuing_authority?` · Issued by ${parsed.issuing_authority}`:''}${parsed.expiry?` · Expires ${parsed.expiry}`:''}${parsed.nationality?' · '+parsed.nationality:''} — confirm below`;
       }
-      if (box) box.innerHTML = `<div style="font-size:13px;color:var(--green-dark);font-weight:600">✓ Document scanned — fields filled below</div><div style="font-size:11px;color:var(--muted);margin-top:3px">${file.name}</div>`;
+      _scanBoxSuccess('ts-rtr-scan-box', file, parsed);
       toast('✓ RTR document scanned');
     } catch(e) {
-      if (box) box.innerHTML = `<div style="font-size:13px;color:var(--amber)">⚠ Could not scan — fill in manually</div>`;
+      _scanBoxError('ts-rtr-scan-box', file);
     }
   };
   reader.readAsDataURL(file);
@@ -7880,6 +7913,9 @@ function pgCompliance(){
           <a href="${govLink}" target="_blank"
             style="font-size:11px;color:var(--navy);border:1px solid var(--border);padding:4px 9px;border-radius:6px;white-space:nowrap;text-decoration:none;font-weight:600">
             GOV.UK ↗</a>
+          ${!url ? `<a href="${govLink}" target="_blank" download
+            style="font-size:11px;color:#fff;background:var(--navy);border:1px solid var(--navy);padding:4px 9px;border-radius:6px;white-space:nowrap;text-decoration:none;font-weight:600">
+            ⬇ Download</a>` : ''}
           <label style="cursor:pointer">
             <span style="font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid var(--border);background:var(--white);color:var(--navy);font-weight:600;white-space:nowrap;font-family:var(--font)">
               ${url ? 'Replace' : 'Upload'}</span>
@@ -8829,7 +8865,7 @@ function pgTenantDetail(tid) {
     { slot: 'address_1',     icon: '📬', label: 'Address Proof 1',        mandatory: true  },
     { slot: 'address_2',     icon: '📬', label: 'Address Proof 2',        mandatory: true  },
     { slot: 'reference',     icon: '📋', label: 'Reference Check',        mandatory: true  },
-    { slot: 'guarantor',     icon: '🤝', label: 'Guarantor Check',        mandatory: false, note: 'Upload signed guarantor agreement — generate one via Documents library' },
+    { slot: 'guarantor',     icon: '🤝', label: 'Guarantor Check',        mandatory: false, note: '⚠ Before the tenancy starts: (1) give the guarantor a copy of the draft tenancy agreement to read, (2) have them sign a separate guarantor deed, (3) upload the signed guarantor agreement here as your audit record.' },
     { slot: 'other',         icon: '📎', label: 'Other Document',          mandatory: false, note: 'Any additional supporting document — use AI assistant to draft if needed' },
   ];
 
@@ -8920,7 +8956,7 @@ function pgTenantDetail(tid) {
               ${hasDocs ? `<span style="font-size:11px;color:var(--muted)">${slotDocs.length} document${slotDocs.length!==1?'s':''}</span>` : ''}
             </div>
             ${!slotDone ? `<div style="font-size:11px;color:var(--red);margin-top:2px">Not uploaded</div>` : ''}
-            ${s.note ? `<div style="font-size:10px;color:var(--muted);margin-top:3px;font-style:italic">(${s.note})</div>` : ''}
+            ${s.note ? `<div style="font-size:11px;${s.slot==='guarantor'?'color:#92400E;background:rgba(217,119,6,0.08);border:1px solid rgba(217,119,6,0.25);border-radius:6px;padding:6px 9px;':'color:var(--muted);font-style:italic;'}margin-top:4px;line-height:1.5">${s.note}</div>` : ''}
           </div>
           <div style="flex-shrink:0">
             <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
@@ -12237,12 +12273,12 @@ async function _scanDepositCertModal(input, tid) {
       if (ref && refEl) refEl.value = ref;
       const amt = parseFloat(parsed.amount || parsed.deposit) || 0;
       if (amt > 0 && amountEl) amountEl.value = amt;
-      if (box) box.innerHTML = '<div style="font-size:22px">✅</div><div style="font-size:13px;font-weight:600;color:var(--green-dark)">Certificate scanned — check details below</div>';
+      _scanBoxSuccess('dep-scan-box', file, parsed);
       if (result) result.innerHTML = `<span style="color:var(--green-dark);font-size:11px">✓ AI extracted: ${[rawScheme,ref?'ref '+ref:'',amt?'£'+amt:''].filter(Boolean).join(' · ')}</span>`;
     }, 'UK tenancy deposit protection certificate. Extract: scheme name (DPS, MyDeposits, or TDS), deposit amount in GBP (number only), protection reference number. Return JSON only, keys: scheme, amount, ref.');
   } catch(e) {
     if (result) result.innerHTML = '<span style="color:var(--red);font-size:11px">Scan failed — enter details manually below</span>';
-    if (box) box.innerHTML = '<div style="font-size:22px">⚠️</div><div style="font-size:13px;color:var(--txt)">Upload deposit certificate</div><div style="font-size:11px;color:var(--muted)">DPS, TDS, MyDeposits</div><input type="file" accept="image/*,.pdf" style="display:none" id="dep-file-input" onchange="_scanDepositCertModal(this,\''+tid+'\')">';
+    _scanBoxError('dep-scan-box', file);
   }
 }
 
@@ -18050,10 +18086,10 @@ function scanPropLicence(input) {
         const matchMap = { hmo:'Mandatory HMO', additional:'Additional HMO', selective:'Selective Licence', 'article 4':'Article 4', 'short-term':'Short-term Let', 'short term':'Short-term Let' };
         for (const [key, val] of Object.entries(matchMap)) { if (lt.includes(key) && sel) { sel.value = val; break; } }
       }
-      if (box) box.innerHTML = `<span style="font-size:20px">✅</span><div><div style="font-size:12px;font-weight:600;color:var(--green-dark)">✓ Licence scanned — fields filled</div><div style="font-size:11px;color:var(--muted);margin-top:2px">${file.name}</div></div>`;
+      _scanBoxSuccess('p-lic-scan-box', file, parsed);
       toast('✓ Licence scanned — check fields below');
     } catch(e) {
-      if (box) box.innerHTML = `<span style="font-size:20px">📄</span><div><div style="font-size:12px;color:var(--red)">Scan failed — fill manually</div></div>`;
+      _scanBoxError('p-lic-scan-box', file);
     }
   };
   reader.readAsDataURL(file);
@@ -18279,10 +18315,10 @@ async function sendTrialEmail(type) {
   } catch(e) { /* non-critical */ }
 }
       }
-      if (box) box.innerHTML = `<span style="font-size:20px">✅</span><div><div style="font-size:12px;font-weight:600;color:var(--green-dark)">✓ EPC scanned${parsed.rating?' — Rating '+parsed.rating.toUpperCase().charAt(0):''}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">${file.name}</div></div>`;
+      _scanBoxSuccess('p-epc-scan-box', file, parsed);
       toast('✓ EPC scanned — check fields below');
     } catch(e) {
-      if (box) box.innerHTML = `<span style="font-size:20px">📄</span><div><div style="font-size:12px;color:var(--red)">Scan failed — fill manually</div></div>`;
+      _scanBoxError('p-epc-scan-box', file);
     }
   };
   reader.readAsDataURL(file);
@@ -18315,10 +18351,10 @@ function scanPropDeposit(input) {
           else if (s.includes('tds')) sel.value='TDS (Tenancy Deposit Scheme)';
         }
       }
-      if (box) box.innerHTML = `<span style="font-size:20px">✅</span><div><div style="font-size:12px;font-weight:600;color:var(--green-dark)">✓ Deposit certificate scanned${parsed.amount?' — £'+parsed.amount:''}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">${file.name}</div></div>`;
+      _scanBoxSuccess('p-dep-scan-box', file, parsed);
       toast('✓ Deposit certificate scanned — check fields below');
     } catch(e) {
-      if (box) box.innerHTML = `<span style="font-size:20px">📄</span><div><div style="font-size:12px;color:var(--red)">Scan failed — fill manually</div></div>`;
+      _scanBoxError('p-dep-scan-box', file);
     }
   };
   reader.readAsDataURL(file);
