@@ -4204,3 +4204,269 @@ ALTER TABLE user_profiles
 | 26 | Property page shows "Unprotected" after deposit cert upload | ✅ Fixed Session 38 — auto write-back to tenant row on scan |
 | 27 | Written Statement shows "No document uploaded" after e-sign | ✅ Fixed Session 38 — reads `signed_pdf_url` from `esign_requests` |
 | 28 | "Send guide" button unresponsive | ✅ Fixed Session 38 — `sendH2RGuide(tid)` built and wired |
+
+---
+
+## Session 39 — 7 June 2026 — Bug Fixes, RTR Manual Check, E-Sign Furnished, Compliance Wiring, Cert Expiry Reminders
+
+**Date:** 7 June 2026
+**Files modified:** `landlord.html`, `supabase/functions/cert-expiry-checker/index.ts` (new edge function)
+
+---
+
+### 1. Section 8 — Landlord Name Field
+
+**Problem:** Section 8 PDF and AI prompt used `_profileName()` which falls back to email prefix (e.g. `sddhawan79`) when `full_name` is null on `user_profiles`.
+
+**Fix:**
+- Added `Landlord full name` field to Step 4 (Notice Details) of the S8 wizard — pre-filled from `_profileName()` but fully editable
+- `s8Step5` reads `document.getElementById('s8_landlord_name')?.value` and stores on `_s8.landlordName`
+- AI prompt uses `_s8.landlordName` instead of `_profileName()`
+- AI prompt told not to generate its own signature block
+- Hard-coded signature block appended to PDF by `s8DownloadPDF` after AI body text:
+  - `Signed: ...............................`
+  - `Name: [entered name]` (bold)
+  - `Capacity: Landlord`
+  - `Date: ___________`
+- Step 5 review table now shows Landlord row
+
+**No schema changes.**
+
+---
+
+### 2. System Documents Bucket Fix (RRA / How to Rent upload)
+
+**Problem:** `uploadSystemDoc(key, input)` was uploading to Supabase storage bucket `'documents'` which does not exist. Error: "bucket not found".
+
+**Fix:** Changed bucket from `'documents'` to `'property-documents'` in both the `.upload()` and `.getPublicUrl()` calls — consistent with every other upload in the app.
+
+---
+
+### 3. Day 1 Kit — Missing System Docs Redirect
+
+**Problem:** When RRA/H2R not uploaded, the modal showed a small amber text link — easy to miss.
+
+**Fix:** Replaced with a prominent amber panel:
+- Shows exactly which document(s) are missing
+- "Upload now →" button closes modal and navigates to Compliance page
+- After upload, `D.userProfile` updates in memory so reopening the kit modal immediately shows ✅
+
+---
+
+### 4. Blocking Alert Modal (`alertMo`)
+
+**New function added** after `closeMo()` / `closeModal()`:
+
+```js
+function alertMo(title, message, actionLabel, actionFn)
+```
+
+- Reuses existing `openMo()` — no new DOM elements
+- User must click "OK, got it" (single button) or "Dismiss" + action button to close
+- Cannot be dismissed by clicking outside the modal
+- Used for all critical errors where user must take action before proceeding
+
+**Three places now use `alertMo` instead of `toast`:**
+1. `sendWelcomeKit` — no tenant email
+2. `sendWelcomeKit` — missing RRA/H2R documents
+3. `sendH2RGuide` — H2R not uploaded
+
+---
+
+### 5. Property Detail Pills — Compliance/Certificates non-responsive
+
+**Root cause found:** Compliance pill and Certificates pill on property overview were calling `renderPage()` — a function that was never defined anywhere in the codebase. Silent no-op.
+
+**Fix:** All three pills now call `nav('prop-detail','${pid}')` with `window._pdTab[pid]` pre-set:
+- Compliance pill → `window._pdTab[pid]='compliance'; nav('prop-detail',pid)`
+- Certificates pill → same
+- Tenancy pill → `window._pdTab[pid]='tenant'; nav('prop-detail',pid)`
+
+---
+
+### 6. Maintenance Audit Log PDF
+
+**New button:** "📄 Audit Log PDF" in the maintenance tab header (next to "Report issue").
+
+**New function `moMaintenanceAuditPDF(pid)`:**
+- Generates court/council-ready PDF using jsPDF
+- Property address and summary stats at top
+- Plain English intro paragraph explaining the document's purpose
+- Every job in date order — each block shows: title, date reported, priority, status, category, assigned contractor, completion date, cost, description, notes
+- Red tint + Awaab's Law flag for flagged jobs; green tint for resolved
+- Hard-coded Awaab's Law obligation text on flagged jobs ("landlord must investigate within 14 days...")
+- Footer with generation timestamp and data custody statement
+- Filename: `nexlet_maintenance_audit_[address]_[date].pdf`
+
+**No schema changes.**
+
+---
+
+### 7. RTR — Manual Passport Check for British/Irish Nationals
+
+**Problem:** British and Irish nationals do not have a share code. The Share Code Wizard was the only RTR path — incorrectly requiring non-existent documents.
+
+**Fix:** RTR "not done" panel in KYC now shows two routes:
+
+**🇬🇧 British or Irish national** → Manual passport check
+- Instructions: inspect original passport in person, photocopy, sign and date the copy
+- Numbered checklist shown in modal
+- Upload slot for signed passport copy (mandatory)
+- Date of check field
+- Saves to same `tenants` columns as wizard (`rtr_result: 'Valid'`, `rtr_check_date`, `rtr_expiry: null`, `rtr_followup_date: null`, `rtr_evidence_path`)
+- `share_code` set to `null` (unlimited RTR — no share code needed)
+- Audit log entry: `RTR_CHECK`
+
+**🌍 All other nationalities** → Share Code Wizard (unchanged)
+
+**RTR complete banner** now distinguishes: "British/Irish passport · Checked [date]" vs share code result. Re-check button routes to correct modal based on `share_code === null`.
+
+**New functions:** `moRTRManualCheck(tid)`, `_rtrManualSave(tid)`
+
+**SQL run:**
+```sql
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS rtr_evidence_path text;
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS rtr_followup_date date;
+```
+
+**Storage:** Uses existing `tenant-documents` bucket under `rtr-evidence/` prefix — same as wizard.
+
+---
+
+### 8. E-Sign — Furnished Status, Parking, Additional Clauses
+
+**New fields added to e-sign form (Option A — AI Generate path):**
+- **Furnished status** (Required) — Unfurnished / Part Furnished / Fully Furnished
+- **Parking** (Optional) — Not included / 1 space / 2 spaces / On-street only
+
+**Three new quick-clause buttons:**
+- Furnished items must be used with reasonable care and returned in the same condition
+- Tenant must not remove any furnished items without written consent
+- Damage to furnished items beyond fair wear and tear may be deducted from the deposit
+
+**AI prompt updated:**
+- Passes `furnished` and `parking` values
+- When Part/Fully Furnished: 5 mandatory furnished clauses injected (inventory as Schedule 1, tenant obligations, no removal, deposit recovery, prompt damage reporting)
+- When Unfurnished: furnished clauses omitted entirely
+
+**No schema changes.** Fields are prompt inputs only.
+
+---
+
+### 9. Certificate Calendar Insert Fix
+
+**Problem:** `saveCertToDB` toast said "Expiry added to calendar" but no `calendar_events` insert existed. The toast was incorrect.
+
+**Fix:** Added `calendar_events` insert to **both** save paths in `saveCertToDB`:
+- Main save path (line ~2017)
+- Fallback save path (line ~2005) — also fixes `D.certs.push` to include `type: certType` so `findCertForDoc` match works correctly
+
+Calendar event: title = `"[cert type] expires — [property address]"`, date = expiry date, notes = "Certificate expiry reminder. Renew before this date."
+
+---
+
+### 10. Day 1 Kit — Hard Blocking Send Checks
+
+**Problem:** `sendWelcomeKit` sent the kit even if Written Statement unsigned, certs missing, or cert files had no `file_url`. Two non-blocking gaps:
+1. Missing cert records — showed "⚠ Pending" in email and sent anyway
+2. Cert has record but no `file_url` — toasted warning and sent without attachment
+
+**Fix — `moWelcomeKit` (glance-confirm modal):**
+- New checklist row: Written Statement (signed by all tenants)
+- All rows now show red "Missing" (not amber) when incomplete
+- **Send button disabled** (`opacity:0.4, cursor:not-allowed`) if anything missing
+- Red panel shows specific issues with shortcut buttons: "Send for e-sign →", "Upload system docs →", "Upload certs →"
+- Green panel shown when everything ready: "✅ All documents ready — kit will be sent with full attachments"
+
+**Fix — `sendWelcomeKit` (double-locked):**
+Collects ALL blockers before showing one consolidated `alertMo`:
+- Written Statement not signed by all tenants
+- RRA / H2R not uploaded
+- Gas/EICR/EPC records missing
+- Gas/EICR/EPC have no `file_url` (cert record exists but file never uploaded)
+
+If any blocker → hard stop, `alertMo`, direct link to compliance. Only when all pass does it build attachments and send.
+
+RRA and H2R are now always appended to `attachment_urls` (guaranteed present after blocker check — no conditional).
+
+---
+
+### 11. Cert Expiry Email Reminders (pg_cron + new Edge Function)
+
+**New infrastructure: automated cert expiry email system.**
+
+#### SQL migrations run:
+```sql
+ALTER TABLE certificates ADD COLUMN IF NOT EXISTS reminder_30_sent_at timestamptz;
+ALTER TABLE certificates ADD COLUMN IF NOT EXISTS reminder_7_sent_at  timestamptz;
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS notification_email text;
+```
+
+#### pg_cron job created:
+- Job name: `nexlet-cert-expiry-checker`
+- Schedule: `0 8 * * *` (daily 8am UTC)
+- Calls: `https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/cert-expiry-checker`
+- Job ID: 6
+
+#### New edge function: `cert-expiry-checker`
+- **Source file:** `supabase/functions/cert-expiry-checker/index.ts`
+- **Deployed:** ✅ 7 June 2026 — invoke test returned `{"success":true,"emailsSent":0,"message":"No expiring certs"}`
+- **Logic:**
+  - Queries `certificates` where `expiry` is within 35 days and not already expired
+  - Groups by `user_id`
+  - For each user: checks `notification_email` override on `user_profiles`, falls back to `auth.users.email`
+  - Sends digest email at 30-day window and again at 7-day window
+  - Each reminder sent once only — `reminder_30_sent_at` / `reminder_7_sent_at` columns prevent duplicates
+  - Email: branded NEXLET HTML, table of expiring certs (cert name, property address, expiry date, days left), CTA → `nexlet.co.uk/#compliance`
+  - 30-day email: amber banner; 7-day email: red urgent banner
+- **Email sender:** `documents@nexlet.co.uk`
+
+#### `notification_email` field:
+If set on `user_profiles`, reminders go to that address. If null, falls back to Supabase auth registration email.
+
+---
+
+### 12. Compliance Dashboard Tabs — wired correctly
+
+**Problem:** Compliance/Certificates stat pills on property overview called `renderPage()` (undefined). Compliance nav page tabs (`⚠️ Action required` / `📋 Full audit`) were functional but stat card clicks also broke.
+
+**Fix:** Pills now call `nav('prop-detail', pid)` with tab pre-set. (See item 5 above for details.)
+
+---
+
+### Schema Changes This Session
+
+| Table | Column | Type | Notes |
+|---|---|---|---|
+| `tenants` | `rtr_evidence_path` | text | RTR manual check — signed passport copy path |
+| `tenants` | `rtr_followup_date` | date | RTR follow-up date (null for British/Irish) |
+| `certificates` | `reminder_30_sent_at` | timestamptz | Expiry reminder dedup |
+| `certificates` | `reminder_7_sent_at` | timestamptz | Expiry reminder dedup |
+| `user_profiles` | `notification_email` | text | Override email for cert expiry reminders |
+
+### Edge Functions — Updated
+
+| Function | Change |
+|---|---|
+| `cert-expiry-checker` | **NEW** — daily cert expiry email reminders |
+
+### Known Issues — Updated
+
+| # | Issue | Status |
+|---|---|---|
+| 1 | ICO number placeholder in legal docs | Pending registration |
+| 2 | MX record for inbound email | Parked post-launch |
+| 3 | `login.html` newsletter signup checkbox | Not built |
+| 4 | `moFinancials` PDF export — jsPDF needed | Post-launch backlog |
+| 5 | Section 8 UX handoff to Form 3A | Post-launch backlog |
+| 6 | WhatsApp reminders | Post-launch backlog |
+| 7 | Free public compliance checker | Marketing priority |
+| 8 | Blog / content hub | Marketing priority |
+| 9 | Postcode finder — replace with getAddress.io | Post-launch backlog |
+| 21 | Welcome kit PDF attachments not arriving | ⚠ `ai-proxy.ts` edge function still needs `attachment_urls` handler — developer task |
+| 24 | `start_date` amber warning in `nav()` | Carry forward — not yet traced |
+| 11 | `newsletter_opted_in` column | ✅ Added previous session |
+| 13 | `relet_prepared` column | Pending SQL |
+| 29 | Day 1 kit bulk send to all tenants | Not yet built — currently one at a time; bulk send after all KYC done is backlog |
+| 30 | Day 30 kit missing-doc hard blocks | Not yet applied — Day 30 still sends with missing docs; apply same pattern as Day 1 next session |
+

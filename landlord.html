@@ -3741,7 +3741,7 @@ function _tenancySetupStep2(pid) {
 function _getTenancyProgress(pid) {
   const lead = D.tenants.find(t => String(t.prop_id) === String(pid) && t.is_lead && t.status === 'Active');
   if (!lead) return null;
-  const defaults = { co_tenants_done: false, written_statement_done: false, tenant_docs_done: false, property_docs_done: false, welcome_kit_done: false };
+  const defaults = { co_tenants_done: false, written_statement_done: false, tenant_docs_done: false, property_docs_done: false, welcome_kit_done: false, occupant_rtr_done: false };
   const prog = Object.assign({}, defaults, lead.tenancy_setup_progress || {});
   if (!prog.written_statement_done) {
     const propTenants = D.tenants.filter(t => String(t.prop_id) === String(pid) && t.status === 'Active' && t.email);
@@ -3819,9 +3819,12 @@ function _renderTenancySetupBar(pid) {
   const lead = D.tenants.find(t => String(t.prop_id) === String(pid) && t.is_lead && t.status === 'Active');
   if (!lead) return '';
   const prog = _getTenancyProgress(pid);
+  const _adultOccupants = (p.occupants||[]).filter(o => o.age >= 18 && o.name);
+  const _occRtrDone = prog.occupant_rtr_done || _adultOccupants.length === 0;
   const steps = [
     { key: 'written_statement_done', label: 'Written Statement',  icon: '✍️', action: `_tenancySetupStep2('${pid}')` },
     { key: 'tenant_docs_done',       label: 'Tenant documents',   icon: '🪪', action: `nav('tenant-detail','${lead.id}')` },
+    ...(_adultOccupants.length ? [{ key: 'occupant_rtr_done', label: `RTR — ${_adultOccupants.length > 1 ? _adultOccupants.length + ' occupants' : _adultOccupants[0].name}`, icon: '🔍', action: `moOccupantRTR('${pid}')` }] : []),
     { key: 'property_docs_done',     label: 'Property compliance',icon: '🛡', action: `pdSetTab('${pid}','compliance')` },
     { key: 'welcome_kit_done',       label: 'Welcome Kit',        icon: '📦', action: `moWelcomeKit('${pid}')` },
   ];
@@ -15525,6 +15528,7 @@ INSTRUCTIONS:
 3. For each ground, include the full legal wording (as required by Form 3A) plus the specific facts stated above.
 4. Calculate and state the notice period and expiry date clearly.
 5. Do NOT include a signature block — one will be appended separately.
+${occupants.length ? `6. Include a PERMITTED OCCUPANTS clause listing: ${occupants.map(o => `${o.name} (age ${o.age})`).join(', ')}. State clearly these persons are permitted to reside at the property but are not parties to the tenancy and have no tenancy rights. Adults (18+) among them have been subject to a Right to Rent check by the landlord.` : ''}
 6. End with this disclaimer in full: "IMPORTANT: This is a draft particulars statement prepared using NexLet. Before serving, this must be transferred to the official Form 3A available from GOV.UK (published 1 May 2026). This document does not constitute legal advice. The landlord takes full responsibility for serving a valid notice."
 7. Use plain text formatting. No markdown bold markers in dates or names.`;
 
@@ -16806,6 +16810,7 @@ function moEsign(pid, tid) {
   _esignPdfUrl  = null;
   _esignSigReady = false;
   _esignLandlordPad = null;
+  window._esignOccupants = JSON.parse(JSON.stringify(p.occupants || []));
 
   // Check for a saved draft within 72hr window
   const _savedDraft = _esignLoadDraft(pid, tid);
@@ -16864,6 +16869,30 @@ function moEsign(pid, tid) {
         <div class="fg"><label>Furnished status <span style="color:var(--red)">*</span></label><select id="esign-furnished"><option value="Unfurnished">Unfurnished</option><option value="Part Furnished">Part Furnished</option><option value="Fully Furnished">Fully Furnished</option></select></div>
         <div class="fg"><label>Parking <span style="color:var(--muted);font-weight:400">(optional)</span></label><select id="esign-parking"><option value="">Not included</option><option value="1 allocated space included">1 space included</option><option value="2 allocated spaces included">2 spaces included</option><option value="On-street parking only">On-street only</option></select></div>
         <div class="fg"><label>Property licence number <span style="color:var(--muted);font-weight:400">(if applicable)</span></label><input type="text" id="esign-licence" value="${p.licence_number||''}" placeholder="e.g. HMO/2024/12345"></div>
+      </div>
+
+      <!-- Permitted Occupants -->
+      <div style="margin-top:14px;border:1px solid var(--border);border-radius:10px;padding:14px 16px;background:var(--off)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div>
+            <div style="font-size:12px;font-weight:700;color:var(--navy)">👨‍👩‍👧 Permitted Occupants <span style="font-size:11px;font-weight:400;color:var(--muted)">(optional)</span></div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">Anyone living at the property who is NOT a named tenant — e.g. adult children, partner. Everyone 18+ requires a Right to Rent check.</div>
+          </div>
+          <button type="button" onclick="_esignAddOccupant()" style="font-size:11px;padding:5px 12px;border:1px solid var(--blue);color:var(--blue);background:rgba(59,111,232,0.06);border-radius:6px;cursor:pointer;font-family:var(--font);white-space:nowrap;flex-shrink:0">+ Add person</button>
+        </div>
+        <div id="esign-occupants-list" style="display:flex;flex-direction:column;gap:8px">
+          ${(p.occupants||[]).length ? (p.occupants||[]).map((o,i) => `
+            <div id="esign-occ-${i}" style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--white);border:1px solid ${o.age>=18?'rgba(217,119,6,0.4)':'var(--border)'};border-radius:7px">
+              <input type="text" value="${o.name||''}" placeholder="Full name" onchange="_esignOccupantChange(${i},'name',this.value)" style="flex:1;border:1px solid var(--border);border-radius:5px;padding:5px 8px;font-size:12px;font-family:var(--font)">
+              <input type="number" value="${o.age||''}" min="0" max="120" placeholder="Age" onchange="_esignOccupantChange(${i},'age',parseInt(this.value)||0)" style="width:70px;border:1px solid var(--border);border-radius:5px;padding:5px 8px;font-size:12px;font-family:var(--font)">
+              ${o.age>=18 ? `<span style="font-size:10px;font-weight:700;color:#92400E;background:rgba(217,119,6,0.12);border:1px solid rgba(217,119,6,0.3);border-radius:4px;padding:2px 6px;white-space:nowrap">⚠ RTR required</span>` : o.age>0 ? `<span style="font-size:10px;color:var(--green-dark);background:rgba(0,168,122,0.08);border:1px solid rgba(0,168,122,0.2);border-radius:4px;padding:2px 6px">Under 18</span>` : ''}
+              <button type="button" onclick="_esignRemoveOccupant(${i})" style="font-size:13px;color:var(--muted);background:none;border:none;cursor:pointer;padding:2px 4px;font-family:var(--font)">✕</button>
+            </div>`).join('') : '<div id="esign-occ-empty" style="font-size:12px;color:var(--muted);font-style:italic;padding:4px 0">No permitted occupants added — click "+ Add person" if anyone else will live here</div>'}
+        </div>
+        <div id="esign-occ-rtr-warn" style="display:${(p.occupants||[]).some(o=>o.age>=18)?'block':'none'};margin-top:10px;background:rgba(217,119,6,0.08);border:1px solid rgba(217,119,6,0.3);border-radius:8px;padding:10px 12px">
+          <div style="font-size:12px;font-weight:700;color:#92400E;margin-bottom:4px">⚠ Right to Rent check required</div>
+          <div style="font-size:11px;color:#92400E;line-height:1.6">Under the Immigration Act 2014, you must check Right to Rent for <strong>every adult (18+) who will use this property as their only or main home</strong> — including permitted occupants who are not named tenants.<br>After saving the contract, use the <strong>RTR check tool</strong> in the tenant section to record each check.</div>
+        </div>
       </div>
       <div class="fg" style="margin-top:2px;grid-column:1/-1">
         <label>Additional clauses <span style="color:var(--muted);font-weight:400">(optional)</span></label>
@@ -17128,6 +17157,198 @@ function esignResumeDraft(pid, tid) {
   }
 }
 
+// ── Permitted occupants — e-sign form helpers ──
+function _esignGetOccupants() {
+  return window._esignOccupants || [];
+}
+function _esignAddOccupant() {
+  window._esignOccupants = _esignGetOccupants();
+  window._esignOccupants.push({ name: '', age: 0 });
+  _esignRenderOccupants();
+}
+function _esignRemoveOccupant(idx) {
+  window._esignOccupants = _esignGetOccupants();
+  window._esignOccupants.splice(idx, 1);
+  _esignRenderOccupants();
+}
+function _esignOccupantChange(idx, field, val) {
+  window._esignOccupants = _esignGetOccupants();
+  if (window._esignOccupants[idx]) window._esignOccupants[idx][field] = val;
+  _esignRenderOccupants();
+}
+function _esignRenderOccupants() {
+  const list = document.getElementById('esign-occupants-list');
+  const warn = document.getElementById('esign-occ-rtr-warn');
+  if (!list) return;
+  const occs = _esignGetOccupants();
+  if (!occs.length) {
+    list.innerHTML = '<div id="esign-occ-empty" style="font-size:12px;color:var(--muted);font-style:italic;padding:4px 0">No permitted occupants added — click "+ Add person" if anyone else will live here</div>';
+    if (warn) warn.style.display = 'none';
+    return;
+  }
+  list.innerHTML = occs.map((o, i) => `
+    <div id="esign-occ-${i}" style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--white);border:1px solid ${o.age>=18?'rgba(217,119,6,0.4)':'var(--border)'};border-radius:7px">
+      <input type="text" value="${o.name||''}" placeholder="Full name" onchange="_esignOccupantChange(${i},'name',this.value)" style="flex:1;border:1px solid var(--border);border-radius:5px;padding:5px 8px;font-size:12px;font-family:var(--font)">
+      <input type="number" value="${o.age||''}" min="0" max="120" placeholder="Age" oninput="_esignOccupantChange(${i},'age',parseInt(this.value)||0)" style="width:70px;border:1px solid var(--border);border-radius:5px;padding:5px 8px;font-size:12px;font-family:var(--font)">
+      ${o.age>=18 ? `<span style="font-size:10px;font-weight:700;color:#92400E;background:rgba(217,119,6,0.12);border:1px solid rgba(217,119,6,0.3);border-radius:4px;padding:2px 6px;white-space:nowrap">⚠ RTR required</span>` : o.age>0 ? `<span style="font-size:10px;color:var(--green-dark);background:rgba(0,168,122,0.08);border:1px solid rgba(0,168,122,0.2);border-radius:4px;padding:2px 6px">Under 18</span>` : ''}
+      <button type="button" onclick="_esignRemoveOccupant(${i})" style="font-size:13px;color:var(--muted);background:none;border:none;cursor:pointer;padding:2px 4px;font-family:var(--font)">✕</button>
+    </div>`).join('');
+  if (warn) warn.style.display = occs.some(o => o.age >= 18) ? 'block' : 'none';
+}
+
+// ── Permitted Occupant RTR check modal ──
+function moOccupantRTR(pid) {
+  const p = P(pid);
+  if (!p) return;
+  const adults = (p.occupants || []).filter(o => o.age >= 18 && o.name);
+  if (!adults.length) { toast('No adult permitted occupants on record', false); return; }
+
+  const rows = adults.map((o, i) => {
+    const done = o.rtr_done;
+    const method = o.rtr_method || '';
+    return `<div style="padding:12px 14px;border:1px solid ${done?'rgba(0,135,90,0.3)':'rgba(217,119,6,0.35)'};border-radius:8px;background:${done?'rgba(0,168,122,0.04)':'rgba(217,119,6,0.04)'}">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--txt)">${o.name} <span style="font-size:11px;font-weight:400;color:var(--muted)">age ${o.age}</span></div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">${done ? `✅ RTR check recorded · ${method}` : '⚠ Right to Rent check required — adult occupant'}</div>
+        </div>
+        ${done
+          ? `<button class="btn btn-sm" style="font-size:11px" onclick="_occRTRReset('${pid}',${i})">↺ Re-check</button>`
+          : `<div style="display:flex;gap:6px;flex-wrap:wrap">
+               <button class="btn btn-sm btn-navy" style="font-size:11px" onclick="_occRTRManual('${pid}',${i})">🪪 British/Irish passport</button>
+               <button class="btn btn-sm" style="font-size:11px;border-color:var(--blue);color:var(--blue)" onclick="_occRTRShareCode('${pid}',${i})">🔍 Share code (UKVI)</button>
+             </div>`}
+      </div>
+    </div>`;
+  }).join('');
+
+  const allDone = adults.every(o => o.rtr_done);
+
+  openMo(
+    '🔍 Right to Rent — Permitted Occupants',
+    `${p.address} · ${adults.length} adult${adults.length > 1 ? 's' : ''} require checks`,
+    `<div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6">
+      Under the <strong>Immigration Act 2014</strong>, every adult (18+) living at the property as their only or main home must have their Right to Rent checked — even if they are not named tenants and do not pay rent.
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px">${rows}</div>
+    ${allDone ? `<div style="margin-top:12px;background:rgba(0,168,122,0.07);border:1px solid rgba(0,168,122,0.2);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--green-dark);font-weight:600">✅ All adult occupant RTR checks complete</div>` : ''}`,
+    `<button class="btn" onclick="closeMo()">Close</button>
+     ${allDone ? `<button class="btn btn-navy" onclick="closeMo();_markTenancyStep('${pid}','occupant_rtr_done',false)">✓ Mark complete</button>` : ''}`
+  );
+}
+
+function _occRTRManual(pid, idx) {
+  const p = P(pid);
+  const o = (p.occupants||[])[idx];
+  if (!o) return;
+  const today = new Date().toISOString().slice(0,10);
+  openMo(
+    `🪪 Manual RTR — ${o.name}`,
+    'British / Irish national · Permitted occupant',
+    `<div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.7">
+      British and Irish nationals have unlimited right to rent. Inspect the original passport in person, take a signed and dated copy, and upload it below as your audit record.
+    </div>
+    <div style="background:rgba(59,111,232,0.06);border:1px solid rgba(59,111,232,0.15);border-radius:8px;padding:12px 14px;margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:8px">Checklist</div>
+      ${['Inspect the original passport in person','Take a photocopy of the photo page','Sign and date the copy as the landlord','Upload the signed copy below'].map((s,i)=>`<div style="font-size:12px;display:flex;gap:8px;margin-bottom:5px"><strong style="color:var(--navy)">${i+1}.</strong>${s}</div>`).join('')}
+    </div>
+    <div class="fg"><label>Date of check <span class="req">*</span></label><input type="date" id="occ-rtr-date-${idx}" value="${today}" style="max-width:200px"></div>
+    <div class="fg">
+      <label>Upload signed passport copy <span class="req">*</span></label>
+      <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:2px dashed var(--border);border-radius:8px;cursor:pointer;font-size:13px;color:var(--muted)">
+        <span style="font-size:20px">📎</span>
+        <span id="occ-rtr-file-lbl-${idx}">Click to upload signed copy (JPG, PNG or PDF)</span>
+        <input type="file" id="occ-rtr-file-${idx}" accept=".jpg,.jpeg,.png,.pdf" style="display:none" onchange="document.getElementById('occ-rtr-file-lbl-${idx}').textContent=this.files[0]?'✓ '+this.files[0].name:'Click to upload'">
+      </label>
+    </div>`,
+    `<button class="btn" onclick="moOccupantRTR('${pid}')">← Back</button>
+     <button class="btn btn-navy" id="occ-rtr-save-${idx}" onclick="_occRTRSave('${pid}',${idx},'British/Irish passport')">💾 Save check</button>`
+  );
+}
+
+function _occRTRShareCode(pid, idx) {
+  const p = P(pid);
+  const o = (p.occupants||[])[idx];
+  if (!o) return;
+  const today = new Date().toISOString().slice(0,10);
+  openMo(
+    `🔍 Share Code RTR — ${o.name}`,
+    'UKVI check · Permitted occupant',
+    `<div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.7">
+      Check this person's Right to Rent status on GOV.UK using their share code, then record the result below.
+    </div>
+    <div class="fg"><label>Share code <span class="req">*</span></label><input type="text" id="occ-sc-${idx}" placeholder="e.g. W7X-B6N-9M2" style="max-width:220px;text-transform:uppercase"></div>
+    <div class="fg"><label>Check date <span class="req">*</span></label><input type="date" id="occ-sc-date-${idx}" value="${today}" style="max-width:200px"></div>
+    <div class="fg"><label>Result <span class="req">*</span></label>
+      <select id="occ-sc-result-${idx}">
+        <option value="">Select result</option>
+        <option value="Valid">Valid — unlimited right to rent</option>
+        <option value="Time-limited">Time-limited — check expiry date</option>
+        <option value="Invalid">Invalid — no right to rent</option>
+      </select>
+    </div>
+    <div style="margin-top:10px"><a href="https://www.gov.uk/view-right-to-rent" target="_blank" style="font-size:12px;color:var(--blue)">↗ Open GOV.UK Right to Rent check</a></div>`,
+    `<button class="btn" onclick="moOccupantRTR('${pid}')">← Back</button>
+     <button class="btn btn-navy" onclick="_occRTRSaveShareCode('${pid}',${idx})">💾 Save result</button>`
+  );
+}
+
+async function _occRTRSave(pid, idx, method) {
+  const btn = document.getElementById(`occ-rtr-save-${idx}`);
+  const dateVal = document.getElementById(`occ-rtr-date-${idx}`)?.value;
+  const fileInput = document.getElementById(`occ-rtr-file-${idx}`);
+  const file = fileInput?.files?.[0];
+  if (!dateVal) { toast('Please enter check date', true); return; }
+  if (!file) { toast('Please upload the signed passport copy', true); return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  try {
+    const ext = file.name.split('.').pop();
+    const path = `rtr-evidence/occ-${pid}-${idx}-${Date.now()}.${ext}`;
+    await sb.storage.from('tenant-documents').upload(path, file, { upsert: true });
+    const p = P(pid);
+    if (!p.occupants) p.occupants = [];
+    p.occupants[idx] = { ...p.occupants[idx], rtr_done: true, rtr_method: method, rtr_date: dateVal, rtr_evidence: path };
+    await sb.from('properties').update({ occupants: p.occupants }).eq('id', pid);
+    closeMo();
+    toast(`✅ RTR check saved for ${p.occupants[idx].name}`);
+    moOccupantRTR(pid);
+  } catch(e) {
+    _logError('_occRTRSave', e);
+    toast('Save failed: ' + e.message, true);
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Save check'; }
+  }
+}
+
+async function _occRTRSaveShareCode(pid, idx) {
+  const sc = document.getElementById(`occ-sc-${idx}`)?.value.trim().toUpperCase();
+  const dateVal = document.getElementById(`occ-sc-date-${idx}`)?.value;
+  const result = document.getElementById(`occ-sc-result-${idx}`)?.value;
+  if (!sc) { toast('Please enter the share code', true); return; }
+  if (!dateVal) { toast('Please enter check date', true); return; }
+  if (!result) { toast('Please select a result', true); return; }
+  if (result === 'Invalid') { alertMo('Right to Rent — Invalid', `${(P(pid)?.occupants||[])[idx]?.name || 'This person'} has no right to rent in England. They cannot occupy this property. Take legal advice before proceeding.`); return; }
+  try {
+    const p = P(pid);
+    if (!p.occupants) p.occupants = [];
+    p.occupants[idx] = { ...p.occupants[idx], rtr_done: true, rtr_method: `Share code (${result})`, rtr_date: dateVal, rtr_share_code: sc };
+    await sb.from('properties').update({ occupants: p.occupants }).eq('id', pid);
+    closeMo();
+    toast(`✅ RTR check saved for ${p.occupants[idx].name}`);
+    moOccupantRTR(pid);
+  } catch(e) {
+    _logError('_occRTRSaveShareCode', e);
+    toast('Save failed: ' + e.message, true);
+  }
+}
+
+async function _occRTRReset(pid, idx) {
+  const p = P(pid);
+  if (!p.occupants?.[idx]) return;
+  p.occupants[idx] = { ...p.occupants[idx], rtr_done: false, rtr_method: '', rtr_date: null };
+  await sb.from('properties').update({ occupants: p.occupants }).eq('id', pid);
+  moOccupantRTR(pid);
+}
+
 function esignShowOptionA() {
   document.getElementById('esign-chooser').style.display = 'none';
   document.getElementById('esign-form-a').style.display = 'block';
@@ -17169,6 +17390,13 @@ async function esignGenerateDoc(pid, tid) {
   const furnished     = document.getElementById('esign-furnished').value;
   const parking       = document.getElementById('esign-parking').value || 'Not included';
   const licenceNo     = document.getElementById('esign-licence').value.trim();
+  const occupants     = _esignGetOccupants().filter(o => o.name && o.name.trim());
+
+  // Save occupants to property record for persistence
+  if (occupants.length || (p.occupants||[]).length) {
+    p.occupants = occupants;
+    sb.from('properties').update({ occupants: occupants }).eq('id', pid).then(() => {});
+  }
   const terms         = document.getElementById('esign-terms').value;
 
   // Validation — all mandatory fields
@@ -17228,6 +17456,8 @@ Pets: ${pets}
 Furnished status: ${furnished}
 Parking: ${parking}
 ${licenceClause}
+${occupants.length ? `Permitted occupants (not named tenants — listed in contract but do not sign):
+${occupants.map(o => `- ${o.name}, age ${o.age}${o.age >= 18 ? ' (adult — Right to Rent check required by landlord before tenancy starts)' : o.age >= 16 ? ' (minor — no RTR check needed)' : ' (child)'}`).join('\n')}` : 'No additional permitted occupants.'}
 Special terms: ${terms || 'None'}
 
 ADDITIONAL CLAUSE SCREENING:
