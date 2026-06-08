@@ -9273,7 +9273,7 @@ async function uploadSystemDoc(key, input) {
   if (!user) { toast('Not logged in', true); return; }
   toast('Uploading…');
   const ext = file.name.split('.').pop() || 'pdf';
-  const path = `property-documents/system/${key}-${user.id}.${ext}`;
+  const path = `${user.id}/system/${key}.${ext}`;
   const { error: upErr } = await sb.storage.from('property-documents').upload(path, file, { upsert: true, contentType: file.type || 'application/pdf' });
   if (upErr) { toast('Upload failed: ' + upErr.message, true); return; }
   const { data: urlData } = sb.storage.from('property-documents').getPublicUrl(path);
