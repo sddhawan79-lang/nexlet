@@ -2289,6 +2289,7 @@ function _toggleCertExpiry() {
 function moCert(pid, docType){
   if (_expiredGuard('Upload certificate')) return;
   window._lastScanFile = null;
+  window._moCertDocType = docType || null;
   const opts=activeProperties().map(p=>`<option value="${p.id}"${p.id==pid?' selected':''}>${p.address}, ${p.city}</option>`).join('');
   openMo('Add certificate','Upload document — AI will scan and fill details',`
     <div class="scan-box" id="sb-scan">
@@ -2406,7 +2407,7 @@ async function scanDoc(input){
     else
       docPrompt = 'UK property compliance certificate or document. Extract: certificate type, reference number, issue date (YYYY-MM-DD), expiry date (YYYY-MM-DD), engineer or provider full name and registration number if present, issuing company or authority, full property address, cost in GBP if present. Return JSON only, keys: type, ref, issued, expiry, engineer, issuing_authority, address, amount.';
     await scanAndFill(file, (parsed)=>{
-      if(parsed.type)document.getElementById('ct').value=parsed.type;
+      if(parsed.type && !window._moCertDocType)document.getElementById('ct').value=parsed.type;
       if(parsed.issued)document.getElementById('ci').value=parsed.issued;
       if(parsed.expiry)document.getElementById('ce').value=parsed.expiry;
       if(parsed.engineer)document.getElementById('ceng').value=parsed.engineer;
