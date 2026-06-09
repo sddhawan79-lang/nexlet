@@ -4470,3 +4470,177 @@ If set on `user_profiles`, reminders go to that address. If null, falls back to 
 | 29 | Day 1 kit bulk send to all tenants | Not yet built — currently one at a time; bulk send after all KYC done is backlog |
 | 30 | Day 30 kit missing-doc hard blocks | Not yet applied — Day 30 still sends with missing docs; apply same pattern as Day 1 next session |
 
+
+---
+
+## Session 39 Continued — Late Session Fixes (8 June 2026)
+
+---
+
+### 13. Critical Schema Fixes — Missing Columns
+
+Four columns were missing from `certificates` table causing `saveCertToDB` fallback path to fire silently — cert saved without `file_url`, Day 1 kit blocker saw `!cert.file_url` and blocked send even after upload.
+
+**SQL run:**
+```sql
+ALTER TABLE certificates ADD COLUMN IF NOT EXISTS file_url text;
+ALTER TABLE certificates ADD COLUMN IF NOT EXISTS cert_ref text;
+ALTER TABLE certificates ADD COLUMN IF NOT EXISTS issued date;
+ALTER TABLE certificates ADD COLUMN IF NOT EXISTS amount numeric;
+```
+
+Eleven columns added to `tenant_documents` for AI scan write-back:
+```sql
+ALTER TABLE tenant_documents ADD COLUMN IF NOT EXISTS extracted_name text;
+ALTER TABLE tenant_documents ADD COLUMN IF NOT EXISTS extracted_doc_number text;
+ALTER TABLE tenant_documents ADD COLUMN IF NOT EXISTS extracted_expiry text;
+ALTER TABLE tenant_documents ADD COLUMN IF NOT EXISTS extracted_address text;
+ALTER TABLE tenant_documents ADD COLUMN IF NOT EXISTS share_code text;
+ALTER TABLE tenant_documents ADD COLUMN IF NOT EXISTS share_code_expiry text;
+ALTER TABLE tenant_documents ADD COLUMN IF NOT EXISTS issuing_authority text;
+ALTER TABLE tenant_documents ADD COLUMN IF NOT EXISTS doc_type_extracted text;
+ALTER TABLE tenant_documents ADD COLUMN IF NOT EXISTS name_mismatch boolean default false;
+ALTER TABLE tenant_documents ADD COLUMN IF NOT EXISTS verified boolean default false;
+ALTER TABLE tenant_documents ADD COLUMN IF NOT EXISTS scan_attempted boolean default false;
+```
+
+Column added to `properties` for permitted occupants:
+```sql
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS occupants jsonb DEFAULT '[]'::jsonb;
+```
+
+---
+
+### 14. AI Scanner — Type-Dropdown Rescan Fix
+
+**Problem:** `scanDoc` read `certTypeVal` from dropdown at file-drop time. User drops EICR file → dropdown still shows Gas Safety default → wrong AI prompt → all fields "Not detected".
+
+**Fix:** Cert type dropdown `onchange` now re-runs `scanDoc` if `window._lastScanFile` is already set:
+```js
+onchange="...;if(window._lastScanFile){scanDoc({files:[window._lastScanFile]});}"
+```
+User can drop file, change type, scan reruns automatically with correct prompt.
+
+---
+
+### 15. Universal Scanner View Button + Helper Functions
+
+**Rule established:** Every AI scanner must show a "👁 View uploaded file" button after upload — user can confirm the correct file before saving.
+
+**Three new helper functions added** (replaces 20+ scattered inline scan state HTML blocks):
+
+```js
+_scanBoxSuccess(boxId, file, parsed)  // ✓ green, filename, View button, warnings
+_scanBoxScanning(boxId)               // ⏳ spinner
+_scanBoxError(boxId, file)            // ⚠ amber, filename, View button still shown
+```
+
+**Applied to all scanners:**
+- `scanDoc` (cert upload / moCert)
+- `scanSetupLicence` (property setup)
+- `scanSetupCert` gas/eicr/epc (property setup)
+- `scanIDDoc` (tenant setup ID docs)
+- `scanRTRDoc` (tenant setup RTR)
+- `scanDepositCert` (tenant setup deposit)
+- `_scanDepositCertModal` (Day 30 deposit)
+- Insurance policy scanners (ts-buildings-scan, ts-contents-scan)
+- Property edit licence, EPC, deposit scanners (p-lic, p-epc, p-dep)
+
+**View button behaviour:** Opens blob URL via `dvoOpen()` — works for in-session uploads. File is already stored in Supabase storage by the time save is called.
+
+---
+
+### 16. Permitted Occupants — E-Sign + RTR
+
+**Problem:** British law requires RTR check for every adult (18+) living at the property as their only/main home — including adult children and non-tenant partners not named on the agreement.
+
+**What was built:**
+
+**E-sign form — Permitted Occupants section:**
+- Dynamic add/remove rows: full name + age
+- Live badge: orange "⚠ RTR required" (18+), green "Under 18", no badge (age not entered)
+- Persistent amber warning panel when any 18+ occupant added — explains legal obligation
+- Data pre-fills from `properties.occupants` JSONB on re-open
+- All occupants saved to `properties.occupants` on generate
+
+**AI contract generation:**
+- All occupants included in prompt
+- Written Statement includes "Permitted Occupants" clause naming each person
+- Adults flagged as having been RTR-checked; children listed without RTR note
+
+**Tenancy setup progress bar:**
+- New step "RTR — [name]" appears when 18+ occupants exist on property
+- Sits between Tenant documents and Property compliance
+- `occupant_rtr_done` added to `_getTenancyProgress` defaults
+
+**`moOccupantRTR(pid)`** — RTR check modal for permitted occupants:
+- Lists each 18+ person with status
+- Two paths: British/Irish passport (upload signed copy) or Share code (UKVI)
+- Share code "Invalid" result → `alertMo` hard block
+- Each check saved to `properties.occupants` JSONB: `rtr_done`, `rtr_method`, `rtr_date`, `rtr_evidence`
+- "Mark complete" button → `_markTenancyStep(pid, 'occupant_rtr_done')`
+
+**New functions:** `moOccupantRTR`, `_occRTRManual`, `_occRTRShareCode`, `_occRTRSave`, `_occRTRSaveShareCode`, `_occRTRReset`, `_esignAddOccupant`, `_esignRemoveOccupant`, `_esignOccupantChange`, `_esignRenderOccupants`, `_esignGetOccupants`
+
+---
+
+### 17. Compliance Tab — MISSING Bug (Open — Carry to Session 40)
+
+**Problem:** Certs uploaded correctly (confirmed in DB after schema fix) but compliance tab still shows MISSING for EICR and EPC.
+
+**Root cause identified but not yet fixed:**
+`findCertForDoc` matches using:
+```js
+match: ['gas safety','cp12','gas cert']       // Gas
+match: ['eicr','electrical installation']      // EICR  
+match: ['epc','energy performance']            // EPC
+```
+
+The dropdown `ct` in `moCert` has options like `"Gas Safety Certificate (GSC)"` which lowercased contains `"gas safety"` — should match. But `cert.type` saved to DB may be null or a different string on the fallback save path (before today's `file_url` column was added, the fallback stripped fields including `type`).
+
+**Status:** Existing cert records saved before schema fix likely have `type: null`. Re-uploading certs will fix them going forward. Additionally need to broaden match arrays to be more defensive.
+
+**Fix needed in Session 40:**
+1. Broaden match arrays to catch more type string variants
+2. Add null-safety to `findCertForDoc` 
+3. Add console debug in `moWelcomeKit` to log `D.certs` for the property so exact type values can be confirmed
+
+---
+
+### Schema Changes — Late Session 39
+
+| Table | Column | Type | Notes |
+|---|---|---|---|
+| `certificates` | `file_url` | text | **Critical** — missing caused all cert uploads to have no stored file URL |
+| `certificates` | `cert_ref` | text | AI scan write-back |
+| `certificates` | `issued` | date | AI scan write-back |
+| `certificates` | `amount` | numeric | AI scan write-back |
+| `tenant_documents` | `extracted_name` | text | KYC scan write-back |
+| `tenant_documents` | `extracted_doc_number` | text | KYC scan write-back |
+| `tenant_documents` | `extracted_expiry` | text | KYC scan write-back |
+| `tenant_documents` | `extracted_address` | text | KYC scan write-back |
+| `tenant_documents` | `share_code` | text | RTR share code |
+| `tenant_documents` | `share_code_expiry` | text | RTR share code expiry |
+| `tenant_documents` | `issuing_authority` | text | Doc issuer |
+| `tenant_documents` | `doc_type_extracted` | text | AI-detected doc type |
+| `tenant_documents` | `name_mismatch` | boolean | Flag if name doesn't match tenant |
+| `tenant_documents` | `verified` | boolean | Manually verified flag |
+| `tenant_documents` | `scan_attempted` | boolean | Scan was attempted |
+| `properties` | `occupants` | jsonb | Permitted occupants array |
+
+---
+
+### Open Issues — Updated After Late Session 39
+
+| # | Issue | Status |
+|---|---|---|
+| 31 | Compliance MISSING bug — certs uploaded but not matched | ⚠ **Carry to Session 40 — fix first** |
+| 32 | Cert view button on compliance row (VALID shows pen icon, no view) | Carry to Session 40 |
+| 30 | Day 30 kit hard blocks | Carry to Session 40 |
+| 33 | Welcome letter modal (`moWelcomeLetter`) | Not yet built — Session 40 |
+| 34 | Guarantor checklist item in tenancy progress bar | Partially done — note updated, progress bar step not yet added |
+| 29 | Day 1 kit bulk send | Backlog |
+| 21 | PDF attachments in kit emails | Developer task (`ai-proxy.ts`) |
+| 24 | `start_date` amber warning | Not traced |
+| 13 | `relet_prepared` column | Pending SQL |
+
