@@ -4500,7 +4500,7 @@ function moWelcomeKit(pid) {
   });
   const kycOk = kycStatus.every(s => s.done);
 
-  const kitReady = rraOk && h2rOk && wsOk && kycOk && gasFileOk && eicrFileOk && epcFileOk;
+  const kitReady = rraOk && h2rOk && wsOk && gasFileOk && eicrFileOk && epcFileOk;
 
   const ck = (ok, label, warn) => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
     <span style="font-size:14px">${ok ? '✅' : '⚠️'}</span>
@@ -4517,7 +4517,6 @@ function moWelcomeKit(pid) {
         <div style="font-size:12.5px;font-weight:600">${t.name}</div>
         <div style="font-size:11px;color:var(--muted)">${t.email||'⚠ No email set'}</div>
       </div>
-      <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:100px;background:${kycDone?'var(--green-bg)':'rgba(229,62,62,0.08)'};color:${kycDone?'var(--green-dark)':'var(--red)'};white-space:nowrap">${kycDone?'KYC ✓':'KYC missing'}</span>
     </div>`;
   }).join('');
 
@@ -4525,7 +4524,6 @@ function moWelcomeKit(pid) {
   if (!wsOk)       blockers.push('Written Statement not yet signed by all tenants');
   if (!rraOk)      blockers.push('RRA 2025 doc not uploaded — Compliance → System Documents');
   if (!h2rOk)      blockers.push('How to Rent Guide not uploaded — Compliance → System Documents');
-  if (!kycOk)      blockers.push('KYC incomplete — all mandatory docs required for every tenant');
   if (!gasCert)    blockers.push('Gas Safety Certificate missing');
   else if (!gasFileOk) blockers.push('Gas Safety Certificate has no file — re-upload in Compliance tab');
   if (!eicrCert)   blockers.push('EICR missing');
@@ -4543,7 +4541,6 @@ function moWelcomeKit(pid) {
       <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin:14px 0 8px">Checklist</div>
       <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:2px 14px">
         ${ck(wsOk,       'Written Statement (signed by all tenants)')}
-        ${ck(kycOk,      'KYC complete (all tenants)', 'Incomplete')}
         ${ck(rraOk,      'RRA 2025 Prescribed Particulars')}
         ${ck(h2rOk,      'How to Rent Guide')}
         ${ck(gasFileOk,  'Gas Safety Certificate', !gasCert?'Missing':'No file')}
@@ -4587,10 +4584,7 @@ async function sendWelcomeKit(pid) {
   if (!gasCert?.file_url)  blockers.push('Gas Safety Certificate missing or has no file');
   if (!eicrCert?.file_url) blockers.push('EICR missing or has no file');
   if (!epcCert?.file_url)  blockers.push('EPC missing or has no file');
-  const mandatoryKycSlots = ['passport', 'right_to_rent', 'address_1', 'address_2'];
   allTenants.forEach(t => {
-    const uploaded = (D.tenantDocs||[]).filter(d => String(d.tenant_id)===String(t.id) && mandatoryKycSlots.includes(d.slot)).length;
-    if (uploaded < mandatoryKycSlots.length) blockers.push(`KYC incomplete for ${t.name}`);
     if (!t.email) blockers.push(`No email address for ${t.name}`);
   });
 
