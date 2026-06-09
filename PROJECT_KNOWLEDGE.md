@@ -4644,3 +4644,55 @@ The dropdown `ct` in `moCert` has options like `"Gas Safety Certificate (GSC)"` 
 | 24 | `start_date` amber warning | Not traced |
 | 13 | `relet_prepared` column | Pending SQL |
 
+
+---
+
+## Session 40 — 9 June 2026 — Email Attachment Fix + Cert Upload Error Visibility
+
+### 1. Kit Email Attachments Not Arriving (Issue 21 — FIXED client-side)
+
+**Root cause confirmed:** All 4 email sends that attach files were using `attachment_urls: [{url, filename}]` — passed to the edge function `ai-proxy`. The edge function does NOT fetch URLs server-side; it only handles base64 `attachments: [{filename, content, content_type}]`. The emails sent successfully but with zero actual file attachments.
+
+**Fix:** Added shared helper `_urlsToAttachments(attachment_urls)` — fetches each URL client-side using `fetch()`, converts blob to base64 via `FileReader`, returns `[{filename, content, content_type}]`. Works because `property-documents` bucket is **PUBLIC** (confirmed in Supabase dashboard).
+
+**4 call sites fixed:**
+| Send function | Fix applied |
+|---|---|
+| `sendWelcomeKit` (Day 1 kit) | `attachment_urls` → `_urlsToAttachments` → `attachments` |
+| `sendDay30Kit` (Day 30 kit) | `attachment_urls` → `_urlsToAttachments` → `attachments` |
+| Prescribed Information send | `attachment_url` → `_urlsToAttachments` → `attachments` |
+| How to Rent Guide send | `attachment_urls` → `_urlsToAttachments` → `attachments` |
+
+**Helper behaviour:** Silently skips any URL that fails to fetch (logs `console.warn`). Spread operator means if 0 attachments resolve, key is omitted entirely from payload.
+
+**Prerequisite:** `property-documents` bucket must remain **Public** in Supabase Storage for client-side fetch to succeed. If bucket ever made private, must switch to signed URLs (Supabase `createSignedUrl`).
+
+---
+
+### 2. Cert File Upload — Silent Failure Made Visible
+
+**Problem:** `_certUploadFile` caught all errors with `console.warn` and returned silently. User saw "✓ Certificate saved" but no file was stored. No indication anything went wrong.
+
+**Fix:** Replaced all silent `console.warn` + `return` paths with `toast(message, true)` — user now sees an amber error toast for:
+- Storage upload failure (Supabase error message shown)
+- `getPublicUrl` returning no URL
+- DB `file_url` update failure (non-column-missing errors)
+- Any unexpected exception
+
+Certificate metadata is still saved in all cases (DB insert already completed before file upload). Error message instructs user to re-upload the file.
+
+---
+
+### Open Issues — Updated After Session 40
+
+| # | Issue | Status |
+|---|---|---|
+| 21 | PDF attachments in kit emails | ✅ Fixed — client-side fetch + base64 via `_urlsToAttachments` |
+| 31 | Compliance MISSING bug — certs uploaded but not matched | ⚠ Carry to Session 41 — not addressed this session |
+| 32 | Cert view button on compliance row | Carry to Session 41 |
+| 30 | Day 30 kit hard blocks | Carry to Session 41 |
+| 33 | Welcome letter modal (`moWelcomeLetter`) | Not yet built |
+| 34 | Guarantor checklist item in tenancy progress bar | Partially done |
+| 29 | Day 1 kit bulk send | Backlog |
+| 24 | `start_date` amber warning | Not traced |
+| 13 | `relet_prepared` column | Pending SQL |

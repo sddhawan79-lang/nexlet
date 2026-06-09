@@ -1890,7 +1890,7 @@ function renderScanSlot(id, onchangeFn, label, hint) {
 
 // ── MARK CERT SERVED ──
 async function markServed(certId){
-  const c=D.certs.find(x=>x.id===certId);
+  const c=D.certs.find(x=>String(x.id)===String(certId));
   if(!c) return;
   const newVal=!c.served;
   const{error}=await sb.from('certificates').update({served:newVal}).eq('id',certId);
@@ -1929,7 +1929,7 @@ async function uploadScanCert(certId, input){
         const{file_url,cert_ref,issued,...safeUpdates}=updates;
         await sb.from('certificates').update(safeUpdates).eq('id',certId);
       }
-      const c=D.certs.find(x=>x.id===certId);
+      const c=D.certs.find(x=>String(x.id)===String(certId));
       if(c) Object.assign(c,updates,{file:true});
       toast('✓ Scanned & saved — expiry, reference and engineer auto-filled!');
       nav(window._currentPage, window._currentParam);
