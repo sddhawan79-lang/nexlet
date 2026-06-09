@@ -4696,3 +4696,189 @@ Certificate metadata is still saved in all cases (DB insert already completed be
 | 29 | Day 1 kit bulk send | Backlog |
 | 24 | `start_date` amber warning | Not traced |
 | 13 | `relet_prepared` column | Pending SQL |
+
+---
+
+## Session 41 — 9 June 2026 — Bug Fixes: Cert Uploads, Compliance Tab, Day 1/30 Kit Overhaul
+
+**Date:** 9 June 2026
+**Files modified:** `landlord.html`
+
+---
+
+### 1. Supabase RLS — Certificates Delete & Update (Data fix, no code change)
+
+**Bug:** Deleting a cert appeared to succeed client-side but the row remained in DB on refresh.
+
+**Root cause:** Two data issues:
+- Older cert rows had `user_id = NULL` — RLS policy `auth.uid() = user_id` evaluated to false, silently blocking all mutations
+- Storage INSERT policy checked `(storage.foldername(name))[1] = auth.uid()` but upload path was `certs/{uid}/{certId}` (uid at position [2], not [1])
+
+**Fixes applied in Supabase (SQL + Storage policy UI):**
+```sql
+-- Fix 1: Backfill null user_id rows
+UPDATE certificates
+SET user_id = 'cd1695ca-101f-4fb4-a176-2ecea79c1129'
+WHERE user_id IS NULL;
+```
+Storage INSERT policy updated: `[1]` → `[2]` (matching `certs/{uid}/...` path structure).
+Then broadened to full-access policy:
+```sql
+CREATE POLICY "property-documents full access"
+ON storage.objects FOR ALL TO public
+USING (bucket_id = 'property-documents')
+WITH CHECK (bucket_id = 'property-documents');
+```
+
+---
+
+### 2. `uploadScanCert` — String/Number ID Coercion Fix (Code fix)
+
+**Bug:** After scanning an existing cert (via the scan button on a compliance row), the in-memory `D.certs` update silently failed — compliance tab showed stale status until hard refresh.
+
+**Root cause:** `uploadScanCert` found the cert with `x.id === certId` (strict equality). `certId` comes from onclick as a string; `D.certs[].id` is a number from Supabase. Strict equality number !== string = silent miss.
+
+**Same bug in `markServed`.** Both fixed:
+```js
+// Before
+const c = D.certs.find(x => x.id === certId);
+// After
+const c = D.certs.find(x => String(x.id) === String(certId));
+```
+
+---
+
+### 3. `_certUploadFile` — Explicit Error Toasts + User_id Filter (Code fix)
+
+**Bug:** `_certUploadFile` silently returned if `window._lastScanFile` was null (no toast). DB `file_url` update never included `user_id` filter — RLS may have blocked it silently on some rows.
+
+**Fixes:**
+- `if (!file) return` → `if (!file) { toast('⚠ No file found — please re-select and try again', true); return; }`
+- Every failure path now shows an explicit toast with the exact error message
+- DB update changed: `.eq('id', certId)` → `.eq('id', String(certId)).eq('user_id', currentUser.id)`
+- In-memory find uses `String(x.id) === String(certId)` consistently
+
+---
+
+### 4. Cert Type Overwrite by AI Scanner (Code fix)
+
+**Bug:** Every cert uploaded via `+ Add cert` saved as "Gas Safety Certificate (GSC)" regardless of which type was selected. The AI `scanDoc` callback wrote `parsed.type` (e.g. `"Gas Safety Certificate"`) directly to `document.getElementById('ct').value` — this string didn't match any option text exactly, so the `<select>` snapped back to its first option.
+
+**Fix 1 — `_moCertDocType` guard:**
+```js
+window._moCertDocType = docType || null;
+// In scanDoc callback:
+if (parsed.type && !window._moCertDocType) document.getElementById('ct').value = parsed.type;
+```
+When opened from a row-specific Upload button, AI cannot overwrite the pre-selected type.
+
+**Fix 2 — Pre-select dropdown from row context:**
+`moCert(pid, docType)` now accepts optional `docType`. After modal opens, finds matching option by text and selects it:
+```js
+for (let i = 0; i < ct.options.length; i++) {
+  if (ct.options[i].text === docType) { ct.selectedIndex = i; break; }
+}
+ct.dispatchEvent(new Event('change'));
+```
+
+**Fix 3 — Stale file auto-scan prevention:**
+`moCert` now clears `window._lastScanFile = null` on open — prevents previous session's file triggering a scan when the dropdown pre-select fires `change`.
+
+**Fix 4 — All Upload/Renew buttons pass `doc.label`:**
+Every `+ Upload` and `🔄 Renew` button in compliance row renderers (`renderCompGroup`, compliance page IIFE) now passes `doc.label` as second arg to `moCert`.
+
+---
+
+### 5. `moCert` Modal — Broken Inline onchange (Code fix)
+
+**Bug:** The Add Certificate modal rendered raw HTML strings and CSS as visible text instead of a proper upload box. Root cause: nested `innerHTML` assignment inside an `onchange` attribute inside a template literal — quote escaping collapsed.
+
+**Fix:** Extracted file change handler to named global function:
+```js
+function _certFileChange(input) {
+  if (!input.files[0]) return;
+  window._lastCertFile = input.files[0];
+  const box = document.getElementById('cert-upload-box');
+  if (box) box.innerHTML = '<div style="...">✓ ' + input.files[0].name + '</div>';
+}
+```
+Input `onchange` now simply calls `_certFileChange(this)`.
+
+---
+
+### 6. Simplified Certificate Upload Modal (UX change)
+
+**Decision:** AI scanner removed from `moCert` modal. All AI cert scanning was unreliable (wrong type, wrong fields, all "Not detected"). The `+ Add document` approach is simpler and more reliable.
+
+**New `moCert` modal fields:**
+- File upload (drag-drop box)
+- Property (dropdown)
+- Document name (free-text, pre-filled from `doc.label` when opened from row)
+- Valid from (date)
+- Valid to / expiry (date)
+- Issuer name
+- Company
+
+**`saveCertToDB` reads from new field IDs:** `_lastCertFile` for file, `ct` for name (text input, not select), `ci`/`ce` for dates, `ceng`/`cref` for issuer/company.
+
+**AI scanner retained only for tenant KYC documents** (passport, RTR, address proof) where extraction genuinely adds value.
+
+---
+
+### 7. Day 1 Kit — All Tenants in One Send (Feature rebuild)
+
+**Previous behaviour:** `moWelcomeKit` found one lead tenant, sent to them only, then showed sequential co-tenant prompts one by one.
+
+**New behaviour:**
+- Shows all active tenants on property with KYC status
+- Blocked until: written statement signed by ALL tenants, KYC complete for ALL (passport, right_to_rent, address_1, address_2), Gas/EICR/EPC with `file_url`, RRA + H2R uploaded
+- Single "Send to all" button sends to every tenant individually — each gets their own email with their magic link
+- Attachments (certs, RRA, H2R) built once via `_urlsToAttachments`, sent to all
+- Day 30 calendar reminder auto-set on success
+- Errors per tenant collected and reported after loop completes
+
+**`moWelcomeKit(pid)`** — `targetTid` param removed (no longer needed).
+
+---
+
+### 8. Day 30 Kit — All Tenants in One Send (Feature rebuild)
+
+**Same pattern as Day 1.** `moDay30Kit(pid)` and `sendDay30Kit(pid)` rebuilt:
+- `tid` param removed — function loops all active tenants
+- Each tenant gets own email with their deposit details
+- Attachments (Smoke/CO, Legionella, Inventory if `file_url` exists) sent to all
+- Error collection same as Day 1
+
+**`moDay30Kit` send button:** now calls `sendDay30Kit('${pid}')` (no tid).
+
+---
+
+### Known Issues — Updated After Session 41
+
+| # | Issue | Status |
+|---|---|---|
+| 1 | ICO number placeholder in legal docs | Pending registration |
+| 2 | MX record for inbound email | Parked post-launch |
+| 3 | `login.html` newsletter signup checkbox | Not built |
+| 4 | `moFinancials` PDF export — jsPDF needed | Post-launch backlog |
+| 5 | Section 8 UX handoff to Form 3A | Post-launch backlog |
+| 6 | WhatsApp reminders | Post-launch backlog |
+| 7 | Free public compliance checker | Marketing priority |
+| 8 | Blog / content hub | Marketing priority |
+| 9 | Postcode finder — replace with getAddress.io | Post-launch backlog |
+| 13 | `relet_prepared` column needed on tenants | Pending SQL |
+| 21 | PDF attachments | ✅ Fixed Session 40 |
+| 24 | `start_date` amber warning | Not traced |
+| 29 | Day 1 kit bulk send | ✅ Fixed Session 41 |
+| 30 | Day 30 kit hard blocks | ✅ Fixed Session 41 — same blocker pattern applied |
+| 31 | Compliance MISSING bug | ✅ Resolved via RLS/data fix + type guard |
+| 32 | Cert view button missing | Carry forward |
+| 33 | Welcome letter modal | Not yet built |
+| 34 | Guarantor progress bar step | Partially done |
+
+---
+
+### Schema Changes This Session
+
+None — all schema fixes were data-level (SQL run directly in Supabase dashboard).
+
