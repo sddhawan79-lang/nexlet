@@ -1774,6 +1774,31 @@ async function savePropToDB() {
 
 // ── SAVE: CERTIFICATE ──
 // ── REUSABLE: scanAndFill ──
+// ── Convert attachment_urls [{url,filename}] → base64 attachments for edge fn ──
+// Edge function only accepts { filename, content (base64), content_type }.
+// This helper fetches each URL client-side and converts to base64.
+// Returns array of { filename, content, content_type } — silently skips failed fetches.
+async function _urlsToAttachments(attachment_urls) {
+  if (!attachment_urls || !attachment_urls.length) return [];
+  const results = [];
+  for (const { url, filename } of attachment_urls) {
+    if (!url) continue;
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) { console.warn('_urlsToAttachments: fetch failed for', url, resp.status); continue; }
+      const blob = await resp.blob();
+      const b64 = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(r.result.split(',')[1]);
+        r.onerror = rej;
+        r.readAsDataURL(blob);
+      });
+      results.push({ filename, content: b64, content_type: blob.type || 'application/pdf' });
+    } catch(e) { console.warn('_urlsToAttachments error for', url, e); }
+  }
+  return results;
+}
+
 async function scanAndFill(file, onResult, customPrompt){
   if(!file) return;
   const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(file);});
@@ -2084,20 +2109,20 @@ async function _certUploadFile(certId, certType, engineerText) {
     const ext = file.name.split('.').pop() || 'pdf';
     const path = `certs/${currentUser.id}/${certId}.${ext}`;
     const { error: upErr } = await sb.storage.from('property-documents').upload(path, file, { contentType: file.type, upsert: true });
-    if (upErr) { console.warn('Cert file upload error:', upErr.message); return; }
+    if (upErr) { toast('⚠ Certificate saved but file upload failed: ' + upErr.message + ' — try re-uploading the file', true); return; }
     const { data: urlData } = sb.storage.from('property-documents').getPublicUrl(path);
-    if (!urlData?.publicUrl) return;
+    if (!urlData?.publicUrl) { toast('⚠ Certificate saved but could not get file URL — try re-uploading', true); return; }
     const fileUrl = urlData.publicUrl;
-    // Try to update file_url column; fall back to has_file only if column missing
     const { error: updErr } = await sb.from('certificates').update({ file_url: fileUrl, has_file: true }).eq('id', certId);
     if (updErr && updErr.message && updErr.message.includes('file_url')) {
-      // file_url column doesn't exist yet — just mark has_file
       await sb.from('certificates').update({ has_file: true }).eq('id', certId);
+    } else if (updErr) {
+      toast('⚠ File uploaded but URL save failed: ' + updErr.message, true);
     }
     const c = D.certs.find(x => x.id === certId || x.id === String(certId));
     if (c) { c.file_url = fileUrl; c.has_file = true; }
     window._lastScanFile = null;
-  } catch(e) { console.warn('_certUploadFile error:', e); }
+  } catch(e) { toast('⚠ File upload error: ' + e.message + ' — certificate data saved, re-upload the file', true); }
 }
 
 // ── SAVE: TENANT (legacy stub — use _saveTenantSetupToDB via moTenant wizard) ──
@@ -4787,10 +4812,11 @@ async function sendWelcomeKit(pid) {
     }
     attachment_urls.push({ url: rraUrl, filename: 'RRA_2025_Prescribed_Particulars.pdf' });
     attachment_urls.push({ url: h2rUrl, filename: 'How_to_Rent_Guide.pdf' });
-    // Send email — edge function fetches files and attaches them
+    // Fetch each cert file client-side → base64 → send as attachments
+    const attachments = await _urlsToAttachments(attachment_urls);
     const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ type:'send_email', to: tenantEmail, subject: `Your tenancy welcome pack — ${propAddr}`, html, ...(attachment_urls.length ? { attachment_urls } : {}) })
+      body: JSON.stringify({ type:'send_email', to: tenantEmail, subject: `Your tenancy welcome pack — ${propAddr}`, html, ...(attachments.length ? { attachments } : {}) })
     });
     const resData = await res.json().catch(()=>({}));
     if (!res.ok || resData.error) throw new Error(resData.error || resData.message || `Send failed (${res.status})`);
@@ -12434,9 +12460,10 @@ async function sendDay30Kit(pid, tid) {
   }
 
   try {
+    const attachments30 = await _urlsToAttachments(attachment_urls);
     const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ type:'send_email', to: toEmail, subject: `Your Day 30 tenancy documents — ${propAddr}`, html, ...(attachment_urls.length ? { attachment_urls } : {}) })
+      body: JSON.stringify({ type:'send_email', to: toEmail, subject: `Your Day 30 tenancy documents — ${propAddr}`, html, ...(attachments30.length ? { attachments: attachments30 } : {}) })
     });
     const resData = await res.json().catch(()=>({}));
     if (!res.ok || resData.error) throw new Error(resData.error || resData.message || `Send failed (${res.status})`);
@@ -12674,9 +12701,10 @@ async function sendPrescribedInfo(tid) {
     </body></html>`;
 
     // 4. Send via edge function with PDF attached
+    const _piAttachments = await _urlsToAttachments([{ url: fileUrl, filename }]);
     const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'send_email', to: t.email, subject: `Prescribed Information — ${propAddr}`, html, attachment_urls: [{ url: fileUrl, filename }] })
+      body: JSON.stringify({ type: 'send_email', to: t.email, subject: `Prescribed Information — ${propAddr}`, html, ...(_piAttachments.length ? { attachments: _piAttachments } : {}) })
     });
     const resData = await res.json().catch(() => ({}));
     if (!res.ok || resData.error) throw new Error(resData.error || resData.message || `Send failed (${res.status})`);
@@ -16145,9 +16173,10 @@ async function sendH2RGuide(tid) {
       <p style="font-size:13px;line-height:1.7">Kind regards,<br>${_profileName()}</p>
       <div style="margin-top:24px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#999">Sent via NexLet · documents@nexlet.co.uk</div>
     </div>`;
+    const _h2rAttachments = await _urlsToAttachments([{ url: h2rUrl, filename: 'How_to_Rent_Guide.pdf' }]);
     const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'send_email', to: t.email, subject: `How to Rent Guide — ${p.address}`, html, attachment_urls: [{ url: h2rUrl, filename: 'How_to_Rent_Guide.pdf' }] })
+      body: JSON.stringify({ type: 'send_email', to: t.email, subject: `How to Rent Guide — ${p.address}`, html, ...(_h2rAttachments.length ? { attachments: _h2rAttachments } : {}) })
     });
     const rd = await res.json().catch(() => ({}));
     if (!res.ok || rd.error) throw new Error(rd.error || `Send failed (${res.status})`);
