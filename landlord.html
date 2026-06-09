@@ -2104,25 +2104,21 @@ async function saveCertToDB() {
 // Upload scanned cert file to storage and store URL on the cert record
 async function _certUploadFile(certId, certType, engineerText) {
   const file = window._lastScanFile;
-  if (!file) return;
+  if (!file) { toast('\u26a0 No file found — please re-select the file and try again', true); return; }
   try {
     const ext = file.name.split('.').pop() || 'pdf';
-    const path = `certs/${currentUser.id}/${certId}.${ext}`;
-    const { error: upErr } = await sb.storage.from('property-documents').upload(path, file, { contentType: file.type, upsert: true });
-    if (upErr) { toast('⚠ Certificate saved but file upload failed: ' + upErr.message + ' — try re-uploading the file', true); return; }
-    const { data: urlData } = sb.storage.from('property-documents').getPublicUrl(path);
-    if (!urlData?.publicUrl) { toast('⚠ Certificate saved but could not get file URL — try re-uploading', true); return; }
+    const storagePath = 'certs/' + currentUser.id + '/' + certId + '.' + ext;
+    const { error: upErr } = await sb.storage.from('property-documents').upload(storagePath, file, { contentType: file.type, upsert: true });
+    if (upErr) { toast('\u26a0 Storage upload failed: ' + upErr.message, true); return; }
+    const { data: urlData } = sb.storage.from('property-documents').getPublicUrl(storagePath);
+    if (!urlData?.publicUrl) { toast('\u26a0 Upload succeeded but URL retrieval failed', true); return; }
     const fileUrl = urlData.publicUrl;
-    const { error: updErr } = await sb.from('certificates').update({ file_url: fileUrl, has_file: true }).eq('id', certId);
-    if (updErr && updErr.message && updErr.message.includes('file_url')) {
-      await sb.from('certificates').update({ has_file: true }).eq('id', certId);
-    } else if (updErr) {
-      toast('⚠ File uploaded but URL save failed: ' + updErr.message, true);
-    }
-    const c = D.certs.find(x => x.id === certId || x.id === String(certId));
+    const { error: updErr } = await sb.from('certificates').update({ file_url: fileUrl, has_file: true }).eq('id', String(certId)).eq('user_id', currentUser.id);
+    if (updErr) { toast('\u26a0 File uploaded but record update failed: ' + updErr.message, true); return; }
+    const c = D.certs.find(x => String(x.id) === String(certId));
     if (c) { c.file_url = fileUrl; c.has_file = true; }
     window._lastScanFile = null;
-  } catch(e) { toast('⚠ File upload error: ' + e.message + ' — certificate data saved, re-upload the file', true); }
+  } catch(e) { toast('\u26a0 File upload error: ' + e.message, true); }
 }
 
 // ── SAVE: TENANT (legacy stub — use _saveTenantSetupToDB via moTenant wizard) ──
