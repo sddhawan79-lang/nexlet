@@ -2274,7 +2274,42 @@ function moCert(pid, docType){
       <div style="font-size:11px;color:var(--muted);margin-top:3px">PDF, JPG or PNG</div>
     </div>
     <div class="fg"><label>Property</label><select id="cp">${opts}</select></div>
-    <div class="fg"><label>Document name <span class="req">*</span></label><input type="text" id="ct" placeholder="e.g. Gas Safety Certificate, EICR, EPC" value="${docType||''}"></div>
+    <div class="fg"><label>Document name <span class="req">*</span></label>
+      <input type="text" id="ct" placeholder="Type or choose from list…" value="${docType||''}" list="cert-name-list" autocomplete="off">
+      <datalist id="cert-name-list">
+        <option value="Gas Safety Certificate (GSC)">
+        <option value="EICR (Electrical Installation)">
+        <option value="EPC (Energy Performance)">
+        <option value="Smoke Alarm Test Record">
+        <option value="CO Alarm Check Record">
+        <option value="Legionella Risk Assessment">
+        <option value="HMO Licence">
+        <option value="Selective Licence">
+        <option value="Planning Permission / Article 4">
+        <option value="Fire Risk Assessment">
+        <option value="Fire Extinguisher Service Record">
+        <option value="Emergency Lighting Test Record">
+        <option value="RRA 2025 Information Sheet">
+        <option value="How to Rent Guide">
+        <option value="Written Statement of Terms">
+        <option value="Right to Rent Record">
+        <option value="Section 48 Notice (Landlord Address)">
+        <option value="Deposit Protection Certificate">
+        <option value="Prescribed Information (Deposit)">
+        <option value="Gas Safety Certificate — Copy Served">
+        <option value="EICR — Copy Served">
+        <option value="EPC — Copy Served">
+        <option value="Smoke &amp; CO Alarm Test Record">
+        <option value="Inventory / Schedule of Condition">
+        <option value="Buildings Insurance Schedule">
+        <option value="Contents Insurance Schedule">
+        <option value="Rent Guarantee Insurance">
+        <option value="Boiler Service Certificate">
+        <option value="PAT Testing Certificate">
+        <option value="Asbestos Survey">
+        <option value="Pest Control Report">
+      </datalist>
+    </div>
     <div class="fg-row">
       <div class="fg"><label>Valid from</label><input type="date" id="ci"></div>
       <div class="fg"><label>Valid to (expiry)</label><input type="date" id="ce"></div>
