@@ -4425,77 +4425,97 @@ async function sendTenantComms(tid) {
 // ── MODAL: WELCOME KIT ──
 // Auto-compiled document pack sent to tenant at tenancy start.
 // Mandatory items cannot be silently removed — they show a warning if missing.
-function moWelcomeKit(pid, targetTid) {
+function moWelcomeKit(pid) {
   const p = P(pid);
   if (!p) { toast('Property not found', true); return; }
-  const tenant = (targetTid ? D.tenants.find(t => String(t.id)===String(targetTid)) : null)
-    || D.tenants.find(t => String(t.prop_id)===String(pid) && t.is_lead && t.status==='Active')
-    || D.tenants.find(t => String(t.prop_id)===String(pid) && t.status==='Active');
-  const pCerts = CF(pid);
-  const pIns = D.insurance.filter(
-    i => String(i.prop_id)===String(pid)
-  );
-  const propAddr = [p.address, p.city].filter(Boolean).join(', ');
-  const tenantName = tenant?.name || 'Tenant';
-  const tenantEmail = tenant?.email || '';
+  const allTenants = D.tenants.filter(t => String(t.prop_id) === String(pid) && t.status === 'Active');
+  if (!allTenants.length) { toast('No active tenants on this property', true); return; }
 
-  // Glance-confirm: just show what's ready/missing at a glance
+  const pCerts = CF(pid);
+  const propAddr = [p.address, p.city].filter(Boolean).join(', ');
+
+  // Cert checks
   const gasCert  = pCerts.find(c => c.type && c.type.toLowerCase().includes('gas'));
   const eicrCert = pCerts.find(c => c.type && (c.type.toLowerCase().includes('eicr') || c.type.toLowerCase().includes('electrical')));
   const epcCert  = pCerts.find(c => c.type && (c.type.toLowerCase().includes('epc') || c.type.toLowerCase().includes('energy')));
   const rraOk    = !!D.userProfile?.rra_doc_url;
   const h2rOk    = !!D.userProfile?.h2r_doc_url;
+  const gasFileOk  = !!gasCert?.file_url;
+  const eicrFileOk = !!eicrCert?.file_url;
+  const epcFileOk  = !!epcCert?.file_url;
 
-  // Written statement — must be signed by this tenant (or all tenants for joint)
-  const allPropTenants = D.tenants.filter(t => String(t.prop_id)===String(pid) && t.status==='Active');
-  const wsOk = allPropTenants.every(t =>
+  // Written statement — all tenants must have signed
+  const wsOk = allTenants.every(t =>
     (D.esignReq||[]).some(r => String(r.tenant_id)===String(t.id) && r.document_type==='written_statement' && r.status==='signed' && r.signed_pdf_url)
   );
 
-  // File URL checks — cert exists but no uploaded file
-  const gasFileOk  = !gasCert  || !!gasCert.file_url;
-  const eicrFileOk = !eicrCert || !!eicrCert.file_url;
-  const epcFileOk  = !epcCert  || !!epcCert.file_url;
+  // KYC — all mandatory slots for all tenants
+  const mandatoryKycSlots = ['passport', 'right_to_rent', 'address_1', 'address_2'];
+  const kycStatus = allTenants.map(t => {
+    const uploaded = (D.tenantDocs||[]).filter(d => String(d.tenant_id)===String(t.id) && mandatoryKycSlots.includes(d.slot));
+    const done = uploaded.length >= mandatoryKycSlots.length;
+    return { t, done, missing: mandatoryKycSlots.length - uploaded.length };
+  });
+  const kycOk = kycStatus.every(s => s.done);
 
-  // Kit is fully ready only when everything is present
-  const kitReady = rraOk && h2rOk && !!gasCert && gasFileOk && !!eicrCert && eicrFileOk && !!epcCert && epcFileOk && wsOk;
+  const kitReady = rraOk && h2rOk && wsOk && kycOk && gasFileOk && eicrFileOk && epcFileOk;
 
   const ck = (ok, label, warn) => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
     <span style="font-size:14px">${ok ? '✅' : '⚠️'}</span>
     <span style="font-size:13px;flex:1">${label}</span>
-    <span style="font-size:11px;font-weight:700;color:${ok?'var(--green-dark)':'var(--red)'}">${ok?'Ready': warn||'Missing'}</span>
+    <span style="font-size:11px;font-weight:700;color:${ok?'var(--green-dark)':'var(--red)'}">${ok ? 'Ready' : warn||'Missing'}</span>
   </div>`;
+
+  const tenantRows = allTenants.map(t => {
+    const ks = kycStatus.find(s => String(s.t.id)===String(t.id));
+    const kycDone = ks?.done;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
+      <div class="t-av" style="width:28px;height:28px;font-size:11px;flex-shrink:0">${INI(t.name)}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12.5px;font-weight:600">${t.name}</div>
+        <div style="font-size:11px;color:var(--muted)">${t.email||'⚠ No email set'}</div>
+      </div>
+      <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:100px;background:${kycDone?'var(--green-bg)':'rgba(229,62,62,0.08)'};color:${kycDone?'var(--green-dark)':'var(--red)'};white-space:nowrap">${kycDone?'KYC ✓':'KYC missing'}</span>
+    </div>`;
+  }).join('');
+
+  const blockers = [];
+  if (!wsOk)       blockers.push('Written Statement not yet signed by all tenants');
+  if (!rraOk)      blockers.push('RRA 2025 doc not uploaded — Compliance → System Documents');
+  if (!h2rOk)      blockers.push('How to Rent Guide not uploaded — Compliance → System Documents');
+  if (!kycOk)      blockers.push('KYC incomplete — all mandatory docs required for every tenant');
+  if (!gasCert)    blockers.push('Gas Safety Certificate missing');
+  else if (!gasFileOk) blockers.push('Gas Safety Certificate has no file — re-upload in Compliance tab');
+  if (!eicrCert)   blockers.push('EICR missing');
+  else if (!eicrFileOk) blockers.push('EICR has no file — re-upload in Compliance tab');
+  if (!epcCert)    blockers.push('EPC missing');
+  else if (!epcFileOk) blockers.push('EPC has no file — re-upload in Compliance tab');
 
   openMo(
     '📦 Day 1 Kit',
-    `${propAddr} · ${tenantName}`,
+    propAddr,
     `<div style="margin-bottom:14px">
-      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Sending to <strong>${tenantEmail||'⚠ No email set'}</strong></div>
-      <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:2px 14px 2px">
-        ${ck(wsOk,      'Written Statement (signed by all tenants)')}
-        ${ck(rraOk,     'RRA 2025 Prescribed Particulars')}
-        ${ck(h2rOk,     'How to Rent Guide')}
-        ${ck(!!gasCert && gasFileOk,   'Gas Safety Certificate', !gasCert ? 'Missing' : 'No file — re-upload')}
-        ${ck(!!eicrCert && eicrFileOk, 'EICR',                   !eicrCert ? 'Missing' : 'No file — re-upload')}
-        ${ck(!!epcCert && epcFileOk,   'EPC',                    !epcCert ? 'Missing' : 'No file — re-upload')}
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Sending to</div>
+      <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:2px 14px">${tenantRows}</div>
+
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin:14px 0 8px">Checklist</div>
+      <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:2px 14px">
+        ${ck(wsOk,       'Written Statement (signed by all tenants)')}
+        ${ck(kycOk,      'KYC complete (all tenants)', 'Incomplete')}
+        ${ck(rraOk,      'RRA 2025 Prescribed Particulars')}
+        ${ck(h2rOk,      'How to Rent Guide')}
+        ${ck(gasFileOk,  'Gas Safety Certificate', !gasCert?'Missing':'No file')}
+        ${ck(eicrFileOk, 'EICR', !eicrCert?'Missing':'No file')}
+        ${ck(epcFileOk,  'EPC', !epcCert?'Missing':'No file')}
       </div>
-      ${!kitReady ? `<div style="margin-top:12px;background:rgba(229,62,62,0.06);border:1px solid rgba(229,62,62,0.25);border-radius:8px;padding:10px 14px">
-        <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:4px">🔒 Kit is incomplete — resolve all items above before sending</div>
-        <div style="font-size:11px;color:var(--muted);line-height:1.6">
-          ${!wsOk ? '• Written Statement must be signed by all tenants before sending<br>' : ''}
-          ${(!rraOk||!h2rOk) ? '• System documents (RRA / How to Rent) must be uploaded in Compliance → System Documents<br>' : ''}
-          ${(!!gasCert&&!gasFileOk)||(!!eicrCert&&!eicrFileOk)||(!!epcCert&&!epcFileOk) ? '• One or more certs have no file attached — re-upload via the Compliance tab<br>' : ''}
-          ${(!gasCert||!eicrCert||!epcCert) ? '• Missing certificates must be uploaded in the property Compliance tab<br>' : ''}
-        </div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
-          ${!wsOk ? `<button class="btn btn-sm" style="font-size:11px" onclick="closeMo();moEsign('${pid}','${tenant?.id||''}')">✍ Send for e-sign →</button>` : ''}
-          ${(!rraOk||!h2rOk) ? `<button class="btn btn-sm" style="font-size:11px" onclick="closeMo();nav('compliance')">Upload system docs →</button>` : ''}
-          ${(!gasCert||!eicrCert||!epcCert||!gasFileOk||!eicrFileOk||!epcFileOk) ? `<button class="btn btn-sm" style="font-size:11px" onclick="closeMo();window._pdTab['${pid}']='compliance';nav('prop-detail','${pid}')">Upload certs →</button>` : ''}
-        </div>
-      </div>` : `<div style="margin-top:10px;background:rgba(0,168,122,0.07);border:1px solid rgba(0,168,122,0.2);border-radius:8px;padding:8px 14px;font-size:12px;color:var(--green-dark);font-weight:600">✅ All documents ready — kit will be sent with full attachments</div>`}
+
+      ${blockers.length ? `<div style="margin-top:12px;background:rgba(229,62,62,0.06);border:1px solid rgba(229,62,62,0.25);border-radius:8px;padding:10px 14px">
+        <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:6px">🔒 Resolve before sending</div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.8">${blockers.map(b=>'• '+b).join('<br>')}</div>
+      </div>` : `<div style="margin-top:10px;background:rgba(0,168,122,0.07);border:1px solid rgba(0,168,122,0.2);border-radius:8px;padding:8px 14px;font-size:12px;color:var(--green-dark);font-weight:600">✅ All ready — kit will be sent to all ${allTenants.length} tenant${allTenants.length!==1?'s':''} with full attachments</div>`}
     </div>`,
     `<button class="btn" onclick="closeMo()">Cancel</button>
-     <button class="btn btn-navy" id="wk-send-btn" ${!kitReady?'disabled style="opacity:.4;cursor:not-allowed"':''} onclick="${kitReady?`sendWelcomeKit('${pid}')`:''}"}>📦 Send kit</button>`
+     <button class="btn btn-navy" id="wk-send-btn" ${!kitReady?'disabled style="opacity:.4;cursor:not-allowed"':''} onclick="${kitReady?`sendWelcomeKit('${pid}')`:''}"}>📦 Send to all</button>`
   );
 }
 
@@ -4512,339 +4532,148 @@ async function sendWelcomeKit(pid) {
   const gasCert  = findCert('gas');
   const eicrCert = findCert('eicr') || findCert('electrical');
   const epcCert  = findCert('epc')  || findCert('energy');
-  const tenant   = D.tenants.find(t => String(t.prop_id) === String(pid) && t.is_lead && t.status === 'Active')
-                || D.tenants.find(t => String(t.prop_id) === String(pid) && t.status === 'Active');
-  const tenantEmail = tenant?.email || '';
-  const tenantName  = tenant?.name  || 'Tenant';
-  if (!tenantEmail) {
-    if (btn) { btn.disabled = false; btn.textContent = '📦 Send kit'; }
-    alertMo('No tenant email', 'This tenant has no email address on file.<br><br>Add their email in <strong>Tenant Details</strong> before sending the Day 1 kit.', 'Go to tenant', `function(){nav('tenant-detail','${pid}')}`);
+  const rraUrl   = D.userProfile?.rra_doc_url;
+  const h2rUrl   = D.userProfile?.h2r_doc_url;
+
+  const allTenants = D.tenants.filter(t => String(t.prop_id) === String(pid) && t.status === 'Active');
+  if (!allTenants.length) { if(btn){btn.disabled=false;btn.textContent='📦 Send to all';} toast('No active tenants', true); return; }
+
+  // Hard block — re-check everything
+  const blockers = [];
+  if (!rraUrl)  blockers.push('RRA 2025 doc not uploaded');
+  if (!h2rUrl)  blockers.push('How to Rent Guide not uploaded');
+  if (!gasCert?.file_url)  blockers.push('Gas Safety Certificate missing or has no file');
+  if (!eicrCert?.file_url) blockers.push('EICR missing or has no file');
+  if (!epcCert?.file_url)  blockers.push('EPC missing or has no file');
+  const mandatoryKycSlots = ['passport', 'right_to_rent', 'address_1', 'address_2'];
+  allTenants.forEach(t => {
+    const uploaded = (D.tenantDocs||[]).filter(d => String(d.tenant_id)===String(t.id) && mandatoryKycSlots.includes(d.slot)).length;
+    if (uploaded < mandatoryKycSlots.length) blockers.push(`KYC incomplete for ${t.name}`);
+    if (!t.email) blockers.push(`No email address for ${t.name}`);
+  });
+
+  if (blockers.length) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '📦 Send to all'; }
+    alertMo('Cannot send kit', blockers.map(b=>'• '+b).join('<br>'), 'OK', 'function(){closeMo()}');
     return;
   }
 
-  const includeDeposit = true;
-  const includeTenancy = false;
-
-  // Build cert rows for email
-  const certRow = (icon, label, cert) => cert ? `
-    <tr>
-      <td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px">${icon} ${label}</td>
-      <td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px;color:#00A87A;font-weight:600">✓ Provided</td>
-      <td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:12px;color:#7A8FA6">${cert.expiry ? 'Expires ' + new Date(cert.expiry).toLocaleDateString('en-GB') : 'No expiry date'}</td>
-    </tr>` : `
-    <tr>
-      <td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px">${icon} ${label}</td>
-      <td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px;color:#D97706;font-weight:600">⚠ Pending</td>
-      <td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:12px;color:#7A8FA6">Will be provided separately</td>
-    </tr>`;
-
-  const depositRow = (includeDeposit && tenant?.scheme) ? `
-    <tr>
-      <td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px">🔒 Deposit protection</td>
-      <td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px;color:#00A87A;font-weight:600">✓ Protected</td>
-      <td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:12px;color:#7A8FA6">${tenant.scheme} · Ref: ${tenant.scheme_ref||'—'} · £${(tenant.deposit||0).toLocaleString()}</td>
-    </tr>` : '';
+  // Build attachments once — same for all tenants
+  const attachment_urls = [];
+  if (gasCert?.file_url)  { const ext = gasCert.file_url.split('.').pop().split('?')[0]||'pdf';  attachment_urls.push({ url: gasCert.file_url,  filename: `Gas_Safety_Certificate.${ext}` }); }
+  if (eicrCert?.file_url) { const ext = eicrCert.file_url.split('.').pop().split('?')[0]||'pdf'; attachment_urls.push({ url: eicrCert.file_url, filename: `EICR.${ext}` }); }
+  if (epcCert?.file_url)  { const ext = epcCert.file_url.split('.').pop().split('?')[0]||'pdf';  attachment_urls.push({ url: epcCert.file_url,  filename: `EPC.${ext}` }); }
+  attachment_urls.push({ url: rraUrl, filename: 'RRA_2025_Prescribed_Particulars.pdf' });
+  attachment_urls.push({ url: h2rUrl, filename: 'How_to_Rent_Guide.pdf' });
+  const attachments = await _urlsToAttachments(attachment_urls);
 
   const today = new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' });
+  const errors = [];
 
-  const html = `<!DOCTYPE html><html><body style="font-family:DM Sans,Arial,sans-serif;color:#1A2B45;max-width:620px;margin:0 auto;padding:0">
-    <div style="background:#0B1E3D;padding:24px 28px;border-radius:12px 12px 0 0">
-      <div style="font-size:20px;font-weight:700;color:#fff">NexLet</div>
-      <div style="font-size:13px;color:rgba(255,255,255,0.5);margin-top:4px">Tenancy Welcome Pack</div>
-    </div>
-    <div style="background:#fff;border:1px solid #E4EAF1;border-top:none;border-radius:0 0 12px 12px;padding:28px">
-      <h2 style="font-size:18px;font-weight:700;margin:0 0 6px">Welcome, ${tenantName}!</h2>
-      <p style="font-size:13px;color:#7A8FA6;margin:0 0 20px">Your tenancy at <strong style="color:#1A2B45">${propAddr}</strong> starts on <strong style="color:#1A2B45">${p?.start_date ? new Date(p.start_date).toLocaleDateString('en-GB') : 'your agreed start date'}</strong>.</p>
-      <p style="font-size:13px;color:#1A2B45;margin:0 0 20px">This email confirms the documents that have been provided to you as part of your tenancy. Please keep a copy for your records.</p>
+  for (const tenant of allTenants) {
+    try {
+      const tenantName  = tenant.name  || 'Tenant';
+      const tenantEmail = tenant.email || '';
 
-      <h3 style="font-size:14px;font-weight:700;margin:0 0 10px;color:#1A2B45">Compliance documents</h3>
-      <table style="width:100%;border-collapse:collapse;margin-bottom:20px;border:1px solid #E4EAF1;border-radius:8px;overflow:hidden">
-        <thead><tr style="background:#F6F8FB">
-          <th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:#7A8FA6;letter-spacing:.4px;text-transform:uppercase">Document</th>
-          <th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:#7A8FA6;letter-spacing:.4px;text-transform:uppercase">Status</th>
-          <th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:#7A8FA6;letter-spacing:.4px;text-transform:uppercase">Details</th>
-        </tr></thead>
-        <tbody>
-          <tr>
-            <td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px">📋 RRA 2025 Information Sheet</td>
-            <td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px;color:#00A87A;font-weight:600">✓ Served</td>
-            <td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:12px"><a href="https://www.gov.uk/government/publications/how-to-rent" style="color:#3B6FE8">GOV.UK PDF</a></td>
-          </tr>
-          <tr>
-            <td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px">📖 How to Rent Guide</td>
-            <td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px;color:#00A87A;font-weight:600">✓ Served</td>
-            <td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:12px"><a href="https://www.gov.uk/government/publications/how-to-rent" style="color:#3B6FE8">GOV.UK PDF</a></td>
-          </tr>
-          ${certRow('🔥','Gas Safety Certificate (GSC)', gasCert)}
-          ${certRow('⚡','Electrical Installation Report (EICR)', eicrCert)}
-          ${certRow('🏷','Energy Performance Certificate (EPC)', epcCert)}
-          ${depositRow}
-          <tr>
-            <td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px">🏦 Prescribed Information (deposit)</td>
-            <td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px;color:${tenant?.scheme?'#00A87A':'#D97706'};font-weight:600">${tenant?.scheme?'✓ Served':'⚠ Pending'}</td>
-            <td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:12px;color:#7A8FA6">${tenant?.scheme?`${tenant.scheme} · Ref: ${tenant.scheme_ref||'—'}`:'Deposit scheme not yet set'}</td>
-          </tr>
-          <tr>
-            <td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px">🔔 Smoke & CO alarm test</td>
-            <td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px;color:#D97706;font-weight:600">⚠ To confirm</td>
-            <td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:12px;color:#7A8FA6">Landlord must test on day 1 · Sign inventory to confirm</td>
-          </tr>
-        </tbody>
-      </table>
-
-      <div style="background:#F6F8FB;border-radius:8px;padding:16px;margin-bottom:20px">
-        <div style="font-size:12px;font-weight:700;color:#7A8FA6;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Your tenancy details</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          ${[
-            ['Property', propAddr],
-            ['Monthly rent', tenant?.rent ? `£${tenant.rent.toLocaleString()}` : '—'],
-            ['Deposit', tenant?.deposit ? `£${tenant.deposit.toLocaleString()}` : '—'],
-            ['Deposit scheme', tenant?.scheme || 'To be confirmed'],
-          ].map(([l,v])=>`<div><div style="font-size:11px;color:#7A8FA6;margin-bottom:2px">${l}</div><div style="font-size:13px;font-weight:600;color:#1A2B45">${v}</div></div>`).join('')}
+      const html = `<!DOCTYPE html><html><body style="font-family:DM Sans,Arial,sans-serif;color:#1A2B45;max-width:620px;margin:0 auto;padding:0">
+        <div style="background:#0B1E3D;padding:24px 28px;border-radius:12px 12px 0 0">
+          <div style="font-size:20px;font-weight:700;color:#fff">NexLet</div>
+          <div style="font-size:13px;color:rgba(255,255,255,0.5);margin-top:4px">Tenancy Welcome Pack</div>
         </div>
-      </div>
+        <div style="background:#fff;border:1px solid #E4EAF1;border-top:none;border-radius:0 0 12px 12px;padding:28px">
+          <h2 style="font-size:18px;font-weight:700;margin:0 0 6px">Welcome, ${tenantName}!</h2>
+          <p style="font-size:13px;color:#7A8FA6;margin:0 0 20px">Your tenancy at <strong style="color:#1A2B45">${propAddr}</strong>.</p>
+          <p style="font-size:13px;color:#1A2B45;margin:0 0 20px">This email confirms the documents provided to you as part of your tenancy. Please keep a copy for your records.</p>
 
-      <div style="background:#F0FBF7;border:1px solid var(--green-bg);border-radius:8px;padding:14px;margin-bottom:20px">
-        <div style="font-size:13px;font-weight:600;color:#009970;margin-bottom:4px">🔗 Your tenant portal</div>
-        <div style="font-size:12px;color:#1A2B45;margin-bottom:10px">Report maintenance issues, view your certificates and sign documents — all in one place.</div>
-        ${tenant?.invite_token ? `<a href="https://nexlet.co.uk/tenant.html?token=${tenant.invite_token}" style="background:#0B1E3D;color:#fff;padding:10px 20px;border-radius:7px;text-decoration:none;font-weight:600;font-size:13px;display:inline-block">Access your portal →</a>` : ''}
-      </div>
+          <h3 style="font-size:14px;font-weight:700;margin:0 0 10px">Compliance documents attached</h3>
+          <table style="width:100%;border-collapse:collapse;margin-bottom:20px;border:1px solid #E4EAF1;border-radius:8px;overflow:hidden">
+            <thead><tr style="background:#F6F8FB">
+              <th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:#7A8FA6;text-transform:uppercase">Document</th>
+              <th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:#7A8FA6;text-transform:uppercase">Status</th>
+            </tr></thead>
+            <tbody>
+              <tr><td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px">📋 RRA 2025 Prescribed Particulars</td><td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px;color:#00A87A;font-weight:600">✓ Attached</td></tr>
+              <tr><td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px">📖 How to Rent Guide</td><td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px;color:#00A87A;font-weight:600">✓ Attached</td></tr>
+              <tr><td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px">🔥 Gas Safety Certificate</td><td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px;color:#00A87A;font-weight:600">✓ Attached${gasCert?.expiry?' · Expires '+new Date(gasCert.expiry).toLocaleDateString('en-GB'):''}</td></tr>
+              <tr><td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px">⚡ EICR</td><td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px;color:#00A87A;font-weight:600">✓ Attached${eicrCert?.expiry?' · Expires '+new Date(eicrCert.expiry).toLocaleDateString('en-GB'):''}</td></tr>
+              <tr><td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px">🏷 EPC</td><td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px;color:#00A87A;font-weight:600">✓ Attached${epcCert?.expiry?' · Expires '+new Date(epcCert.expiry).toLocaleDateString('en-GB'):''}</td></tr>
+              ${tenant.scheme ? `<tr><td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px">🔒 Deposit protection</td><td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px;color:#00A87A;font-weight:600">✓ Protected · ${tenant.scheme} · Ref: ${tenant.scheme_ref||'—'} · £${(tenant.deposit||0).toLocaleString()}</td></tr>` : ''}
+            </tbody>
+          </table>
 
-      <p style="font-size:12px;color:#7A8FA6;line-height:1.6;margin:0">This document was served on <strong>${today}</strong> as required under the Renters Rights Act 2025. A timestamped record has been created for landlord compliance purposes.</p>
-    </div>
-    <div style="padding:16px;text-align:center;font-size:11px;color:#999">Sent via NexLet · nexlet.co.uk · documents@nexlet.co.uk</div>
-  </body></html>`;
+          <div style="background:#F0FBF7;border:1px solid #b2eadc;border-radius:8px;padding:14px;margin-bottom:20px">
+            <div style="font-size:13px;font-weight:600;color:#009970;margin-bottom:4px">🔗 Your tenant portal</div>
+            <div style="font-size:12px;color:#1A2B45;margin-bottom:10px">Report maintenance, view documents and sign agreements online.</div>
+            ${tenant.invite_token ? `<a href="https://nexlet.co.uk/tenant.html?token=${tenant.invite_token}" style="background:#0B1E3D;color:#fff;padding:10px 20px;border-radius:7px;text-decoration:none;font-weight:600;font-size:13px;display:inline-block">Access your portal →</a>` : ''}
+          </div>
 
-  try {
-    // ── Hard block — all mandatory docs must be present with files before send ──
-    const allTenants = D.tenants.filter(t => String(t.prop_id)===String(pid) && t.status==='Active');
-    const wsSignedAll = allTenants.every(t =>
-      (D.esignReq||[]).some(r => String(r.tenant_id)===String(t.id) && r.document_type==='written_statement' && r.status==='signed' && r.signed_pdf_url)
-    );
-    const rraUrl = D.userProfile?.rra_doc_url;
-    const h2rUrl = D.userProfile?.h2r_doc_url;
+          <p style="font-size:12px;color:#7A8FA6;line-height:1.6;margin:0">Served on <strong>${today}</strong> under the Renters Rights Act 2025. A timestamped compliance record has been created.</p>
+        </div>
+        <div style="padding:16px;text-align:center;font-size:11px;color:#999">Sent via NexLet · nexlet.co.uk</div>
+      </body></html>`;
 
-    // Build attachment_urls — edge function fetches files server-side
-    const attachment_urls = [];
-    const certsToAttach = [
-      { cert: gasCert,  filename: `Gas_Safety_Certificate_${propAddr.replace(/[^a-z0-9]/gi,'_')}` },
-      { cert: eicrCert, filename: `EICR_${propAddr.replace(/[^a-z0-9]/gi,'_')}` },
-      { cert: epcCert,  filename: `EPC_${propAddr.replace(/[^a-z0-9]/gi,'_')}` },
-    ];
+      const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ type:'send_email', to: tenantEmail, subject: `Your tenancy welcome pack — ${propAddr}`, html, ...(attachments.length ? { attachments } : {}) })
+      });
+      const resData = await res.json().catch(()=>({}));
+      if (!res.ok || resData.error) throw new Error(resData.error || resData.message || `Send failed (${res.status})`);
 
-    // Collect every blocking issue before showing one clear alert
-    const blockers = [];
-    if (!wsSignedAll)  blockers.push('Written Statement not yet signed by all tenants — send for e-sign first');
-    if (!rraUrl)       blockers.push('RRA 2025 Prescribed Particulars not uploaded — go to Compliance → System Documents');
-    if (!h2rUrl)       blockers.push('How to Rent Guide not uploaded — go to Compliance → System Documents');
-    if (!gasCert)      blockers.push('Gas Safety Certificate missing — upload in property Compliance tab');
-    else if (!gasCert.file_url) blockers.push('Gas Safety Certificate has no file attached — re-upload in property Compliance tab');
-    if (!eicrCert)     blockers.push('EICR missing — upload in property Compliance tab');
-    else if (!eicrCert.file_url) blockers.push('EICR has no file attached — re-upload in property Compliance tab');
-    if (!epcCert)      blockers.push('EPC missing — upload in property Compliance tab');
-    else if (!epcCert.file_url)  blockers.push('EPC has no file attached — re-upload in property Compliance tab');
-
-    if (blockers.length) {
-      if (btn) { btn.disabled = false; btn.innerHTML = '📦 Send kit'; }
-      alertMo(
-        'Kit cannot be sent yet',
-        `The following must be resolved before the Day 1 kit can be sent:<br><br>` +
-        blockers.map(b => `• ${b}`).join('<br>'),
-        'Go to Compliance',
-        `function(){nav('prop-detail','${pid}');setTimeout(()=>pdSetTab('${pid}','compliance'),100)}`
-      );
-      return;
-    }
-
-    // All clear — build attachment list
-    for (const { cert, filename } of certsToAttach) {
-      if (!cert || !cert.file_url) continue;
-      const ext = cert.file_url.split('.').pop().split('?')[0] || 'pdf';
-      attachment_urls.push({ url: cert.file_url, filename: `${filename}.${ext}` });
-    }
-    attachment_urls.push({ url: rraUrl, filename: 'RRA_2025_Prescribed_Particulars.pdf' });
-    attachment_urls.push({ url: h2rUrl, filename: 'How_to_Rent_Guide.pdf' });
-    // Fetch each cert file client-side → base64 → send as attachments
-    const attachments = await _urlsToAttachments(attachment_urls);
-    const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ type:'send_email', to: tenantEmail, subject: `Your tenancy welcome pack — ${propAddr}`, html, ...(attachments.length ? { attachments } : {}) })
-    });
-    const resData = await res.json().catch(()=>({}));
-    if (!res.ok || resData.error) throw new Error(resData.error || resData.message || `Send failed (${res.status})`);
-
-    // Log to email_log
-    const tenant2 = D.tenants.find(t => String(t.prop_id) === String(pid) && t.status === 'Active');
-    if (tenant2) {
+      // Log
       const logEntry = {
-        prop_id: String(pid),
-        tenant_id: tenant2.id,
-        tenant_name: tenantName,
-        template_id: 'welcome_kit',
-        template_name: 'Day 1 Welcome Kit',
+        prop_id: String(pid), tenant_id: tenant.id, tenant_name: tenantName,
+        template_id: 'welcome_kit', template_name: 'Day 1 Welcome Kit',
         subject: `Tenancy welcome pack — ${propAddr}`,
-        sent_to: tenantEmail,
-        status: 'Sent',
-        user_id: currentUser.id,
+        sent_to: tenantEmail, status: 'Sent', user_id: currentUser.id,
       };
       const { data: logData } = await sb.from('email_log').insert(logEntry).select().single();
       if (logData) D.emailLog.unshift(logData);
+
+    } catch(e) {
+      errors.push(`${tenant.name}: ${e.message}`);
     }
+  }
 
-    // Mark certs as served
-    const certIdsToServe = [gasCert?.id, eicrCert?.id, epcCert?.id].filter(Boolean);
-    for (const cid of certIdsToServe) {
-      await sb.from('certificates').update({ served: true }).eq('id', cid);
-      const c = D.certs.find(x => x.id === cid);
-      if (c) c.served = true;
-    }
+  // Mark certs served
+  const certIdsToServe = [gasCert?.id, eicrCert?.id, epcCert?.id].filter(Boolean);
+  for (const cid of certIdsToServe) {
+    await sb.from('certificates').update({ served: true }).eq('id', cid).eq('user_id', currentUser.id);
+    const c = D.certs.find(x => String(x.id)===String(cid));
+    if (c) c.served = true;
+  }
 
-    // Audit log — full timestamped record
-    await logAudit('WELCOME_KIT_SENT', 'tenants', tenant2?.id || pid,
-      `Welcome kit sent to ${tenantEmail} for ${propAddr}. Docs: RRA sheet, How to Rent, Written Statement, GSC(${gasCert?'✓':'missing'}), EICR(${eicrCert?'✓':'missing'}), EPC(${epcCert?'✓':'missing'}), Deposit+PI(${tenant2?.scheme||'not set'}), Smoke/CO alarm test(pending move-in day)`
-    );
+  await logAudit('WELCOME_KIT_SENT', 'properties', pid,
+    `Day 1 kit sent to ${allTenants.length} tenant(s) at ${propAddr}`
+  );
 
-    closeMo();
-    toast('✓ Welcome kit sent to ' + tenantEmail);
-    _markTenancyStep(String(pid), 'welcome_kit_done', false);
-    _pollEsignSigned(String(pid));
+  _markTenancyStep(String(pid), 'welcome_kit_done', false);
 
-    // ── NEXT STEP FLOW ──
-    // Work out what comes next: co-tenants → KYC → property compliance
-    const allPropTenants = D.tenants.filter(t => String(t.prop_id)===String(pid) && t.status==='Active');
-    const sentTids = new Set(D.emailLog.filter(e=>e.template_id==='welcome_kit').map(e=>String(e.tenant_id)));
-    sentTids.add(String(tenant2?.id)); // include the one just sent
-    const pendingKitTenants = allPropTenants.filter(t => !sentTids.has(String(t.id)));
+  if (btn) { btn.disabled = false; btn.textContent = '📦 Send to all'; }
+  closeMo();
 
-    // Check KYC completeness across all tenants
-    const mandatoryKycSlots = ['passport','address_1','address_2','reference'];
-    const tenantsNeedingKyc = allPropTenants.filter(t => {
-      const uploaded = (D.tenantDocs||[]).filter(d => String(d.tenant_id)===String(t.id) && mandatoryKycSlots.includes(d.slot)).length;
-      return uploaded < mandatoryKycSlots.length;
-    });
-
-    // Check property compliance completeness
-    const propCertsAll = D.certs.filter(c => String(c.prop_id)===String(pid));
-    const hasGas  = propCertsAll.some(c=>(c.type||'').toLowerCase().includes('gas'));
-    const hasEicr = propCertsAll.some(c=>(c.type||'').toLowerCase().includes('eicr')||(c.type||'').toLowerCase().includes('electrical'));
-    const hasEpc  = propCertsAll.some(c=>(c.type||'').toLowerCase().includes('epc')||(c.type||'').toLowerCase().includes('energy'));
-    const propComplianceDone = hasGas && hasEicr && hasEpc;
-
-    // Determine next step
-    let nextTitle, nextSub, nextBody, nextBtns;
-
-    if (pendingKitTenants.length > 0) {
-      // Still co-tenants — direct to KYC first, then kit
-      const next = pendingKitTenants[0];
-      const remaining = pendingKitTenants.length;
-      nextTitle = '✅ Kit sent!';
-      nextSub = `${tenantName} · ${propAddr}`;
-      nextBody = `
-        <div style="text-align:center;padding:8px 0 16px">
-          <div style="font-size:36px;margin-bottom:10px">📦</div>
-          <div style="font-size:14px;font-weight:600;margin-bottom:4px">Welcome kit sent to ${tenantName}</div>
-          <div style="font-size:12px;color:var(--muted);margin-bottom:20px">${remaining} co-tenant${remaining!==1?'s':''} still need${remaining===1?'s':''} their KYC and kit</div>
-          <div style="background:rgba(59,111,232,0.06);border:1px solid rgba(59,111,232,0.2);border-radius:10px;padding:14px 16px;text-align:left">
-            <div style="font-size:11px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Next — co-tenant</div>
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-              <div class="t-av">${INI(next.name)}</div>
-              <div>
-                <div style="font-size:13px;font-weight:600">${next.name}</div>
-                <div style="font-size:11px;color:var(--muted)">${next.email||'⚠ No email set'}</div>
-              </div>
-            </div>
-            <div style="display:flex;flex-direction:column;gap:6px">
-              <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--txt)"><span>1️⃣</span><span>Upload KYC documents (passport, RTR, address proof)</span></div>
-              <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--txt)"><span>2️⃣</span><span>Complete Right to Rent check</span></div>
-              <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--txt)"><span>3️⃣</span><span>Send Day 1 kit once KYC is complete</span></div>
-            </div>
-          </div>
-        </div>`;
-      nextBtns = `<button class="btn" onclick="closeMo();nav('tenant-detail','${pid}')">Later</button><button class="btn btn-navy" onclick="closeMo();nav('tenant-detail','${next.id}')">Start KYC for ${next.name} →</button>`;
-
-    } else if (tenantsNeedingKyc.length > 0) {
-      // All kits sent — now KYC
-      const next = tenantsNeedingKyc[0];
-      nextTitle = '✅ All kits sent!';
-      nextSub = propAddr;
-      nextBody = `
-        <div style="text-align:center;padding:8px 0 16px">
-          <div style="font-size:36px;margin-bottom:10px">🎉</div>
-          <div style="font-size:14px;font-weight:600;margin-bottom:4px">Day 1 kits sent to all tenants</div>
-          <div style="font-size:12px;color:var(--muted);margin-bottom:20px">Next step: collect KYC identity documents</div>
-          <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:14px 16px;text-align:left">
-            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Start with</div>
-            <div style="display:flex;align-items:center;gap:10px">
-              <div class="t-av">${INI(next.name)}</div>
-              <div>
-                <div style="font-size:13px;font-weight:600">${next.name}</div>
-                <div style="font-size:11px;color:var(--muted)">Passport · Address proof · Reference check needed</div>
-              </div>
-            </div>
-          </div>
-        </div>`;
-      nextBtns = `<button class="btn" onclick="closeMo();nav('tenant-detail','${pid}')">Later</button><button class="btn btn-navy" onclick="closeMo();nav('tenant-detail','${next.id}')">Upload KYC for ${next.name} →</button>`;
-
-    } else if (!propComplianceDone) {
-      // KYC done — property compliance
-      nextTitle = '✅ KYC complete!';
-      nextSub = propAddr;
-      nextBody = `
-        <div style="text-align:center;padding:8px 0 16px">
-          <div style="font-size:36px;margin-bottom:10px">🛡</div>
-          <div style="font-size:14px;font-weight:600;margin-bottom:4px">All tenant docs collected</div>
-          <div style="font-size:12px;color:var(--muted);margin-bottom:20px">Next: upload property compliance certificates</div>
-          <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:12px 16px;text-align:left;font-size:12px">
-            ${!hasGas  ? `<div style="margin-bottom:6px;color:var(--red)">⚠ Gas Safety Certificate missing</div>` : ''}
-            ${!hasEicr ? `<div style="margin-bottom:6px;color:var(--red)">⚠ EICR missing</div>` : ''}
-            ${!hasEpc  ? `<div style="margin-bottom:6px;color:var(--red)">⚠ EPC missing</div>` : ''}
-          </div>
-        </div>`;
-      nextBtns = `<button class="btn" onclick="closeMo();nav('tenant-detail','${pid}')">Later</button><button class="btn btn-navy" onclick="closeMo();moBulkScan('${pid}')">Upload certs →</button>`;
-
-    } else {
-      // Everything done — add Day 30 to calendar + feature tour
-      const startDate = tenant2?.start_date ? new Date(tenant2.start_date) : new Date();
-      const day30Date = new Date(startDate);
+  if (errors.length) {
+    toast(`⚠ Sent with errors: ${errors.join('; ')}`, true);
+  } else {
+    toast(`✓ Day 1 kit sent to all ${allTenants.length} tenant${allTenants.length!==1?'s':''}!`);
+    // Day 30 calendar reminder
+    const leadTenant = allTenants.find(t => t.is_lead) || allTenants[0];
+    if (leadTenant?.start_date) {
+      const day30Date = new Date(leadTenant.start_date);
       day30Date.setDate(day30Date.getDate() + 30);
       const day30Str = day30Date.toISOString().slice(0,10);
-      // Auto-add Day 30 reminder to calendar
-      sb.from('calendar_events').insert({
-        user_id: currentUser.id,
-        title: `Day 30 pack due — ${propAddr}`,
-        date: day30Str,
-        prop_id: String(pid),
-        notes: `Send deposit prescribed info, inventory and smoke/CO test record to tenant`
-      }).select().single().then(({data}) => { if (data) D.calEvents.push(data); });
-
-      nextTitle = '🎉 Tenancy setup complete!';
-      nextSub = propAddr;
-      nextBody = `
-        <div style="text-align:center;padding:8px 0 16px">
-          <div style="font-size:36px;margin-bottom:10px">🎉</div>
-          <div style="font-size:14px;font-weight:600;margin-bottom:4px">All done for move-in!</div>
-          <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Day 30 reminder added to your calendar · ${day30Str}</div>
-          <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:14px 16px;text-align:left">
-            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">What's next on NEXLET</div>
-            <div style="display:flex;flex-direction:column;gap:8px;font-size:12px">
-              <div>📅 <strong>Calendar</strong> — all compliance deadlines auto-tracked</div>
-              <div>💰 <strong>Rent & Finance</strong> — log payments, track arrears</div>
-              <div>🔧 <strong>Maintenance</strong> — log issues, assign contractors</div>
-              <div>📋 <strong>Documents</strong> — Section 8, rent increase notices, templates</div>
-              <div>📦 <strong>Day 30 pack</strong> — due ${day30Str}, reminder set</div>
-            </div>
-          </div>
-        </div>`;
-      nextBtns = `<button class="btn btn-navy" onclick="closeMo();nav('dashboard')">Go to dashboard →</button>`;
+      const { data: calData } = await sb.from('calendar_events').insert({
+        user_id: currentUser.id, prop_id: String(pid),
+        title: `Day 30 pack due — ${propAddr}`, date: day30Str,
+        notes: `Send deposit prescribed info, inventory and smoke/CO test record`
+      }).select().single();
+      if (calData) D.calEvents.push(calData);
+      setTimeout(() => toast(`📅 Day 30 pack reminder set for ${day30Str}`), 1500);
     }
-
-    openMo(nextTitle, nextSub, nextBody, nextBtns);
-
-  } catch(err) {
-    if (btn) { btn.disabled = false; btn.textContent = '📦 Send welcome kit'; }
-    toast('Error sending welcome kit: ' + err.message, true);
   }
+
+  nav(window._currentPage, window._currentParam);
 }
+
 
 // ── ESIGN POLL ──
 function _pollEsignSigned(pid) {
@@ -9051,7 +8880,7 @@ function pgTenantDetail(tid) {
         <div style="padding:8px 16px 14px;border-top:1px solid var(--border)">
           ${_day30Dispatched
             ? `<div style="font-size:11px;color:var(--green-dark);font-weight:600">✓ Day 30 Pack dispatched</div>`
-            : `<button class="btn btn-navy" style="width:100%;font-size:12px;padding:7px 0" onclick="moDay30Kit('${t.prop_id}','${tid}')">📨 Dispatch Day 30 Pack</button>
+            : `<button class="btn btn-navy" style="width:100%;font-size:12px;padding:7px 0" onclick="moDay30Kit('${t.prop_id}')">📨 Dispatch Day 30 Pack</button>
                <div style="font-size:10px;color:var(--muted);margin-top:5px;text-align:center">Sends deposit prescribed info + inventory to tenant</div>`
           }
         </div>
@@ -12227,118 +12056,112 @@ function moDay30Kit(pid, tid) {
       </div>
     </div>`,
     `<button class="btn" onclick="closeMo()">Cancel</button>
-     <button class="btn btn-navy" id="d30-send-btn" onclick="sendDay30Kit('${pid}','${t.id}')">\U0001f4e8 Send Day 30 Pack</button>`
+     <button class="btn btn-navy" id="d30-send-btn" onclick="sendDay30Kit('${pid}')">📨 Send to all</button>`
   );
 }
 
 
-async function sendDay30Kit(pid, tid) {
+async function sendDay30Kit(pid) {
   if (_expiredGuard('Send Day 30 Pack')) return;
   const btn = document.getElementById('d30-send-btn');
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Sending…'; }
 
   const p = P(pid);
-  const t = D.tenants.find(x => String(x.id) === String(tid));
-  const toEmail = t?.email || '';
-  const toName  = t?.name  || 'Tenant';
-  if (!toEmail) { if(btn){btn.disabled=false;btn.textContent='📨 Send Day 30 Pack';} toast('No email address for this tenant', true); return; }
   const propAddr = [p?.address, p?.city].filter(Boolean).join(', ');
   const pCerts = CF(pid);
-  const today = new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' });
+  const allTenants = D.tenants.filter(t => String(t.prop_id) === String(pid) && t.status === 'Active');
+  if (!allTenants.length) { if(btn){btn.disabled=false;btn.textContent='📨 Send to all';} toast('No active tenants', true); return; }
 
-  const piSent = D.emailLog.some(e => (String(e.prop_id)===String(pid)||String(e.tenant_id)===String(tid)) && (e.template_id==='prescribed_info'||e.template_id?.includes('prescribed')));
+  const missingEmail = allTenants.filter(t => !t.email);
+  if (missingEmail.length) {
+    if(btn){btn.disabled=false;btn.textContent='📨 Send to all';}
+    alertMo('Missing email', missingEmail.map(t=>`• ${t.name} has no email address`).join('<br>'), 'OK', 'function(){closeMo()}');
+    return;
+  }
+
+  const today = new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' });
   const smokeCert = pCerts.find(c => c.type && (c.type.toLowerCase().includes('smoke')||c.type.toLowerCase().includes('co alarm')||c.type.toLowerCase().includes('carbon monoxide')));
   const legCert   = pCerts.find(c => c.type && c.type.toLowerCase().includes('legionella'));
   const invCert   = pCerts.find(c => c.type && (c.type.toLowerCase().includes('inventory')||c.type.toLowerCase().includes('schedule of condition')));
 
-  const statusRow = (icon, label, done, detail) => `
-    <tr>
-      <td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px">${icon} ${label}</td>
-      <td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px;font-weight:600;color:${done?'#00A87A':'#D97706'}">${done?'✓ Provided':'⚠ Pending'}</td>
-      <td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:12px;color:#7A8FA6">${detail}</td>
-    </tr>`;
-
-  const html = `<!DOCTYPE html><html><body style="font-family:DM Sans,Arial,sans-serif;color:#1A2B45;max-width:620px;margin:0 auto;padding:0">
-    <div style="background:#0B1E3D;padding:24px 28px;border-radius:12px 12px 0 0">
-      <div style="font-size:20px;font-weight:700;color:#fff">NEXLET</div>
-      <div style="font-size:13px;color:rgba(255,255,255,0.5);margin-top:4px">Day 30 Compliance Pack</div>
-    </div>
-    <div style="background:#fff;border:1px solid #E4EAF1;border-top:none;border-radius:0 0 12px 12px;padding:28px">
-      <h2 style="font-size:18px;font-weight:700;margin:0 0 6px">Important tenancy documents</h2>
-      <p style="font-size:13px;color:#7A8FA6;margin:0 0 6px">Property: <strong style="color:#1A2B45">${propAddr}</strong></p>
-      <p style="font-size:13px;color:#1A2B45;margin:0 0 20px">Your landlord is required by law to provide the following documents within 30 days of receiving your deposit. Please keep copies for your records.</p>
-
-      <h3 style="font-size:14px;font-weight:700;margin:0 0 10px">Compliance documents</h3>
-      <table style="width:100%;border-collapse:collapse;margin-bottom:20px;border:1px solid #E4EAF1;border-radius:8px;overflow:hidden">
-        <thead><tr style="background:#F6F8FB">
-          <th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:#7A8FA6;text-transform:uppercase">Document</th>
-          <th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:#7A8FA6;text-transform:uppercase">Status</th>
-          <th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:#7A8FA6;text-transform:uppercase">Details</th>
-        </tr></thead>
-        <tbody>
-          ${statusRow('🏦','Deposit Protection Certificate', !!(t?.scheme&&t?.scheme_ref), t?.scheme?`${t.scheme} · Ref: ${t.scheme_ref||'—'} · £${(t.deposit||0).toLocaleString()}`:'Scheme not yet registered')}
-          ${statusRow('📋','Prescribed Information', piSent, piSent?'Served — see previous correspondence':'Will be provided separately')}
-          ${statusRow('🔔','Smoke & CO Alarm Test Record', !!smokeCert, smokeCert?`Tested ${smokeCert.issued?new Date(smokeCert.issued).toLocaleDateString('en-GB'):''}`.trim():'To be confirmed')}
-          ${statusRow('🧪','Legionella Risk Assessment', !!legCert, legCert?`Assessed ${legCert.issued?new Date(legCert.issued).toLocaleDateString('en-GB'):''}`.trim():'To be confirmed')}
-          ${statusRow('📦','Inventory / Schedule of Condition', !!invCert, invCert?'Signed inventory on file':'Pending')}
-        </tbody>
-      </table>
-
-      <div style="background:#F6F8FB;border-radius:8px;padding:16px;margin-bottom:20px">
-        <div style="font-size:12px;font-weight:700;color:#7A8FA6;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Your deposit details</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          ${[['Deposit scheme', t?.scheme||'To be confirmed'],['Reference', t?.scheme_ref||'Pending'],['Deposit amount', t?.deposit?`£${t.deposit.toLocaleString()}`:'—'],['Property', propAddr]]
-            .map(([l,v])=>`<div><div style="font-size:11px;color:#7A8FA6;margin-bottom:2px">${l}</div><div style="font-size:13px;font-weight:600;color:#1A2B45">${v}</div></div>`).join('')}
-        </div>
-      </div>
-
-      <p style="font-size:12px;color:#7A8FA6;line-height:1.6;margin:0">These documents were served on <strong>${today}</strong> as required under the Housing Act 2004 and the Renters Rights Act 2025. A timestamped record has been created.</p>
-    </div>
-    <div style="padding:16px;text-align:center;font-size:11px;color:#999">Sent via NEXLET · nexlet.co.uk · documents@nexlet.co.uk</div>
-  </body></html>`;
-
-  // Build attachment_urls from certs that have file_url
+  // Build attachments once
   const attachment_urls = [];
-  const missingFileUrl30 = [];
   for (const { cert, filename } of [
-    { cert: smokeCert, filename: `Smoke_CO_Test_Record_${propAddr.replace(/[^a-z0-9]/gi,'_')}` },
-    { cert: legCert,   filename: `Legionella_Assessment_${propAddr.replace(/[^a-z0-9]/gi,'_')}` },
-    { cert: invCert,   filename: `Inventory_${propAddr.replace(/[^a-z0-9]/gi,'_')}` },
+    { cert: smokeCert, filename: 'Smoke_CO_Test_Record.pdf' },
+    { cert: legCert,   filename: 'Legionella_Assessment.pdf' },
+    { cert: invCert,   filename: 'Inventory.pdf' },
   ]) {
-    if (!cert) continue;
-    if (!cert.file_url) { missingFileUrl30.push(cert.type || filename); continue; }
-    const ext = cert.file_url.split('.').pop().split('?')[0] || 'pdf';
-    attachment_urls.push({ url: cert.file_url, filename: `${filename}.${ext}` });
+    if (cert?.file_url) {
+      const ext = cert.file_url.split('.').pop().split('?')[0] || 'pdf';
+      attachment_urls.push({ url: cert.file_url, filename });
+    }
   }
-  if (missingFileUrl30.length) {
-    toast(`⚠ ${missingFileUrl30.length} cert${missingFileUrl30.length!==1?'s':''} have no stored file — sending without attachment. Re-upload via bulk scan to fix.`, true);
+  const attachments30 = await _urlsToAttachments(attachment_urls);
+  const errors = [];
+
+  for (const t of allTenants) {
+    try {
+      const toEmail = t.email;
+      const toName  = t.name || 'Tenant';
+      const piSent  = D.emailLog.some(e => (String(e.prop_id)===String(pid)||String(e.tenant_id)===String(t.id)) && (e.template_id==='prescribed_info'||e.template_id?.includes('prescribed')));
+
+      const statusRow = (icon, label, done, detail) =>
+        `<tr><td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px">${icon} ${label}</td><td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px;font-weight:600;color:${done?'#00A87A':'#D97706'}">${done?'✓ Provided':'⚠ Pending'}</td><td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:12px;color:#7A8FA6">${detail}</td></tr>`;
+
+      const html = `<!DOCTYPE html><html><body style="font-family:DM Sans,Arial,sans-serif;color:#1A2B45;max-width:620px;margin:0 auto;padding:0">
+        <div style="background:#0B1E3D;padding:24px 28px;border-radius:12px 12px 0 0">
+          <div style="font-size:20px;font-weight:700;color:#fff">NexLet</div>
+          <div style="font-size:13px;color:rgba(255,255,255,0.5);margin-top:4px">Day 30 Compliance Pack</div>
+        </div>
+        <div style="background:#fff;border:1px solid #E4EAF1;border-top:none;border-radius:0 0 12px 12px;padding:28px">
+          <h2 style="font-size:18px;font-weight:700;margin:0 0 6px">Important tenancy documents, ${toName}</h2>
+          <p style="font-size:13px;color:#7A8FA6;margin:0 0 20px">Property: <strong style="color:#1A2B45">${propAddr}</strong></p>
+          <table style="width:100%;border-collapse:collapse;margin-bottom:20px;border:1px solid #E4EAF1;border-radius:8px;overflow:hidden">
+            <thead><tr style="background:#F6F8FB">
+              <th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:#7A8FA6;text-transform:uppercase">Document</th>
+              <th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:#7A8FA6;text-transform:uppercase">Status</th>
+              <th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:#7A8FA6;text-transform:uppercase">Details</th>
+            </tr></thead>
+            <tbody>
+              ${statusRow('🔒','Deposit Protection', !!(t.scheme&&t.scheme_ref), t.scheme?`${t.scheme} · Ref: ${t.scheme_ref||'—'} · £${(t.deposit||0).toLocaleString()}`:'Scheme not yet registered')}
+              ${statusRow('📋','Prescribed Information', piSent, piSent?'Served':'Will be provided separately')}
+              ${statusRow('🔔','Smoke & CO Alarm Test Record', !!smokeCert, smokeCert?'On file':'Pending')}
+              ${statusRow('🧪','Legionella Risk Assessment', !!legCert, legCert?'On file':'Pending')}
+              ${statusRow('📦','Inventory / Schedule of Condition', !!invCert, invCert?'Signed inventory on file':'Pending')}
+            </tbody>
+          </table>
+          <p style="font-size:12px;color:#7A8FA6;line-height:1.6;margin:0">Served on <strong>${today}</strong> under the Housing Act 2004 and the Renters Rights Act 2025.</p>
+        </div>
+        <div style="padding:16px;text-align:center;font-size:11px;color:#999">Sent via NexLet · nexlet.co.uk</div>
+      </body></html>`;
+
+      const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ type:'send_email', to: toEmail, subject: `Your Day 30 tenancy documents — ${propAddr}`, html, ...(attachments30.length ? { attachments: attachments30 } : {}) })
+      });
+      const resData = await res.json().catch(()=>({}));
+      if (!res.ok || resData.error) throw new Error(resData.error || resData.message || `Send failed (${res.status})`);
+
+      const logEntry = { prop_id: String(pid), tenant_id: t.id, tenant_name: toName, template_id: 'day30_pack', template_name: 'Day 30 Kit', subject: `Day 30 tenancy documents — ${propAddr}`, sent_to: toEmail, status: 'Sent', user_id: currentUser.id };
+      const { data: logData } = await sb.from('email_log').insert(logEntry).select().single();
+      if (logData) D.emailLog.unshift(logData);
+
+    } catch(e) { errors.push(`${t.name}: ${e.message}`); }
   }
 
-  try {
-    const attachments30 = await _urlsToAttachments(attachment_urls);
-    const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ type:'send_email', to: toEmail, subject: `Your Day 30 tenancy documents — ${propAddr}`, html, ...(attachments30.length ? { attachments: attachments30 } : {}) })
-    });
-    const resData = await res.json().catch(()=>({}));
-    if (!res.ok || resData.error) throw new Error(resData.error || resData.message || `Send failed (${res.status})`);
+  await logAudit('DAY30_PACK_SENT', 'properties', pid, `Day 30 pack sent to ${allTenants.length} tenant(s) at ${propAddr}`);
 
-    // Log to email_log
-    const logEntry = { prop_id: String(pid), tenant_id: t.id, tenant_name: toName, template_id: 'day30_pack', template_name: 'Day 30 Kit', subject: `Day 30 tenancy documents — ${propAddr}`, sent_to: toEmail, status: 'Sent', user_id: currentUser.id };
-    const { data: logData } = await sb.from('email_log').insert(logEntry).select().single();
-    if (logData) D.emailLog.unshift(logData);
+  if(btn){btn.disabled=false;btn.textContent='📨 Send to all';}
+  closeMo();
 
-    await logAudit('DAY30_PACK_SENT', 'tenants', t.id, `Day 30 pack sent to ${toEmail} for ${propAddr}. Deposit: ${t?.scheme||'unset'}·${t?.scheme_ref||'—'}, PI: ${piSent?'sent':'pending'}, Smoke/CO: ${smokeCert?'✓':'pending'}, Legionella: ${legCert?'✓':'pending'}, Inventory: ${invCert?'✓':'pending'}`);
-
-    closeMo();
-    toast('✓ Day 30 Pack sent to ' + toEmail);
-    if (window._currentPage === 'tenant-detail') nav('tenant-detail', String(t.id));
-
-  } catch(err) {
-    if (btn) { btn.disabled = false; btn.textContent = '📨 Send Day 30 Pack'; }
-    toast('Error sending Day 30 Pack: ' + err.message, true);
+  if (errors.length) {
+    toast(`⚠ Sent with errors: ${errors.join('; ')}`, true);
+  } else {
+    toast(`✓ Day 30 pack sent to all ${allTenants.length} tenant${allTenants.length!==1?'s':''}!`);
   }
+  nav(window._currentPage, window._currentParam);
 }
+
 
 function generatePrescribedInfoPDF(tid) {
   const t = D.tenants.find(x => String(x.id) === String(tid));
