@@ -2288,6 +2288,7 @@ function _toggleCertExpiry() {
 
 function moCert(pid, docType){
   if (_expiredGuard('Upload certificate')) return;
+  window._lastScanFile = null;
   const opts=activeProperties().map(p=>`<option value="${p.id}"${p.id==pid?' selected':''}>${p.address}, ${p.city}</option>`).join('');
   openMo('Add certificate','Upload document — AI will scan and fill details',`
     <div class="scan-box" id="sb-scan">
