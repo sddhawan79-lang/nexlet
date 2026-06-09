@@ -2286,7 +2286,7 @@ function _toggleCertExpiry() {
   if (row) row.style.display = hide ? 'none' : '';
 }
 
-function moCert(pid){
+function moCert(pid, docType){
   if (_expiredGuard('Upload certificate')) return;
   const opts=activeProperties().map(p=>`<option value="${p.id}"${p.id==pid?' selected':''}>${p.address}, ${p.city}</option>`).join('');
   openMo('Add certificate','Upload document — AI will scan and fill details',`
@@ -2363,7 +2363,18 @@ function moCert(pid){
     </div>
     <div class="fg"><label>Notes (optional)</label><textarea placeholder="Any notes…"></textarea></div>
   `,'<button class="btn" onclick="closeMo()">Cancel</button><button class="btn btn-navy" onclick="saveCertToDB()">Save certificate</button>');
-  setTimeout(() => { try { _toggleCertExpiry(); } catch(e) {} }, 50);
+  setTimeout(() => {
+    try { _toggleCertExpiry(); } catch(e) {}
+    if (docType) {
+      const ct = document.getElementById('ct');
+      if (ct) {
+        for (let i = 0; i < ct.options.length; i++) {
+          if (ct.options[i].text === docType) { ct.selectedIndex = i; break; }
+        }
+        ct.dispatchEvent(new Event('change'));
+      }
+    }
+  }, 50);
 }
 
 async function scanDoc(input){
@@ -6848,7 +6859,7 @@ function pdTabContent(pid, tab) {
           rowAction = `${_naBtn}`;
         } else if (st.overdue) {
           rowAction = `${_editBtn}${_viewBtn}${_deleteBtn}
-            <button onclick="moCert('${pid}')"
+            <button onclick="moCert('${pid}','${_escLabel}')"
             style="font-size:10px;padding:3px 8px;
             border-radius:5px;border:1px solid var(--red);
             background:rgba(229,62,62,0.07);color:var(--red);
@@ -6964,7 +6975,8 @@ function pdTabContent(pid, tab) {
       const _recUrl = _recCert ? (_recCert.url || _recCert.file_url || (_recCert.engineer && String(_recCert.engineer).startsWith('http') ? _recCert.engineer : null) || null) : null;
       const _recView = _recUrl ? `<button onclick="event.stopPropagation();dvoOpen('${_recUrl}','${doc.label.replace(/'/g,"\\'")}','')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:600">👁 View</button>` : '';
       const _recEdit = _recCert ? `<button onclick="event.stopPropagation();moEditCert('${_recCert.id}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font)">✎</button>` : '';
-      const _recUpload = !_recCert ? `<button onclick="event.stopPropagation();moCert('${pid}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font);white-space:nowrap">+ Upload</button>` : '';
+      const _recDocLbl = doc.label.replace(/'/g,"\\'");
+      const _recUpload = !_recCert ? `<button onclick="event.stopPropagation();moCert('${pid}','${_recDocLbl}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font);white-space:nowrap">+ Upload</button>` : '';
       const _recNA = st.isNA
         ? `<button onclick="event.stopPropagation();unbypassDoc('${pid}','${doc.id}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font);white-space:nowrap" title="Remove N/A">↩ Undo N/A</button>`
         : `<button onclick="event.stopPropagation();bypassDoc('${pid}','${doc.id}')" style="font-size:10px;padding:3px 8px;border-radius:100px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:600" title="Not applicable for this property">N/A</button>`;
@@ -7822,14 +7834,16 @@ function pgCompliance(){
                       return _eb + _vb + _db + `<button onclick="event.stopPropagation();markServed('${_cr.id}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid #00A87A;background:rgba(0,168,122,0.08);color:#00A87A;cursor:pointer;font-family:var(--font);font-weight:600;white-space:nowrap">✓ Mark Served</button>`;
                     }
                     if (st.lbl==='NOT UPLOADED' || (!_cr && st.overdue)) {
+                      const _escDocLbl = doc.label.replace(/'/g,"\\'");
                       return doc.mandatory
-                        ? `<button onclick="event.stopPropagation();moCert('${selPid}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--red);background:rgba(229,62,62,0.07);color:var(--red);cursor:pointer;font-family:var(--font);font-weight:600;white-space:nowrap">+ Upload</button>`
-                        : `<button onclick="event.stopPropagation();moCert('${selPid}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font);white-space:nowrap">+ Upload</button>`;
+                        ? `<button onclick="event.stopPropagation();moCert('${selPid}','${_escDocLbl}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--red);background:rgba(229,62,62,0.07);color:var(--red);cursor:pointer;font-family:var(--font);font-weight:600;white-space:nowrap">+ Upload</button>`
+                        : `<button onclick="event.stopPropagation();moCert('${selPid}','${_escDocLbl}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font);white-space:nowrap">+ Upload</button>`;
                     }
                     if (st.overdue) {
+                      const _escDocLbl = doc.label.replace(/'/g,"\\'");
                       return doc.mandatory
-                        ? _eb + _vb + _db + `<button onclick="event.stopPropagation();moCert('${selPid}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--red);background:rgba(229,62,62,0.07);color:var(--red);cursor:pointer;font-family:var(--font);font-weight:600">🔄 Renew</button>`
-                        : _eb + _vb + _db + `<button onclick="event.stopPropagation();moCert('${selPid}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font)">+ Upload</button>`;
+                        ? _eb + _vb + _db + `<button onclick="event.stopPropagation();moCert('${selPid}','${_escDocLbl}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--red);background:rgba(229,62,62,0.07);color:var(--red);cursor:pointer;font-family:var(--font);font-weight:600">🔄 Renew</button>`
+                        : _eb + _vb + _db + `<button onclick="event.stopPropagation();moCert('${selPid}','${_escDocLbl}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font)">+ Upload</button>`;
                     }
                     return `${_eb}${_vb}${_db}`;
                   })()}
