@@ -4882,3 +4882,213 @@ Input `onchange` now simply calls `_certFileChange(this)`.
 
 None — all schema fixes were data-level (SQL run directly in Supabase dashboard).
 
+
+---
+
+## Session 42 — Compliance Tab Overhaul, Day 1/30 Kit Fixes, Evidence Bundle Rebuild
+
+### 1. Compliance Tab — Written Statement Wired to E-Sign Records (Bug fix)
+
+**Bug:** Written Statement row in compliance tab always showed MISSING even when all tenants had signed, because `findCertForDoc` searched `D.certs` — but signed written statements live in `D.esignReq`, not certificates.
+
+**Fix:** `renderCompGroup` now intercepts `doc.id === 'written_statement'` before `findCertForDoc` runs. Checks `D.esignReq` for all active tenants on the property:
+- All signed → GREEN "SIGNED" + View button per signer (first name label)
+- Some signed → AMBER "PARTIAL" + count ("1/2 signed") + e-sign button for unsigned
+- None signed → GREY "NOT SIGNED" + e-sign button
+- No active tenants → GREY "NO TENANTS"
+
+Old e-sign button block (multi-line string concatenation) removed entirely.
+
+---
+
+### 2. Compliance Tab — Right to Rent Per-Tenant Override (Feature)
+
+**Previous behaviour:** RTR row used `findCertForDoc` against certificates — had no per-tenant awareness.
+
+**New behaviour:** `renderCompGroup` intercepts `doc.id === 'right_to_rent'` with early return. For each active tenant on the property:
+- `rtr_check_date` set → COMPLETE (wizard done), shows "View [FirstName]" button if doc exists
+- Doc uploaded to `right_to_rent` slot but no wizard → counts as partial
+- Nothing → INCOMPLETE, shows "Check [FirstName]" button linking to tenant detail
+
+Aggregate: all done → GREEN COMPLETE, some → AMBER PARTIAL with count, none → GREY NOT CHECKED.
+
+---
+
+### 3. Compliance Tab — Insurance Rows Route to moAddInsurance (Bug fix)
+
+**Bug:** Insurance rows in compliance tab had "Manage" button calling non-existent `moInsurance()` function — would throw JS error on click.
+
+**Fix:** Button now calls `moAddInsurance(null, pid, doc.insurance_type)` — pre-fills property and insurance type in the add insurance modal.
+
+---
+
+### 4. Insurance — Calendar Event on Save (Feature)
+
+`saveInsurance` now creates a `calendar_events` row when expiry date is set. Duplicate-safe (checks title + date before inserting). Powers the same renewal reminder pipeline as certs.
+
+---
+
+### 5. Cert Recognition — Widened Match Arrays (Bug fix)
+
+`COMPLIANCE_DOCS` match arrays widened to catch common AI-returned type variants:
+- `gas`: added `'gas safe'`, `'gsc'`, `'gas safety certificate'`
+- `eicr`: added `'electrical inspection'`, `'electrical safety'`
+- `epc`: added `'energy certificate'`, `'energy rating'`
+- `smoke`: added `'smoke test'`, `'smoke & co'`, `'smoke and co'`
+- `co`: added `'co check'`, `'co test'`
+- `legionella`: added `'legionella risk'`, `'water assessment'`
+
+---
+
+### 6. Edit Certificate Modal — cert_ref Read/Write Fix (Bug fix)
+
+**Bug:** `moEditCert` read `cert.ref||cert.reference` — never read `cert.cert_ref`. `saveCertToDB` writes company field to `cert_ref` column. So edit modal always showed blank reference.
+
+**Fixes:**
+- `moEditCert` reads `cert.ref||cert.reference||cert.cert_ref`
+- `saveEditCert` writes both `ref` and `cert_ref` columns
+
+---
+
+### 7. Mandatory Expiry Validation on Cert Upload (Feature)
+
+`saveCertToDB` now blocks save if expiry field is visible (doc type requires it) but empty. Toast: "Please enter the expiry date — needed to trigger renewal reminders". Focus moves to expiry field.
+
+Logic: checks `_expiryRow.style.display !== 'none'` — only blocks when field is shown (no-expiry docs like smoke alarm, RTR, prescribed info are unaffected).
+
+---
+
+### 8. PDF Preview — New Tab Instead of Iframe (UX fix)
+
+`dvoOpen` PDF path replaced: no more iframe, no more 4-second Google Docs fallback.
+
+**New behaviour:** Supabase storage PDFs open instantly in new tab via `window.open(url, '_blank', 'noopener')`. Overlay closes. Images still preview inline in modal.
+
+---
+
+### 9. Bulk Scan — Type Matching Fix + Validation (Bug fix)
+
+**Bug:** `_renderBulkResults` used `.slice(0,4)` to match AI-returned type to dropdown option. When AI returned `null` or `""`, `.slice(0,4)` = `""` which matches every option via `includes("")` — defaulted to first option (Gas Safety). EPC saved as Gas Safety silently.
+
+**Fix:** Replaced with `matchCertType(aiType)` function using explicit keyword matching covering all common AI return variants including `"CP12"`, `"epc"`, `"EICR"`, `"Energy Performance Certificate"` etc.
+
+**Validation:** Dropdown now has blank default `"— select type —"`. `saveBulkResults` validates all rows before saving — blocks with red border + inline error if any type is blank. No more silent skips.
+
+**Calendar events:** `saveBulkResults` now creates `calendar_events` row for each cert with an expiry date — same pattern as `saveCertToDB`.
+
+---
+
+### 10. Day 1 / Day 30 Kit — Attachments Fix (Critical bug fix)
+
+**Root cause:** `_urlsToAttachments` fetches files in the browser using `fetch(url)`. Supabase storage public URLs can fail silently due to CORS or browser fetch constraints — returns empty array, attachments silently dropped. Lead tenant may have partially worked; co-tenants got nothing.
+
+**Fix:** Removed `_urlsToAttachments` call from both `sendWelcomeKit` and `sendDay30Kit`. Now passes `attachment_urls` (raw `[{url, filename}]` array) directly to the edge function in `ai-proxy`. Edge function fetches files server-side in Deno — no CORS, no browser limitation.
+
+**Edge function `ai-proxy` updated** to handle `attachment_urls`:
+```typescript
+if (body.attachment_urls?.length) {
+  for (const { url, filename } of body.attachment_urls) {
+    const r = await fetch(url);
+    const buf = await r.arrayBuffer();
+    const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+    attachments.push({ filename, content: b64, content_type: r.headers.get('content-type') });
+  }
+}
+// Legacy fallback: body.attachments (pre-encoded base64) still accepted
+```
+
+---
+
+### 11. Day 1 / Day 30 Kit — KYC Blocker (Feature)
+
+**Previous behaviour:** Kit could be sent to tenants with incomplete KYC — no check.
+
+**New behaviour:** Both modal pre-check and `sendWelcomeKit` hard-block if any active tenant (including co-tenants) has missing mandatory KYC slots: `passport`, `right_to_rent`, `address_1`, `address_2`.
+
+- RTR treated as complete if `tenant.rtr_check_date` is set (wizard done), even without physical doc upload
+- Modal checklist shows new KYC row: "✅ KYC complete — all tenants & co-tenants" or "⚠️ [Name]: 2 docs missing"
+- Blocker message names the specific missing slots and directs: "Go to Tenants → [Name] → KYC"
+- `kitReady` now includes `kycOk` — send button stays disabled until all KYC complete
+
+---
+
+### 12. Day 1 / Day 30 Kit — Done Checks Aligned to COMPLIANCE_DOCS (Bug fix)
+
+**Previous behaviour:** Day 1 kit checklist `done:` for certs used inline `propCerts.some(c=>c.type.includes('gas'))` — different logic from compliance tab, could get out of sync.
+
+**Fix:** All 5 cert done checks now use `findCertForDoc(COMPLIANCE_DOCS.safety.docs.find(d=>d.id==='...'), propCerts)` — identical to compliance tab. If compliance shows green, Day 1 tick shows ticked.
+
+**Upload buttons** switched from `moBulkScan(pid)` to `moCert(pid, docLabel)` — same single-cert modal as compliance tab. One consistent upload path.
+
+---
+
+### 13. Compliance / Health Score — Single Source of Truth (Bug fix)
+
+**Problem:** Three different scores showing different numbers:
+- Weekly email: `(totalCerts - expiredCerts) / totalCerts * 100` — cert count only, ignored mandatory docs
+- Dashboard: weighted formula (certs 30pts raw count, rent 30pts, maintenance 20pts, KYC 20pts)
+- Compliance page: `calcRAG` per property — mandatory COMPLIANCE_DOCS slot completeness
+
+**Fix:**
+- Dashboard cert component (30pts) now averages `calcRAG(pid).score` across all active properties
+- Weekly email `portfolioScore` now averages `calcRAG(pid).score` across all properties
+- Compliance page unchanged — it was already the most accurate
+
+All three now show the same number.
+
+---
+
+### 14. Evidence Bundle — Full Legal Rebuild (Feature rebuild)
+
+Complete rewrite of `exportEvidenceBundle(tid)` for legal admissibility.
+
+**Structure:**
+- **Cover:** Bundle reference `NXL-YYYYMMDD-HHMM-xxxxxx`, generation timestamp with time (not just date), AI-assisted document notice
+- **Section 1 — Tenancy Details & Compliance Obligations:** Structured table of all mandatory RRA 2025 obligations (written statement, RRA info sheet, H2R, Gas/EICR/EPC, prescribed info) with SERVED/SIGNED/MISSING status and exact dates. Missing items show fine amounts.
+- **Section 2 — KYC & Identity:** Filtered strictly to `tenant_id`. Shows slot labels (Passport, RTR etc.), upload timestamp with time, verified status, name mismatch flagged in red. RTR check date shown separately.
+- **Section 3 — AI-Generated Documents:** Lists written statement, prescribed info, Section 8 notices with generation timestamp (date + time + seconds), signing timestamp if applicable. AI disclaimer: "generated with AI assistance, reviewed and authorised by landlord".
+- **Section 4 — Communications Log:** Full timestamp (date + time), subject, recipient. Deduped by subject+recipient+date. Sorted chronologically. Not truncated.
+- **Section 5 — Rent Payment History:** Arrears summary box if any overdue. Per-row: due date, amount, paid amount, status.
+- **Section 6 — Maintenance Log:** Awaab's Law flag box at top if unresolved hazards. Per-row: date, title, status, priority, cost, description. "AWAAB'S LAW FLAG" note with statutory reference.
+- **Section 7 — Declaration of Truth:** Landlord name, property, bundle ref, statutory declaration text, signature line, date line, company details.
+
+**Technical fixes:**
+- `safe()` function strips non-Latin chars before jsPDF renders — fixes garbled maintenance text ("Ø<ßà")
+- Bundle reference on every page footer — prevents pages challenged as belonging to different bundle
+- Landlord name from `D.userProfile?.full_name`
+- Footer: tenant name + bundle ref + page N of total on every page
+
+---
+
+### Known Issues — Updated After Session 42
+
+| # | Issue | Status |
+|---|---|------|
+| 1 | ICO number placeholder in legal docs | Pending registration |
+| 2 | MX record for inbound email | Parked post-launch |
+| 3 | `login.html` newsletter signup checkbox | Not built |
+| 4 | `moFinancials` PDF export — jsPDF needed | Post-launch backlog |
+| 5 | Section 8 UX handoff to Form 3A | Post-launch backlog |
+| 6 | WhatsApp reminders | Post-launch backlog |
+| 7 | Free public compliance checker | Marketing priority |
+| 8 | Blog / content hub | Marketing priority |
+| 9 | Postcode finder — replace with getAddress.io | Post-launch backlog |
+| 13 | `relet_prepared` column needed on tenants | Pending SQL |
+| 24 | `start_date` amber warning | Not traced |
+| 32 | Cert view button — old certs with null file_url | Data issue — no code fix needed |
+| 33 | Welcome letter modal | Not yet built |
+| 34 | Guarantor progress bar step | Partially done |
+| 35 | Issue 4 (KYC/RTR compliance section) | Partially done — RTR done, full KYC panel pending |
+
+---
+
+### Schema Changes — Session 42
+
+None — all fixes were code-level.
+
+### Edge Function Changes — Session 42
+
+**`ai-proxy` (super-processor)** — `send_email` handler updated:
+- Accepts `attachment_urls: [{url, filename}]` — fetches files server-side in Deno, base64 encodes, passes to Resend
+- Legacy `attachments: [{filename, content, content_type}]` (pre-encoded base64) still accepted as fallback
+- Previously the Resend call had no attachment handling at all — field was silently ignored
