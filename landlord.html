@@ -4663,7 +4663,6 @@ async function sendWelcomeKit(pid) {
         body: JSON.stringify({ type:'send_email', to: tenantEmail, subject: `Your tenancy welcome pack — ${propAddr}`, html, ...(attachments.length ? { attachments } : {}) })
       });
       const resData = await res.json().catch(()=>({}));
-      console.log('[Day1Kit] status:', res.status, '| attachments:', attachments.length, '| response:', JSON.stringify(resData).slice(0,300));
       if (!res.ok || resData.error) throw new Error(resData.error || resData.message || `Send failed (${res.status})`);
 
       // Log
@@ -8845,14 +8844,14 @@ function pgTenantDetail(tid) {
       done: propLog.some(e=>(e.template_id||'').includes('how_to_rent')||(e.subject||'').toLowerCase().includes('how to rent'))||tenantLog2.some(e=>(e.template_id||'').includes('how_to_rent')||(e.subject||'').toLowerCase().includes('how to rent')),
       action:`sendH2RGuide('${tid}')`, btnLabel:'Send guide' },
     { icon:'🔥', label:'Gas Safety Certificate served',
-      done: propCerts.some(c=>c.type&&c.type.toLowerCase().includes('gas')),
-      action:`moBulkScan('${t.prop_id}')`, btnLabel:'Upload GSC' },
+      done: !!findCertForDoc(COMPLIANCE_DOCS.safety.docs.find(d=>d.id==='gas'), propCerts),
+      action:`moCert('${t.prop_id}','Gas Safety Certificate (CP12)')`, btnLabel:'Upload GSC' },
     { icon:'⚡', label:'EICR served to tenant',
-      done: propCerts.some(c=>c.type&&(c.type.toLowerCase().includes('eicr')||c.type.toLowerCase().includes('electrical'))),
-      action:`moBulkScan('${t.prop_id}')`, btnLabel:'Upload EICR' },
+      done: !!findCertForDoc(COMPLIANCE_DOCS.safety.docs.find(d=>d.id==='eicr'), propCerts),
+      action:`moCert('${t.prop_id}','EICR (Electrical Installation)')`, btnLabel:'Upload EICR' },
     { icon:'🏷', label:'EPC served to tenant',
-      done: propCerts.some(c=>c.type&&(c.type.toLowerCase().includes('epc')||c.type.toLowerCase().includes('energy'))),
-      action:`moBulkScan('${t.prop_id}')`, btnLabel:'Upload EPC' },
+      done: !!findCertForDoc(COMPLIANCE_DOCS.safety.docs.find(d=>d.id==='epc'), propCerts),
+      action:`moCert('${t.prop_id}','EPC (Energy Performance)')`, btnLabel:'Upload EPC' },
     { icon:'✍️', label:'Written Statement e-signed',
       done: (D.esignReq||[]).some(r=>String(r.tenant_id)===String(t.id)&&r.document_type==='written_statement'&&r.status==='signed'),
       action:`moEsign('${t.prop_id}','${t.id}')`, btnLabel:'Send for signing' },
@@ -8872,14 +8871,14 @@ function pgTenantDetail(tid) {
       done: !!(t.scheme&&t.scheme_ref),
       action:`moDepositCertModal('${t.id}')`, btnLabel:'Record deposit' },
     { icon:'🔔', label:'Smoke & CO alarm tested',
-      done: propCerts.some(c=>c.type&&(c.type.toLowerCase().includes('smoke')||c.type.toLowerCase().includes('co alarm')||c.type.toLowerCase().includes('carbon monoxide'))),
-      action:`moBulkScan('${t.prop_id}')`, btnLabel:'Upload test record' },
+      done: !!findCertForDoc(COMPLIANCE_DOCS.safety.docs.find(d=>d.id==='smoke'), propCerts) || !!findCertForDoc(COMPLIANCE_DOCS.safety.docs.find(d=>d.id==='co'), propCerts),
+      action:`moCert('${t.prop_id}','Smoke Alarm Test Record')`, btnLabel:'Upload test record' },
     { icon:'📋', label:'Inventory / schedule of condition signed',
       done: propCerts.some(c=>c.type&&(c.type.toLowerCase().includes('inventory')||c.type.toLowerCase().includes('schedule of condition')))||(D._invReports||[]).some(r=>String(r.propId)===String(t.prop_id)),
       action:`moInventoryReport('${t.prop_id}')`, btnLabel:'Create Inventory' },
     { icon:'🧪', label:'Legionella risk assessment completed',
-      done: propCerts.some(c=>c.type&&c.type.toLowerCase().includes('legionella')),
-      action:`moBulkScan('${t.prop_id}')`, btnLabel:'Upload assessment' },
+      done: !!findCertForDoc(COMPLIANCE_DOCS.safety.docs.find(d=>d.id==='legionella'), propCerts),
+      action:`moCert('${t.prop_id}','Legionella Risk Assessment')`, btnLabel:'Upload assessment' },
     ...(_hasPet ? [{ icon:'🐾', label:'Pet agreement signed',
       done: propLog.some(e=>(e.template_id||'').includes('pet')||(e.subject||'').toLowerCase().includes('pet'))||tenantLog2.some(e=>(e.subject||'').toLowerCase().includes('pet')),
       action:`moCommunicationsHub('${tid}')`, btnLabel:'Send pet agreement' }] : []),
@@ -18187,13 +18186,22 @@ async function dvoOpen(url, title, meta) {
     const fileType = _dvoType(viewUrl);
 
     if (fileType === 'pdf') {
-      // Supabase storage PDFs: open in new tab — iframe blocked cross-origin
-      document.getElementById('dvo-loading').style.display = 'none';
-      window.open(viewUrl, '_blank', 'noopener');
-      // Close the overlay — nothing to show inline
-      const overlay = document.getElementById('doc-viewer-overlay');
-      if (overlay) overlay.style.display = 'none';
-      document.body.style.overflow = '';
+      const iframe = document.getElementById('dvo-iframe');
+      iframe.onload = function() {
+        document.getElementById('dvo-loading').style.display = 'none';
+        iframe.style.display = 'block';
+      };
+      iframe.onerror = function() {
+        document.getElementById('dvo-loading').style.display = 'none';
+        document.getElementById('dvo-fallback').style.display = 'flex';
+      };
+      iframe.src = viewUrl;
+      setTimeout(function() {
+        const loading = document.getElementById('dvo-loading');
+        if (loading && loading.style.display !== 'none') {
+          iframe.src = 'https://docs.google.com/viewer?url=' + encodeURIComponent(viewUrl) + '&embedded=true';
+        }
+      }, 4000);
 
     } else if (fileType === 'image') {
       const img = document.getElementById('dvo-img');
