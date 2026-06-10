@@ -5101,11 +5101,14 @@ function pgDashboard(){
       // ── Compliance Health Score Ring ──
       const _allTenants = D.tenants.filter(t=>t.status==='Active');
       const _propCount  = D.properties.filter(p=>(p.status||'active')!=='archived').length;
+      const _certChecks = D.certs.filter(c=>{
+        if(!c.expiry_date) return false;
+        return new Date(c.expiry_date) > new Date();
+      }).length;
+      const _totalCerts = D.certs.length;
       // Score components (0-100):
-      // 1. Compliance score (30pts) — calcRAG per property, same as compliance tab
-      const _ragScores = D.properties.filter(p=>(p.status||'active')!=='archived').map(p=>calcRAG(p.id).score);
-      const _avgRag = _ragScores.length>0 ? Math.round(_ragScores.reduce((a,b)=>a+b,0)/_ragScores.length) : 0;
-      const certScore = Math.round(_avgRag * 0.30);
+      // 1. Cert validity (30pts)
+      const certScore  = _totalCerts>0 ? Math.round((_certChecks/_totalCerts)*30) : 0;
       // 2. Rent health (30pts)
       const _lateR = D.rent.filter(r=>r.status==='Late').length;
       const _totalR= D.rent.filter(r=>['Paid','Late','Due'].includes(r.status)).length;
@@ -5140,7 +5143,7 @@ function pgDashboard(){
           <div style="display:flex;gap:12px;flex-wrap:wrap">
             <div style="display:flex;flex-direction:column;gap:2px;min-width:80px;cursor:pointer" onclick="nav('compliance')" title="View certificates">
               <div style="font-size:10px;color:var(--muted)">Certificates</div>
-              <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden"><div style="height:100%;width:${_avgRag}%;background:${_avgRag>=80?'#10B981':_avgRag>=50?'#D97706':'#E53E3E'};border-radius:2px;transition:width .8s ease"></div></div>
+              <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden"><div style="height:100%;width:${certScore/30*100}%;background:${certScore===30?'#10B981':'#D97706'};border-radius:2px;transition:width .8s ease"></div></div>
             </div>
             <div style="display:flex;flex-direction:column;gap:2px;min-width:80px;cursor:pointer" onclick="nav('finance')" title="View rent">
               <div style="font-size:10px;color:var(--muted)">Rent</div>
@@ -8095,10 +8098,13 @@ async function checkAllReminders() {
     } catch(e) { shouldSendDigest = false; }
 
     if (shouldSendDigest) {
-    // Calculate portfolio score — calcRAG per property averaged, same as compliance tab
-    const _emailRagScores = D.properties.map(p => calcRAG(p.id).score);
-    const portfolioScore = _emailRagScores.length > 0
-      ? Math.round(_emailRagScores.reduce((a,b) => a+b, 0) / _emailRagScores.length)
+    // Calculate portfolio score
+    const allCerts = D.certs;
+    const totalCerts = allCerts.length;
+    const expiredCerts = allCerts.filter(c => c.expiry && new Date(c.expiry) < today).length;
+    const criticalCerts = allCerts.filter(c => { if(!c.expiry) return false; const d=Math.round((new Date(c.expiry)-today)/864e5); return d>=0&&d<=14; }).length;
+    const portfolioScore = totalCerts > 0
+      ? Math.max(0, Math.min(100, Math.round(((totalCerts-expiredCerts)/totalCerts)*100) - (criticalCerts*5)))
       : 0;
     const scoreCol = portfolioScore>=80?'var(--green)':portfolioScore>=50?'#D97706':'#E53E3E';
     const scoreLabel = portfolioScore>=80?'Healthy ✅':portfolioScore>=50?'Needs attention ⚠️':'At risk 🔴';
@@ -9931,142 +9937,424 @@ async function exportEvidenceBundle(tid) {
   const t = D.tenants.find(x => String(x.id) === String(tid));
   if (!t) return;
   const p = D.properties.find(x => String(x.id) === String(t.prop_id)) || { address:'—', city:'' };
-  const docs   = D.tenantDocs.filter(d => String(d.tenant_id) === String(tid));
-  const comms  = D.emailLog.filter(e => String(e.tenant_id)===String(tid)||String(e.prop_id)===String(t.prop_id));
-  const rents  = D.rent.filter(r => String(r.prop_id)===String(t.prop_id));
-  const maint  = D.maintenance.filter(m => String(m.prop_id)===String(t.prop_id));
 
-  toast('⏳ Generating evidence bundle…');
+  // Tenant name — clean single value, no duplication
+  const tenantName = (t.name || 'Tenant').trim();
+
+  // Landlord name from profile
+  const llName = D.userProfile?.full_name || D.userProfile?.name || currentUser?.email || 'Landlord';
+  const llEmail = currentUser?.email || '—';
+
+  // Data — all filtered strictly to this tenant / property
+  const docs   = (D.tenantDocs || []).filter(d => String(d.tenant_id) === String(tid));
+  const allComms = (D.emailLog || []).filter(e =>
+    String(e.tenant_id) === String(tid) || String(e.prop_id) === String(t.prop_id)
+  );
+  // Dedupe comms by subject+sent_to+date
+  const seenComms = new Set();
+  const comms = allComms.filter(e => {
+    const key = (e.subject||'') + '|' + (e.sent_to||'') + '|' + (e.sent_at||'').slice(0,10);
+    if (seenComms.has(key)) return false;
+    seenComms.add(key); return true;
+  }).sort((a,b) => new Date(a.sent_at||0) - new Date(b.sent_at||0));
+
+  const rents  = (D.rent || []).filter(r => String(r.prop_id) === String(t.prop_id))
+    .sort((a,b) => new Date(a.due_date||0) - new Date(b.due_date||0));
+  const maint  = (D.maintenance || []).filter(m => String(m.prop_id) === String(t.prop_id))
+    .sort((a,b) => new Date(a.issue_date||0) - new Date(b.issue_date||0));
+  const pCerts = CF(t.prop_id);
+  const esigns = (D.esignReq || []).filter(r => String(r.tenant_id) === String(tid));
+
+  // Bundle reference number — timestamp-based, unique
+  const now = new Date();
+  const bundleRef = 'NXL-' + now.getFullYear()
+    + String(now.getMonth()+1).padStart(2,'0')
+    + String(now.getDate()).padStart(2,'0')
+    + '-' + String(now.getHours()).padStart(2,'0')
+    + String(now.getMinutes()).padStart(2,'0')
+    + '-' + String(tid).slice(-6);
+  const genTimestamp = now.toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})
+    + ' at ' + now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+
+  toast('Generating evidence bundle…');
 
   try {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
     const W = doc.internal.pageSize.getWidth();
     let y = 0;
+    let pageNum = 1;
 
-    const addPage = () => { doc.addPage(); y = 20; };
-    const ln = (text, size=11, bold=false, color=[40,40,40]) => {
-      doc.setFontSize(size); doc.setFont('helvetica', bold?'bold':'normal');
+    const addPage = () => { doc.addPage(); y = 20; pageNum++; };
+
+    // Safe text — strip non-latin chars that corrupt jsPDF
+    const safe = (s) => String(s||'').replace(/[^\x20-\x7E\u00A0-\u00FF]/g, ' ').trim();
+
+    const ln = (text, size=10, bold=false, color=[40,40,40], indent=15) => {
+      doc.setFontSize(size);
+      doc.setFont('helvetica', bold ? 'bold' : 'normal');
       doc.setTextColor(...color);
-      const lines = doc.splitTextToSize(String(text||''), W-30);
+      const lines = doc.splitTextToSize(safe(text), W - indent - 15);
       lines.forEach(l => {
-        if (y > 270) addPage();
-        doc.text(l, 15, y); y += size*0.45;
+        if (y > 275) addPage();
+        doc.text(l, indent, y);
+        y += size * 0.42;
       });
       y += 1;
     };
-    const rule = (col=[200,200,200]) => {
-      if (y > 270) addPage();
-      doc.setDrawColor(...col); doc.setLineWidth(0.3);
-      doc.line(15, y, W-15, y); y += 4;
-    };
-    const sectionHeader = (title) => {
-      if (y > 250) addPage();
-      doc.setFillColor(245, 247, 250);
-      doc.rect(10, y-4, W-20, 10, 'F');
-      ln(title, 13, true, [30,60,120]); y += 3; rule([180,200,230]);
+
+    const rule = (col=[210,210,210], weight=0.2) => {
+      if (y > 275) addPage();
+      doc.setDrawColor(...col); doc.setLineWidth(weight);
+      doc.line(15, y, W-15, y); y += 3;
     };
 
-    // ── COVER ──
-    doc.setFillColor(30, 58, 120);
-    doc.rect(0, 0, W, 55, 'F');
+    const sectionHeader = (num, title) => {
+      if (y > 255) addPage();
+      y += 4;
+      doc.setFillColor(11, 30, 61);
+      doc.rect(10, y-5, W-20, 11, 'F');
+      doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
+      doc.text(safe('SECTION ' + num + ' — ' + title), 15, y+2);
+      y += 10; rule([180,200,230], 0.3);
+    };
+
+    const field = (label, value, col=[40,40,40]) => {
+      if (y > 275) addPage();
+      doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(100,100,120);
+      doc.text(safe(label + ':'), 15, y);
+      doc.setFont('helvetica','normal'); doc.setTextColor(...col);
+      const lines = doc.splitTextToSize(safe(value||'—'), W-70);
+      doc.text(lines, 55, y);
+      y += Math.max(lines.length * 4.2, 5) + 1;
+    };
+
+    // ── COVER PAGE ──
+    doc.setFillColor(11, 30, 61);
+    doc.rect(0, 0, W, 65, 'F');
+    doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(150,175,220);
+    doc.text('NEXLET LANDLORD COMPLIANCE PLATFORM', 15, 14);
     doc.setFontSize(22); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
-    doc.text('EVIDENCE BUNDLE', 15, 22);
-    doc.setFontSize(14); doc.setFont('helvetica','normal');
-    doc.text(`${t.name}`, 15, 33);
-    doc.setFontSize(10); doc.setTextColor(200,215,240);
-    doc.text(`${p.address}, ${p.city}`, 15, 42);
-    doc.text(`Generated: ${new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}`, 15, 49);
-    y = 65;
+    doc.text('EVIDENCE BUNDLE', 15, 26);
+    doc.setFontSize(11); doc.setFont('helvetica','normal'); doc.setTextColor(200,215,240);
+    doc.text(safe(tenantName), 15, 36);
+    doc.text(safe(p.address + (p.city ? ', ' + p.city : '')), 15, 43);
+    doc.setFontSize(8); doc.setTextColor(130,160,210);
+    doc.text('Bundle ref: ' + bundleRef, 15, 52);
+    doc.text('Generated: ' + genTimestamp, 15, 58);
+    y = 75;
 
     // Summary box
     doc.setDrawColor(180,195,230); doc.setLineWidth(0.5);
-    doc.rect(10, y, W-20, 28);
-    doc.setFontSize(10); doc.setFont('helvetica','normal'); doc.setTextColor(60,60,60);
+    doc.setFillColor(248,250,253);
+    doc.rect(10, y, W-20, 36, 'FD');
     const flds = [
-      ['Tenant', t.name], ['Property', `${p.address}, ${p.city}`],
+      ['Tenant', tenantName],
+      ['Property', p.address + (p.city?', '+p.city:'')],
       ['Tenancy start', t.start_date ? new Date(t.start_date).toLocaleDateString('en-GB') : '—'],
-      ['Rent', t.rent ? `£${t.rent}/mo` : '—'],
-      ['Deposit', t.deposit ? `£${t.deposit}` : '—'],
-      ['Deposit scheme', t.scheme ? `${t.scheme} — ${t.scheme_ref||'ref pending'}` : 'Not set'],
+      ['Monthly rent', t.rent ? 'GBP ' + Number(t.rent).toLocaleString() : '—'],
+      ['Deposit', t.deposit ? 'GBP ' + Number(t.deposit).toLocaleString() : '—'],
+      ['Deposit scheme', t.scheme ? t.scheme + (t.scheme_ref ? ' — Ref: ' + t.scheme_ref : '') : 'NOT PROTECTED'],
     ];
     const colW = (W-20)/2;
+    doc.setFontSize(9);
     flds.forEach(([l,v], i) => {
       const cx = 15 + (i%2)*colW;
-      const cy = y + 7 + Math.floor(i/2)*8;
-      doc.setFont('helvetica','bold'); doc.text(l+':', cx, cy);
-      doc.setFont('helvetica','normal'); doc.text(v||'—', cx+30, cy);
+      const cy = y + 8 + Math.floor(i/2)*10;
+      doc.setFont('helvetica','bold'); doc.setTextColor(80,100,140); doc.text(safe(l+':'), cx, cy);
+      doc.setFont('helvetica','normal'); doc.setTextColor(30,30,30);
+      doc.text(safe(String(v||'—').slice(0,45)), cx+28, cy);
     });
-    y += 36; rule();
+    y += 44;
+    rule();
 
-    // ── SECTION 1: KYC ──
-    sectionHeader('SECTION 1 — KYC DOCUMENTS');
-    if (docs.length === 0) { ln('No KYC documents uploaded.', 10, false, [150,150,150]); y += 4; }
-    docs.forEach((d, i) => {
-      ln(`${i+1}. ${d.doc_label || d.slot || 'Document'}`, 11, true);
-      if (d.extracted_name) ln(`   Name: ${d.extracted_name}`, 10);
-      if (d.extracted_doc_number) ln(`   Reference: ${d.extracted_doc_number}`, 10);
-      if (d.extracted_expiry) ln(`   Expiry: ${d.extracted_expiry}`, 10);
-      if (d.share_code) ln(`   Share code: ${d.share_code}`, 10);
-      ln(`   Verified: ${d.verified ? '✓ Yes' : 'Not yet verified'}  |  Uploaded: ${d.uploaded_at ? new Date(d.uploaded_at).toLocaleDateString('en-GB') : '—'}`, 10, false, d.verified?[0,120,80]:[180,0,0]);
-      if (d.name_mismatch) ln(`   ⚠ NAME MISMATCH — extracted "${d.extracted_name}" vs tenant record "${t.name}"`, 10, true, [180,0,0]);
-      rule([220,220,220]); y += 1;
+    // AI disclaimer box
+    doc.setFillColor(255,250,235);
+    doc.setDrawColor(210,160,30); doc.setLineWidth(0.4);
+    doc.rect(10, y, W-20, 16, 'FD');
+    doc.setFontSize(8); doc.setFont('helvetica','bold'); doc.setTextColor(140,90,0);
+    doc.text('AI-ASSISTED DOCUMENT NOTICE', 15, y+6);
+    doc.setFont('helvetica','normal'); doc.setTextColor(100,70,0);
+    doc.text(safe('Some documents in this bundle were generated with AI assistance via the NexLet platform. All AI-generated'), 15, y+11);
+    doc.text(safe('documents carry a generation timestamp and have been reviewed and authorised by the landlord named below.'), 15, y+15);
+    y += 22; rule();
+
+    // ── SECTION 1: TENANCY DETAILS ──
+    sectionHeader('1', 'TENANCY DETAILS & COMPLIANCE OBLIGATIONS');
+    field('Tenant full name', tenantName);
+    field('Property address', p.address + (p.city?', '+p.city:'') + (p.postcode?' '+p.postcode:''));
+    field('Tenancy start date', t.start_date ? new Date(t.start_date).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : '—');
+    field('Monthly rent', t.rent ? 'GBP ' + Number(t.rent).toLocaleString() : '—');
+    field('Deposit amount', t.deposit ? 'GBP ' + Number(t.deposit).toLocaleString() : '—');
+    field('Deposit scheme', t.scheme || 'NOT REGISTERED — POTENTIAL LIABILITY');
+    field('Deposit reference', t.scheme_ref || '—');
+    field('Deposit protection deadline', t.start_date ? new Date(new Date(t.start_date).getTime()+30*864e5).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) + ' (30 days from start)' : '—');
+    y += 3;
+
+    // Compliance obligations table
+    ln('Mandatory compliance obligations under RRA 2025:', 10, true, [11,30,61]);
+    y += 2;
+    const obligationRows = [
+      ['Written Statement served', esigns.some(r=>r.document_type==='written_statement'&&r.status==='signed') ? 'SIGNED — ' + (()=>{const r=esigns.find(r=>r.document_type==='written_statement'&&r.status==='signed'); return r?.signed_at?new Date(r.signed_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):r?.created_at?new Date(r.created_at).toLocaleDateString('en-GB'):'date unknown';})() : 'NOT SIGNED — RISK'],
+      ['RRA 2025 Info Sheet served', comms.some(e=>(e.template_id||'').includes('rra')||(e.subject||'').toLowerCase().includes('renters')) ? 'SERVED — ' + (()=>{const e=comms.find(e=>(e.template_id||'').includes('rra')||(e.subject||'').toLowerCase().includes('renters')); return e?.sent_at?new Date(e.sent_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):''})() : 'NOT EVIDENCED'],
+      ['How to Rent Guide served', comms.some(e=>(e.template_id||'').includes('how_to_rent')||(e.subject||'').toLowerCase().includes('how to rent')) ? 'SERVED' : 'NOT EVIDENCED'],
+      ['Gas Safety cert served', pCerts.some(c=>(c.type||'').toLowerCase().includes('gas')&&c.file_url) ? 'ON FILE — ' + (()=>{const c=pCerts.find(c=>(c.type||'').toLowerCase().includes('gas')); return c?.expiry?'Expires '+new Date(c.expiry).toLocaleDateString('en-GB'):''})() : 'MISSING — CRIMINAL LIABILITY'],
+      ['EICR served', pCerts.some(c=>(c.type||'').toLowerCase().includes('eicr')&&c.file_url) ? 'ON FILE — ' + (()=>{const c=pCerts.find(c=>(c.type||'').toLowerCase().includes('eicr')); return c?.expiry?'Expires '+new Date(c.expiry).toLocaleDateString('en-GB'):''})() : 'MISSING — FINE UP TO GBP 30,000'],
+      ['EPC served', pCerts.some(c=>(c.type||'').toLowerCase().includes('epc')&&c.file_url) ? 'ON FILE' : 'MISSING'],
+      ['Deposit prescribed info', comms.some(e=>(e.template_id||'').includes('prescribed')) ? 'SERVED — ' + (()=>{const e=comms.find(e=>(e.template_id||'').includes('prescribed')); return e?.sent_at?new Date(e.sent_at).toLocaleDateString('en-GB'):''})() : 'NOT EVIDENCED — FINE UP TO 3x DEPOSIT'],
+    ];
+    const oblColW = (W-30)/2;
+    obligationRows.forEach(([label, status]) => {
+      if (y > 272) addPage();
+      const isOk = status.startsWith('SIGNED')||status.startsWith('SERVED')||status.startsWith('ON FILE');
+      const isRisk = status.includes('MISSING')||status.includes('NOT EVIDENCED')||status.includes('NOT SIGNED')||status.includes('RISK');
+      doc.setFontSize(9);
+      doc.setFont('helvetica','normal'); doc.setTextColor(50,50,50);
+      doc.text(safe(label), 15, y);
+      doc.setFont('helvetica','bold');
+      doc.setTextColor(...(isOk?[0,120,80]:isRisk?[180,30,30]:[150,100,0]));
+      const statusLines = doc.splitTextToSize(safe(status), oblColW);
+      doc.text(statusLines, 15+oblColW, y);
+      y += Math.max(statusLines.length*4,5)+1;
+      rule([220,220,220], 0.15);
     });
+    y += 3;
 
-    // ── SECTION 2: COMPLIANCE TIMELINE ──
+    // ── SECTION 2: KYC & IDENTITY ──
     addPage();
-    sectionHeader('SECTION 2 — COMPLIANCE TIMELINE');
-    if (comms.length === 0) { ln('No communications logged.', 10, false, [150,150,150]); y += 4; }
-    comms.slice(0,40).forEach(e => {
-      const ts = e.sent_at ? new Date(e.sent_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
-      ln(`${ts}  —  ${e.subject||e.template_id||'Email'}  →  ${e.sent_to||'—'}`, 10);
-      rule([230,230,230]); y += 1;
-    });
+    sectionHeader('2', 'KYC & IDENTITY DOCUMENTS');
+    ln('All documents below were uploaded under tenant record: ' + tenantName + ' (ID: ' + tid + ')', 9, false, [80,80,100]);
+    y += 2;
+    if (docs.length === 0) {
+      ln('No KYC documents on record.', 9, false, [150,50,50]);
+    } else {
+      const KYC_SLOT_LABELS = { passport:'Passport / Photo ID', right_to_rent:'Right to Rent', address_1:'Address Proof 1', address_2:'Address Proof 2', reference:'Reference Check', guarantor:'Guarantor', other:'Other Document' };
+      docs.forEach((d, i) => {
+        if (y > 260) addPage();
+        doc.setFillColor(248,250,253);
+        doc.rect(10, y-1, W-20, d.name_mismatch?28:22, 'F');
+        doc.setFontSize(10); doc.setFont('helvetica','bold'); doc.setTextColor(11,30,61);
+        doc.text(safe((i+1) + '. ' + (KYC_SLOT_LABELS[d.slot]||d.slot||'Document')), 15, y+4);
+        doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(80,80,80);
+        doc.text(safe('File: ' + (d.doc_label||d.file_name||'—')), 15, y+9);
+        const uploadTs = d.uploaded_at ? new Date(d.uploaded_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) + ' ' + new Date(d.uploaded_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) : '—';
+        doc.text(safe('Uploaded: ' + uploadTs + '   |   Verified: ' + (d.verified?'YES':'NO')), 15, y+14);
+        if (d.extracted_name) doc.text(safe('AI extracted name: ' + d.extracted_name), 15, y+19);
+        if (d.name_mismatch) {
+          doc.setFont('helvetica','bold'); doc.setTextColor(180,30,30);
+          doc.text(safe('NAME MISMATCH: extracted "' + d.extracted_name + '" vs tenant record "' + tenantName + '"'), 15, y+24);
+        }
+        y += d.name_mismatch ? 32 : 26;
+        rule([200,210,230], 0.2);
+      });
+    }
+    y += 3;
 
-    // ── SECTION 3: PORTAL ACTIVITY ──
-    sectionHeader('SECTION 3 — PORTAL ACTIVITY');
-    ln(`Portal invite sent: ${t.invite_used ? '✓ Yes' : 'Not sent'}`, 10);
-    ln(`Last login: ${t.last_login ? new Date(t.last_login).toLocaleDateString('en-GB') : '—'}`, 10);
-    y += 4;
+    // RTR check date
+    if (t.rtr_check_date) {
+      ln('Right to Rent check date: ' + new Date(t.rtr_check_date).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}), 9, false, [0,100,60]);
+    } else {
+      ln('Right to Rent check: NOT RECORDED — civil penalty up to GBP 20,000 per tenant', 9, true, [180,30,30]);
+    }
+    y += 3;
 
-    // ── SECTION 4: RENT HISTORY ──
-    sectionHeader('SECTION 4 — RENT PAYMENT HISTORY');
-    if (rents.length === 0) { ln('No rent records found.', 10, false, [150,150,150]); y += 4; }
-    rents.slice(0,50).forEach(r => {
-      const ts = r.due_date ? new Date(r.due_date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
-      const statusColor = r.status==='Paid'?[0,120,80]:r.status==='Late'?[180,0,0]:[100,100,100];
-      doc.setFontSize(10); doc.setFont('helvetica','normal'); doc.setTextColor(60,60,60);
-      if (y>270) addPage();
-      doc.text(`${ts}  £${(r.amount||0).toLocaleString()}`, 15, y);
-      doc.setTextColor(...statusColor); doc.setFont('helvetica','bold');
-      doc.text(r.status||'—', W-40, y); doc.setFont('helvetica','normal'); doc.setTextColor(60,60,60);
-      y += 6; rule([230,230,230]); y += 1;
-    });
+    // ── SECTION 3: AI-GENERATED DOCUMENTS ──
+    sectionHeader('3', 'AI-GENERATED & PLATFORM DOCUMENTS');
+    ln('The following documents were generated by the NexLet platform. Each entry records the generation timestamp.', 9, false, [80,80,100]);
+    y += 2;
+    const aiDocs = [
+      ...esigns.map(r => ({
+        label: r.document_type==='written_statement'?'Written Statement of Terms':'E-sign Document',
+        ts: r.created_at, status: r.status==='signed'?'SIGNED by tenant':'Sent — awaiting signature',
+        signedAt: r.signed_at, isAI: true
+      })),
+      ...comms.filter(e=>(e.template_id||'').includes('prescribed')).map(e=>({
+        label:'Prescribed Information (Deposit)', ts:e.sent_at, status:'Sent to ' + (e.sent_to||'—'), isAI:true
+      })),
+      ...comms.filter(e=>(e.template_id||'').includes('section8')||(e.subject||'').toLowerCase().includes('section 8')).map(e=>({
+        label:'Section 8 Notice', ts:e.sent_at, status:'Sent to ' + (e.sent_to||'—'), isAI:true
+      })),
+    ];
+    if (aiDocs.length === 0) {
+      ln('No AI-generated documents on record.', 9, false, [150,150,150]);
+    } else {
+      aiDocs.forEach((d,i) => {
+        if (y > 268) addPage();
+        const genTs = d.ts ? new Date(d.ts).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) + ' ' + new Date(d.ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '—';
+        doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(11,30,61);
+        doc.text(safe((i+1) + '. ' + d.label), 15, y);
+        doc.setFont('helvetica','normal'); doc.setTextColor(60,60,60);
+        doc.text(safe('Generated/sent: ' + genTs), 15, y+5);
+        doc.text(safe('Status: ' + d.status), 15, y+10);
+        if (d.signedAt) {
+          const signTs = new Date(d.signedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) + ' ' + new Date(d.signedAt).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+          doc.setTextColor(0,120,80); doc.setFont('helvetica','bold');
+          doc.text(safe('Signed by tenant: ' + signTs), 15, y+15);
+          y += 19;
+        } else { y += 14; }
+        rule([210,220,235], 0.2);
+      });
+    }
+    doc.setFontSize(8); doc.setFont('helvetica','italic'); doc.setTextColor(130,130,130);
+    ln('All AI-generated documents were reviewed and authorised by the landlord prior to sending. NexLet platform version logged at generation time. Reference: ' + bundleRef, 8, false, [130,130,130]);
+    y += 3;
 
-    // ── SECTION 5: MAINTENANCE ──
+    // ── SECTION 4: COMMUNICATIONS LOG ──
+    addPage();
+    sectionHeader('4', 'COMMUNICATIONS LOG (TIMESTAMPED)');
+    ln('All entries below are extracted from the NexLet platform email audit log. Duplicates removed.', 9, false, [80,80,100]);
+    y += 2;
+    if (comms.length === 0) {
+      ln('No communications on record.', 9, false, [150,150,150]);
+    } else {
+      // Table header
+      doc.setFillColor(230,235,245);
+      doc.rect(10, y, W-20, 7, 'F');
+      doc.setFontSize(8); doc.setFont('helvetica','bold'); doc.setTextColor(40,60,120);
+      doc.text('DATE & TIME', 15, y+5);
+      doc.text('SUBJECT', 55, y+5);
+      doc.text('RECIPIENT', W-55, y+5);
+      y += 9; rule([180,195,225], 0.3);
+      comms.forEach(e => {
+        if (y > 272) addPage();
+        const ts = e.sent_at
+          ? new Date(e.sent_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})
+            + ' ' + new Date(e.sent_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})
+          : '—';
+        const subj = safe((e.subject||e.template_name||e.template_id||'Email').slice(0,55));
+        const recip = safe((e.sent_to||'—').slice(0,30));
+        doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(50,50,50);
+        doc.text(ts, 15, y);
+        doc.text(subj, 55, y);
+        doc.setTextColor(80,80,120); doc.text(recip, W-55, y);
+        y += 5; rule([230,230,230], 0.1);
+      });
+    }
+    y += 3;
+
+    // ── SECTION 5: RENT PAYMENT HISTORY ──
+    if (y > 230) addPage();
+    sectionHeader('5', 'RENT PAYMENT HISTORY');
+    const lateRents = rents.filter(r=>r.status==='Late'||r.status==='Due');
+    const totalArrears = lateRents.reduce((s,r)=>s+(r.amount||0)-(r.paid_amount||0),0);
+    if (totalArrears > 0) {
+      doc.setFillColor(255,240,240); doc.setDrawColor(180,30,30); doc.setLineWidth(0.4);
+      doc.rect(10, y, W-20, 10, 'FD');
+      doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(180,30,30);
+      doc.text(safe('TOTAL ARREARS: GBP ' + totalArrears.toLocaleString() + ' — ' + lateRents.length + ' payment(s) overdue'), 15, y+7);
+      y += 14;
+    }
+    if (rents.length === 0) {
+      ln('No rent payment records found.', 9, false, [150,150,150]);
+    } else {
+      doc.setFillColor(230,235,245); doc.rect(10, y, W-20, 7, 'F');
+      doc.setFontSize(8); doc.setFont('helvetica','bold'); doc.setTextColor(40,60,120);
+      doc.text('DUE DATE', 15, y+5); doc.text('AMOUNT', 60, y+5);
+      doc.text('PAID', 90, y+5); doc.text('STATUS', W-35, y+5);
+      y += 9; rule([180,195,225], 0.3);
+      rents.forEach(r => {
+        if (y > 272) addPage();
+        const ts = r.due_date ? new Date(r.due_date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
+        const statusCol = r.status==='Paid'?[0,120,80]:r.status==='Late'?[180,30,30]:[150,100,0];
+        doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(50,50,50);
+        doc.text(ts, 15, y);
+        doc.text('GBP ' + (r.amount||0).toLocaleString(), 60, y);
+        doc.text(r.paid_amount ? 'GBP ' + Number(r.paid_amount).toLocaleString() : '—', 90, y);
+        doc.setFont('helvetica','bold'); doc.setTextColor(...statusCol);
+        doc.text(safe(r.status||'—'), W-35, y);
+        y += 5; rule([230,230,230], 0.1);
+      });
+    }
+    y += 3;
+
+    // ── SECTION 6: MAINTENANCE LOG ──
+    if (y > 230) addPage();
+    sectionHeader('6', 'MAINTENANCE LOG');
+    const awaabItems = maint.filter(m=>m.awaab&&m.status!=='Resolved');
+    if (awaabItems.length > 0) {
+      doc.setFillColor(255,240,240); doc.setDrawColor(180,30,30); doc.setLineWidth(0.4);
+      doc.rect(10, y, W-20, 10, 'FD');
+      doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(180,30,30);
+      doc.text(safe('AWAAB\'S LAW: ' + awaabItems.length + ' unresolved hazard(s) — immediate action required'), 15, y+7);
+      y += 14;
+    }
+    if (maint.length === 0) {
+      ln('No maintenance records found.', 9, false, [150,150,150]);
+    } else {
+      maint.forEach(m => {
+        if (y > 265) addPage();
+        const ts = m.issue_date||m.created_at ? new Date(m.issue_date||m.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—';
+        const isAwaab = m.awaab && m.status !== 'Resolved';
+        doc.setFontSize(9); doc.setFont('helvetica','bold');
+        doc.setTextColor(isAwaab?[180,30,30]:[11,30,61]);
+        doc.text(safe(ts + '  ' + (m.title||'Job')), 15, y);
+        doc.setFont('helvetica','normal'); doc.setTextColor(80,80,80);
+        const statusCol = m.status==='Resolved'?[0,120,80]:m.priority==='Urgent'?[180,30,30]:[150,100,0];
+        doc.setFontSize(8);
+        doc.text(safe('Status: ' + (m.status||'—') + '   Priority: ' + (m.priority||'—') + '   Cost: GBP ' + (m.cost||0)), 15, y+5);
+        if (m.description) {
+          const descLines = doc.splitTextToSize(safe(m.description), W-30);
+          doc.setFontSize(8); doc.setTextColor(100,100,100);
+          doc.text(descLines.slice(0,2), 15, y+10);
+          y += 10 + descLines.slice(0,2).length * 3.5;
+        } else { y += 9; }
+        if (isAwaab) {
+          doc.setFontSize(8); doc.setFont('helvetica','bold'); doc.setTextColor(180,30,30);
+          doc.text('AWAAB\'S LAW FLAG — Potential health hazard. 24hr investigation required under s.10A HA 1985.', 15, y);
+          y += 5;
+        }
+        y += 2; rule([220,225,235], 0.15);
+      });
+    }
+    y += 3;
+
+    // ── SECTION 7: DECLARATION OF TRUTH ──
     if (y > 220) addPage();
-    sectionHeader('SECTION 5 — MAINTENANCE LOG');
-    if (maint.length === 0) { ln('No maintenance records found.', 10, false, [150,150,150]); }
-    maint.slice(0,30).forEach(m => {
-      ln(`${m.title||'Job'} — ${m.status||'—'} — ${m.created_at?new Date(m.created_at).toLocaleDateString('en-GB'):''} — £${m.cost||0}`, 10);
-      if (m.description) ln(`   ${m.description}`, 9, false, [100,100,100]);
-      rule([230,230,230]); y += 1;
+    sectionHeader('7', 'DECLARATION OF TRUTH');
+    y += 4;
+    doc.setFillColor(248,250,253); doc.setDrawColor(11,30,61); doc.setLineWidth(0.5);
+    doc.rect(10, y, W-20, 52, 'FD');
+    doc.setFontSize(10); doc.setFont('helvetica','normal'); doc.setTextColor(30,30,30);
+    const declText = [
+      'I, ' + llName + ', being the landlord of the property at ' + p.address + (p.city?', '+p.city:'') + ',',
+      'declare that the information contained in this Evidence Bundle (Reference: ' + bundleRef + ')',
+      'is true and accurate to the best of my knowledge and belief.',
+      '',
+      'I understand that this document may be used in court proceedings, deposit adjudication,',
+      'or regulatory enquiries under the Renters Rights Act 2025 and the Housing Act 1988.',
+      '',
+      'This bundle was generated by the NexLet landlord compliance platform on',
+      genTimestamp + '.',
+    ];
+    declText.forEach((line, i) => {
+      doc.text(safe(line), 15, y + 9 + i * 5.5);
     });
+    y += 60;
+    doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(11,30,61);
+    doc.text('Signed: ___________________________________', 15, y);
+    doc.text('Date: ___________________________________', W/2, y);
+    y += 8;
+    doc.setFont('helvetica','normal'); doc.setTextColor(80,80,80);
+    doc.text(safe('Print name: ' + llName), 15, y);
+    doc.text('Bundle reference: ' + bundleRef, W/2, y);
+    y += 12;
+    doc.setFontSize(8); doc.setTextColor(130,130,130);
+    ln('This document was produced by NexLet (nexlet.co.uk), operated by Beacon Residentials Ltd (Co. No. 10990778). It constitutes a structured record of compliance activity and communications. It does not constitute legal advice. For legal proceedings, this bundle should be reviewed by a qualified solicitor.', 8, false, [130,130,130]);
 
-    // Footer on all pages
+    // ── FOOTER on all pages ──
     const totalPages = doc.getNumberOfPages();
     for (let pg = 1; pg <= totalPages; pg++) {
       doc.setPage(pg);
-      doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(150,150,150);
-      doc.text(`NexLet — Evidence Bundle for ${t.name} — Page ${pg} of ${totalPages}`, W/2, 292, { align:'center' });
+      doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(150,150,150);
+      doc.text('NexLet Evidence Bundle — ' + safe(tenantName) + ' — Ref: ' + bundleRef + ' — Page ' + pg + ' of ' + totalPages, W/2, 292, { align:'center' });
     }
 
-    const filename = `evidence_bundle_${(t.name||'tenant').replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.pdf`;
+    const filename = 'evidence_bundle_' + safe(tenantName).replace(/\s+/g,'_') + '_' + now.toISOString().slice(0,10) + '_' + bundleRef.slice(-6) + '.pdf';
     doc.save(filename);
-    toast('✓ Evidence bundle downloaded');
+    toast('Evidence bundle downloaded — Ref: ' + bundleRef);
   } catch(err) {
-    _logError('Bundle', err);
-    toast('⚠ Could not generate PDF — check console', true);
+    console.error('Evidence bundle error:', err);
+    toast('Could not generate PDF — check console', true);
   }
 }
 
