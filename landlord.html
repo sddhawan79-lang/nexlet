@@ -4663,6 +4663,7 @@ async function sendWelcomeKit(pid) {
         body: JSON.stringify({ type:'send_email', to: tenantEmail, subject: `Your tenancy welcome pack — ${propAddr}`, html, ...(attachments.length ? { attachments } : {}) })
       });
       const resData = await res.json().catch(()=>({}));
+      console.log('[Day1Kit] status:', res.status, '| attachments:', attachments.length, '| response:', JSON.stringify(resData).slice(0,300));
       if (!res.ok || resData.error) throw new Error(resData.error || resData.message || `Send failed (${res.status})`);
 
       // Log
@@ -6541,41 +6542,6 @@ function pdTabContent(pid, tab) {
         const _certRec = findCertForDoc(doc, certList);
         const _certUrl = _certRec ? (_certRec.url || _certRec.file_url || _certRec.document_url || (_certRec.engineer && String(_certRec.engineer).startsWith('http') ? _certRec.engineer : null) || null) : null;
 
-        // RIGHT TO RENT: per-tenant status from rtr_check_date / tenantDocs slot
-        if (doc.id === 'right_to_rent') {
-          const _rtrTenants = D.tenants.filter(t => String(t.prop_id) === String(pid) && t.status === 'Active');
-          if (!_rtrTenants.length) {
-            return '<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:#E4EAF1;border:1px solid transparent;border-radius:8px;gap:8px"><div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:500;color:var(--txt)">' + doc.label + '</div><div style="font-size:10.5px;color:var(--muted);margin-top:1px">' + doc.note + '</div></div><div style="display:flex;align-items:center;gap:6px;flex-shrink:0"><span style="font-size:10px;font-weight:700;color:#7A8FA6;letter-spacing:.3px">NO TENANTS</span></div></div>';
-          }
-          const _rtrResults = _rtrTenants.map(t => {
-            const _done = !!(t.rtr_check_date);
-            const _doc = (D.tenantDocs||[]).find(d => String(d.tenant_id)===String(t.id) && d.slot==='right_to_rent');
-            const _partial = !_done && !!_doc;
-            return { t, done: _done, partial: _partial, doc: _doc };
-          });
-          const _rtrAllDone = _rtrResults.every(r => r.done);
-          const _rtrSomeDone = _rtrResults.some(r => r.done || r.partial) && !_rtrAllDone;
-          const _rtrBg = _rtrAllDone ? 'var(--green-bg)' : _rtrSomeDone ? 'rgba(217,119,6,0.07)' : '#E4EAF1';
-          const _rtrCol = _rtrAllDone ? '#00A87A' : _rtrSomeDone ? '#D97706' : '#7A8FA6';
-          const _rtrBdr = _rtrAllDone ? 'var(--green-bg)' : _rtrSomeDone ? 'rgba(217,119,6,0.25)' : 'transparent';
-          const _rtrLbl = _rtrAllDone ? 'COMPLETE' : _rtrSomeDone ? 'PARTIAL' : 'NOT CHECKED';
-          const _rtrBtns = _rtrResults.map(r => {
-            const _fname = (r.t.name||'Tenant').split(' ')[0];
-            const _safeTid = String(r.t.id).replace(/'/g,"\\'");
-            if (r.done) {
-              const _dateStr = r.t.rtr_check_date ? ' (' + new Date(r.t.rtr_check_date).toLocaleDateString('en-GB',{day:'numeric',month:'short'}) + ')' : '';
-              const _viewUrl = r.doc && r.doc.file_url ? r.doc.file_url : null;
-              if (_viewUrl) {
-                return '<button onclick="event.stopPropagation();dvoOpen(\'' + _viewUrl + '\',\'RTR Check\',\'Right to Rent\')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:600">View ' + _fname + _dateStr + '</button>';
-              }
-              return '<span style="font-size:10px;color:#00A87A;font-weight:600">' + _fname + _dateStr + '</span>';
-            }
-            return '<button onclick="event.stopPropagation();nav(\'tenant-detail\',\'' + _safeTid + '\')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font);white-space:nowrap">Check ' + _fname + '</button>';
-          }).join('');
-          const _rtrPartialNote = _rtrSomeDone ? '<span style="font-size:9px;color:#D97706">' + _rtrResults.filter(r=>r.done||r.partial).length + '/' + _rtrTenants.length + ' checked</span>' : '';
-          return '<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:' + _rtrBg + ';border:1px solid ' + _rtrBdr + ';border-radius:8px;gap:8px"><div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:' + (!_rtrAllDone?'700':'500') + ';color:var(--txt)">' + doc.label + '</div><div style="font-size:10.5px;color:var(--muted);margin-top:1px;line-height:1.4">' + doc.note + '</div></div><div style="display:flex;align-items:center;gap:6px;flex-shrink:0">' + _rtrPartialNote + '<span style="font-size:10px;font-weight:700;color:' + _rtrCol + ';letter-spacing:.3px;white-space:nowrap">' + _rtrLbl + '</span>' + _rtrBtns + '</div></div>';
-        }
-
         // WRITTEN STATEMENT: status from esign_requests, not certificates
         if (doc.id === 'written_statement') {
           const _wsTenants = D.tenants.filter(t => String(t.prop_id) === String(pid) && t.status === 'Active');
@@ -6625,7 +6591,7 @@ function pdTabContent(pid, tab) {
 
         if (st.action === 'insurance') {
           // Route insurance rows to moInsurance, not moCert
-          rowAction = '<button onclick="event.stopPropagation();moAddInsurance(null,\'' + pid + '\',\'' + (doc.insurance_type||'').replace(/'/g,"\\'") + '\')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font);white-space:nowrap">Manage</button>';
+          rowAction = '<button onclick="event.stopPropagation();moInsurance(\'' + pid + '\')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font);white-space:nowrap">Manage</button>';
         } else if (st.isNA) {
           rowAction = _naBtn;
         } else if (st.overdue) {
@@ -11136,20 +11102,6 @@ async function saveInsurance(insId) {
   }
   closeMo();
   toast('✓ Insurance policy saved');
-  // Wire expiry to calendar so landlord sees renewal date
-  if (expiry) {
-    const _insProp = D.properties.find(p => String(p.id) === String(prop_id));
-    const _insCalTitle = (type||'Insurance') + ' renewal — ' + ((_insProp||{}).address||'Property');
-    const _existingCal = D.calEvents.find(e => e.title === _insCalTitle && e.date === expiry);
-    if (!_existingCal) {
-      const { data: _calData } = await sb.from('calendar_events').insert({
-        user_id: currentUser.id, prop_id: String(prop_id),
-        title: _insCalTitle, date: expiry,
-        notes: 'Insurance renewal reminder. Arrange renewal before this date.'
-      }).select().single();
-      if (_calData) D.calEvents.push(_calData);
-    }
-  }
   nav(window._currentPage, window._currentParam);
 }
 
@@ -18235,22 +18187,13 @@ async function dvoOpen(url, title, meta) {
     const fileType = _dvoType(viewUrl);
 
     if (fileType === 'pdf') {
-      const iframe = document.getElementById('dvo-iframe');
-      iframe.onload = function() {
-        document.getElementById('dvo-loading').style.display = 'none';
-        iframe.style.display = 'block';
-      };
-      iframe.onerror = function() {
-        document.getElementById('dvo-loading').style.display = 'none';
-        document.getElementById('dvo-fallback').style.display = 'flex';
-      };
-      iframe.src = viewUrl;
-      setTimeout(function() {
-        const loading = document.getElementById('dvo-loading');
-        if (loading && loading.style.display !== 'none') {
-          iframe.src = 'https://docs.google.com/viewer?url=' + encodeURIComponent(viewUrl) + '&embedded=true';
-        }
-      }, 4000);
+      // Supabase storage PDFs: open in new tab — iframe blocked cross-origin
+      document.getElementById('dvo-loading').style.display = 'none';
+      window.open(viewUrl, '_blank', 'noopener');
+      // Close the overlay — nothing to show inline
+      const overlay = document.getElementById('doc-viewer-overlay');
+      if (overlay) overlay.style.display = 'none';
+      document.body.style.overflow = '';
 
     } else if (fileType === 'image') {
       const img = document.getElementById('dvo-img');
