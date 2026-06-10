@@ -5101,14 +5101,11 @@ function pgDashboard(){
       // ── Compliance Health Score Ring ──
       const _allTenants = D.tenants.filter(t=>t.status==='Active');
       const _propCount  = D.properties.filter(p=>(p.status||'active')!=='archived').length;
-      const _certChecks = D.certs.filter(c=>{
-        if(!c.expiry_date) return false;
-        return new Date(c.expiry_date) > new Date();
-      }).length;
-      const _totalCerts = D.certs.length;
       // Score components (0-100):
-      // 1. Cert validity (30pts)
-      const certScore  = _totalCerts>0 ? Math.round((_certChecks/_totalCerts)*30) : 0;
+      // 1. Compliance score (30pts) — calcRAG per property, same as compliance tab
+      const _ragScores = D.properties.filter(p=>(p.status||'active')!=='archived').map(p=>calcRAG(p.id).score);
+      const _avgRag = _ragScores.length>0 ? Math.round(_ragScores.reduce((a,b)=>a+b,0)/_ragScores.length) : 0;
+      const certScore = Math.round(_avgRag * 0.30);
       // 2. Rent health (30pts)
       const _lateR = D.rent.filter(r=>r.status==='Late').length;
       const _totalR= D.rent.filter(r=>['Paid','Late','Due'].includes(r.status)).length;
@@ -5143,7 +5140,7 @@ function pgDashboard(){
           <div style="display:flex;gap:12px;flex-wrap:wrap">
             <div style="display:flex;flex-direction:column;gap:2px;min-width:80px;cursor:pointer" onclick="nav('compliance')" title="View certificates">
               <div style="font-size:10px;color:var(--muted)">Certificates</div>
-              <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden"><div style="height:100%;width:${certScore/30*100}%;background:${certScore===30?'#10B981':'#D97706'};border-radius:2px;transition:width .8s ease"></div></div>
+              <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden"><div style="height:100%;width:${_avgRag}%;background:${_avgRag>=80?'#10B981':_avgRag>=50?'#D97706':'#E53E3E'};border-radius:2px;transition:width .8s ease"></div></div>
             </div>
             <div style="display:flex;flex-direction:column;gap:2px;min-width:80px;cursor:pointer" onclick="nav('finance')" title="View rent">
               <div style="font-size:10px;color:var(--muted)">Rent</div>
@@ -8098,13 +8095,10 @@ async function checkAllReminders() {
     } catch(e) { shouldSendDigest = false; }
 
     if (shouldSendDigest) {
-    // Calculate portfolio score
-    const allCerts = D.certs;
-    const totalCerts = allCerts.length;
-    const expiredCerts = allCerts.filter(c => c.expiry && new Date(c.expiry) < today).length;
-    const criticalCerts = allCerts.filter(c => { if(!c.expiry) return false; const d=Math.round((new Date(c.expiry)-today)/864e5); return d>=0&&d<=14; }).length;
-    const portfolioScore = totalCerts > 0
-      ? Math.max(0, Math.min(100, Math.round(((totalCerts-expiredCerts)/totalCerts)*100) - (criticalCerts*5)))
+    // Calculate portfolio score — calcRAG per property averaged, same as compliance tab
+    const _emailRagScores = D.properties.map(p => calcRAG(p.id).score);
+    const portfolioScore = _emailRagScores.length > 0
+      ? Math.round(_emailRagScores.reduce((a,b) => a+b, 0) / _emailRagScores.length)
       : 0;
     const scoreCol = portfolioScore>=80?'var(--green)':portfolioScore>=50?'#D97706':'#E53E3E';
     const scoreLabel = portfolioScore>=80?'Healthy ✅':portfolioScore>=50?'Needs attention ⚠️':'At risk 🔴';
@@ -8844,14 +8838,14 @@ function pgTenantDetail(tid) {
       done: propLog.some(e=>(e.template_id||'').includes('how_to_rent')||(e.subject||'').toLowerCase().includes('how to rent'))||tenantLog2.some(e=>(e.template_id||'').includes('how_to_rent')||(e.subject||'').toLowerCase().includes('how to rent')),
       action:`sendH2RGuide('${tid}')`, btnLabel:'Send guide' },
     { icon:'🔥', label:'Gas Safety Certificate served',
-      done: !!findCertForDoc(COMPLIANCE_DOCS.safety.docs.find(d=>d.id==='gas'), propCerts),
-      action:`moCert('${t.prop_id}','Gas Safety Certificate (CP12)')`, btnLabel:'Upload GSC' },
+      done: propCerts.some(c=>c.type&&c.type.toLowerCase().includes('gas')),
+      action:`moBulkScan('${t.prop_id}')`, btnLabel:'Upload GSC' },
     { icon:'⚡', label:'EICR served to tenant',
-      done: !!findCertForDoc(COMPLIANCE_DOCS.safety.docs.find(d=>d.id==='eicr'), propCerts),
-      action:`moCert('${t.prop_id}','EICR (Electrical Installation)')`, btnLabel:'Upload EICR' },
+      done: propCerts.some(c=>c.type&&(c.type.toLowerCase().includes('eicr')||c.type.toLowerCase().includes('electrical'))),
+      action:`moBulkScan('${t.prop_id}')`, btnLabel:'Upload EICR' },
     { icon:'🏷', label:'EPC served to tenant',
-      done: !!findCertForDoc(COMPLIANCE_DOCS.safety.docs.find(d=>d.id==='epc'), propCerts),
-      action:`moCert('${t.prop_id}','EPC (Energy Performance)')`, btnLabel:'Upload EPC' },
+      done: propCerts.some(c=>c.type&&(c.type.toLowerCase().includes('epc')||c.type.toLowerCase().includes('energy'))),
+      action:`moBulkScan('${t.prop_id}')`, btnLabel:'Upload EPC' },
     { icon:'✍️', label:'Written Statement e-signed',
       done: (D.esignReq||[]).some(r=>String(r.tenant_id)===String(t.id)&&r.document_type==='written_statement'&&r.status==='signed'),
       action:`moEsign('${t.prop_id}','${t.id}')`, btnLabel:'Send for signing' },
@@ -8871,14 +8865,14 @@ function pgTenantDetail(tid) {
       done: !!(t.scheme&&t.scheme_ref),
       action:`moDepositCertModal('${t.id}')`, btnLabel:'Record deposit' },
     { icon:'🔔', label:'Smoke & CO alarm tested',
-      done: !!findCertForDoc(COMPLIANCE_DOCS.safety.docs.find(d=>d.id==='smoke'), propCerts) || !!findCertForDoc(COMPLIANCE_DOCS.safety.docs.find(d=>d.id==='co'), propCerts),
-      action:`moCert('${t.prop_id}','Smoke Alarm Test Record')`, btnLabel:'Upload test record' },
+      done: propCerts.some(c=>c.type&&(c.type.toLowerCase().includes('smoke')||c.type.toLowerCase().includes('co alarm')||c.type.toLowerCase().includes('carbon monoxide'))),
+      action:`moBulkScan('${t.prop_id}')`, btnLabel:'Upload test record' },
     { icon:'📋', label:'Inventory / schedule of condition signed',
       done: propCerts.some(c=>c.type&&(c.type.toLowerCase().includes('inventory')||c.type.toLowerCase().includes('schedule of condition')))||(D._invReports||[]).some(r=>String(r.propId)===String(t.prop_id)),
       action:`moInventoryReport('${t.prop_id}')`, btnLabel:'Create Inventory' },
     { icon:'🧪', label:'Legionella risk assessment completed',
-      done: !!findCertForDoc(COMPLIANCE_DOCS.safety.docs.find(d=>d.id==='legionella'), propCerts),
-      action:`moCert('${t.prop_id}','Legionella Risk Assessment')`, btnLabel:'Upload assessment' },
+      done: propCerts.some(c=>c.type&&c.type.toLowerCase().includes('legionella')),
+      action:`moBulkScan('${t.prop_id}')`, btnLabel:'Upload assessment' },
     ...(_hasPet ? [{ icon:'🐾', label:'Pet agreement signed',
       done: propLog.some(e=>(e.template_id||'').includes('pet')||(e.subject||'').toLowerCase().includes('pet'))||tenantLog2.some(e=>(e.subject||'').toLowerCase().includes('pet')),
       action:`moCommunicationsHub('${tid}')`, btnLabel:'Send pet agreement' }] : []),
