@@ -6561,14 +6561,14 @@ function pdTabContent(pid, tab) {
           const _rtrLbl = _rtrAllDone ? 'COMPLETE' : _rtrSomeDone ? 'PARTIAL' : 'NOT CHECKED';
           const _rtrBtns = _rtrResults.map(r => {
             const _fname = (r.t.name||'Tenant').split(' ')[0];
-            const _safePid = String(pid).replace(/'/g,"\\'");
             const _safeTid = String(r.t.id).replace(/'/g,"\\'");
             if (r.done) {
               const _dateStr = r.t.rtr_check_date ? ' (' + new Date(r.t.rtr_check_date).toLocaleDateString('en-GB',{day:'numeric',month:'short'}) + ')' : '';
               const _viewUrl = r.doc && r.doc.file_url ? r.doc.file_url : null;
-              return (_viewUrl
-                ? '<button onclick="event.stopPropagation();dvoOpen(\\'' + _viewUrl + '\\',\\'RTR — ' + _fname + '\\',\\'' + (p?p.address:'') + '\')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:600">View ' + _fname + _dateStr + '</button>'
-                : '<span style="font-size:10px;color:#00A87A;font-weight:600">' + _fname + _dateStr + '</span>');
+              if (_viewUrl) {
+                return '<button onclick="event.stopPropagation();dvoOpen(\'' + _viewUrl + '\',\'RTR Check\',\'Right to Rent\')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:600">View ' + _fname + _dateStr + '</button>';
+              }
+              return '<span style="font-size:10px;color:#00A87A;font-weight:600">' + _fname + _dateStr + '</span>';
             }
             return '<button onclick="event.stopPropagation();nav(\'tenant-detail\',\'' + _safeTid + '\')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font);white-space:nowrap">Check ' + _fname + '</button>';
           }).join('');
