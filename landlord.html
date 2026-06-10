@@ -651,7 +651,7 @@ const COMPLIANCE_DOCS = {
         mandatory: true,
         no_expiry: false,
         hmo_only: false,
-        match: ['gas safety','cp12','gas cert']
+        match: ['gas safety','cp12','gas cert','gas safe','gsc','gas safety certificate']
       },
       {
         id: 'eicr',
@@ -661,7 +661,7 @@ const COMPLIANCE_DOCS = {
         mandatory: true,
         no_expiry: false,
         hmo_only: false,
-        match: ['eicr','electrical installation','electrical condition']
+        match: ['eicr','electrical installation','electrical condition','electrical inspection','electrical safety']
       },
       {
         id: 'epc',
@@ -671,7 +671,7 @@ const COMPLIANCE_DOCS = {
         mandatory: true,
         no_expiry: false,
         hmo_only: false,
-        match: ['epc','energy performance']
+        match: ['epc','energy performance','energy certificate','energy rating']
       },
       {
         id: 'smoke',
@@ -681,7 +681,7 @@ const COMPLIANCE_DOCS = {
         mandatory: true,
         no_expiry: true,
         hmo_only: false,
-        match: ['smoke alarm','smoke detector']
+        match: ['smoke alarm','smoke detector','smoke test','smoke & co','smoke and co']
       },
       {
         id: 'co',
@@ -691,7 +691,7 @@ const COMPLIANCE_DOCS = {
         mandatory: true,
         no_expiry: true,
         hmo_only: false,
-        match: ['co alarm','carbon monoxide','co detector']
+        match: ['co alarm','carbon monoxide','co detector','co check','co test']
       },
       {
         id: 'legionella',
@@ -701,7 +701,7 @@ const COMPLIANCE_DOCS = {
         mandatory: true,
         no_expiry: false,
         hmo_only: false,
-        match: ['legionella','water risk','l8']
+        match: ['legionella','water risk','l8','legionella risk','water assessment']
       },
     ]
   },
@@ -2040,6 +2040,16 @@ async function saveCertToDB() {
 
   if (!propId) { toast('Please select a property', true); return; }
   if (!certType) { toast('Please enter a document name', true); return; }
+
+  // Block save if expiry field visible but empty — needed to fire renewal reminders
+  const _expiryField = document.getElementById('ce');
+  const _expiryRow = _expiryField?.closest('.fg') || _expiryField?.parentElement;
+  const _expiryVisible = _expiryRow ? _expiryRow.style.display !== 'none' : true;
+  if (_expiryVisible && !expiry) {
+    toast('Please enter the expiry date — needed to trigger renewal reminders', true);
+    _expiryField?.focus();
+    return;
+  }
 
   const status = expiry ? (new Date(expiry) < new Date() ? 'Expired' : 'Valid') : 'No expiry';
 
@@ -6531,75 +6541,77 @@ function pdTabContent(pid, tab) {
         const _certRec = findCertForDoc(doc, certList);
         const _certUrl = _certRec ? (_certRec.url || _certRec.file_url || _certRec.document_url || (_certRec.engineer && String(_certRec.engineer).startsWith('http') ? _certRec.engineer : null) || null) : null;
 
-        const _viewBtn = _certUrl ? `<button onclick="event.stopPropagation();dvoOpen('${_certUrl}','${doc.label.replace(/'/g,"\\'")}','${p ? p.address : ''}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:600">👁 View</button>` : '';
-        const _deleteBtn = _certRec ? `<button onclick="event.stopPropagation();dlDelete('${_certRec.id}','prop-detail')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid rgba(229,62,62,0.3);background:rgba(229,62,62,0.05);color:var(--red);cursor:pointer;font-family:var(--font)">✕</button>` : '';
-        const _editBtn = _certRec ? `<button onclick="event.stopPropagation();moEditCert('${_certRec.id}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);white-space:nowrap">✎</button>` : '';
-
-        // E-sign button — only for written_statement doc
-        const _esignTenant = D.tenants.find(t => String(t.prop_id) === String(pid) && t.status === 'Active');
-        const _esignBtn = (doc.id === 'written_statement' && _esignTenant && !st.isNA)
-          ? `<div style="display:flex;flex-direction:column;align-items:center;gap:1px">`
-            + `<button onclick="event.stopPropagation();moEsign('${pid}','${_esignTenant.id}')" `
-            + `style="font-size:10px;padding:3px 10px;border-radius:5px;border:1px solid var(--green-dark);`
-            + `background:var(--green-bg);color:var(--green-dark);cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:600">`
-            + `✍ Send for e-sign</button>`
-            + `<span style="font-size:9px;color:var(--muted);white-space:nowrap">AI generates &amp; tenant signs online</span>`
-            + `</div>`
-          : '';
-
-        // N/A toggle button — only on non-mandatory, non-insurance docs
-        const _naBtn = (!doc.mandatory && !doc.insurance_type)
-          ? (st.isNA
-              ? `<button onclick="event.stopPropagation();unbypassDoc('${pid}','${doc.id}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font);white-space:nowrap" title="Remove N/A — mark as required">↩ Undo N/A</button>`
-              : `<button onclick="event.stopPropagation();bypassDoc('${pid}','${doc.id}')" style="font-size:10px;padding:3px 8px;border-radius:100px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:600" title="Mark as not applicable for this property">N/A</button>`)
-          : '';
-
-        if (st.action === 'insurance') {
-          rowAction = `<button onclick="moCert('${pid}')"
-            style="font-size:10px;padding:3px 8px;
-            border-radius:5px;border:1px solid var(--border);
-            background:var(--white);color:var(--muted);
-            cursor:pointer;font-family:var(--font);
-            white-space:nowrap">Manage →</button>`;
-        } else if (st.isNA) {
-          rowAction = `${_naBtn}`;
-        } else if (st.overdue) {
-          rowAction = `${_editBtn}${_viewBtn}${_deleteBtn}
-            <button onclick="moCert('${pid}','${_escLabel}')"
-            style="font-size:10px;padding:3px 8px;
-            border-radius:5px;border:1px solid var(--red);
-            background:rgba(229,62,62,0.07);color:var(--red);
-            cursor:pointer;font-family:var(--font);
-            white-space:nowrap;font-weight:600">
-            🔄 Renew</button>${_esignBtn}${_naBtn}`;
-        } else {
-          rowAction = `${_editBtn}${_viewBtn}${_deleteBtn}${_esignBtn}${_naBtn}`;
+        // WRITTEN STATEMENT: status from esign_requests, not certificates
+        if (doc.id === 'written_statement') {
+          const _wsTenants = D.tenants.filter(t => String(t.prop_id) === String(pid) && t.status === 'Active');
+          const _wsFirst = _wsTenants[0];
+          if (!_wsTenants.length) {
+            return '<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:#E4EAF1;border:1px solid transparent;border-radius:8px;gap:8px"><div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:500;color:var(--txt)">' + doc.label + '</div><div style="font-size:10.5px;color:var(--muted);margin-top:1px">' + doc.note + '</div></div><div style="display:flex;align-items:center;gap:6px;flex-shrink:0"><span style="font-size:10px;font-weight:700;color:#7A8FA6;letter-spacing:.3px">NO TENANTS</span></div></div>';
+          }
+          const _wsSigned = (D.esignReq||[]).filter(r => _wsTenants.some(t => String(t.id)===String(r.tenant_id)) && r.document_type==='written_statement' && r.status==='signed' && r.signed_pdf_url);
+          const _wsAll = _wsSigned.length >= _wsTenants.length;
+          const _wsSome = _wsSigned.length > 0 && !_wsAll;
+          const _wsBg = _wsAll ? 'var(--green-bg)' : _wsSome ? 'rgba(217,119,6,0.07)' : '#E4EAF1';
+          const _wsCol = _wsAll ? '#00A87A' : _wsSome ? '#D97706' : '#7A8FA6';
+          const _wsBdr = _wsAll ? 'var(--green-bg)' : _wsSome ? 'rgba(217,119,6,0.25)' : 'transparent';
+          const _wsLbl = _wsAll ? 'SIGNED' : _wsSome ? 'PARTIAL' : 'NOT SIGNED';
+          const _wsViews = _wsSigned.map(r => {
+            const _tn = (_wsTenants.find(t=>String(t.id)===String(r.tenant_id))||{}).name||'Tenant';
+            const _safeName = _tn.replace(/'/g, "\\'");
+            const _fname = _tn.split(' ')[0];
+            return '<button onclick="event.stopPropagation();dvoOpen(\'' + r.signed_pdf_url + '\',\'Signed Written Statement\',\'' + _safeName + '\')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:600">View ' + _fname + '</button>';
+          }).join('');
+          const _wsEsign = (!_wsAll && _wsFirst)
+            ? '<button onclick="event.stopPropagation();moEsign(\'' + pid + '\',\'' + _wsFirst.id + '\')" style="font-size:10px;padding:3px 10px;border-radius:5px;border:1px solid var(--green-dark);background:var(--green-bg);color:var(--green-dark);cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:600">Send for e-sign</button>'
+            : '';
+          const _wsPartial = _wsSome ? '<span style="font-size:9px;color:#D97706">' + _wsSigned.length + '/' + _wsTenants.length + ' signed</span>' : '';
+          const _wsWt = !_wsAll ? '700' : '500';
+          return '<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:' + _wsBg + ';border:1px solid ' + _wsBdr + ';border-radius:8px;gap:8px">'
+            + '<div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:' + _wsWt + ';color:var(--txt)">' + doc.label + '</div>'
+            + '<div style="font-size:10.5px;color:var(--muted);margin-top:1px;line-height:1.4">' + doc.note + '</div></div>'
+            + '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">' + _wsPartial
+            + '<span style="font-size:10px;font-weight:700;color:' + _wsCol + ';letter-spacing:.3px;white-space:nowrap">' + _wsLbl + '</span>'
+            + _wsViews + _wsEsign + '</div></div>';
         }
 
-        const _escLabel = doc.label.replace(/'/g,"\\'");
-        const _escAddr = (p ? p.address : '').replace(/'/g,"\\'");
-        const _rowClick = _certUrl ? `onclick="dvoOpen('${_certUrl}','${_escLabel}','${_escAddr}')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:${st.bg};border:1px solid ${st.bdr};border-radius:8px;gap:8px"` : `style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:${st.bg};border:1px solid ${st.bdr};border-radius:8px;gap:8px"`;
-        return `
-          <div ${_rowClick}>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:12.5px;font-weight:${st.overdue && doc.mandatory ? '700' : '500'};
-                color:var(--txt)">${doc.label}</div>
-              <div style="font-size:10.5px;color:var(--muted);
-                margin-top:1px;line-height:1.4">
-                ${doc.note}</div>
-            </div>
-            <div style="display:flex;align-items:center;
-              gap:6px;flex-shrink:0">
-              ${dayStr
-                ? `<span style="font-size:10px;
-                    color:${st.col}">${dayStr}</span>`
-                : ''}
-              <span style="font-size:10px;font-weight:700;
-                color:${st.col};letter-spacing:.3px;
-                white-space:nowrap">${st.lbl}</span>
-              ${rowAction}
-            </div>
-          </div>`;
+        const _viewBtn = _certUrl ? '<button onclick="event.stopPropagation();dvoOpen(\'' + _certUrl + '\',\'' + doc.label.replace(/\'/g, "\\'") + '\',\'' + (p ? p.address : '') + '\')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:600">View</button>' : '';
+        const _deleteBtn = _certRec ? '<button onclick="event.stopPropagation();dlDelete(\'' + _certRec.id + '\',\'prop-detail\')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid rgba(229,62,62,0.3);background:rgba(229,62,62,0.05);color:var(--red);cursor:pointer;font-family:var(--font)">x</button>' : '';
+        const _editBtn = _certRec ? '<button onclick="event.stopPropagation();moEditCert(\'' + _certRec.id + '\')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);white-space:nowrap">Edit</button>' : '';
+
+        // N/A toggle — only on non-mandatory, non-insurance docs
+        const _naBtn = (!doc.mandatory && !doc.insurance_type)
+          ? (st.isNA
+              ? '<button onclick="event.stopPropagation();unbypassDoc(\'' + pid + '\',\'' + doc.id + '\')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font);white-space:nowrap">Undo N/A</button>'
+              : '<button onclick="event.stopPropagation();bypassDoc(\'' + pid + '\',\'' + doc.id + '\')" style="font-size:10px;padding:3px 8px;border-radius:100px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:600">N/A</button>')
+          : '';
+
+        const _escLabel = doc.label.replace(/'/g, "\\'");
+        const _escAddr = (p ? p.address : '').replace(/'/g, "\\'");
+
+        if (st.action === 'insurance') {
+          // Route insurance rows to moInsurance, not moCert
+          rowAction = '<button onclick="event.stopPropagation();moInsurance(\'' + pid + '\')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font);white-space:nowrap">Manage</button>';
+        } else if (st.isNA) {
+          rowAction = _naBtn;
+        } else if (st.overdue) {
+          rowAction = _editBtn + _viewBtn + _deleteBtn + '<button onclick="moCert(\'' + pid + '\',\'' + _escLabel + '\')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--red);background:rgba(229,62,62,0.07);color:var(--red);cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:600">Renew</button>' + _naBtn;
+        } else {
+          rowAction = _editBtn + _viewBtn + _deleteBtn + _naBtn;
+        }
+
+        const _rowClick = _certUrl
+          ? 'onclick="dvoOpen(\'' + _certUrl + '\',\'' + _escLabel + '\',\'' + _escAddr + '\')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:' + st.bg + ';border:1px solid ' + st.bdr + ';border-radius:8px;gap:8px"'
+          : 'style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:' + st.bg + ';border:1px solid ' + st.bdr + ';border-radius:8px;gap:8px"';
+        return '<div ' + _rowClick + '>'
+          + '<div style="flex:1;min-width:0">'
+          + '<div style="font-size:12.5px;font-weight:' + (st.overdue && doc.mandatory ? '700' : '500') + ';color:var(--txt)">' + doc.label + '</div>'
+          + '<div style="font-size:10.5px;color:var(--muted);margin-top:1px;line-height:1.4">' + doc.note + '</div>'
+          + '</div>'
+          + '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">'
+          + (dayStr ? '<span style="font-size:10px;color:' + st.col + '">' + dayStr + '</span>' : '')
+          + '<span style="font-size:10px;font-weight:700;color:' + st.col + ';letter-spacing:.3px;white-space:nowrap">' + st.lbl + '</span>'
+          + rowAction
+          + '</div></div>';
       }).join('');
 
       const overdueCount = group.docs.filter(doc => {
@@ -12824,7 +12836,7 @@ async function moEditCert(id) {
 
   const fieldsHtml = [
     renderInput('type', 'text', cert.type||'', 'Certificate Type'),
-    renderInput('ref', 'text', cert.ref||cert.reference||'', flbl('ref','Reference Number')),
+    renderInput('ref', 'text', cert.ref||cert.reference||cert.cert_ref||'', flbl('ref','Reference Number')),
     renderInput('issued', 'date', cert.issued||'', flbl('issued','Issue Date')),
     renderInput('expiry', 'date', cert.expiry||'', flbl('expiry','Expiry Date'), '(leave blank if no expiry)'),
     renderInput('engineer', 'text', cert.engineer||'', flbl('engineer','Engineer / Provider')),
@@ -12848,6 +12860,7 @@ async function saveEditCert(id) {
   const updates = {
     type:              document.getElementById('ec-type')?.value.trim()||null,
     ref:               document.getElementById('ec-ref')?.value.trim()||null,
+    cert_ref:          document.getElementById('ec-ref')?.value.trim()||null,
     issued:            document.getElementById('ec-issued')?.value||null,
     expiry:            document.getElementById('ec-expiry')?.value||null,
     engineer:          document.getElementById('ec-engineer')?.value.trim()||null,
