@@ -2680,7 +2680,7 @@ function archiveProperty(pid) {
       </select>
     </div>
   `, `<button class="btn" onclick="closeMo()">Cancel</button>
-     <button class="btn btn-navy" id="arch-btn" onclick="_archivePropertyConfirm('${pid}')">Archive property</button>`);
+     <button class="btn" id="arch-btn" style="background:var(--red);border-color:var(--red);color:#fff" onclick="_archivePropertyConfirm('${pid}')">Archive property</button>`);
 }
 
 async function _archivePropertyConfirm(pid) {
@@ -4361,7 +4361,7 @@ function moEndTenancy(tid) {
     '<div class="fg"><label>End date (leave blank for today)</label>' +
     '<input type="date" id="et-date" value="' + new Date().toISOString().slice(0,10) + '"></div>',
     '<button class="btn" onclick="closeMo()">Cancel</button>' +
-    '<button class="btn btn-navy" id="et-btn" onclick="_endTenancy(\'' + t.id + '\')">✔ End Tenancy</button>'
+    '<button class="btn" id="et-btn" style="background:var(--red);border-color:var(--red);color:#fff" onclick="_endTenancy(\'' + t.id + '\')">✔ End Tenancy</button>'
   );
 }
 
@@ -6471,8 +6471,8 @@ function pgPropDetail(pid) {
       const sk = p.status || 'vacant';
       const btn = (label, cls, fn) => `<button class="btn ${cls}" style="font-size:12px;padding:7px 14px" onclick="${fn}">${label}</button>`;
       let btns = '';
-      if (sk === 'vacant')       btns = btn('Start Tenancy', 'btn-navy', `startTenancy('${pid}')`) + btn('🧹 Prepare to Re-let', '', `moPreparRelet('${pid}')`) + btn('Archive', '', `archiveProperty('${pid}')`);
-      else if (sk === 'active')   btns = btn('✍️ E-sign Agreement', '', `moEsign('${pid}','${t?t.id:''}')`) + btn('End Tenancy', '', `endTenancy('${pid}')`) + btn('Archive', '', `archiveProperty('${pid}')`);
+      if (sk === 'vacant')       btns = btn('Start Tenancy', 'btn-navy', `startTenancy('${pid}')`) + `<button class="btn" style="font-size:12px;padding:7px 14px;color:var(--blue);border-color:rgba(59,111,232,0.4);background:var(--blue-bg)" onclick="moPreparRelet('${pid}')">🧹 Prepare to Re-let</button>` + `<button class="btn" style="font-size:12px;padding:7px 14px;color:var(--muted);border-color:var(--border)" onclick="archiveProperty('${pid}')">Archive</button>`;
+      else if (sk === 'active')   btns = btn('✍️ E-sign Agreement', 'btn-navy', `moEsign('${pid}','${t?t.id:''}')`) + `<button class="btn" style="font-size:12px;padding:7px 14px;color:var(--red);border-color:rgba(229,62,62,0.4);background:rgba(229,62,62,0.04)" onclick="endTenancy('${pid}')">End Tenancy</button>` + `<button class="btn" style="font-size:12px;padding:7px 14px;color:var(--muted);border-color:var(--border)" onclick="archiveProperty('${pid}')">Archive</button>`;
       else if (sk === 'refurbishment') btns = btn('Mark Ready', 'btn-navy', `markRefurbReady('${pid}')`) + btn('Archive', '', `archiveProperty('${pid}')`);
       else if (sk === 'archived') {
         const isSold = p.archive_reason === 'Sold';
