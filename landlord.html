@@ -15238,6 +15238,30 @@ function s8Step5() {
 function s8Nav(dir) {
   if (_s8.step + dir < 1 || _s8.step + dir > 5) return;
   if (_s8.step === 2 && dir === 1 && !_s8.category) { toast('Please select a reason', true); return; }
+
+  // Step 4 → 5: validate all req:true fields for selected grounds
+  if (_s8.step === 4 && dir === 1) {
+    const selectedData = S8_GROUNDS.filter(g => _s8.selectedGrounds.includes(g.num));
+    const missing = [];
+    for (const g of selectedData) {
+      for (const f of (g.fields||[])) {
+        if (!f.req) continue;
+        const el = document.getElementById(f.id);
+        const val = el ? el.value.trim() : '';
+        if (!val) {
+          missing.push(`Ground ${g.num} — "${f.label}"`);
+          if (el) { el.style.border = '1.5px solid var(--red)'; el.focus(); }
+        } else {
+          if (el) el.style.border = '';
+        }
+      }
+    }
+    if (missing.length) {
+      toast('Required fields missing: ' + missing[0] + (missing.length > 1 ? ` (+${missing.length-1} more)` : ''), true);
+      return;
+    }
+  }
+
   _s8.step += dir;
   s8Render();
 }
@@ -15333,6 +15357,22 @@ async function s8Generate() {
 
   const p = _s8.prop, t = _s8.tenant;
   const selectedData = S8_GROUNDS.filter(g => _s8.selectedGrounds.includes(g.num));
+
+  // Second-line defence: re-validate all req fields before generating
+  const _missingFields = [];
+  for (const g of selectedData) {
+    for (const f of (g.fields||[])) {
+      if (!f.req) continue;
+      const val = (_s8.fields[f.id] || '').toString().trim();
+      if (!val) _missingFields.push(`Ground ${g.num}: ${f.label}`);
+    }
+  }
+  if (_missingFields.length) {
+    btn.disabled = false;
+    btn.innerHTML = '✦ Generate draft';
+    toast('Cannot generate — required fields missing: ' + _missingFields[0] + (_missingFields.length > 1 ? ` (+${_missingFields.length-1} more)` : ''), true);
+    return;
+  }
 
   try {
     // Build notice directly in Form 3A section order — no AI needed, all data is known
@@ -17710,6 +17750,7 @@ function s13Next() {
     s.landlordName = document.getElementById('s13-lname')?.value.trim()||s.landlordName;
     s.landlordAddress = document.getElementById('s13-laddr')?.value.trim()||'';
     if (!s.tenantId) { toast('Please select a tenant', true); return; }
+    if (!s.landlordName) { toast('Please enter the landlord full name', true); document.getElementById('s13-lname')?.focus(); return; }
   } else if (n===2) {
     s.newRent = document.getElementById('s13-newrent')?.value||'';
     s.noticeDate = document.getElementById('s13-ndate')?.value||s.noticeDate;
