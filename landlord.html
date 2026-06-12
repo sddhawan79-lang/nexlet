@@ -1747,6 +1747,11 @@ async function savePropToDB() {
 
   D.properties.unshift({...data, rooms:[], inspections:[]});
   await logAudit('ADD_PROPERTY', 'properties', data.id, `Added: ${prop.address}, ${prop.city}`);
+  _clearPropDraft(); // clear draft on successful save
+  window._propStep = 0; // prevent closeMo from re-saving
+
+  // Re-render current page immediately so new property appears without any delay
+  try { nav(window._currentPage || 'properties', window._currentParam || null); } catch(e) {}
 
   closeMo();
   toast('✓ Property saved!');
@@ -2226,7 +2231,65 @@ function openMo(t,s,b,f){
   
   document.getElementById('mo').classList.add('open');
 }
+// ── WIZARD DRAFT SAVE / RESTORE ──
+function _savePropDraft() {
+  try {
+    const d = {
+      addr:     document.getElementById('p-addr')?.value || '',
+      city:     document.getElementById('p-city')?.value || '',
+      post:     document.getElementById('p-post')?.value || '',
+      country:  document.getElementById('p-country')?.value || 'England',
+      type:     document.getElementById('p-type')?.value || '',
+      beds:     document.getElementById('p-beds')?.value || '',
+      bath:     document.getElementById('p-bath')?.value || '',
+      rent:     document.getElementById('p-rent')?.value || '',
+      purchase: document.getElementById('p-purchase')?.value || '',
+      value:    document.getElementById('p-value')?.value || '',
+      ownership:document.getElementById('p-ownership')?.value || '',
+      notes:    document.getElementById('p-notes')?.value || '',
+      step:     window._propStep || 1,
+      ts:       Date.now()
+    };
+    // Only save if at least address has been started
+    if (d.addr || d.city) localStorage.setItem('nexlet_prop_draft', JSON.stringify(d));
+  } catch(e) {}
+}
+function _clearPropDraft() { try { localStorage.removeItem('nexlet_prop_draft'); } catch(e) {} }
+function _restorePropDraft() {
+  try {
+    const raw = localStorage.getItem('nexlet_prop_draft');
+    if (!raw) return false;
+    const d = JSON.parse(raw);
+    // Discard drafts older than 24h
+    if (!d.addr || (Date.now() - d.ts) > 864e5) { _clearPropDraft(); return false; }
+    return d;
+  } catch(e) { return false; }
+}
+function _saveTenantDraft() {
+  try {
+    const s = window._tsetup || {};
+    if (!s.name && !s.email) return; // nothing worth saving
+    localStorage.setItem('nexlet_tenant_draft', JSON.stringify({ ...s, ts: Date.now() }));
+  } catch(e) {}
+}
+function _clearTenantDraft() { try { localStorage.removeItem('nexlet_tenant_draft'); } catch(e) {} }
+function _restoreTenantDraft(pid) {
+  try {
+    const raw = localStorage.getItem('nexlet_tenant_draft');
+    if (!raw) return false;
+    const d = JSON.parse(raw);
+    if (!d.name && !d.email) { _clearTenantDraft(); return false; }
+    // Only restore if draft is for same property or no property mismatch
+    if ((Date.now() - d.ts) > 864e5) { _clearTenantDraft(); return false; }
+    if (pid && d.pid && String(d.pid) !== String(pid)) return false;
+    return d;
+  } catch(e) { return false; }
+}
+
 function closeMo(){
+  // Auto-save wizard drafts on close so work isn't lost
+  if (window._propStep && window._propStep > 0) _savePropDraft();
+  if (window._tsetup && (window._tsetup.name || window._tsetup.email)) _saveTenantDraft();
   document.getElementById('mo').classList.remove('open');
   const box = document.querySelector('.mo-box');
   if (box) box.classList.remove('mo-wide');
@@ -2338,6 +2401,22 @@ function moAddProp(){
   window._addPropOrigin = 'properties';
   const limit=getPropLimit();
   if(D.properties.length >= limit){ const _t=getUserPlan()==='starter'?'landlord':'portfolio'; upgradePrompt('Add more properties',_t); return; }
+
+  // Check for unsaved draft
+  const _propDraft = _restorePropDraft();
+  if (_propDraft) {
+    openMo('Resume adding property?', _propDraft.addr || 'Unsaved property',
+      `<div style="font-size:13px;color:var(--muted);margin-bottom:18px">You started adding a property and closed the form. Would you like to carry on where you left off?</div>
+       <div style="background:var(--off);border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-size:12px;margin-bottom:16px">
+         <div><strong>${_propDraft.addr || '—'}</strong>${_propDraft.city ? ', ' + _propDraft.city : ''}${_propDraft.post ? ' ' + _propDraft.post : ''}</div>
+         ${_propDraft.rent ? '<div style="color:var(--muted);margin-top:4px">Rent: £' + _propDraft.rent + '/mo</div>' : ''}
+       </div>`,
+      `<button class="btn" onclick="closeMo();_clearPropDraft();moAddProp()">Start fresh</button>
+       <button class="btn btn-navy" onclick="closeMo();_moAddPropWithDraft(_restorePropDraft())">Continue →</button>`
+    );
+    return;
+  }
+
   document.getElementById('mo-t').textContent = 'Add property';
   document.getElementById('mo-s').textContent = 'Step 1 of 3 — address';
   document.querySelector('.mo-box').classList.add('mo-wide');
@@ -2492,6 +2571,25 @@ function moAddProp(){
     </div>`;
   document.getElementById('mo').classList.add('open');
   window._propStep = 1;
+}
+
+function _moAddPropWithDraft(d) {
+  if (!d) { moAddProp(); return; }
+  _clearPropDraft(); // clear before calling moAddProp so draft prompt doesn't re-trigger
+  moAddProp(); // opens fresh modal
+  // After modal renders, fill in draft values
+  setTimeout(() => {
+    const set = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
+    set('p-addr', d.addr); set('p-city', d.city); set('p-post', d.post);
+    set('p-type', d.type); set('p-beds', d.beds); set('p-bath', d.bath);
+    set('p-rent', d.rent); set('p-purchase', d.purchase);
+    set('p-value', d.value); set('p-notes', d.notes);
+    if (d.country) { const el = document.getElementById('p-country'); if (el) el.value = d.country; }
+    if (d.ownership) { const el = document.getElementById('p-ownership'); if (el) el.value = d.ownership; }
+    // Restore to the step they were on
+    if (d.step && d.step > 1) goStep(Math.min(d.step, 3));
+    document.getElementById('mo-s').textContent = `Step ${Math.min(d.step||1, 3)} of 3 — resuming draft`;
+  }, 50);
 }
 
 function propStepNext(){
@@ -3579,6 +3677,22 @@ async function saveInspectionToDB(pid) {
 // ── TENANT FAST-ADD MODAL ──
 window._tsetup = {};
 
+function _moTenantWithDraft(pid) {
+  const d = _restoreTenantDraft(pid);
+  _clearTenantDraft(); // clear before calling moTenant so draft prompt doesn't re-trigger
+  moTenant(pid); // opens fresh
+  if (!d) return;
+  // Restore draft values after modal renders
+  setTimeout(() => {
+    window._tsetup = { ...window._tsetup, ...d, pid: pid || d.pid };
+    const set = (id, val) => { const el = document.getElementById(id); if (el && val !== undefined && val !== null) el.value = val; };
+    set('ts-name', d.name); set('ts-email', d.email); set('ts-phone', d.phone);
+    set('ts-start', d.start_date); set('ts-rent', d.rent); set('ts-deposit', d.deposit);
+    set('ts-scheme', d.scheme); set('ts-ref', d.scheme_ref);
+    if (d.pid) { const sel = document.getElementById('ts-prop'); if (sel) sel.value = d.pid; }
+  }, 50);
+}
+
 function toggleTenantType(type) {
   window._tsetup.tenantType = type;
   var leadBtn = document.getElementById('ts-lead-btn');
@@ -3612,6 +3726,22 @@ function toggleTenantType(type) {
 function moTenant(pid) {
   if (_expiredGuard('Add tenant')) return;
   const propOpts = D.properties.map(pr => `<option value="${pr.id}"${String(pr.id)===String(pid)?' selected':''}>${pr.address}${pr.city?', '+pr.city:''}</option>`).join('');
+
+  // Check for unsaved draft (for same property)
+  const _tDraft = _restoreTenantDraft(pid);
+  if (_tDraft && _tDraft.name) {
+    openMo('Resume adding tenant?', _tDraft.name || 'Unsaved tenant',
+      `<div style="font-size:13px;color:var(--muted);margin-bottom:18px">You started adding a tenant and closed the form. Would you like to carry on?</div>
+       <div style="background:var(--off);border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-size:12px;margin-bottom:16px">
+         <div><strong>${_tDraft.name || '—'}</strong>${_tDraft.email ? ' · ' + _tDraft.email : ''}</div>
+         ${_tDraft.rent ? '<div style="color:var(--muted);margin-top:4px">Rent: £' + _tDraft.rent + '/mo</div>' : ''}
+       </div>`,
+      `<button class="btn" onclick="closeMo();_clearTenantDraft();moTenant('${pid||''}')">Start fresh</button>
+       <button class="btn btn-navy" onclick="closeMo();_moTenantWithDraft('${pid||''}')">Continue →</button>`
+    );
+    return;
+  }
+
   window._tsetup = { pid: pid ? String(pid) : (D.properties[0]?.id ? String(D.properties[0].id) : ''), tenantType: 'lead', rentDay: 1 };
 
   document.getElementById('mo-t').textContent = 'Add tenant';
@@ -3964,6 +4094,10 @@ async function _saveTenantSetupToDB() {
       } catch(_e) { console.warn('Portal invite email failed silently', _e); }
     }
 
+    _clearTenantDraft(); // clear draft on successful save
+    window._tsetup = {}; // prevent closeMo from re-saving
+    // Re-render current page immediately so new tenant appears without delay
+    try { nav(window._currentPage || 'tenants', window._currentParam || null); } catch(e) {}
     closeMo();
     toast('✓ Tenant added!');
     // Post-add CTA modal
