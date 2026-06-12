@@ -10100,31 +10100,37 @@ function moCommunicationsHub(tid) {
   const logRows = D.emailLog
     .filter(e => String(e.tenant_id)===String(tid) || String(e.prop_id)===String(t.prop_id))
     .slice(0,30)
-    .map(e=>`
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border);gap:10px">
+    .map(e=>{
+      const st = e.status||'Sent';
+      const stCol = st==='Draft'?'var(--muted)':st==='Downloaded'?'var(--blue)':st==='Generated'?'var(--amber)':'var(--green-dark)';
+      const stBg  = st==='Draft'?'var(--off)':st==='Downloaded'?'var(--blue-bg)':st==='Generated'?'var(--amber-bg)':'var(--green-bg)';
+      const ts = e.sent_at ? new Date(e.sent_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) + ' ' + new Date(e.sent_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) : '';
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border);gap:10px">
         <div style="min-width:0">
-          <div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.subject||e.template_id||'Email'}</div>
-          <div style="font-size:11px;color:var(--muted)">${e.sent_to||''} · ${e.sent_at?new Date(e.sent_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):''}</div>
+          <div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.subject||e.template_name||e.template_id||'Document'}</div>
+          <div style="font-size:11px;color:var(--muted)">${e.sent_to||''} · ${ts}</div>
         </div>
-        <span style="font-size:10px;padding:2px 7px;border-radius:100px;background:var(--green-bg);color:var(--green-dark);flex-shrink:0">Sent</span>
-      </div>`).join('') || '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">No emails sent yet</div>';
+        <span style="font-size:10px;padding:2px 7px;border-radius:100px;background:${stBg};color:${stCol};flex-shrink:0;white-space:nowrap">${st}</span>
+      </div>`;
+    }).join('') || '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">No documents sent yet</div>';
 
-  openModal(`
-    <div style="background:var(--navy);padding:16px 18px;border-radius:10px 10px 0 0">
-      <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:2px">📨 Communications — ${t.name}</div>
-      <div style="font-size:12px;color:rgba(255,255,255,0.6)">${(D.properties.find(p=>String(p.id)===String(t.prop_id))||{}).address||'Property'}</div>
-    </div>
-    <div style="padding:16px 18px">
+  const _propAddr = (D.properties.find(p=>String(p.id)===String(t.prop_id))||{}).address||'Property';
+  openMo(
+    `📨 ${t.name}`,
+    _propAddr,
+    `<div style="margin-bottom:14px">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:10px">Send a document</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px">
-        ${docs.map(d=>`<button onclick="closeModal();${d.action}" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--white);cursor:pointer;font-family:var(--font);text-align:left;transition:background .15s" onmouseenter="this.style.background='var(--off)'" onmouseleave="this.style.background='var(--white)'">
+        ${docs.map(d=>`<button onclick="closeMo();${d.action}" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--white);cursor:pointer;font-family:var(--font);text-align:left;transition:background .15s" onmouseenter="this.style.background='var(--off)'" onmouseleave="this.style.background='var(--white)'">
           <span style="font-size:20px;flex-shrink:0">${d.icon}</span>
           <span style="min-width:0"><div style="font-size:12px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d.label}</div><div style="font-size:10px;color:var(--muted);margin-top:1px">${d.sub}</div></span>
         </button>`).join('')}
       </div>
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px">History (${D.emailLog.filter(e=>String(e.tenant_id)===String(tid)||String(e.prop_id)===String(t.prop_id)).length} items)</div>
-      <div style="max-height:300px;overflow-y:auto">${logRows}</div>
-    </div>`);
+      <div style="max-height:260px;overflow-y:auto">${logRows}</div>
+    </div>`,
+    `<button class="btn" onclick="closeMo()">Close</button>`
+  );
 }
 
 // ── Evidence Bundle PDF export ──
@@ -10880,8 +10886,19 @@ async function sendInventoryNow(id) {
       })
     });
     if (!res.ok) { const err = await res.text(); throw new Error(err); }
-    const ll = { landlord_id: currentUser.id, alert_type: 'inventory_report', reference_key: `inv_${id}_to_${tid}`, recipient_email: t.email, sent_at: new Date().toISOString(), metadata: { reportId: id } };
-    await sb.from('email_log').insert(ll);
+    const ll = {
+      user_id: currentUser.id,
+      tenant_id: String(tid),
+      prop_id: String(r.propId||''),
+      template_id: 'inventory_report',
+      template_name: `Inventory Report — ${r.type||''}`,
+      sent_to: t.email,
+      subject: `Inventory Report — ${r.address||''}`,
+      status: 'Sent',
+      sent_at: new Date().toISOString()
+    };
+    const { data: invLogData } = await sb.from('email_log').insert(ll).select().single().catch(()=>({data:null}));
+    D.emailLog.unshift(invLogData || { ...ll, id: Date.now() });
     closeMo();
     toast(`✓ Inventory report sent to ${t.name}`);
   } catch(e) {
@@ -15725,9 +15742,10 @@ occupantClause + '\n\n' +
         template_name: `Section 8 Notice — Grounds ${selectedData.map(g=>g.num).join(', ')}`,
         sent_to: t?.email || null,
         subject: `Section 8 Notice — ${p.address}`,
-        status: 'Draft'
+        status: 'Draft',
+        sent_at: new Date().toISOString()
       });
-      D.emailLog.unshift({ template_name: `Section 8 Notice`, sent_to: t?.email||'—', sent_at: new Date().toISOString(), status: 'Draft', prop_id: String(p.id) });
+      D.emailLog.unshift({ template_name: `Section 8 Notice — Grounds ${selectedData.map(g=>g.num).join(', ')}`, sent_to: t?.email||'—', sent_at: new Date().toISOString(), status: 'Draft', prop_id: String(p.id), tenant_id: t ? String(t.id) : null });
     } catch(e) { /* non-critical */ }
 
     await logAudit('GENERATE_S8', 'section8', p.id, `Grounds: ${selectedData.map(g=>g.num).join(', ')}`);
@@ -18089,6 +18107,7 @@ async function _sendS13() {
       template_id: 'section13',
       subject: `Section 13 Notice — £${curRent.toLocaleString()} → £${nw.toLocaleString()}/mo from ${eDate}`,
       status: 'Sent', user_id: currentUser.id,
+      sent_at: new Date().toISOString()
     }).select().single();
     if (logData) D.emailLog.unshift(logData);
 
