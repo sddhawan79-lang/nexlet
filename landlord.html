@@ -14727,7 +14727,7 @@ async function deleteCustomTemplate(id) {
 const S8_GROUNDS = [
   // ── MANDATORY GROUNDS ──
   { num:'1',   type:'M', cat:'landlord', label:'Landlord or family moving in',
-    plain:'You require the property as the only or principal home for yourself, your spouse/civil partner/cohabitee, or a close family member (parent, grandparent, sibling, child, grandchild, or child/grandchild of your cohabitee). The tenancy must have begun at least 1 year before the date of the notice. (RRA 2025 — in force 1 May 2026)',
+    plain:'The current tenancy began at least 1 year before the relevant date and the landlord who is seeking possession requires the dwelling-house as the only or principal home of any of the following—\n(a) the landlord;\n(b) the landlord\'s spouse or civil partner or a person with whom the landlord lives as if they were married or in a civil partnership;\n(c) the landlord\'s—\n    (i) parent;\n    (ii) grandparent;\n    (iii) sibling;\n    (iv) child;\n    (v) grandchild;\n(d) a child or grandchild of a person mentioned in paragraph (b).\nA relationship of the half-blood is to be treated as a relationship of the whole blood.\nIn the case of joint landlords seeking possession, references to "the landlord" in this ground are to be read as references to at least one of those joint landlords.\nWhen calculating whether the current tenancy began at least 1 year before the relevant date, both—\n(a) the day when the current tenancy began, and\n(b) the relevant date,\nmust be included in the calculation.',
     notice:'4 months', days:122, restrict12:true,
     evidence:'Evidence that the named person intends to live there as their only or principal home. If the tenancy started before 1 May 2026, you must also have given written notice at the start that Ground 1 may be used.',
     fields:[
@@ -14735,7 +14735,7 @@ const S8_GROUNDS = [
       {id:'s8_relation', label:'Relationship to you', type:'select', opts:['Landlord (me)','Spouse / civil partner','Person living with me as if married or civil partner','Parent','Child','Sibling','Grandparent','Grandchild','Child/grandchild of my cohabiting partner'], req:true}
     ]},
   { num:'1A',  type:'M', cat:'landlord', label:'Landlord intends to sell the property',
-    plain:'You intend to sell the property with vacant possession. The tenancy must have begun at least 1 year before the date of the notice. (RRA 2025 — replaces many Section 21 "I want to sell" cases. Cannot be used by social housing registered providers.)',
+    plain:'The following conditions are met—\n(a) the landlord who is seeking possession intends to sell a freehold or leasehold interest in the dwelling-house or to grant a lease of the dwelling-house for a term certain of more than 21 years which is not terminable before the end of that term by notice given by or to the landlord;\n(b) the assured tenancy on which the dwelling-house is let did not come into being by virtue of any provision of Schedule 1 to the Rent Act 1977 or section 4 of the Rent (Agriculture) Act 1976;\n(c) either—\n    (i) the current tenancy began at least 1 year before the relevant date, or\n    (ii) at the relevant date, notice of a compulsory acquisition in relation to the dwelling-house has been given, the landlord intends to sell their interest in the dwelling-house to the acquiring authority and the acquiring authority intends to acquire it;\n(d) the landlord seeking possession is not—\n    (i) a non-profit registered provider of social housing,\n    (ii) a body registered as a social landlord in the register maintained under section 1 of the Housing Act 1996,\n    (iii) a body registered as a social landlord in the register kept under section 20(1) of the Housing (Scotland) Act 2010,\n    (iv) a housing trust, within the meaning of the Housing Associations Act 1985, which is a charity, or\n    (v) where the dwelling-house is social housing within the meaning of Part 2 of the Housing and Regeneration Act 2008, a profit-making registered provider of social housing.\nIn paragraph (c)(ii), "sell" includes transfer.',
     notice:'4 months', days:122, restrict12:true,
     evidence:'Estate agent instructions, valuation report, or marketing evidence confirming intent to sell.',
     fields:[]},
@@ -14745,28 +14745,28 @@ const S8_GROUNDS = [
     evidence:'Rent-to-buy agreement documentation. Evidence that the offer period has expired and any statutory offer obligations have been met.',
     fields:[]},
   { num:'2',   type:'M', cat:'other', label:'Mortgagee seeking possession',
-    plain:'The property is subject to a mortgage and the lender is entitled to possession.',
-    notice:'2 months', days:61, restrict12:false,
+    plain:'The dwelling-house is subject to a mortgage and—\n(a) the mortgagee is entitled to exercise a power of sale conferred on him by the mortgage or by section 101 of the Law of Property Act 1925; and\n(b) the mortgagee requires possession of the dwelling-house for the purpose of disposing of it with vacant possession in exercise of that power;\nand for the purposes of this ground "mortgage" includes a charge and "mortgagee" shall be construed accordingly.',
+    notice:'4 months', days:122, restrict12:false,
     evidence:'Mortgage documentation and lender possession order.',
     fields:[]},
   { num:'2ZA', type:'M', cat:'other', label:'Landlord holds under a superior tenancy ending soon (social/agricultural)',
     plain:'The landlord holds the property under a superior tenancy that will end within 12 months, and the landlord is a registered provider of social housing, agricultural tenant, supported accommodation provider, or local authority company. (RRA 2025 — mainly applies to social landlords, not typical private landlords.)',
-    notice:'2 months', days:61, restrict12:false,
+    notice:'4 months', days:122, restrict12:false,
     evidence:'Evidence of the superior tenancy and its impending end. Confirmation of landlord type (registered provider / agricultural / supported accommodation).',
     fields:[]},
   { num:'2ZB', type:'M', cat:'other', label:'Superior long-lease (21+ years) expiring within 12 months',
     plain:'The landlord holds under a long fixed-term superior tenancy (21+ years) which will expire within 12 months. (RRA 2025 — applies where an intermediate landlord\'s long lease is ending.)',
-    notice:'2 months', days:61, restrict12:false,
+    notice:'4 months', days:122, restrict12:false,
     evidence:'Documentation of the superior fixed-term tenancy and its expiry date.',
     fields:[]},
   { num:'2ZC', type:'M', cat:'other', label:'New landlord via section 18 — previous landlord was social/agricultural',
     plain:'The current landlord became landlord via section 18 of the Housing Act 1988 within the last 6 months, and the previous landlord was a registered provider of social housing, agricultural tenant, supported accommodation provider, or local authority company. (RRA 2025 — specialist ground, rarely applies to private landlords.)',
-    notice:'2 months', days:61, restrict12:false,
+    notice:'4 months', days:122, restrict12:false,
     evidence:'Evidence that the previous landlord fell into one of the qualifying categories. Documentation of how you became the landlord.',
     fields:[]},
   { num:'2ZD', type:'M', cat:'other', label:'New landlord via section 18 — long lease expiry',
     plain:'The current landlord became landlord via section 18 of the Housing Act 1988 as a result of a long fixed-term superior tenancy (21+ years) coming to an end, and this happened within the past 6 months. (RRA 2025 — specialist ground.)',
-    notice:'2 months', days:61, restrict12:false,
+    notice:'4 months', days:122, restrict12:false,
     evidence:'Documentation of the long superior tenancy that ended and evidence of how you became the landlord.',
     fields:[]},
   // Ground 3 (former holiday let) — OMITTED by RRA 2025, no longer available
@@ -14807,22 +14807,22 @@ const S8_GROUNDS = [
     fields:[]},
   { num:'5E',  type:'M', cat:'other', label:'Landlord needs dwelling for supported accommodation',
     plain:'The landlord requires the dwelling for occupation as supported accommodation, and suitable alternative accommodation is available. (RRA 2025 — supported accommodation providers only.)',
-    notice:'4 months', days:122, restrict12:false,
+    notice:'4 weeks', days:28, restrict12:false,
     evidence:'Alternative accommodation details. Evidence of supported accommodation purpose.',
     fields:[]},
   { num:'5F',  type:'M', cat:'other', label:'Supported accommodation — support ended or no longer needed',
     plain:'The tenant no longer needs the level of support provided, or the support package has ended. (RRA 2025 — supported accommodation providers only.)',
-    notice:'2 months', days:61, restrict12:false,
+    notice:'4 weeks', days:28, restrict12:false,
     evidence:'Care plans showing reduced support needs. Support provider confirmation.',
     fields:[]},
   { num:'5G',  type:'M', cat:'other', label:'Homeless duty under s193 HA 1996 discharged by LA (social landlord)',
     plain:'The main homelessness duty under section 193 of the Housing Act 1996 has been discharged by the local authority. (RRA 2025 — social housing providers only, does not apply to private landlords.)',
-    notice:'2 months', days:61, restrict12:false,
+    notice:'4 weeks', days:28, restrict12:false,
     evidence:'Local authority confirmation that homelessness duty has been discharged.',
     fields:[]},
   { num:'5H',  type:'M', cat:'other', label:'Eligibility conditions no longer met (social/charity landlord)',
     plain:'The tenant no longer meets the eligibility conditions for the tenancy set by the social or charitable landlord. (RRA 2025 — social housing/charitable providers only, does not apply to private landlords.)',
-    notice:'2 months', days:61, restrict12:false,
+    notice:'4 weeks', days:28, restrict12:false,
     evidence:'Tenancy eligibility criteria. Evidence that conditions are no longer met.',
     fields:[]},
   { num:'6',   type:'M', cat:'landlord', label:'Landlord intends to demolish or redevelop',
@@ -14848,19 +14848,19 @@ const S8_GROUNDS = [
     evidence:'Death certificate. Succession documentation.',
     fields:[]},
   { num:'7A',  type:'M', cat:'asb', label:'Serious anti-social behaviour / criminal conviction',
-    plain:'The tenant, household member or visitor has been convicted of a serious offence, breached an ASB order, or there is a closure order in place.',
+    plain:'The following conditions are met—\n(a) condition 1: a relevant order or conviction has been made against a relevant person, or a closure order has been made in respect of the dwelling-house or part of it (and has not been discharged);\n(b) condition 2: it is just and equitable to make the possession order.\nFor the purposes of condition 1, a "relevant order or conviction" means—\n(a) conviction for a serious offence (as defined in Part 1 of Schedule 2A to the Housing Act 1988) committed in or in the locality of the dwelling-house;\n(b) conviction for a serious offence which was directed at the landlord, a member of the landlord\'s household, another tenant of the dwelling-house, or a person employed by the landlord;\n(c) an injunction granted under section 1 of the Anti-social Behaviour, Crime and Policing Act 2014 to prevent the person from engaging in housing-related nuisance;\n(d) a conviction under section 30 of the Anti-social Behaviour, Crime and Policing Act 2014 for breach of an injunction under section 1 of that Act;\n(e) a noise abatement notice under section 80 of the Environmental Protection Act 1990;\n(f) a criminal behaviour order under section 22 of the Anti-social Behaviour, Crime and Policing Act 2014.\nFor the purposes of condition 1, "relevant person" means the tenant, or a person who is residing in or visiting the dwelling-house.',
     notice:'Immediate', days:0, restrict12:false,
     evidence:'Court conviction records, ASB orders, police reports, closure order.',
     fields:[
       {id:'s8_7a_detail', label:'Describe the conviction or order', type:'textarea', placeholder:'e.g. Convicted of drug supply offences at the property on [date]. Case ref: [X]', req:true}
     ]},
   { num:'7B',  type:'M', cat:'asb', label:'No right to rent in the UK',
-    plain:'A condition of the tenancy is that the tenant has the right to rent in the UK, and that condition is no longer met.',
+    plain:'A condition of the tenancy requires the tenant to have the right to rent in England under Part 3 of the Immigration Act 2014 and—\n(a) the Secretary of State has given a notice to the landlord under section 33D of that Act in relation to the tenant, or\n(b) the tenant has not been given leave to enter or remain in the United Kingdom (within the meaning of the Immigration Act 1971) and the Secretary of State has notified the landlord that the tenant does not have leave.',
     notice:'2 weeks', days:14, restrict12:false,
     evidence:'Home Office notice confirming no right to rent. Right to Rent check documentation.',
     fields:[]},
   { num:'8',   type:'M', cat:'arrears', label:'Serious rent arrears (3+ months)',
-    plain:'The tenant owes at least 3 months\' rent (monthly tenancy) or 13 weeks\' rent (weekly/fortnightly) BOTH at the date of this notice AND at the court hearing date. Note: Universal Credit delays must be excluded.',
+    plain:'Both at the date of the service of the notice under section 8 of this Act relating to the proceedings for possession and at the date of the hearing—\n(a) if rent is payable weekly or fortnightly, at least 13 weeks\' rent is unpaid;\n(b) if rent is payable monthly, at least 3 months\' rent is unpaid;\n(c) if rent is payable quarterly, at least one quarter\'s rent is more than 3 months in arrears;\n(d) if rent is payable yearly, at least 3 months\' rent is more than 3 months in arrears;\nand for the purpose of this ground "rent" means rent lawfully due from the tenant.\nNote: Any arrears caused solely by a delay or failure in the payment of housing benefit or universal credit must not be included in calculating whether this ground is met.',
     notice:'4 weeks', days:28, restrict12:false, ucWarning:true,
     evidence:'Full rent ledger showing every payment due and received. UC warning: any arrears caused solely by Universal Credit delays must be excluded.',
     fields:[
@@ -14869,7 +14869,7 @@ const S8_GROUNDS = [
       {id:'s8_uc8', label:'Do any arrears relate to Universal Credit delays?', type:'select', opts:['No — all arrears are the tenant\'s responsibility','Yes — UC delays account for some (I have excluded those above)'], req:true}
     ]},
   { num:'8A',  type:'M', cat:'arrears', label:'Persistent rent arrears (new RRA 2025)',
-    plain:'The tenant has been at least 2 months in arrears on at least 3 separate occasions in the preceding 3 years. This closes the "pay before the hearing" loophole.',
+    plain:'On at least 3 occasions in the period of 3 years ending with the date of the service of the notice under section 8 of this Act relating to these proceedings, the tenant was at least 2 months in arrears with rent.\nFor the purpose of this ground "rent" means rent lawfully due from the tenant.\nNote: Any arrears caused solely by a delay or failure in the payment of housing benefit or universal credit must not be included in calculating whether this ground is met.',
     notice:'4 weeks', days:28, restrict12:false,
     evidence:'Full rent ledger for 3 years showing 3+ separate periods where arrears reached 2 months.',
     fields:[
@@ -14879,14 +14879,14 @@ const S8_GROUNDS = [
     ]},
   // ── DISCRETIONARY GROUNDS ──
   { num:'9',   type:'D', cat:'other', label:'Suitable alternative accommodation available',
-    plain:'Suitable alternative accommodation is available (or will be) when the possession order takes effect.',
+    plain:'Suitable alternative accommodation is available for the tenant or will be available for him when the order for possession takes effect.\nThe accommodation is to be suitable if it satisfies the requirements of the relevant schedule (Schedule 3 to the Housing Act 1988).',
     notice:'2 months', days:61, restrict12:false,
     evidence:'Details of the alternative accommodation — address, size, rent level, proximity to services.',
     fields:[
       {id:'s8_alt', label:'Alternative accommodation address', type:'text', placeholder:'e.g. 42 Oak Street, Manchester, M1 2AB', req:true}
     ]},
   { num:'10',  type:'D', cat:'arrears', label:'Rent arrears (any amount)',
-    plain:'Some rent is lawfully due and unpaid at the date of the notice AND at the hearing date. Useful as a fallback if Ground 8 arrears drop below 3 months before court.',
+    plain:'Some rent lawfully due from the tenant—\n(a) is unpaid on the date on which the proceedings for possession are begun; and\n(b) except where the tenant has not vacated the property under a notice under section 8 of this Act, was in arrears at the date of the service of that notice.\nFor the purpose of this ground "rent" means rent lawfully due from the tenant.\nNote: Any arrears caused solely by a delay or failure in the payment of housing benefit or universal credit must not be included in calculating whether this ground is met.',
     notice:'4 weeks', days:28, restrict12:false, ucWarning:true,
     evidence:'Rent ledger. Note: court has discretion — may order payment in instalments.',
     fields:[
@@ -14894,14 +14894,14 @@ const S8_GROUNDS = [
       {id:'s8_arr10_date', label:'Arrears as at date', type:'date', req:true}
     ]},
   { num:'11',  type:'D', cat:'arrears', label:'Persistently late rent payments',
-    plain:'The tenant persistently delays paying rent, even if no arrears exist at the hearing date.',
+    plain:'Whether or not any rent is in arrears on the date on which proceedings for possession are begun, the tenant has persistently delayed paying rent which has become lawfully due.',
     notice:'4 weeks', days:28, restrict12:false,
     evidence:'Rent ledger showing repeated late payments with specific dates rent was due vs dates actually paid.',
     fields:[
       {id:'s8_late', label:'Describe the pattern of late payments', type:'textarea', placeholder:'e.g. Rent due 1st of each month. Paid late: Jan (14th), Feb (22nd), March (11th), April (19th)', req:true}
     ]},
   { num:'12',  type:'D', cat:'breach', label:'Breach of tenancy agreement',
-    plain:'The tenant has broken one or more obligations of the tenancy (other than rent payment).',
+    plain:'Any obligation of the tenancy (other than one related to the payment of rent) has been broken or not performed.',
     notice:'2 weeks', days:14, restrict12:false,
     evidence:'Copy of tenancy showing relevant clause. Evidence of breach (photos, letters, complaints).',
     fields:[
@@ -14909,21 +14909,21 @@ const S8_GROUNDS = [
       {id:'s8_br_detail', label:'Describe the breach', type:'textarea', placeholder:'e.g. Tenant has kept a dog at the property since March 2025 without consent', req:true}
     ]},
   { num:'13',  type:'D', cat:'breach', label:'Deterioration of the property',
-    plain:'The condition of the property (or common parts) has deteriorated due to waste, neglect or default by the tenant or anyone living with them.',
+    plain:'The condition of the dwelling-house or any of the common parts has deteriorated owing to acts of waste by, or the neglect or default of, the tenant or any other person residing in the dwelling-house and, in the case of an act of waste by, or the neglect or default of, a person lodging with the tenant or a sub-tenant of his, the tenant has not taken such steps as he ought reasonably to have taken for the removal of the lodger or sub-tenant.',
     notice:'2 weeks', days:14, restrict12:false,
     evidence:'Move-in photos vs current dated photos. Inspection reports.',
     fields:[
       {id:'s8_det', label:'Describe the deterioration', type:'textarea', placeholder:'e.g. Kitchen floor damaged, walls heavily marked, bathroom tiles cracked and mouldy', req:true}
     ]},
   { num:'14',  type:'D', cat:'asb', label:'Nuisance or anti-social behaviour',
-    plain:'The tenant or someone living with them has caused nuisance or annoyance to neighbours, or used the property for illegal or immoral purposes.',
+    plain:'The tenant or a person residing in or visiting the dwelling-house—\n(a) has been guilty of conduct causing or likely to cause a nuisance or annoyance to a person residing, visiting or otherwise engaging in a lawful activity in the locality; or\n(b) has been convicted of—\n    (i) using the dwelling-house or allowing it to be used for immoral or illegal purposes, or\n    (ii) an indictable offence committed in, or in the locality of, the dwelling-house.',
     notice:'Immediate', days:0, restrict12:false,
     evidence:'Diary of incidents with dates, times, descriptions. Neighbour statements. Police reports.',
     fields:[
       {id:'s8_asb', label:'Describe the incidents', type:'textarea', placeholder:'e.g. Loud music 11pm–3am on 14/03, 21/03, 28/03. Police called. Neighbours have provided statements.', req:true}
     ]},
   { num:'14ZA',type:'D', cat:'asb', label:'Conviction for indictable offence during a riot',
-    plain:'The tenant or someone living with them has been convicted of an indictable offence committed during a riot. (Inserted by Anti-Social Behaviour, Crime and Policing Act 2014 — specific ground requiring riot-related conviction.)',
+    plain:'The tenant or an adult residing in the dwelling-house has been convicted of an indictable offence which was committed during, and at the scene of, a riot in the United Kingdom.\nIn this ground—\n"adult" means a person aged 18 or over;\n"riot" has the meaning given by section 1 of the Public Order Act 1986.',
     notice:'Immediate', days:0, restrict12:false,
     evidence:'Criminal conviction documentation confirming riot-related indictable offence.',
     fields:[]},
@@ -14933,7 +14933,7 @@ const S8_GROUNDS = [
     evidence:'Police report or court injunction. Confirmation tenant left due to domestic abuse.',
     fields:[]},
   { num:'15',  type:'D', cat:'breach', label:'Deterioration of furniture',
-    plain:'Furniture provided under the tenancy has deteriorated due to ill-treatment by the tenant.',
+    plain:'The condition of any furniture provided for use under the tenancy has, in the opinion of the court, deteriorated owing to ill-treatment by the tenant or any other person residing in the dwelling-house and, in the case of ill-treatment by a person lodging with the tenant or by a sub-tenant of his, the tenant has not taken such steps as he ought reasonably to have taken for the removal of the lodger or sub-tenant.',
     notice:'2 weeks', days:14, restrict12:false,
     evidence:'Move-in inventory with furniture photos. Current photos showing damage.',
     fields:[
@@ -14941,15 +14941,15 @@ const S8_GROUNDS = [
     ]},
   // Ground 16 — renumbered to Ground 5C (Mandatory) by RRA 2025
   { num:'17',  type:'D', cat:'breach', label:'Tenant gave false information',
-    plain:'The tenant (or someone acting for them) gave false or misleading information to obtain the tenancy — for example, fake references or forged payslips.',
+    plain:'The tenant is the person, or one of the persons, to whom the tenancy was granted and the landlord was induced to grant the tenancy by a false statement made knowingly or recklessly by—\n(a) the tenant; or\n(b) a person acting at the tenant\'s instigation.',
     notice:'2 weeks', days:14, restrict12:false,
     evidence:'Evidence of false information (original fraudulent documents, employer denial).',
     fields:[
       {id:'s8_false', label:'Describe the false information given', type:'textarea', placeholder:'e.g. Tenant provided forged payslips. Employer confirms no record of employment.', req:true}
     ]},
   { num:'18',  type:'D', cat:'other', label:'Supported accommodation — refused support',
-    plain:'The tenancy is supported accommodation and the tenant has refused to co-operate with the support services provider.',
-    notice:'2 weeks', days:14, restrict12:false,
+    plain:'The dwelling-house is in an area that has been designated as a selective licensing area under Part 3 of the Housing Act 2004 and the landlord requires possession of the dwelling-house because—\n(a) a licence has been refused under that Part in respect of the dwelling-house;\n(b) the landlord or a superior landlord has been convicted of an offence under section 95 of that Act in respect of the dwelling-house.',
+    notice:'4 weeks', days:28, restrict12:false,
     evidence:'Documentation of support offered and tenant refusal.',
     fields:[]},
 ];
@@ -15139,7 +15139,7 @@ function s8Step4() {
 
   // Core fields
   const coreFields = `
-    <div class="fg"><label>Landlord full name <span class="req">*</span></label><input type="text" id="s8_landlord_name" value="${_profileName()}" placeholder="e.g. John Smith" style="max-width:360px"></div>
+    <div class="fg"><label>Landlord full name <span class="req">*</span></label><input type="text" id="s8_landlord_name" value="" placeholder="e.g. John Smith or Beacon Residentials Ltd" style="max-width:360px"><div style="font-size:11px;color:var(--muted);margin-top:4px">Enter your full legal name, company name, or both names for joint landlords (e.g. John Smith and Jane Smith).</div></div>
     <div class="fg-row">
       <div class="fg"><label>Date of this notice <span class="req">*</span></label><input type="date" id="s8_notice_date" value="${today}"></div>
       <div class="fg"><label>Method of service</label><select id="s8_service"><option>First class post</option><option>Hand delivered to tenant</option><option>Email (and post)</option><option>All methods — post, email and hand delivery</option></select></div>
@@ -15182,7 +15182,8 @@ function s8Step5() {
   const today = new Date().toISOString().slice(0,10);
   const noticeDate = document.getElementById('s8_notice_date')?.value || today;
   const serviceMethod = document.getElementById('s8_service')?.value || 'First class post';
-  const landlordName = document.getElementById('s8_landlord_name')?.value.trim() || _profileName();
+  const landlordName = document.getElementById('s8_landlord_name')?.value.trim() || '';
+  if (!landlordName) { toast('Please enter the landlord full name before continuing', true); document.getElementById('s8_landlord_name')?.focus(); return; }
   const selectedData = S8_GROUNDS.filter(g => _s8.selectedGrounds.includes(g.num));
   const maxDays = selectedData.reduce((m,g) => Math.max(m, g.days), 14);
   const expiry = new Date(new Date(noticeDate).getTime() + maxDays * 864e5).toISOString().slice(0,10);
@@ -15333,51 +15334,87 @@ async function s8Generate() {
   const p = _s8.prop, t = _s8.tenant;
   const selectedData = S8_GROUNDS.filter(g => _s8.selectedGrounds.includes(g.num));
 
-  // Build ground details for prompt
-  const groundDetails = selectedData.map(g => {
-    const fieldVals = (g.fields||[]).map(f => `${f.label}: ${_s8.fields[f.id]||'[not provided]'}`).join('\n');
-    return `GROUND ${g.num} (${g.type==='M'?'Mandatory':'Discretionary'}) — ${g.label}
-Legal description: ${g.plain}
-Notice period: ${g.notice}
-${fieldVals ? 'Specific details:\n' + fieldVals : ''}
-Evidence required: ${g.evidence}`;
-  }).join('\n\n---\n\n');
-
-  const prompt = `You are generating a Section 8 Notice Particulars Statement for a UK landlord under the Housing Act 1988 as amended by the Renters' Rights Act 2025.
-
-PROPERTY & TENANCY DETAILS:
-Property: ${p.address}, ${p.city}, ${p.postcode}
-Monthly rent: £${p.rent || '[unknown]'}
-Landlord name: ${_s8.landlordName}
-Tenant name: ${t ? t.name : '[Tenant name]'}
-Tenant email: ${t?.email || '[unknown]'}
-Tenancy start date: ${FMS(t?.start_date) || '[unknown]'}
-Date of this notice: ${FMS(_s8.noticeDate)}
-Method of service: ${_s8.serviceMethod}
-Notice expiry date: ${FMS(_s8.expiryDate)}
-Earliest date landlord can apply to court: ${FMS(new Date(new Date(_s8.expiryDate).getTime()+864e5).toISOString().slice(0,10))}
-
-GROUNDS FOR POSSESSION:
-${groundDetails}
-
-INSTRUCTIONS:
-1. Generate a formal Section 8 Notice Particulars Statement using the above.
-2. Include a proper header with "SECTION 8 NOTICE — NOTICE SEEKING POSSESSION" and all property/tenant details.
-3. For each ground, include the full legal wording (as required by Form 3A) plus the specific facts stated above.
-4. Calculate and state the notice period and expiry date clearly.
-5. Do NOT include a signature block — one will be appended separately.
-${(p.occupants||[]).length ? `6. Include a PERMITTED OCCUPANTS clause listing: ${(p.occupants||[]).map(o => `${o.name} (age ${o.age})`).join(', ')}. State clearly these persons are permitted to reside at the property but are not parties to the tenancy and have no tenancy rights. Adults (18+) among them have been subject to a Right to Rent check by the landlord.` : ''}
-6. End with this disclaimer in full: "IMPORTANT: This is a draft particulars statement prepared using NexLet. Before serving, this must be transferred to the official Form 3A available from GOV.UK (published 1 May 2026). This document does not constitute legal advice. The landlord takes full responsibility for serving a valid notice."
-7. Use plain text formatting. No markdown bold markers in dates or names.`;
-
   try {
-    const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 3000, messages: [{ role: 'user', content: prompt }] })
-    });
-    const data = await res.json();
-    const text = data.content?.[0]?.text || 'Generation failed. Please try again.';
+    // Build notice directly in Form 3A section order — no AI needed, all data is known
+    const propAddr = [p.address, p.city, p.postcode].filter(Boolean).join(', ');
+    const noticeDateFmt = FMS(_s8.noticeDate);
+    const expiryFmt = FMS(_s8.expiryDate);
+    const courtDateFmt = FMS(new Date(new Date(_s8.expiryDate).getTime()+864e5).toISOString().slice(0,10));
+    const groundNums = selectedData.map(g => 'Ground ' + g.num).join(', ');
+
+    const groundsSection42 = selectedData.map(g => {
+      const fieldVals = (g.fields||[]).map(f => '  ' + f.label + ': ' + (_s8.fields[f.id]||'[not provided]')).join('\n');
+      return 'Ground ' + g.num + ' — ' + g.label + ' (' + (g.type==='M'?'Mandatory':'Discretionary') + ')\n\n' +
+        'Legal wording (Schedule 2, Housing Act 1988 as amended):\n' + g.plain +
+        (fieldVals ? '\n\nSpecific facts:\n' + fieldVals : '') +
+        '\n\nNotice period required: ' + g.notice +
+        '\n\nEvidence: ' + g.evidence;
+    }).join('\n\n' + '─'.repeat(60) + '\n\n');
+
+    const groundsSection43 = selectedData.map(g => {
+      const fieldVals = (g.fields||[]).map(f => '  ' + f.label + ': ' + (_s8.fields[f.id]||'[not provided]')).join('\n');
+      return 'Ground ' + g.num + ' — ' + g.label + ':\n' + (fieldVals || '  [Landlord to provide further details before serving]');
+    }).join('\n\n');
+
+    const occupantClause = (p.occupants||[]).length
+      ? '\n\nPERMITTED OCCUPANTS (not named tenants — listed for information only):\n' +
+        (p.occupants||[]).map(o => '  ' + o.name + ' (age ' + o.age + ')' + (o.age >= 18 ? ' — Right to Rent check completed by landlord' : '')).join('\n') +
+        '\nThese persons are permitted to reside at the property but are not parties to the tenancy and have no tenancy rights.'
+      : '';
+
+    const text =
+'FORM 3A\n' +
+'NOTICE SEEKING POSSESSION OF A PROPERTY LET ON AN ASSURED TENANCY\n' +
+'Housing Act 1988 section 8, as amended by the Renters\' Rights Act 2025\n' +
+'Private rented sector — England only\n' +
+'(For use with the official GOV.UK Form 3A — 05.26)\n' +
+'\n' + '═'.repeat(60) + '\n\n' +
+'SECTION 1 — TENANT DETAILS\n\n' +
+'1.1  Full name(s) of tenant(s):\n     ' + (t ? t.name : '[Tenant name]') + '\n\n' +
+'1.2  Property address:\n     ' + (p.address||'') + '\n     ' + (p.city||'') + '\n     ' + (p.postcode||'') + '\n\n' +
+'─'.repeat(60) + '\n\n' +
+'SECTION 2 — EARLIEST DATE LANDLORD CAN APPLY TO COURT\n\n' +
+'2.1  Your landlord cannot begin court proceedings for possession earlier than:\n\n' +
+'     ' + courtDateFmt + '\n\n' +
+'─'.repeat(60) + '\n\n' +
+'SECTION 3 — LATEST DATE LANDLORD CAN APPLY TO COURT\n\n' +
+'     The latest date your landlord can apply to court is 12 months from the date\n' +
+'     of service of this notice. After this the notice will no longer be valid.\n\n' +
+'─'.repeat(60) + '\n\n' +
+'SECTION 4 — LANDLORD\'S REASONS FOR ASKING YOU TO LEAVE\n\n' +
+'4.1  Grounds relied upon: ' + groundNums + '\n\n' +
+'4.2  Possession ground(s) as set out in Schedule 2 to the Housing Act 1988:\n\n' +
+groundsSection42 + '\n\n' +
+'─'.repeat(60) + '\n\n' +
+'4.3  Landlord\'s explanation of why each possession ground is being used:\n\n' +
+groundsSection43 +
+occupantClause + '\n\n' +
+'─'.repeat(60) + '\n\n' +
+'SECTION 5 — CONTACT DETAILS OF LANDLORD\n\n' +
+'5.1  Signature: ___________________________\n\n' +
+'5.2  I am the: Landlord\n\n' +
+'5.3  Date of this notice: ' + noticeDateFmt + '\n\n' +
+'5.4  Name of landlord: ' + _s8.landlordName + '\n\n' +
+'5.5  Address of landlord: ' + (D.userProfile?.landlord_address || '[Landlord address — complete before serving]') + '\n\n' +
+'5.6  Method of service: ' + _s8.serviceMethod + '\n\n' +
+'5.7  Notice expiry date: ' + expiryFmt + '\n\n' +
+'─'.repeat(60) + '\n\n' +
+'IMPORTANT NOTICE TO TENANT (Section 6)\n\n' +
+'Whether you want to leave or stay, you should seek advice immediately.\n' +
+'You do not have to leave immediately. If you choose not to leave, your landlord\n' +
+'must apply to the court to evict you.\n\n' +
+'Where to seek advice:\n' +
+'  Shelter: www.shelter.org.uk or 0808 800 4444\n' +
+'  Citizens Advice: www.citizensadvice.org.uk or 03444 111 444\n' +
+'  Housing Loss Prevention Advice Service: www.gov.uk/guidance/legal-aid-for-possession-proceedings\n\n' +
+'─'.repeat(60) + '\n\n' +
+'DRAFT NOTICE — FOR REFERENCE ONLY\n' +
+'This is a draft particulars statement prepared using NexLet to help you complete\n' +
+'the official GOV.UK Form 3A (published May 2026). This document alone is NOT a\n' +
+'valid Section 8 notice. Before serving, transfer these details to the official\n' +
+'Form 3A available at: www.gov.uk/guidance/assured-tenancy-forms\n' +
+'This document does not constitute legal advice. The landlord takes full\n' +
+'responsibility for serving a valid notice in compliance with the Housing Act 1988.';
 
     _s8.generatedText = text;
 
@@ -15507,17 +15544,7 @@ async function s8DownloadPDF() {
     const lines = text.split('\n');
     for (const line of lines) {
       if (line.trim().length === 0) { y += 5; continue; }
-      if (line.trim().startsWith('#')) {
-        const h = line.trim().replace(/^#+\s*/, '');
-        doc.setFontSize(12); doc.setFont(undefined, 'bold');
-        y += 4;
-        const splits = doc.splitTextToSize(h, W-32);
-        for (const s of splits) { if (y > 270) { doc.addPage(); y = 18; } doc.text(s, 16, y); y += 7; }
-        doc.setFontSize(10); doc.setFont(undefined, 'normal');
-        y += 2;
-        continue;
-      }
-      const splits = doc.splitTextToSize(line.replace(/\*\*/g,''), W-32);
+      const splits = doc.splitTextToSize(line, W-32);
       for (const s of splits) { if (y > 270) { doc.addPage(); y = 18; } doc.text(s, 16, y); y += 5.5; }
     }
 
