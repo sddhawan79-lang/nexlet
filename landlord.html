@@ -6591,8 +6591,16 @@ function pdTabContent(pid, tab) {
         <button class="btn btn-sm" onclick="moTenant('${pid}')" style="border-color:var(--green);color:var(--green-dark)">+ Add tenant</button>
       </div>
 
-      <div class="panel" style="margin-bottom:16px;border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)">
-        <div class="ph2"><div><h2>✉ Email log</h2><p>Documents sent to tenants at this property</p></div><button class="btn btn-sm" onclick="nav('templates')">+ Send document</button></div>
+      <div style="background:var(--navy);border-radius:12px;padding:16px 18px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:3px">📨 Send a document to ${t?.name?.split(' ')[0]||'tenant'}</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.65)">Notice, tenancy agreement, inventory, rent increase, prescribed info &amp; more</div>
+        </div>
+        <button class="btn" style="background:#fff;color:var(--navy);border:none;font-weight:700;padding:9px 20px;font-size:13px;flex-shrink:0" onclick="moCommunicationsHub('${t?.id||''}')">Open comms centre →</button>
+      </div>
+
+      <div class="panel" style="margin-bottom:16px">
+        <div class="ph2"><div><h2>✉ Email log</h2><p>Documents sent to tenants at this property</p></div></div>
         <div style="padding:14px 18px">${propEmailLogHtml(pid)}</div>
       </div>`
 
@@ -10079,10 +10087,15 @@ function moCommunicationsHub(tid) {
   const t = D.tenants.find(x => String(x.id) === String(tid));
   if (!t) return;
   const docs = [
-    { id:'welcome_kit',    label:'Welcome Kit',           action:`moWelcomeKit('${t.prop_id}')` },
-    { id:'rra_info_sheet', label:'RRA Information Sheet', action:`moRRASheet()` },
-    { id:'esign',          label:'Tenancy Agreement (e-sign)', action:`moEsign('${t.prop_id}','${t.id}')` },
-    { id:'section8',       label:'Section 8 Notice',      action:`moSection8('${t.prop_id}')` },
+    { id:'esign',          icon:'✍️', label:'Tenancy Agreement',    sub:'E-sign flow',                   action:`moEsign('${t.prop_id}','${t.id}')`,       cat:'tenancy' },
+    { id:'welcome_kit',    icon:'📦', label:'Welcome Kit',           sub:'Day 1 pack — certs + docs',     action:`moWelcomeKit('${t.prop_id}')`,             cat:'tenancy' },
+    { id:'prescribed_info',icon:'🔐', label:'Prescribed Information',sub:'Deposit cert to tenant',        action:`moPrescribedInfo('${t.id}')`,              cat:'tenancy' },
+    { id:'rra_info_sheet', icon:'📋', label:'RRA Information Sheet', sub:'Required for all tenancies',    action:`moRRASheet()`,                             cat:'tenancy' },
+    { id:'section13',      icon:'📈', label:'Section 13',            sub:'Rent increase notice',          action:`moSection13('${t.prop_id}')`,              cat:'legal'   },
+    { id:'section8',       icon:'⚖️', label:'Section 8 Notice',      sub:'Possession proceedings',       action:`moSection8('${t.prop_id}')`,               cat:'legal'   },
+    { id:'inventory',      icon:'🏠', label:'Inventory Report',      sub:'AI room-by-room condition',     action:`moInventoryReport('${t.prop_id}')`,        cat:'inspect' },
+    { id:'rentarrears',    icon:'💷', label:'Rent Arrears Letter',   sub:'1st or final warning',          action:`moGenerate('rentarrears1')`,               cat:'legal'   },
+    { id:'custom',         icon:'✦',  label:'AI Document',           sub:'Any letter or notice',          action:`nav('templates')`,                         cat:'other'   },
   ];
   const logRows = D.emailLog
     .filter(e => String(e.tenant_id)===String(tid) || String(e.prop_id)===String(t.prop_id))
@@ -10097,14 +10110,17 @@ function moCommunicationsHub(tid) {
       </div>`).join('') || '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">No emails sent yet</div>';
 
   openModal(`
-    <div class="ph2" style="padding:16px 18px;border-bottom:1px solid var(--border)">
-      <div><h2 style="font-size:16px">📨 Communications — ${t.name}</h2>
-        <p style="font-size:12px;color:var(--muted)">Send a document or view correspondence history</p></div>
+    <div style="background:var(--navy);padding:16px 18px;border-radius:10px 10px 0 0">
+      <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:2px">📨 Communications — ${t.name}</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.6)">${(D.properties.find(p=>String(p.id)===String(t.prop_id))||{}).address||'Property'}</div>
     </div>
     <div style="padding:16px 18px">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:10px">Send a document</div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px">
-        ${docs.map(d=>`<button class="btn btn-sm" onclick="closeModal();${d.action}">${d.label}</button>`).join('')}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px">
+        ${docs.map(d=>`<button onclick="closeModal();${d.action}" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--white);cursor:pointer;font-family:var(--font);text-align:left;transition:background .15s" onmouseenter="this.style.background='var(--off)'" onmouseleave="this.style.background='var(--white)'">
+          <span style="font-size:20px;flex-shrink:0">${d.icon}</span>
+          <span style="min-width:0"><div style="font-size:12px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d.label}</div><div style="font-size:10px;color:var(--muted);margin-top:1px">${d.sub}</div></span>
+        </button>`).join('')}
       </div>
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px">History (${D.emailLog.filter(e=>String(e.tenant_id)===String(tid)||String(e.prop_id)===String(t.prop_id)).length} items)</div>
       <div style="max-height:300px;overflow-y:auto">${logRows}</div>
@@ -10673,6 +10689,28 @@ function pgInventoryReport(id) {
 }
 
 // ── SEND INVENTORY REPORT TO TENANT ──
+function _invSigMode(mode) {
+  window._invSigMode = mode;
+  const drawArea = document.getElementById('inv-sig-draw-area');
+  const typeArea = document.getElementById('inv-sig-type-area');
+  const drawBtn  = document.getElementById('inv-sig-draw-btn');
+  const typeBtn  = document.getElementById('inv-sig-type-btn');
+  if (mode === 'draw') {
+    if (drawArea) drawArea.style.display = '';
+    if (typeArea) typeArea.style.display = 'none';
+    if (drawBtn) { drawBtn.style.background='var(--navy)'; drawBtn.style.color='#fff'; drawBtn.style.borderColor='var(--navy)'; }
+    if (typeBtn) { typeBtn.style.background='var(--white)'; typeBtn.style.color='var(--txt)'; typeBtn.style.borderColor='var(--border)'; }
+  } else {
+    if (drawArea) drawArea.style.display = 'none';
+    if (typeArea) typeArea.style.display = '';
+    if (drawBtn) { drawBtn.style.background='var(--white)'; drawBtn.style.color='var(--txt)'; drawBtn.style.borderColor='var(--border)'; }
+    if (typeBtn) { typeBtn.style.background='var(--navy)'; typeBtn.style.color='#fff'; typeBtn.style.borderColor='var(--navy)'; }
+  }
+}
+function _invSigClear() {
+  if (window._invSigPad) window._invSigPad.clear();
+}
+
 function sendInventoryReport(id) {
   const r = D._invReports?.find(x => x.id === id);
   if (!r) { toast('Report not found', true); return; }
@@ -10703,10 +10741,42 @@ NexLet`;
   openMo('Send Inventory Report',`📋 ${r.type} · ${r.address}`,`
     <div class="fg"><label>Send to</label><select id="inv-send-tenant">${tenantOpts}</select></div>
     <div class="fg"><label>Email subject</label><input id="inv-send-subject" value="Inventory Report — ${r.address}"></div>
-    <div class="fg"><label>Email body</label><textarea id="inv-send-body" style="min-height:160px;font-size:12px;line-height:1.6">${defaultBody.replace(/`/g,'\\`').replace(/\$/g,'\\$')}</textarea></div>
-    <div style="font-size:11px;color:var(--muted);margin-top:6px">The report PDF will be attached. Sent from documents@nexlet.co.uk via Resend.</div>
+    <div class="fg"><label>Email body</label><textarea id="inv-send-body" style="min-height:120px;font-size:12px;line-height:1.6">${defaultBody.replace(/`/g,'\\`').replace(/\$/g,'\\$')}</textarea></div>
+
+    <div class="fg" style="margin-top:14px">
+      <label style="font-weight:600">Landlord signature <span class="req">*</span></label>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Sign below — this will be embedded in the report PDF as your authorisation</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <button type="button" id="inv-sig-draw-btn" onclick="_invSigMode('draw')" style="font-size:12px;padding:5px 14px;border-radius:6px;border:2px solid var(--navy);background:var(--navy);color:#fff;cursor:pointer;font-family:var(--font);font-weight:600">✍ Draw</button>
+        <button type="button" id="inv-sig-type-btn" onclick="_invSigMode('type')" style="font-size:12px;padding:5px 14px;border-radius:6px;border:2px solid var(--border);background:var(--white);color:var(--txt);cursor:pointer;font-family:var(--font);font-weight:500">Aa Type</button>
+      </div>
+      <div id="inv-sig-draw-area">
+        <div style="border:1.5px solid var(--border);border-radius:6px;overflow:hidden;background:#fff;position:relative;touch-action:none">
+          <canvas id="inv-landlord-canvas" style="display:block;width:100%;height:100px;cursor:crosshair;touch-action:none"></canvas>
+        </div>
+        <button type="button" onclick="_invSigClear()" style="font-size:11px;color:var(--muted);background:none;border:none;cursor:pointer;padding:4px 0;font-family:var(--font)">✕ Clear</button>
+      </div>
+      <div id="inv-sig-type-area" style="display:none">
+        <input id="inv-sig-typed" class="fi" placeholder="Type your full name" style="width:100%;font-family:Georgia,serif;font-size:18px;letter-spacing:1px;font-style:italic" oninput="window._invSigTyped=this.value">
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">Your typed name will appear as a signature on the report</div>
+      </div>
+    </div>
+
+    <div style="font-size:11px;color:var(--muted);margin-top:8px">📎 The report PDF will be attached. Sent from documents@nexlet.co.uk via Resend.</div>
   `,`<button class="btn" onclick="closeMo()">Cancel</button>
     <button class="btn btn-navy" id="inv-send-btn" onclick="sendInventoryNow('${id}')">✉ Send to tenant</button>`);
+  // Init signature pad after modal renders
+  window._invSigPad = null; window._invSigMode = 'draw'; window._invSigTyped = '';
+  setTimeout(() => {
+    const canvas = document.getElementById('inv-landlord-canvas');
+    if (canvas && window.SignaturePad) {
+      const ratio = window.devicePixelRatio || 1;
+      canvas.width  = canvas.offsetWidth  * ratio;
+      canvas.height = canvas.offsetHeight * ratio;
+      canvas.getContext('2d').scale(ratio, ratio);
+      window._invSigPad = new SignaturePad(canvas, { backgroundColor: 'rgb(255,255,255)', penColor: 'rgb(26,43,69)' });
+    }
+  }, 80);
 }
 
 async function sendInventoryNow(id) {
@@ -10717,6 +10787,19 @@ async function sendInventoryNow(id) {
   const body = document.getElementById('inv-send-body')?.value?.trim();
   if (!tid) { toast('Please select a tenant', true); return; }
   if (!subject) { toast('Please enter a subject', true); return; }
+
+  // Validate + collect landlord signature
+  let landlordSig = null;
+  if (window._invSigMode === 'draw') {
+    if (!window._invSigPad || window._invSigPad.isEmpty()) {
+      toast('Please sign the report before sending', true); return;
+    }
+    landlordSig = { type: 'draw', data: window._invSigPad.toDataURL('image/png') };
+  } else {
+    const typed = (window._invSigTyped || '').trim();
+    if (!typed) { toast('Please type your name as signature before sending', true); return; }
+    landlordSig = { type: 'typed', data: typed };
+  }
 
   const t = D.tenants.find(x => String(x.id) === String(tid));
   if (!t?.email) { toast('Tenant has no email address', true); return; }
@@ -10757,7 +10840,26 @@ async function sendInventoryNow(id) {
         if (col===1) { y+=imgW*0.75+10; col=0; } else { col=1; }
       }
     }
-    y+=6; doc.setDrawColor(238,238,238); doc.line(16,y,W-16,y); y+=6;
+    // Landlord signature block
+    y+=10; if (y>250) { doc.addPage(); y=18; }
+    doc.setDrawColor(180,190,210); doc.line(16,y,W-16,y); y+=8;
+    doc.setFontSize(9); doc.setFont(undefined,'bold'); doc.setTextColor(26,43,69);
+    doc.text('LANDLORD SIGNATURE',16,y); y+=7;
+    doc.setFont(undefined,'normal');
+    if (landlordSig.type === 'draw') {
+      try {
+        doc.addImage(landlordSig.data,'PNG',16,y,60,20);
+        y+=24;
+      } catch(e) { doc.text('[Signature on file]',16,y); y+=8; }
+    } else {
+      doc.setFontSize(16); doc.setFont(undefined,'italic'); doc.setTextColor(26,43,69);
+      doc.text(landlordSig.data,16,y); y+=10;
+      doc.setFont(undefined,'normal'); doc.setFontSize(9);
+    }
+    doc.setFontSize(8); doc.setTextColor(120,130,150);
+    doc.text(`${_profileName()} · Signed digitally via NexLet · ${new Date().toLocaleDateString('en-GB')}`,16,y); y+=8;
+
+    y+=4; doc.setDrawColor(238,238,238); doc.line(16,y,W-16,y); y+=6;
     doc.setFontSize(7.5); doc.setTextColor(153,153,153);
     doc.text(`Generated by NexLet · ${r.date} · AI-generated`,16,y);
     pdfBase64 = doc.output('datauristring').split(',')[1];
@@ -16453,6 +16555,17 @@ function moInventoryReport(pid){
     <div class="fg"><label>Upload room photos <span class="req">*</span></label>
       <input type="file" accept="image/*" multiple id="inv-photos" onchange="invPhotosSelected(this)" style="display:block;width:100%;padding:8px;font-family:var(--font);font-size:13px;margin-bottom:10px">
       <div id="inv-photo-info" style="font-size:11px;color:var(--muted)">📷 Select multiple — kitchen, living room, bedrooms, bathroom, exterior. AI identifies rooms and assesses condition.</div>
+      <div style="margin-top:10px">
+        <button type="button" onclick="const t=document.getElementById('inv-photo-tip');t.style.display=t.style.display==='none'?'block':'none';this.textContent=t.style.display==='none'?'💡 How to get the best report ▾':'💡 How to get the best report ▴'" style="font-size:11px;color:var(--blue);background:none;border:none;cursor:pointer;padding:0;font-family:var(--font);font-weight:600">💡 How to get the best report ▾</button>
+        <div id="inv-photo-tip" style="display:none;margin-top:8px;background:var(--blue-bg);border:1px solid rgba(59,111,232,0.2);border-radius:8px;padding:12px 14px;font-size:12px;line-height:1.7;color:var(--txt)">
+          <div style="font-weight:700;margin-bottom:6px;color:var(--navy)">📸 Photo tips for accurate AI reporting</div>
+          <div style="margin-bottom:4px"><strong>Name your files by room</strong> — e.g. <code style="background:rgba(0,0,0,0.06);padding:1px 5px;border-radius:3px">kitchen_1.jpg</code>, <code style="background:rgba(0,0,0,0.06);padding:1px 5px;border-radius:3px">bedroom2_window.jpg</code>. The AI reads the filename to identify the room.</div>
+          <div style="margin-bottom:4px"><strong>One room per batch</strong> — shoot all angles of a room before moving to the next. Group: kitchen, living room, each bedroom, bathroom, hallway, exterior.</div>
+          <div style="margin-bottom:4px"><strong>Capture defects clearly</strong> — if there's a mark, crack or stain, take a close-up. The AI flags damage for the report.</div>
+          <div style="margin-bottom:4px"><strong>Include fixtures</strong> — open cupboards, photograph appliances, switches, windows. More coverage = more detailed report.</div>
+          <div style="color:var(--muted)">If filenames are generic (IMG_001.jpg), add a note below describing the rooms in order — the AI will use that as context.</div>
+        </div>
+      </div>
     </div>
     <div class="fg"><label>Additional notes (optional)</label>
       <textarea id="inv-notes" placeholder="e.g. New carpet in bedroom 1, landlord's furniture in living room…"></textarea>
