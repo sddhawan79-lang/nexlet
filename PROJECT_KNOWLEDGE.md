@@ -5092,3 +5092,249 @@ None — all fixes were code-level.
 - Accepts `attachment_urls: [{url, filename}]` — fetches files server-side in Deno, base64 encodes, passes to Resend
 - Legacy `attachments: [{filename, content, content_type}]` (pre-encoded base64) still accepted as fallback
 - Previously the Resend call had no attachment handling at all — field was silently ignored
+
+---
+
+## Session 43 — 12 June 2026 — Section 8 Legal Compliance, UI/UX Fixes, Wizard Drafts, Comms Hub
+
+### 1. Section 8 Generator — Critical Bug Fix (was never generating)
+
+**Root cause:** `occupants` variable referenced in the prompt template string inside `s8Generate()` was never defined in that scope — threw a `ReferenceError` before the fetch fired. `try/catch` swallowed it silently; button spun indefinitely.
+
+**Fix:** Changed `${occupants.length ? ...}` → `${(p.occupants||[]).length ? ...}` using the already-loaded property object.
+
+**Also fixed:**
+- `max_tokens` bumped 1500 → 3000 — multi-ground S8 notices were being truncated
+- `s8DownloadPDF` was synchronous but called `await` — made `async`
+
+---
+
+### 2. Section 8 — Replaced AI Generation with Form 3A Compliant Template
+
+**Problem:** AI was generating notices with `**bold**` markdown and `##` headers — not valid for legal documents.
+
+**Fix:** Removed AI fetch entirely from `s8Generate()`. Notice text now built directly in JS as plain text following exact Form 3A section order from GOV.UK (05.26):
+
+- Section 1: Tenant details (1.1 name, 1.2 address)
+- Section 2: Earliest court date (2.1)
+- Section 3: Latest court date (12-month validity)
+- Section 4: Grounds (4.1 summary, 4.2 full statutory wording per ground, 4.3 landlord explanation)
+- Section 5: Landlord contact details (5.1–5.7 inc. method of service, expiry date)
+- Section 6: Tenant advice (Shelter, Citizens Advice, HLPAS links — verbatim from Form 3A)
+
+**Result:** Instant generation (no API call), deterministic output, no markdown contamination.
+
+---
+
+### 3. Section 8 — Official Statutory Wording (Legal compliance)
+
+**Problem:** `S8_GROUNDS[].plain` fields were summaries, not the verbatim Schedule 2 wording required by Form 3A question 4.2. GOV.UK guidance: *"If you do not include the legal wording, or if it is incomplete or inaccurate, your notice may be invalid."*
+
+**Fix:** Replaced `plain` field for 17 grounds with verbatim text from *Form 3A: Legal wording for possession grounds* (GOV.UK, 05.26). Grounds updated: 1, 1A, 2, 7A, 7B, 8, 8A, 9, 10, 11, 12, 13, 14, 14ZA, 15, 17, 18.
+
+**Also fixed: Notice periods** — corrected against official guidance table:
+| Ground(s) | Was | Now |
+|---|---|---|
+| 2, 2ZA, 2ZB, 2ZC, 2ZD | 2 months | 4 months |
+| 5E | 4 months | 4 weeks |
+| 5F, 5G, 5H | 2 months | 4 weeks |
+| 18 | 2 weeks | 4 weeks |
+
+Wrong notice period = invalid notice. These are now correct per [GOV.UK assured tenancy forms guidance](https://www.gov.uk/guidance/assured-tenancy-forms).
+
+---
+
+### 4. Section 8 — Mandatory Field Validation
+
+**Problem:** `req:true` fields (arrears amount, dates, descriptions) in step 4 had no validation — user could advance to Review and generate a notice with blank mandatory fields, making it legally invalid.
+
+**Fix — two layers:**
+1. `s8Nav()` step 4→5: validates all `req:true` fields for selected grounds. Red-borders first missing field, focuses it, toasts ground + field name (`"Ground 8 — Total arrears (£) (+1 more)"`). Blocks advance if any missing.
+2. `s8Generate()`: second-line defence re-checks `_s8.fields` against `req` flag before building notice text.
+
+**Also:** S13 `s13Next()` now validates landlord name (was only checking new rent and effective date).
+
+---
+
+### 5. Section 8 — Landlord Name Fix
+
+**Problem:** `s8_landlord_name` input was pre-filled with `_profileName()` which fell back to email prefix (`sddhawan79`) when `full_name` is null in profile.
+
+**Fix:** Field is now blank by default with placeholder `e.g. John Smith or Beacon Residentials Ltd`. Hint text below explains joint landlords and company names. Blocks `propStepNext` advance if left empty.
+
+---
+
+### 6. Section 8 / All Generators — Comms Timestamping
+
+**Problem:** Several generators were not logging to `email_log` or were missing `sent_at`, meaning documents didn't appear in the Communications tab.
+
+**Fixes:**
+- `s8DownloadPDF`: now inserts `email_log` row with `status: 'Downloaded'`, `sent_at`
+- `s8SendToTenant`: `sent_at` was missing from insert (was only on in-memory push)
+- `s8Generate`: existing `email_log` insert (status: 'Draft') — added `sent_at` and fixed in-memory push fields
+- `moGenerate`: now inserts `email_log` row with `status: 'Generated'` on document generation (not just on send)
+- Inventory send: was logging to legacy schema (`landlord_id`, `alert_type`). Now uses standard `user_id`, `tenant_id`, `prop_id`, `template_id`, `subject`, `status`, `sent_at`
+- S13 send: `sent_at` was missing from insert
+
+---
+
+### 7. Property & Tenant — Instant Appear After Save
+
+**Problem:** After saving a new property or tenant, the page behind the "What next?" modal was never re-rendered — property/tenant only appeared after navigating away and back (2-minute apparent delay).
+
+**Root cause:** `D.properties.unshift(data)` updated memory immediately but `nav()` was never called. Modal obscured the stale render.
+
+**Fix:** `nav(window._currentPage, window._currentParam)` called immediately after `unshift()`, before `closeMo()` — re-renders current page with new data instantly. Applied to both `savePropToDB` and `_saveTenantSetupToDB`.
+
+---
+
+### 8. Property & Tenant Wizards — Draft Auto-Save on Close
+
+**Problem:** Closing the Add Property or Add Tenant modal (X button) lost all entered data with no warning.
+
+**Implementation:** localStorage draft save/restore system:
+
+**Functions added:**
+- `_savePropDraft()` / `_clearPropDraft()` / `_restorePropDraft()` — localStorage key `nexlet_prop_draft`
+- `_saveTenantDraft()` / `_clearTenantDraft()` / `_restoreTenantDraft(pid)` — localStorage key `nexlet_tenant_draft`
+- `_moAddPropWithDraft(d)` — restores draft values into modal, jumps to saved step
+- `_moTenantWithDraft(pid)` — restores draft values into tenant modal
+
+**Behaviour:**
+- `closeMo()` auto-saves both wizards if meaningful data exists (address started, or name/email entered)
+- On next open: shows "Resume adding?" prompt with data preview and two options — Continue or Start fresh
+- Drafts expire after 24 hours
+- Tenant drafts are property-scoped — won't restore if different property selected
+- Cleared on successful save; `_propStep`/`_tsetup` reset to prevent re-save on `closeMo()`
+
+**Fields saved — property:** address, city, postcode, country, type, beds, bathrooms, rent, purchase price, estimated value, ownership type, notes, step number
+**Fields saved — tenant:** name, email, phone, start date, rent, deposit, scheme, scheme ref, property
+
+---
+
+### 9. Action Items Panel — Deep Links
+
+**Problem:** All action items on the dashboard clicked to generic pages (`compliance`, `maintenance`, `financials`) with no property context.
+
+**Fix:** `UA()` function upgraded — each item now emits `page: 'property-detail'`, `param: pid`, and a contextual `cta` label:
+| Item type | CTA | Route |
+|---|---|---|
+| Missing cert | `Fix →` | `property-detail/{pid}` |
+| Cert expiring | `Renew →` | `property-detail/{pid}` |
+| Maintenance issue | `View →` | `property-detail/{pid}` |
+| Rent due/late | `Log →` | `property-detail/{pid}` |
+| Licence/mortgage expiry | `View →` | `property-detail/{pid}` |
+
+---
+
+### 10. Button Colour Differentiation — Property Actions
+
+**Problem:** E-sign Agreement, End Tenancy, Archive on property cards were all plain white buttons — no visual hierarchy.
+
+**Fix:**
+| Button | Style |
+|---|---|
+| E-sign Agreement | Navy (primary) |
+| Prepare to Re-let | Blue tint |
+| End Tenancy (card) | Red outline/tint |
+| Archive (card) | Muted grey |
+| End Tenancy (confirm modal) | Solid red |
+| Archive (confirm modal) | Solid red |
+
+---
+
+### 11. Inventory — Photo Guidance Tip
+
+**Addition:** Collapsible "💡 How to get the best report" button added below the file picker in `moInventoryReport`. Expands to show:
+- Name files by room (`kitchen_1.jpg`, `bedroom2_window.jpg`) — AI reads filename to identify room
+- Shoot all angles of one room before moving to next
+- Close-up defects for flagging
+- Include fixtures, open cupboards
+- Fallback: if generic filenames, describe rooms in order in the notes field
+
+---
+
+### 12. Inventory — Landlord Signature on Send
+
+**Problem:** No way for landlord to sign/authorise the inventory report before sending.
+
+**Implementation:** Signature block added to `sendInventoryReport` modal:
+- **Draw mode:** Canvas pad using same `SignaturePad` library as e-sign flow. Initialised with `setTimeout` after modal renders.
+- **Type mode:** Italic serif text input — typed name renders as signature.
+- Toggle buttons switch between modes with visual active state.
+- Validated before send — blocks with toast if empty.
+- Embedded in PDF: drawn = image above footer; typed = large italic text + name/date line.
+- Helper functions: `_invSigMode(mode)`, `_invSigClear()`
+
+---
+
+### 13. Communications Hub — Fix + Upgrade
+
+**Critical bug:** `moCommunicationsHub` called `openModal()` which was undefined — only `openMo()` exists. `closeModal` had an alias but not `openModal`. Hub silently failed on every call.
+
+**Fix:** Converted to `openMo(title, subtitle, body, footer)`.
+
+**Document list expanded** from 4 to 9 items with icons and sub-descriptions:
+| Doc | Icon | Sub |
+|---|---|---|
+| Tenancy Agreement | ✍️ | E-sign flow |
+| Welcome Kit | 📦 | Day 1 pack |
+| Prescribed Information | 🔐 | Deposit cert to tenant |
+| RRA Information Sheet | 📋 | Required for all tenancies |
+| Section 13 | 📈 | Rent increase notice |
+| Section 8 | ⚖️ | Possession proceedings |
+| Inventory Report | 🏠 | AI room-by-room condition |
+| Rent Arrears Letter | 💷 | 1st or final warning |
+| AI Document | ✦ | Any letter or notice |
+
+**UI upgrade:** Plain `btn-sm` buttons replaced with 2-column grid cards (icon + label + sub-description).
+
+**Log display upgraded:**
+- Status badge colour-coded: green=Sent, amber=Generated, blue=Downloaded, grey=Draft
+- Timestamp shows date **and time** (was date only)
+- Shows `template_name` or `subject` (was falling back to raw `template_id`)
+
+---
+
+### 14. Send Document CTA — Property Page
+
+**Problem:** `+ Send document` was a tiny `btn-sm` in the email log panel header — easily missed. Clicked to `nav('templates')` losing property/tenant context.
+
+**Fix:**
+- Replaced with a full-width navy banner card above the email log panel: tenant first name, description, "Open comms centre →" CTA
+- `onclick` now calls `moCommunicationsHub(tid)` with tenant ID — keeps full context
+
+---
+
+### Known Issues — Updated After Session 43
+
+| # | Issue | Status |
+|---|---|------|
+| 1 | ICO number placeholder in legal docs | Pending registration |
+| 2 | MX record for inbound email | Parked post-launch |
+| 3 | `login.html` newsletter signup checkbox | Not built |
+| 4 | `moFinancials` PDF export | Post-launch backlog |
+| 5 | Section 8 UX handoff to Form 3A | Documented in modal — complete |
+| 6 | WhatsApp reminders | Post-launch backlog |
+| 7 | Free public compliance checker | Marketing priority |
+| 8 | Blog / content hub | Marketing priority |
+| 9 | Postcode finder — replace with getAddress.io | Post-launch backlog |
+| 13 | `relet_prepared` column needed on tenants | Pending SQL |
+| 24 | `start_date` amber warning | Not traced |
+| 32 | Cert view button — old certs with null file_url | Data issue |
+| 33 | Welcome letter modal (`moWelcomeLetterr`) | Not yet built |
+| 34 | Guarantor progress bar step | Partially done |
+| 35 | Full KYC panel in compliance tab | Pending — RTR done, remaining slots pending |
+| 36 | `company_name` column on `user_profiles` | Pending SQL — `_profileName()` ready to use it |
+| 37 | S8 grounds without official statutory wording (1B, 2ZA–2ZD, 4A, 5B, 5D, 5H, 6A, 6B, 7, 9) | Mostly social housing — verify before use |
+
+### Schema Changes — Session 43
+
+None — all fixes code-level.
+
+**Recommended SQL (not yet run):**
+```sql
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS company_name text;
+```
+Once added, `_profileName()` will auto-use it: `company_name || full_name || email prefix`.
+
