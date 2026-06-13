@@ -4666,8 +4666,8 @@ function moWelcomeKit(pid) {
 
   const blockers = [];
   if (!wsOk)       blockers.push('Written Statement not yet signed by all tenants');
-  if (!rraOk)      blockers.push('RRA 2025 doc not uploaded — Compliance → System Documents');
-  if (!h2rOk)      blockers.push('How to Rent Guide not uploaded — Compliance → System Documents');
+  if (!rraOk)      blockers.push('RRA 2025 doc not uploaded — Compliance → Tenancy Packs & Templates');
+  if (!h2rOk)      blockers.push('How to Rent Guide not uploaded — Compliance → Tenancy Packs & Templates');
   if (!gasCert)    blockers.push('Gas Safety Certificate missing');
   else if (!gasFileOk) blockers.push('Gas Safety Certificate has no file — re-upload in Compliance tab');
   if (!eicrCert)   blockers.push('EICR missing');
@@ -5025,8 +5025,214 @@ function UA(){
     if(days>=0&&days<=30) reminders.push({b:days<=7?'red':'amber',l:'Mortgage',t:`Mortgage ends in ${days} days`,s:p.address,page:'property-detail',param:String(p.id),cta:'View →'});
   });
 
-  return[...miss,...reminders,...mnt,...rnt];
+  // Tenant mandatory actions (PI, deposit, RTR, agreement)
+  const tenantMandatory = [];
+  D.tenants.filter(t => t.status === 'Active').forEach(t => {
+    const actions = getMandatoryActions(t);
+    actions.filter(a => a.severity === 'red').forEach(a => {
+      const isOverdue = a.deadlineDays !== null && a.deadlineDays < 0;
+      const label = isOverdue ? `${Math.abs(a.deadlineDays)}d overdue` : a.deadlineDays === 0 ? 'Today' : a.deadlineDays !== null ? `${a.deadlineDays}d` : 'Required';
+      tenantMandatory.push({
+        b: isOverdue ? 'red' : 'amber',
+        l: label,
+        t: `${a.label} — ${t.name}`,
+        s: (P(t.prop_id)||{address:'—'}).address,
+        page: 'tenant-detail',
+        param: String(t.id),
+        cta: a.cta + ' →',
+        _action: a.action
+      });
+    });
+  });
+
+  return[...miss,...reminders,...mnt,...rnt,...tenantMandatory];
 }
+
+// ── MANDATORY ACTIONS ENGINE ──
+// Central source of truth for all legally mandatory outstanding actions per tenant.
+// Returns array of action objects sorted by severity + deadline.
+// Used by: tenant detail banner, dashboard UA(), compliance tab, Day 1/30 cards.
+function getMandatoryActions(tenant) {
+  if (!tenant) return [];
+  const today = new Date(); today.setHours(0,0,0,0);
+  const tid = String(tenant.id);
+  const pid = String(tenant.prop_id);
+  const p = P(tenant.prop_id) || { address: '—' };
+  const propCerts = D.certs.filter(c => String(c.prop_id) === pid);
+  const propLog   = D.emailLog.filter(e => String(e.prop_id) === pid);
+  const tenLog    = D.emailLog.filter(e => String(e.tenant_id) === tid);
+  const allLog    = [...propLog, ...tenLog];
+  const startDate = tenant.start_date ? new Date(tenant.start_date) : null;
+  const actions = [];
+
+  const daysUntil = (dateStr) => {
+    if (!dateStr) return null;
+    const d = new Date(dateStr); d.setHours(0,0,0,0);
+    return Math.round((d - today) / 864e5);
+  };
+  const deadlineLabel = (days) => {
+    if (days === null) return '';
+    if (days < 0)  return `${Math.abs(days)} day${Math.abs(days)!==1?'s':''} overdue`;
+    if (days === 0) return 'Due today';
+    return `${days} day${days!==1?'s':''} left`;
+  };
+  const sev = (days) => {
+    if (days === null) return 'amber';
+    if (days < 0)  return 'red';
+    if (days <= 7) return 'red';
+    if (days <= 14) return 'amber';
+    return 'amber';
+  };
+
+  // 1. RTR check
+  const rtrDone = tenant.rtr_check_date || tenant.rtr_skipped ||
+    (D.tenantDocs||[]).some(d => String(d.tenant_id)===tid && d.slot==='right_to_rent' && d.uploaded_at);
+  if (!rtrDone) {
+    actions.push({ id:'rtr', severity:'red', icon:'🪪', label:'Right to Rent check',
+      detail:'Must be completed before tenancy starts. Fine up to £3,000 per tenant.',
+      deadline: startDate ? startDate.toISOString().slice(0,10) : null,
+      deadlineDays: startDate ? daysUntil(startDate.toISOString().slice(0,10)) : null,
+      cta:'Complete check', action:`moRTRWizard('${tid}')`, group:'Pre-Tenancy' });
+  }
+
+  // 2. Written Statement (replaces AST under RRA 2025)
+  const agreementDone = (D.esignReq||[]).some(r => String(r.tenant_id)===tid && r.document_type==='written_statement' && r.status==='signed');
+  const agreementSent = (D.esignReq||[]).some(r => String(r.tenant_id)===tid && r.document_type==='written_statement');
+  if (!agreementDone) {
+    actions.push({ id:'agreement', severity: agreementSent ? 'amber' : 'red', icon:'📝', label:'Written Statement of Terms',
+      detail: agreementSent ? 'Sent — awaiting tenant signature.' : 'Must be served BEFORE tenancy begins. Fine up to £7,000.',
+      deadline: startDate ? startDate.toISOString().slice(0,10) : null,
+      deadlineDays: startDate ? daysUntil(startDate.toISOString().slice(0,10)) : null,
+      cta: agreementSent ? 'Chase signature' : 'Send for signing', action:`moEsign('${pid}','${tid}')`, group:'Legal Documents' });
+  }
+
+  // 3. Gas Safety Certificate
+  const hasGas = propCerts.find(c => (c.type||'').toLowerCase().match(/gas|cp12|gsc/));
+  const gasExpired = hasGas && hasGas.expiry && new Date(hasGas.expiry) < today;
+  if (!hasGas || gasExpired) {
+    const days = hasGas && hasGas.expiry ? daysUntil(hasGas.expiry) : null;
+    actions.push({ id:'gas', severity: (!hasGas || (days !== null && days < 0)) ? 'red' : 'amber', icon:'🔥', label:'Gas Safety Certificate (CP12)',
+      detail: !hasGas ? 'Required annually. Must be given to tenant before move-in.' : `Expired — renew immediately.`,
+      deadline: hasGas?.expiry || null, deadlineDays: days,
+      cta:'Upload cert', action:`moCert()`, group:'Legal Documents' });
+  }
+
+  // 4. EICR
+  const hasEICR = propCerts.find(c => (c.type||'').toLowerCase().match(/eicr|electrical/));
+  const eicrExpired = hasEICR && hasEICR.expiry && new Date(hasEICR.expiry) < today;
+  if (!hasEICR || eicrExpired) {
+    actions.push({ id:'eicr', severity:'red', icon:'⚡', label:'EICR (Electrical Installation Condition Report)',
+      detail: !hasEICR ? 'Required every 5 years. Must be given to tenant before move-in.' : 'Expired — renew immediately.',
+      deadline: hasEICR?.expiry || null, deadlineDays: hasEICR?.expiry ? daysUntil(hasEICR.expiry) : null,
+      cta:'Upload cert', action:`moCert()`, group:'Legal Documents' });
+  }
+
+  // 5. EPC
+  const hasEPC = propCerts.find(c => (c.type||'').toLowerCase().match(/epc|energy performance/));
+  if (!hasEPC) {
+    actions.push({ id:'epc', severity:'amber', icon:'🏷', label:'EPC (Energy Performance Certificate)',
+      detail:'Required for all tenancies. Minimum E rating. Must be given to tenant.',
+      deadline: null, deadlineDays: null,
+      cta:'Upload cert', action:`moCert()`, group:'Legal Documents' });
+  }
+
+  // 6. RRA Information Sheet
+  const rraServed = allLog.some(e => e.template_id==='rra_info_sheet' || (e.subject||'').toLowerCase().includes('rra') || (e.subject||'').toLowerCase().includes('renters'));
+  if (!rraServed) {
+    actions.push({ id:'rra_sheet', severity:'red', icon:'📋', label:'RRA 2025 Information Sheet',
+      detail:'Mandatory PDF — a link is NOT valid. Fine up to £7,000 if missed.',
+      deadline: startDate ? startDate.toISOString().slice(0,10) : null,
+      deadlineDays: startDate ? daysUntil(startDate.toISOString().slice(0,10)) : null,
+      cta:'Send now', action:`moRRASheet()`, group:'Legal Documents' });
+  }
+
+  // 7. How to Rent Guide
+  const h2rServed = allLog.some(e => (e.template_id||'').includes('how_to_rent') || (e.subject||'').toLowerCase().includes('how to rent'));
+  if (!h2rServed) {
+    actions.push({ id:'h2r', severity:'amber', icon:'📖', label:'How to Rent Guide',
+      detail:'Latest GOV.UK edition. Must be served with latest version — resend when updated.',
+      deadline: startDate ? startDate.toISOString().slice(0,10) : null,
+      deadlineDays: startDate ? daysUntil(startDate.toISOString().slice(0,10)) : null,
+      cta:'Send guide', action:`sendH2RGuide('${tid}')`, group:'Legal Documents' });
+  }
+
+  // 8. Deposit protection
+  const depositTaken = tenant.deposit && parseFloat(tenant.deposit) > 0;
+  const depositProtected = tenant.scheme && tenant.scheme_ref;
+  if (depositTaken && !depositProtected) {
+    const dep30 = startDate ? new Date(startDate.getTime() + 30*864e5) : null;
+    const days = dep30 ? daysUntil(dep30.toISOString().slice(0,10)) : null;
+    actions.push({ id:'deposit_protect', severity: sev(days), icon:'🏦', label:'Deposit not registered in protection scheme',
+      detail:`Must register with DPS, MyDeposits or TDS within 30 days. Fine up to 3× deposit (£${((parseFloat(tenant.deposit)||0)*3).toLocaleString()}).`,
+      deadline: dep30 ? dep30.toISOString().slice(0,10) : null, deadlineDays: days,
+      cta:'Register deposit', action:`moDepositCertModal('${tid}')`, group:'Deposit Protection' });
+  }
+
+  // 9. Prescribed Information
+  const piServed = allLog.some(e => (e.template_id||'').includes('prescribed') || (e.template_id||'').includes('pi_'));
+  if (depositTaken && depositProtected && !piServed) {
+    const pi30 = startDate ? new Date(startDate.getTime() + 30*864e5) : null;
+    const days = pi30 ? daysUntil(pi30.toISOString().slice(0,10)) : null;
+    actions.push({ id:'prescribed_info', severity: sev(days), icon:'📄', label:'Prescribed Information not served',
+      detail:`Must be served within 30 days of receiving deposit. Fine up to 3× deposit (£${((parseFloat(tenant.deposit)||0)*3).toLocaleString()}).`,
+      deadline: pi30 ? pi30.toISOString().slice(0,10) : null, deadlineDays: days,
+      cta:'Generate & Send', action:`moPrescribedInfo('${tid}')`, group:'Deposit Protection' });
+  }
+
+  // Sort: overdue first, then by days remaining, then amber
+  actions.sort((a, b) => {
+    const sevOrder = { red: 0, amber: 1 };
+    if (sevOrder[a.severity] !== sevOrder[b.severity]) return sevOrder[a.severity] - sevOrder[b.severity];
+    if (a.deadlineDays !== null && b.deadlineDays !== null) return a.deadlineDays - b.deadlineDays;
+    if (a.deadlineDays !== null) return -1;
+    if (b.deadlineDays !== null) return 1;
+    return 0;
+  });
+
+  return actions;
+}
+
+// Render the mandatory actions banner for tenant detail page
+function renderMandatoryBanner(tenant) {
+  const actions = getMandatoryActions(tenant);
+  if (!actions.length) return '';
+  const overdue  = actions.filter(a => a.deadlineDays !== null && a.deadlineDays < 0);
+  const urgent   = actions.filter(a => a.severity === 'red' && (a.deadlineDays === null || a.deadlineDays >= 0));
+  const advisory = actions.filter(a => a.severity === 'amber');
+  const topColor = overdue.length ? '#E53E3E' : urgent.length ? '#D97706' : '#D97706';
+  const topBg    = overdue.length ? 'rgba(229,62,62,0.06)' : 'rgba(217,119,6,0.06)';
+  const topLabel = overdue.length ? `${overdue.length} overdue legal obligation${overdue.length!==1?'s':''}` :
+                   urgent.length  ? `${urgent.length} urgent action${urgent.length!==1?'s':''} required` :
+                   `${advisory.length} compliance item${advisory.length!==1?'s':''} to complete`;
+  return `
+  <div id="mandatory-banner" style="border:1.5px solid ${topColor};border-radius:12px;background:${topBg};margin-bottom:16px;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid ${topColor}25;cursor:pointer" onclick="document.getElementById('mandatory-banner-body').style.display=document.getElementById('mandatory-banner-body').style.display==='none'?'':'none';this.querySelector('.banner-chevron').style.transform=document.getElementById('mandatory-banner-body').style.display==='none'?'rotate(-90deg)':''">
+      <span style="font-size:18px">${overdue.length ? '🔴' : '⚠️'}</span>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:700;color:${topColor}">${topLabel}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:1px">Click to ${actions.length > 2 ? 'expand · ' : ''}complete each item to stay legally compliant</div>
+      </div>
+      <span class="banner-chevron" style="font-size:12px;color:var(--muted);transition:transform .2s">▼</span>
+    </div>
+    <div id="mandatory-banner-body" style="padding:0 16px">
+      ${actions.map(a => {
+        const isOverdue = a.deadlineDays !== null && a.deadlineDays < 0;
+        const col = isOverdue ? '#E53E3E' : a.severity === 'red' ? '#D97706' : '#D97706';
+        const deadlineStr = a.deadlineDays !== null ? (isOverdue ? `<span style="color:#E53E3E;font-weight:700">${Math.abs(a.deadlineDays)}d overdue</span>` : a.deadlineDays === 0 ? `<span style="color:#E53E3E;font-weight:700">Due today</span>` : `<span style="color:${a.severity==='red'?'#E53E3E':'#D97706'};font-weight:600">${a.deadlineDays}d left</span>`) : '';
+        return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:16px;flex-shrink:0">${a.icon}</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:600;color:var(--txt)">${a.label}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:1px">${a.detail}</div>
+          </div>
+          ${deadlineStr ? `<span style="font-size:11px;white-space:nowrap">${deadlineStr}</span>` : ''}
+          <button class="btn btn-sm" style="flex-shrink:0;border-color:${col};color:${col};font-size:11px;padding:3px 10px" onclick="${a.action}">${a.cta}</button>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+}
+
 function pgComplianceSection(){
   if(!D.properties.length) return '';
   var html = '<div style="margin-bottom:22px">';
@@ -7869,18 +8075,78 @@ function pgCompliance(){
         </div>`;
       const bothOk = rraUrl && h2rUrl;
       const oneOk = rraUrl || h2rUrl;
+
+      // Per-tenant Prescribed Information status
+      const activeTenants = D.tenants.filter(t => t.status === 'Active');
+      const piRows = activeTenants.map(function(t) {
+        var piServed = D.emailLog.some(function(e){ return (String(e.prop_id)===String(t.prop_id)||String(e.tenant_id)===String(t.id)) && ((e.template_id||'').includes('prescribed')||(e.template_id||'').includes('pi_')); });
+        var depositTaken = t.deposit && parseFloat(t.deposit) > 0;
+        var depositProtected = t.scheme && t.scheme_ref;
+        var pi30 = t.start_date ? new Date(new Date(t.start_date).getTime()+30*864e5) : null;
+        var tod = new Date(); tod.setHours(0,0,0,0);
+        var daysLeft = pi30 ? Math.round((pi30 - tod) / 864e5) : null;
+        var isOverdue = daysLeft !== null && daysLeft < 0;
+        var prop = P(t.prop_id) || { address: '—' };
+        var statusHtml, btnHtml;
+        if (piServed) {
+          statusHtml = '<span style="color:var(--green-dark);font-weight:600">\u2713 Served</span>';
+          btnHtml = '<button class="btn btn-sm" onclick="moPrescribedInfo(\'' + t.id + '\')" style="font-size:11px">Resend</button>';
+        } else if (!depositTaken) {
+          statusHtml = '<span style="color:var(--muted)">N/A \u2014 no deposit</span>';
+          btnHtml = '';
+        } else if (!depositProtected) {
+          statusHtml = '<span style="color:#D97706;font-weight:600">\u26a0 Register deposit first</span>';
+          btnHtml = '<button class="btn btn-sm" onclick="moDepositCertModal(\'' + t.id + '\')" style="font-size:11px;border-color:#D97706;color:#D97706">Register \u2192</button>';
+        } else {
+          var dl = daysLeft !== null ? daysLeft : 99;
+          statusHtml = isOverdue
+            ? '<span style="color:var(--red);font-weight:700">\ud83d\udd34 ' + Math.abs(daysLeft) + 'd overdue</span>'
+            : dl <= 7
+            ? '<span style="color:var(--red);font-weight:700">\u26a0 ' + dl + 'd left</span>'
+            : '<span style="color:#D97706;font-weight:600">\u26a0 Not served \u00b7 ' + dl + 'd left</span>';
+          btnHtml = '<button class="btn btn-sm btn-navy" onclick="moPrescribedInfo(\'' + t.id + '\')" style="font-size:11px">Generate &amp; Send</button>';
+        }
+        var depStr = t.deposit ? ' \u00b7 Deposit: \u00a3' + parseFloat(t.deposit).toLocaleString() : '';
+        var schStr = t.scheme ? ' \u00b7 ' + t.scheme : '';
+        return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">'
+          + '<div style="flex:1;min-width:0">'
+          + '<div style="font-size:13px;font-weight:600;color:var(--txt)">' + t.name + '</div>'
+          + '<div style="font-size:11px;color:var(--muted);margin-top:1px">' + prop.address + depStr + schStr + '</div>'
+          + '<div style="font-size:11px;margin-top:2px">' + statusHtml + '</div>'
+          + '</div>'
+          + btnHtml
+          + '</div>';
+      }).join('');
+
       return `
         <div style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:20px;border-left:3px solid var(--navy)">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
-            <h2 style="margin:0">📋 System Documents</h2>
-            <span style="font-size:10px;font-weight:700;color:#fff;background:${bothOk?'var(--green)':'#D97706'};padding:2px 7px;border-radius:100px">
-              ${bothOk?'Both uploaded':oneOk?'1 of 2':'Not uploaded'}</span>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:2px">
+            <h2 style="margin:0">📦 Tenancy Packs &amp; Templates</h2>
           </div>
-          <p style="font-size:12px;color:var(--muted);margin:0 0 12px">
-            Upload once — attached automatically to every Day 1 kit. Replace whenever GOV.UK publishes a new version.
+          <p style="font-size:12px;color:var(--muted);margin:0 0 16px">
+            Mandatory documents for every tenancy — upload once, generate per tenant, track compliance automatically.
           </p>
-          ${mkSlot('RRA 2025 Prescribed Particulars','rra',rraUrl,'https://www.gov.uk/government/publications/renters-rights-act-2025-prescribed-particulars')}
-          ${mkSlot('How to Rent Guide','h2r',h2rUrl,'https://www.gov.uk/government/publications/how-to-rent')}
+
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px">Standard documents — upload once, auto-attach to every Day 1 kit</div>
+          <div style="background:var(--off);border-radius:8px;padding:4px 14px;margin-bottom:16px">
+            <div style="display:flex;align-items:center;gap:8px;padding:6px 0">
+              <span style="font-size:10px;font-weight:700;color:#fff;background:${bothOk?'var(--green)':'#D97706'};padding:2px 7px;border-radius:100px;white-space:nowrap">
+                ${bothOk?'Both uploaded':oneOk?'1 of 2':'Not uploaded'}</span>
+              <span style="font-size:12px;color:var(--muted)">Replace whenever GOV.UK publishes a new version</span>
+            </div>
+            ${mkSlot('RRA 2025 Prescribed Particulars','rra',rraUrl,'https://www.gov.uk/government/publications/renters-rights-act-2025-prescribed-particulars')}
+            ${mkSlot('How to Rent Guide','h2r',h2rUrl,'https://www.gov.uk/government/publications/how-to-rent')}
+          </div>
+
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px">
+            📄 Prescribed Information — generate per tenant · must be served within 30 days of deposit receipt
+          </div>
+          <div style="background:rgba(229,62,62,0.04);border:1px solid rgba(229,62,62,0.15);border-radius:8px;padding:6px 14px;margin-bottom:8px;font-size:11px;color:var(--txt)">
+            ⚖️ <strong>Legal requirement</strong> — failure to serve carries a fine of up to <strong>3× the deposit amount</strong> and bars you from recovering possession.
+          </div>
+          <div style="padding:0 2px">
+            ${activeTenants.length ? piRows : '<div style="font-size:12px;color:var(--muted);padding:10px 0">No active tenants</div>'}
+          </div>
         </div>`;
     })()}
 
@@ -8285,14 +8551,29 @@ async function checkAllReminders() {
     } catch(e) { shouldSendDigest = false; }
 
     if (shouldSendDigest) {
-    // Calculate portfolio score
+    // Calculate portfolio score — same 4-component formula as dashboard health score
     const allCerts = D.certs;
     const totalCerts = allCerts.length;
-    const expiredCerts = allCerts.filter(c => c.expiry && new Date(c.expiry) < today).length;
-    const criticalCerts = allCerts.filter(c => { if(!c.expiry) return false; const d=Math.round((new Date(c.expiry)-today)/864e5); return d>=0&&d<=14; }).length;
-    const portfolioScore = totalCerts > 0
-      ? Math.max(0, Math.min(100, Math.round(((totalCerts-expiredCerts)/totalCerts)*100) - (criticalCerts*5)))
-      : 0;
+    // 1. Cert validity (30pts)
+    const _certChecksD = D.certs.filter(c => c.expiry && new Date(c.expiry) > today).length;
+    const _totalCertsD = D.certs.length;
+    const _digestCertScore = _totalCertsD > 0 ? Math.round((_certChecksD / _totalCertsD) * 30) : 0;
+    // 2. Rent health (30pts)
+    const _lateRD = D.rent.filter(r => r.status === 'Late').length;
+    const _totalRD = D.rent.filter(r => ['Paid','Late','Due'].includes(r.status)).length;
+    const _digestRentScore = _totalRD > 0 ? Math.round(((_totalRD - _lateRD) / _totalRD) * 30) : 0;
+    // 3. Maintenance (20pts)
+    const _awaabOD = D.maintenance.filter(m => m.awaab && m.status !== 'Resolved').length;
+    const _urgOD   = D.maintenance.filter(m => m.priority === 'Urgent' && m.status !== 'Resolved').length;
+    const _openD   = D.maintenance.filter(m => m.status !== 'Resolved').length;
+    const _digestMaintScore = !D.properties.length ? 0 : _awaabOD > 0 ? 0 : _urgOD > 0 ? 8 : _openD > 3 ? 12 : _openD > 0 ? 16 : 20;
+    // 4. KYC (20pts)
+    const _activeTenD = D.tenants.filter(t => t.status === 'Active');
+    const _digestKycScore = _activeTenD.length === 0 ? 0 : Math.round((_activeTenD.filter(t => {
+      const cl = t.compliance_checklist || {}; const keys = ['rtr','id_docs','agreement'];
+      return keys.every(k => (cl[k]?.ra || 'red') === 'green');
+    }).length / _activeTenD.length) * 20);
+    const portfolioScore = Math.min(100, _digestCertScore + _digestRentScore + _digestMaintScore + _digestKycScore);
     const scoreCol = portfolioScore>=80?'var(--green)':portfolioScore>=50?'#D97706':'#E53E3E';
     const scoreLabel = portfolioScore>=80?'Healthy ✅':portfolioScore>=50?'Needs attention ⚠️':'At risk 🔴';
 
@@ -9201,6 +9482,7 @@ function pgTenantDetail(tid) {
       ${tenancyCard}
       ${stickyCard}
       ${(()=>{ const g8=getGround8Status(t.id); if(!g8||!g8.warning) return ''; const isHit=g8.threshold; return `<div style="background:${isHit?'rgba(229,62,62,0.07)':'rgba(217,119,6,0.06)'};border:1px solid ${isHit?'rgba(229,62,62,0.3)':'rgba(217,119,6,0.3)'};border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><div style="font-size:13px;font-weight:700;color:${isHit?'var(--red)':'var(--amber)'};margin-bottom:4px">${isHit?'🔴 Ground 8 threshold reached':'⚠️ Rent arrears warning'}</div><div style="font-size:12px;color:var(--txt);line-height:1.6">${g8.monthsArrears} month${g8.monthsArrears!==1?'s':''} in arrears · £${g8.totalUnpaid.toLocaleString()} unpaid across ${g8.unpaidCount} payment${g8.unpaidCount!==1?'s':''}${isHit?' · Ground 8 requires 2+ months — you may now serve a Section 8 notice':' · Ground 8 triggers at 2 months'}</div></div><button class="btn btn-sm" style="${isHit?'border-color:var(--red);color:var(--red)':'border-color:var(--amber);color:var(--amber)'}" onclick="moSection8('${t.prop_id}')">⚖️ Section 8 →</button></div>`; })()}
+      ${renderMandatoryBanner(t)}
       ${unifiedDocsCard}
       ${portalCard}
 
@@ -10715,6 +10997,77 @@ function _invSigMode(mode) {
 }
 function _invSigClear() {
   if (window._invSigPad) window._invSigPad.clear();
+}
+
+// ── Shared landlord signature pad for generators (S8, S13, moGenerate) ──
+function _genSigHtml(prefix) {
+  return `<div style="margin-top:14px;border:1.5px solid var(--border);border-radius:8px;padding:12px 14px;background:var(--off)">
+    <div style="font-size:12px;font-weight:600;color:var(--txt);margin-bottom:4px">Landlord signature <span style="color:var(--red)">*</span></div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Sign before serving — embedded in the document as proof of authorisation</div>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <button type="button" id="${prefix}-sig-draw-btn" onclick="_genSigMode('${prefix}','draw')" style="font-size:12px;padding:5px 14px;border-radius:6px;border:2px solid var(--navy);background:var(--navy);color:#fff;cursor:pointer;font-family:var(--font);font-weight:600">&#9997; Draw</button>
+      <button type="button" id="${prefix}-sig-type-btn" onclick="_genSigMode('${prefix}','type')" style="font-size:12px;padding:5px 14px;border-radius:6px;border:2px solid var(--border);background:var(--white);color:var(--txt);cursor:pointer;font-family:var(--font);font-weight:500">Aa Type</button>
+    </div>
+    <div id="${prefix}-sig-draw-area">
+      <div style="border:1.5px solid var(--border);border-radius:6px;overflow:hidden;background:#fff;touch-action:none">
+        <canvas id="${prefix}-sig-canvas" style="display:block;width:100%;height:90px;cursor:crosshair;touch-action:none"></canvas>
+      </div>
+      <button type="button" onclick="_genSigClear('${prefix}')" style="font-size:11px;color:var(--muted);background:none;border:none;cursor:pointer;padding:4px 0;font-family:var(--font)">&#10005; Clear</button>
+    </div>
+    <div id="${prefix}-sig-type-area" style="display:none">
+      <input id="${prefix}-sig-typed" class="fi" placeholder="Type your full name" style="width:100%;font-family:Georgia,serif;font-size:18px;letter-spacing:1px;font-style:italic" oninput="window._genSigTypedVal_${prefix}=this.value">
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">Your typed name will appear as a signature on the document</div>
+    </div>
+  </div>`;
+}
+function _genSigInit(prefix) {
+  window['_genSigPad_' + prefix] = null;
+  window['_genSigMode_' + prefix] = 'draw';
+  window['_genSigTypedVal_' + prefix] = '';
+  setTimeout(() => {
+    const canvas = document.getElementById(prefix + '-sig-canvas');
+    if (canvas && window.SignaturePad) {
+      const ratio = window.devicePixelRatio || 1;
+      canvas.width  = canvas.offsetWidth  * ratio;
+      canvas.height = canvas.offsetHeight * ratio;
+      canvas.getContext('2d').scale(ratio, ratio);
+      window['_genSigPad_' + prefix] = new SignaturePad(canvas, { backgroundColor: 'rgb(255,255,255)', penColor: 'rgb(26,43,69)' });
+    }
+  }, 80);
+}
+function _genSigMode(prefix, mode) {
+  window['_genSigMode_' + prefix] = mode;
+  const drawArea = document.getElementById(prefix + '-sig-draw-area');
+  const typeArea = document.getElementById(prefix + '-sig-type-area');
+  const drawBtn  = document.getElementById(prefix + '-sig-draw-btn');
+  const typeBtn  = document.getElementById(prefix + '-sig-type-btn');
+  if (mode === 'draw') {
+    if (drawArea) drawArea.style.display = '';
+    if (typeArea) typeArea.style.display = 'none';
+    if (drawBtn) { drawBtn.style.background='var(--navy)'; drawBtn.style.color='#fff'; drawBtn.style.borderColor='var(--navy)'; }
+    if (typeBtn) { typeBtn.style.background='var(--white)'; typeBtn.style.color='var(--txt)'; typeBtn.style.borderColor='var(--border)'; }
+  } else {
+    if (drawArea) drawArea.style.display = 'none';
+    if (typeArea) typeArea.style.display = '';
+    if (drawBtn) { drawBtn.style.background='var(--white)'; drawBtn.style.color='var(--txt)'; drawBtn.style.borderColor='var(--border)'; }
+    if (typeBtn) { typeBtn.style.background='var(--navy)'; typeBtn.style.color='#fff'; typeBtn.style.borderColor='var(--navy)'; }
+  }
+}
+function _genSigClear(prefix) {
+  const pad = window['_genSigPad_' + prefix];
+  if (pad) pad.clear();
+}
+function _genSigCollect(prefix) {
+  const mode = window['_genSigMode_' + prefix] || 'draw';
+  if (mode === 'draw') {
+    const pad = window['_genSigPad_' + prefix];
+    if (!pad || pad.isEmpty()) { toast('Please sign the document before continuing', true); return null; }
+    return { type: 'draw', data: pad.toDataURL('image/png') };
+  } else {
+    const typed = (window['_genSigTypedVal_' + prefix] || '').trim();
+    if (!typed) { toast('Please type your name as signature before continuing', true); return null; }
+    return { type: 'typed', data: typed };
+  }
 }
 
 function sendInventoryReport(id) {
@@ -12259,9 +12612,11 @@ function moPrescribedInfo(tid) {
     <div style="font-size:12px;color:var(--muted);background:var(--off);border-radius:7px;padding:10px 12px;line-height:1.7">
       The deposit is held by <strong>${t.scheme}</strong> under the Tenancy Deposit Protection scheme as required by the Housing Act 2004. The tenant may dispute deductions via the scheme's free Alternative Dispute Resolution (ADR) service — contact: <strong>${schemeInfo.dispute}</strong>.
     </div>
+    ${_genSigHtml('pi')}
   `, `<button class="btn" onclick="closeMo()">Close</button>
      <button class="btn" onclick="generatePrescribedInfoPDF('${tid}')">📥 Download PDF</button>
      <button class="btn btn-navy" id="pi-send-btn" onclick="sendPrescribedInfo('${tid}')">📧 Send to Tenant</button>`);
+  _genSigInit('pi');
 }
 
 // ── DEPOSIT CERTIFICATE MODAL — focused 2-section modal ──
@@ -12588,9 +12943,22 @@ function generatePrescribedInfoPDF(tid) {
     // Signatures
     ln('Signatures', 11, true, [11,30,61]); y += 4;
     doc.setFontSize(10); doc.setFont('helvetica','normal'); doc.setTextColor(50,50,50);
-    doc.text('Landlord signature:', 15, y); doc.setDrawColor(180,180,180); doc.line(60, y+1, W-15, y+1); y += 10;
-    doc.text('Tenant signature:', 15, y); doc.line(55, y+1, W-15, y+1); y += 10;
-    doc.text('Date:', 15, y); doc.line(30, y+1, W-15, y+1); y += 10;
+    doc.text('Landlord signature:', 15, y);
+    const _piSigEmbed = _genSigCollect('pi');
+    if (_piSigEmbed) {
+      if (_piSigEmbed.type === 'draw') {
+        doc.addImage(_piSigEmbed.data, 'PNG', 58, y - 8, 60, 18);
+      } else {
+        doc.setFont('helvetica','italic'); doc.setFontSize(14); doc.setTextColor(26,43,69);
+        doc.text(_piSigEmbed.data, 60, y);
+        doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(50,50,50);
+      }
+    } else {
+      doc.setDrawColor(180,180,180); doc.line(60, y+1, W-15, y+1);
+    }
+    y += 10;
+    doc.text('Tenant signature:', 15, y); doc.setDrawColor(180,180,180); doc.line(55, y+1, W-15, y+1); y += 10;
+    doc.text('Date:', 15, y); doc.text(new Date().toLocaleDateString('en-GB'), 30, y); y += 10;
     rule();
 
     // Footer
@@ -12624,6 +12992,9 @@ function generatePrescribedInfoPDF(tid) {
 }
 
 async function sendPrescribedInfo(tid) {
+  // Validate signature first
+  const _piSig = _genSigCollect('pi');
+  if (!_piSig) return;
   const btn = document.getElementById('pi-send-btn');
   const t = D.tenants.find(x => String(x.id) === String(tid));
   if (!t) return;
@@ -14761,8 +15132,10 @@ function moSendToTenant() {
     <div style="background:var(--blue-bg);border:1px solid rgba(59,111,232,0.2);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--blue)">
       Sent from: <strong>documents@nexlet.co.uk</strong> · A timestamped record will be saved to this tenant's profile
     </div>
+    ${(function(){const _legalTemplates=['rentincrease','noticetoquit','depositdeduction','depositreturn','rentarrears1','rentarrears2','endoftenancy'];return _legalTemplates.includes(ctx?.templateId) ? _genSigHtml('mogensend') : ''})()}
   `, `<button class="btn" onclick="closeMo()">Cancel</button>
       <button class="btn btn-navy" id="send-btn" onclick="sendEmailNow()">✉ Send email</button>`);
+  if (['rentincrease','noticetoquit','depositdeduction','depositreturn','rentarrears1','rentarrears2','endoftenancy'].includes(window._genContext?.templateId)) _genSigInit('mogensend');
 }
 
 // ── S4: SEND EMAIL VIA RESEND ──
@@ -14772,6 +15145,13 @@ async function sendEmailNow() {
   const subject = document.getElementById('send-subject')?.value.trim();
   const ctx = window._genContext;
   if (!to) { toast('Please enter a recipient email', true); return; }
+  // Collect sig for legal templates
+  const _legalTemps = ['rentincrease','noticetoquit','depositdeduction','depositreturn','rentarrears1','rentarrears2','endoftenancy'];
+  let _moGenSig = null;
+  if (_legalTemps.includes(ctx?.templateId)) {
+    _moGenSig = _genSigCollect('mogensend');
+    if (!_moGenSig) return;
+  }
   btn.disabled = true;
   btn.innerHTML = '<span class="spin"></span>Sending…';
   const htmlBody = `<div style="font-family:sans-serif;max-width:680px;margin:0 auto;padding:32px 24px;color:#1A2B45">
@@ -14783,6 +15163,7 @@ async function sendEmailNow() {
     <div style="margin-top:32px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#999">
       Sent via NexLet · documents@nexlet.co.uk · This document is for reference only and does not constitute legal advice.
     </div>
+    ${_moGenSig ? `<div style="margin-top:16px;padding-top:12px;border-top:1px solid #eee"><div style="font-size:11px;color:#999;margin-bottom:6px">Landlord signature:</div>${_moGenSig.type==='draw' ? '<img src="'+_moGenSig.data+'" style="height:40px">' : '<span style="font-family:Georgia,serif;font-size:18px;font-style:italic">'+_moGenSig.data+'</span>'}</div>` : ''}
   </div>`;
   try {
     const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
@@ -15607,7 +15988,9 @@ function s8ShowConsent() {
     </div>
     <div style="background:var(--off);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-top:14px;font-size:11px;color:var(--muted);line-height:1.6">
       By clicking <strong>Generate draft</strong> below, you confirm you have read and agreed to the above. Your confirmation will be recorded with a timestamp in the audit log.
-    </div>`;
+    </div>
+    ${_genSigHtml('s8')}`;
+  _genSigInit('s8');
 
   footer.innerHTML = `<div style="display:flex;justify-content:space-between;width:100%">
     <button class="btn" onclick="s8Render()">← Back</button>
@@ -15618,6 +16001,11 @@ function s8ShowConsent() {
 async function s8Generate() {
   const checks = ['s8_c1','s8_c2','s8_c3'].map(id => document.getElementById(id)?.checked);
   if (!checks.every(Boolean)) { toast('Please confirm all three points', true); return; }
+
+  // Collect landlord signature
+  const _s8Sig = _genSigCollect('s8');
+  if (!_s8Sig) return;
+  _s8.landlordSig = _s8Sig;
 
   // Log disclaimer acceptance to audit trail
   await logAudit(
@@ -15868,8 +16256,20 @@ async function s8DownloadPDF() {
     if (y > 240) { doc.addPage(); y = 18; }
     doc.setFontSize(10); doc.setTextColor(26,43,69); doc.setFont(undefined, 'normal');
     doc.text('Signed:', 16, y);
-    doc.setDrawColor(120,120,120);
-    doc.line(40, y+1, W-16, y+1);
+    // Embed landlord signature if captured
+    const _s8SigEmbed = _s8.landlordSig;
+    if (_s8SigEmbed) {
+      if (_s8SigEmbed.type === 'draw') {
+        doc.addImage(_s8SigEmbed.data, 'PNG', 36, y - 8, 60, 18);
+      } else {
+        doc.setFont(undefined, 'italic'); doc.setFontSize(14); doc.setTextColor(26,43,69);
+        doc.text(_s8SigEmbed.data, 40, y);
+        doc.setFont(undefined, 'normal'); doc.setFontSize(10);
+      }
+    } else {
+      doc.setDrawColor(120,120,120);
+      doc.line(40, y+1, W-16, y+1);
+    }
     y += 10;
     doc.text('Name:', 16, y);
     doc.setFont(undefined, 'bold');
@@ -15881,7 +16281,7 @@ async function s8DownloadPDF() {
     y += 8;
     doc.text('Date:', 16, y);
     doc.setDrawColor(120,120,120);
-    doc.line(40, y+1, 100, y+1);
+    doc.text(new Date().toLocaleDateString('en-GB'), 40, y);
     y += 10;
 
     // ── Footer ──
@@ -16278,7 +16678,7 @@ async function sendH2RGuide(tid) {
   if (!h2rUrl) {
     alertMo(
       'How to Rent Guide not uploaded',
-      'The How to Rent Guide has not been uploaded yet.<br><br>Go to <strong>Compliance → System Documents</strong> to upload it once — it will then be available to send to all tenants.',
+      'The How to Rent Guide has not been uploaded yet.<br><br>Go to <strong>Compliance → Tenancy Packs & Templates</strong> to upload it once — it will then be available to send to all tenants.',
       'Go to Compliance',
       `function(){nav('compliance')}`
     );
@@ -17892,6 +18292,7 @@ function _renderS13Step(n) {
     <button onclick="s13Back()" style="background:none;border:none;font-family:var(--font);font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;padding:7px 0;visibility:${n===1?'hidden':'visible'}">← Back</button>
     <span style="font-size:12px;color:var(--muted)">Step ${n} of 3</span>
     <button class="btn btn-navy" id="s13-btn" onclick="s13Next()">${n===3?'Send notice':'Next →'}</button>`;
+  if (n === 3) _genSigInit('s13');
 }
 
 function _s13StepHtml(n) {
@@ -17970,7 +18371,7 @@ function _s13StepHtml(n) {
       <p><strong>Your right to challenge:</strong> If you consider the proposed rent is above the open market rent, you may refer this notice to the First-tier Tribunal (Property Chamber) before ${eDate}. The Tribunal will set a market rent. You will not be penalised for exercising this right.</p>
       <p>Please continue paying the current rent of £${cur.toLocaleString()}/month until the effective date.</p>
       <div style="margin-top:24px;padding-top:14px;border-top:1px solid #E4EAF1">
-        <p style="margin-bottom:24px">Signed: ___________________________</p>
+        <p style="margin-bottom:4px">Signed: ${_s13Sig && _s13Sig.type==='draw' ? `<img src="${_s13Sig.data}" style="height:36px;vertical-align:middle;margin-left:8px">` : _s13Sig ? `<span style="font-family:Georgia,serif;font-size:16px;font-style:italic;margin-left:8px">${_s13Sig.data}</span>` : '___________________________'}</p>
         <p>Name: <strong>${s.landlordName}</strong> &nbsp;&nbsp; Date: ${nDate}</p>
       </div>
     </div>`;
@@ -17989,7 +18390,8 @@ function _s13StepHtml(n) {
         <div><div style="font-size:13px;font-weight:500">Log to audit trail</div><div style="font-size:11px;color:var(--muted)">Timestamped court-admissible record of service</div></div>
       </label>
     </div>
-    <div style="background:var(--amber-bg);border:1px solid rgba(217,119,6,0.2);border-radius:8px;padding:10px 14px;font-size:11px;color:var(--amber)">⚠️ Email is valid service under RRA 2025. For extra evidence, also send by first-class post and keep proof of postage.</div>`;
+    <div style="background:var(--amber-bg);border:1px solid rgba(217,119,6,0.2);border-radius:8px;padding:10px 14px;font-size:11px;color:var(--amber)">⚠️ Email is valid service under RRA 2025. For extra evidence, also send by first-class post and keep proof of postage.</div>
+    ${_genSigHtml('s13')}`;
   }
   return '';
 }
@@ -18061,6 +18463,9 @@ function s13Back() {
 }
 
 async function _sendS13() {
+  // Collect signature before disabling button
+  const _s13Sig = _genSigCollect('s13');
+  if (!_s13Sig) return;
   const btn = document.getElementById('s13-btn');
   if (btn) { btn.disabled=true; btn.innerHTML='<span class="spin"></span>Sending…'; }
   const s = window._s13;
