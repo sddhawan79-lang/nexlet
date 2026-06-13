@@ -5173,7 +5173,7 @@ function getMandatoryActions(tenant) {
   if (depositTaken && depositProtected && !piServed) {
     const pi30 = startDate ? new Date(startDate.getTime() + 30*864e5) : null;
     const days = pi30 ? daysUntil(pi30.toISOString().slice(0,10)) : null;
-    actions.push({ id:'prescribed_info', severity: sev(days), icon:'📄', label:'Prescribed Information not served',
+    actions.push({ id:'prescribed_info', severity: sev(days), icon:'📄', label:'Deposit Notice not served',
       detail:`Must be served within 30 days of receiving deposit. Fine up to 3× deposit (£${((parseFloat(tenant.deposit)||0)*3).toLocaleString()}).`,
       deadline: pi30 ? pi30.toISOString().slice(0,10) : null, deadlineDays: days,
       cta:'Generate & Send', action:`moPrescribedInfo('${tid}')`, group:'Deposit Protection' });
@@ -5810,7 +5810,7 @@ function getPropCheckItems(mode){
     {id:'ob9',  group:'Legal Documents',   label:'EICR served',                                detail:'Electrical Installation Condition Report. Valid for 5 years.'},
     {id:'ob10', group:'Legal Documents',   label:'EPC served',                                 detail:'Minimum E rating required. Valid 10 years.'},
     {id:'ob11', group:'Deposit Protection',label:'Deposit registered in approved scheme',      detail:'DPS, MyDeposits or TDS. Must be done within 30 days of receipt.'},
-    {id:'ob12', group:'Deposit Protection',label:'Prescribed Information served to tenant',    detail:'Confirm scheme name, amount, and how to reclaim. Keep proof.'},
+    {id:'ob12', group:'Deposit Protection',label:'Deposit Notice served to tenant',    detail:'Confirm scheme name, amount, and how to reclaim. Keep proof.'},
     {id:'ob13', group:'Move-In Day',       label:'Move-in inventory & condition report signed',detail:'Room-by-room condition report with dated photos. Both parties sign.'},
     {id:'ob14', group:'Move-In Day',       label:'All keys handed over & counted',             detail:'Front door, back door, post box, meter cupboard, window keys. Log sets given.'},
     {id:'ob15', group:'Move-In Day',       label:'Smoke & CO alarms tested & logged',          detail:'Smoke alarm on every storey. CO alarm in any room with solid fuel appliance.'},
@@ -8139,7 +8139,7 @@ function pgCompliance(){
           </div>
 
           <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px">
-            📄 Prescribed Information — generate per tenant · must be served within 30 days of deposit receipt
+            📄 Deposit Notice — generate per tenant · must be served within 30 days of deposit receipt
           </div>
           <div style="background:rgba(229,62,62,0.04);border:1px solid rgba(229,62,62,0.15);border-radius:8px;padding:6px 14px;margin-bottom:8px;font-size:11px;color:var(--txt)">
             ⚖️ <strong>Legal requirement</strong> — failure to serve carries a fine of up to <strong>3× the deposit amount</strong> and bars you from recovering possession.
@@ -9144,7 +9144,6 @@ function pgTenantDetail(tid) {
           ${t.status === 'Ended' ? '<span style="font-size:11px;font-weight:600;background:var(--off);color:var(--muted);padding:5px 10px;border-radius:6px;border:1px solid var(--border)">📦 Archived</span>' : `<button class="btn btn-sm" onclick="moTenantDetail('${t.id}')">✎ Edit</button><button class="btn btn-sm" style="margin-left:4px;border-color:var(--blue);color:var(--blue)" onclick="moTenantDocs('${t.id}','${t.prop_id}')">📄 Upload Docs</button>`}
           <button class="btn btn-sm btn-navy" onclick="moSection8('${t.prop_id}')">⚖️ Section 8</button>
           <button class="btn btn-sm btn-navy" onclick="moTenantComms('${t.id}')">✉ Message</button>
-          ${t.scheme && t.scheme_ref && t.status !== 'Ended' ? `<button class="btn btn-sm" style="border-color:var(--green-dark);color:var(--green-dark)" onclick="moPrescribedInfo('${t.id}')">📄 Prescribed Info</button>` : ''}
           ${t.status === 'Ended' ? '' : `<button class="btn btn-sm" style="border-color:var(--red);color:var(--red)" onclick="moEndTenancy('${t.id}')">⏻ End Tenancy</button>`}
         </div>
       </div>
@@ -9332,7 +9331,7 @@ function pgTenantDetail(tid) {
   const _day30Dispatched = propLog.some(e=>e.template_id==='day30_pack')||tenantLog2.some(e=>e.template_id==='day30_pack');
   const _hasPet = !!(t.pet_allowed || t.has_pet);
   const day30Items = [
-    { icon:'🏦', label:'Deposit prescribed info served',
+    { icon:'📄', label:'Deposit Notice served',
       done: propLog.some(e=>e.template_id==='prescribed'||e.template_id?.includes('prescribed'))||tenantLog2.some(e=>e.template_id?.includes('prescribed')),
       action:`moPrescribedInfo('${tid}')`, btnLabel:'Generate & Send' },
     { icon:'💰', label:'Deposit scheme protected',
@@ -9412,7 +9411,7 @@ function pgTenantDetail(tid) {
   const _kitMeta = {
     'welcome_kit':              { label:'Day 1 Kit',           color:'#0B1E3D', bg:'rgba(11,30,61,0.07)',  icon:'📦' },
     'day30_pack':               { label:'Day 30 Kit',          color:'#7C3AED', bg:'rgba(124,58,237,0.07)', icon:'📋' },
-    'prescribed_info':          { label:'Prescribed Info',     color:'#D97706', bg:'rgba(217,119,6,0.08)', icon:'🏦' },
+    'prescribed_info':          { label:'Deposit Notice',      color:'#D97706', bg:'rgba(217,119,6,0.08)', icon:'📄' },
     'rra_info_sheet':           { label:'RRA Info Sheet',      color:'#0369A1', bg:'rgba(3,105,161,0.07)', icon:'📄' },
     'how_to_rent':              { label:'How to Rent',         color:'#0369A1', bg:'rgba(3,105,161,0.07)', icon:'🏠' },
     'section8_notice':          { label:'Section 8',           color:'#DC2626', bg:'rgba(220,38,38,0.07)', icon:'⚖️' },
@@ -10371,7 +10370,7 @@ function moCommunicationsHub(tid) {
   const docs = [
     { id:'esign',          icon:'✍️', label:'Tenancy Agreement',    sub:'E-sign flow',                   action:`moEsign('${t.prop_id}','${t.id}')`,       cat:'tenancy' },
     { id:'welcome_kit',    icon:'📦', label:'Welcome Kit',           sub:'Day 1 pack — certs + docs',     action:`moWelcomeKit('${t.prop_id}')`,             cat:'tenancy' },
-    { id:'prescribed_info',icon:'🔐', label:'Prescribed Information',sub:'Deposit cert to tenant',        action:`moPrescribedInfo('${t.id}')`,              cat:'tenancy' },
+    { id:'prescribed_info',icon:'📄', label:'Deposit Notice',         sub:'Resend deposit prescribed info', action:`moPrescribedInfo('${t.id}')`,              cat:'tenancy' },
     { id:'rra_info_sheet', icon:'📋', label:'RRA Information Sheet', sub:'Required for all tenancies',    action:`moRRASheet()`,                             cat:'tenancy' },
     { id:'section13',      icon:'📈', label:'Section 13',            sub:'Rent increase notice',          action:`moSection13('${t.prop_id}')`,              cat:'legal'   },
     { id:'section8',       icon:'⚖️', label:'Section 8 Notice',      sub:'Possession proceedings',       action:`moSection8('${t.prop_id}')`,               cat:'legal'   },
@@ -12593,7 +12592,7 @@ function moPrescribedInfo(tid) {
   };
   const schemeInfo = schemeUrls[t.scheme] || { url: 'your deposit scheme website', dispute: 'your deposit scheme helpline' };
 
-  openMo('📄 Prescribed Information', `${t.name} · ${p.address}`, `
+  openMo('📄 Deposit Notice (Prescribed Information)', `${t.name} · ${p.address}`, `
     <div style="background:rgba(0,168,122,0.06);border:1px solid rgba(0,168,122,0.2);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:var(--txt);line-height:1.6">
       This document must be served on the tenant within <strong>30 days</strong> of receiving the deposit. Keep a signed copy as proof of service. Fine: up to <strong>3× the deposit amount</strong> if missed.
     </div>
@@ -12967,7 +12966,7 @@ function generatePrescribedInfoPDF(tid) {
     doc.text(footer, W/2, 287, { align: 'center' });
 
     doc.save(`Prescribed_Information_${t.name.replace(/[^a-zA-Z0-9]/g,'_')}_${new Date().toISOString().slice(0,10)}.pdf`);
-    toast('✅ Prescribed Information PDF downloaded');
+    toast('✅ Deposit Notice PDF downloaded');
 
     // Log to email_log as served record
     sb.from('email_log').insert({
@@ -13112,7 +13111,7 @@ async function sendPrescribedInfo(tid) {
     await logAudit('PRESCRIBED_INFO_SENT', 'tenants', t.id, `Prescribed Information sent to ${t.email} for ${propAddr} · ref: ${t.scheme_ref||'—'}`);
 
     closeMo();
-    toast('✓ Prescribed Information sent to ' + t.email);
+    toast('✓ Deposit Notice sent to ' + t.email);
     if (window._currentPage === 'tenant-detail') nav('tenant-detail', String(t.id));
 
   } catch(err) {
