@@ -9447,7 +9447,7 @@ function pgTenantDetail(tid) {
 
   return `
     <div class="topbar"><span class="tb-title">Tenants</span><div class="tb-right">
-      <button class="btn btn-sm" onclick="exportEvidenceBundle('${tid}')">📁 Export Bundle</button>
+      <button class="btn btn-sm" onclick="moLegalPack('${t.prop_id}','${tid}')">📁 Evidence Pack</button>
       <button class="btn btn-sm" onclick="moTenantDetail('${t.id}')">✎ Edit tenant</button>
     </div></div>
     <div class="content">
@@ -19630,10 +19630,12 @@ async function exportData(pid) {
   }
 }
 
-function moLegalPack(pid) {
+function moLegalPack(pid, preselectedTid) {
   const p = P(pid); if (!p) return;
   const tenants = D.tenants.filter(t => String(t.prop_id) === String(pid));
-  const activeTenant = tenants.find(t => t.status === 'Active') || tenants[0];
+  const activeTenant = preselectedTid
+    ? (tenants.find(t => String(t.id) === String(preselectedTid)) || tenants.find(t => t.status === 'Active') || tenants[0])
+    : (tenants.find(t => t.status === 'Active') || tenants[0]);
 
   openMo('📋 Legal Evidence Pack', `${p.address} — court-ready PDF`, `
     <div style="display:flex;flex-direction:column;gap:14px">
@@ -19644,7 +19646,7 @@ function moLegalPack(pid) {
       <div>
         <label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--muted);margin-bottom:8px;display:block">Select tenant</label>
         <select id="lep-tenant" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-family:var(--font);font-size:13px;background:var(--white);box-sizing:border-box">
-          ${tenants.length ? tenants.map(t=>`<option value="${t.id}">${t.name} ${t.status==='Ended'?'(Ended)':'(Active)'}</option>`).join('') : '<option value="">No tenants on record</option>'}
+          ${tenants.length ? tenants.map(t=>`<option value="${t.id}"${String(t.id)===String(activeTenant?.id)?' selected':''}>${t.name} ${t.status==='Ended'?'(Ended)':'(Active)'}</option>`).join('') : '<option value="">No tenants on record</option>'}
         </select>
       </div>
 
