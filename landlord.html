@@ -11772,11 +11772,9 @@ function pgMaintenance(){
 async function moveStage(id,stage){
   const statusMap={'Reported':'Open','Assigned':'Open','In Progress':'Open','Completed':'Resolved','Closed':'Resolved'};
   const now = new Date().toISOString();
-  const tsField = stage==='Assigned'?'assigned_date':stage==='In Progress'?'in_progress_date':stage==='Completed'||stage==='Closed'?'completed_date':null;
   const updates = {
     stage, status:statusMap[stage]||'Open',
     completed_date:(stage==='Completed'||stage==='Closed')?now.slice(0,10):null,
-    ...(tsField && tsField!=='completed_date' ? {[tsField]: now.slice(0,10)} : {})
   };
   const{error}=await sb.from('maintenance').update(updates).eq('id',id);
   if(error){toast('Error: '+error.message,true);return;}
