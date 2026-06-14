@@ -8994,6 +8994,38 @@ async function checkAllReminders() {
       }
     }
   }
+
+  // ── 15. Awaab's Law — alert on 24h and 14d breach ──
+  for (const m of D.maintenance.filter(x => x.awaab && x.status !== 'Resolved')) {
+    const sla = getAwaabSLA(m);
+    if (!sla || sla.resolved) continue;
+    const prop = P(m.prop_id) || { address: 'your property', city: '' };
+    if (sla.breach14d) {
+      if (await alreadySent('REMINDER_AWAAB_14D', m.id, 'awaab_14d')) continue;
+      const html14 = emailWrap(
+        `Awaab's Law — 14-day deadline BREACHED — ${prop.address}`,
+        "Awaab's Law SLA breach",
+        '<div style="background:rgba(229,62,62,0.07);border:1px solid rgba(229,62,62,0.3);border-radius:8px;padding:14px 16px;margin-bottom:14px">'
+        + '<div style="font-size:14px;font-weight:700;color:#E53E3E;margin-bottom:6px">14-day investigation deadline BREACHED</div>'
+        + `<div style="font-size:13px;color:#1A2B45"><strong>${m.title||'Maintenance issue'}</strong> at <strong>${prop.address}${prop.city?', '+prop.city:''}</strong></div>`
+        + `<div style="font-size:12px;color:#7A8FA6;margin-top:4px">${Math.round(sla.daysElapsed)} days since reported</div></div>`
+        + '<p style="font-size:13px">This issue has exceeded the 14-day investigation window under Awaab\'s Law. Immediate action required. Log in to update the job or assign to a contractor.</p>'
+      );
+      await sendReminder(`Awaab 14d breach — ${m.title||'issue'} · ${prop.address}`, html14, 'REMINDER_AWAAB_14D', m.id, 'awaab_14d');
+    } else if (sla.breach24h) {
+      if (await alreadySent('REMINDER_AWAAB_24H', m.id, 'awaab_24h')) continue;
+      const html24 = emailWrap(
+        `Awaab's Law — 24h emergency deadline passed — ${prop.address}`,
+        "Awaab's Law — 24h deadline",
+        '<div style="background:rgba(217,119,6,0.07);border:1px solid rgba(217,119,6,0.3);border-radius:8px;padding:14px 16px;margin-bottom:14px">'
+        + '<div style="font-size:14px;font-weight:700;color:#D97706;margin-bottom:6px">24-hour emergency investigation deadline passed</div>'
+        + `<div style="font-size:13px;color:#1A2B45"><strong>${m.title||'Maintenance issue'}</strong> at <strong>${prop.address}${prop.city?', '+prop.city:''}</strong></div>`
+        + `<div style="font-size:12px;color:#7A8FA6;margin-top:4px">${sla.daysLeft14} days of 14-day window remaining</div></div>`
+        + `<p style="font-size:13px">Complete the full investigation within <strong>${sla.daysLeft14} more days</strong>. Log in to assign to a contractor or update the job status.</p>`
+      );
+      await sendReminder(`Awaab 24h passed — ${m.title||'issue'} · ${prop.address}`, html24, 'REMINDER_AWAAB_24H', m.id, 'awaab_24h');
+    }
+  }
 }
 
 // ── PAGE: REMINDERS ──
@@ -10774,7 +10806,7 @@ function pgRent(){
   allRows.sort((a,b) => (b.due_date||''). localeCompare(a.due_date||'')); 
   const tot  = D.properties.reduce((s,p)=>s+(p.rent||0),0);
   const paid = allRows.filter(r=>r.status==='Paid').reduce((s,r)=>s+(r.amount||0),0);
-  const outstanding = allRows.filter(r=>r.status==='Due'||r.status==='Late'||r.status==='Scheduled').reduce((s,r)=>s+(r.amount||0),0);
+  const outstanding = allRows.filter(r=>r.status==='Due'||r.status==='Late').reduce((s,r)=>s+(r.amount||0),0);
   const lateCount = allRows.filter(r=>r.status==='Late').length;
   const rows = allRows.filter(r=>r.status!=='Scheduled'||new Date(r.due_date)<=new Date());
   return`<div class="topbar"><span class="tb-title">Rent</span><div class="tb-right"><button class="btn btn-navy" onclick="moAddPayment()">+ Record payment</button></div></div>
