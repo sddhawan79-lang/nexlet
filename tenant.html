@@ -634,17 +634,26 @@ async function submitJob(){
 
   btn.innerHTML = '<span class="spin"></span> Submitting…';
 
-  // 3. Get photo filenames (actual upload is post-launch — store names only)
-  const photos = [];
+  // 3. Upload photos to storage and collect public URLs
   const photoInput = document.getElementById('job-photos');
-  if(photoInput.files.length){
-    [...photoInput.files].forEach(f => photos.push(f.name));
+  const photoFiles = photoInput.files ? [...photoInput.files].slice(0, 5) : [];
+  const photoUrls = [];
+  for (const file of photoFiles) {
+    try {
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      const path = `maintenance/${currentTenant.user_id}/portal/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error: upErr } = await sb.storage.from('property-documents').upload(path, file, { upsert: true, contentType: file.type || 'image/jpeg' });
+      if (!upErr) {
+        const { data: urlData } = sb.storage.from('property-documents').getPublicUrl(path);
+        if (urlData?.publicUrl) photoUrls.push(urlData.publicUrl);
+      }
+    } catch(e) { console.warn('photo upload failed', e); }
   }
 
   // 4. Build full description
   const fullDesc = notes ? description + '\n\nAdditional notes: ' + notes : description;
 
-  // 5. Save to tenant_maintenance
+  // 5. Save to tenant_maintenance with photo_urls
   const job = {
     tenancy_ref: String(currentTenant.id),
     prop_id: currentTenant.prop_id,
@@ -655,9 +664,9 @@ async function submitJob(){
     status: 'Reported',
     locked: true,
     submitted_at: new Date().toISOString(),
-    user_id: currentTenant.user_id,  // landlord's user_id — used for RLS & landlord dashboard
+    user_id: currentTenant.user_id,
     tenant_phone: currentTenant.phone || null,
-    photos: photos.length ? photos : null
+    photo_urls: photoUrls.length ? photoUrls : null
   };
 
   const { data:saved, error } = await sb
@@ -673,7 +682,7 @@ async function submitJob(){
     return;
   }
 
-  // 6. Mirror to landlord's maintenance table so it appears in Maintenance & Log
+  // 6. Mirror to landlord maintenance table — include photo_urls so landlord sees them immediately
   await sb.from('maintenance').insert({
     prop_id: currentTenant.prop_id,
     title: ('🏠 Tenant: ' + description).slice(0, 60),
@@ -685,6 +694,7 @@ async function submitJob(){
     issue_date: new Date().toISOString().slice(0, 10),
     awaab: category === 'Damp & Mould',
     user_id: currentTenant.user_id,
+    photo_urls: photoUrls.length ? photoUrls : null,
   });
 
   // 7. Email landlord
