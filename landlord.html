@@ -1392,7 +1392,7 @@ async function loadData() {
     sb.from('email_log').select('*').order('sent_at', {ascending: false}),
     sb.from('custom_templates').select('*').order('created_at', {ascending: false}),
     sb.from('contractors').select('*').order('name', {ascending: true}),
-    sb.from('job_assignments').select('*, tenant_maintenance(prop_id, category, submitted_at)'),
+    sb.from('job_assignments').select('*, tenant_maintenance(id, prop_id, tenant_id, category, description, priority, photo_urls, submitted_at, landlord_notified)'),
     sb.from('tenant_documents').select('*').order('uploaded_at', {ascending: false}),
     sb.from('user_profiles').select('*').eq('id', currentUser.id).maybeSingle(),
     sb.from('stripe_subscriptions').select('plan_name').eq('user_id', currentUser.id).maybeSingle(),
@@ -2148,8 +2148,31 @@ async function saveIssueToDB() {
 
   D.maintenance.unshift({...data, desc: data.description, date: data.issue_date});
   await logAudit('ADD_MAINTENANCE', 'maintenance', data.id, `Logged: ${issue.title}`);
+
+  // Upload any attached photos to storage
+  const photoInput = document.getElementById('i-photos');
+  const photoFiles = photoInput?.files ? [...photoInput.files] : [];
+  if (photoFiles.length) {
+    const photoUrls = [];
+    for (const file of photoFiles.slice(0,5)) {
+      try {
+        const ext = file.name.split('.').pop();
+        const path = `${currentUser.id}/maintenance/${data.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error: upErr } = await sb.storage.from('property-documents').upload(path, file, { upsert: true });
+        if (!upErr) {
+          const { data: urlData } = sb.storage.from('property-documents').getPublicUrl(path);
+          if (urlData?.publicUrl) photoUrls.push(urlData.publicUrl);
+        }
+      } catch(_) {}
+    }
+    if (photoUrls.length) {
+      await sb.from('maintenance').update({ photo_urls: photoUrls }).eq('id', data.id).catch(()=>{});
+      D.maintenance[0].photo_urls = photoUrls;
+    }
+  }
+
   closeMo();
-  toast('✓ Issue logged!');
+  toast('✓ Issue logged' + (photoFiles.length ? ` · ${photoFiles.length} photo${photoFiles.length!==1?'s':''} uploaded` : '') + '!');
   nav(window._currentPage, window._currentParam);
 }
 
@@ -9035,6 +9058,49 @@ async function checkAllReminders() {
       await sendReminder(`Awaab 24h passed — ${m.title||'issue'} · ${prop.address}`, html24, 'REMINDER_AWAAB_24H', m.id, 'awaab_24h');
     }
   }
+
+  // -- 16. Tenant maintenance submissions -- alert landlord on new unacknowledged jobs
+  try {
+    const { data: newJobs } = await sb
+      .from('tenant_maintenance')
+      .select('id, prop_id, tenant_id, category, description, priority, photo_urls, submitted_at')
+      .eq('landlord_notified', false)
+      .order('submitted_at', { ascending: false })
+      .limit(20);
+    if (newJobs && newJobs.length) {
+      for (const job of newJobs) {
+        const prop = P(job.prop_id) || { address: 'your property', city: '' };
+        const tenant = D.tenants.find(t => String(t.id) === String(job.tenant_id));
+        if (await alreadySent('REMINDER_TENANT_MAINT', job.id, 'tm_notif')) continue;
+        const photoBlock = (job.photo_urls && job.photo_urls.length)
+          ? '<div style="margin-top:14px"><div style="font-size:12px;font-weight:600;color:#1A2B45;margin-bottom:8px">Photos from tenant (' + job.photo_urls.length + '):</div><div style="display:flex;gap:8px;flex-wrap:wrap">'
+            + job.photo_urls.map(function(u){ return '<img src="' + u + '" style="width:100px;height:80px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0">'; }).join('')
+            + '</div></div>'
+          : '';
+        const priCol = job.priority === 'Urgent' ? '#E53E3E' : job.priority === 'High' ? '#D97706' : '#7A8FA6';
+        const submittedStr = job.submitted_at ? new Date(job.submitted_at).toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+        const html = emailWrap(
+          'New maintenance request: ' + (job.category||'Issue') + ' at ' + prop.address,
+          'Tenant maintenance report',
+          '<div style="background:rgba(229,62,62,0.07);border:1px solid rgba(229,62,62,0.25);border-radius:8px;padding:14px 16px;margin-bottom:14px">'
+          + '<div style="font-size:14px;font-weight:700;color:#E53E3E;margin-bottom:6px">New maintenance request from your tenant</div>'
+          + '<div style="font-size:13px;color:#1A2B45"><strong>' + (job.category||'General') + '</strong> at <strong>' + prop.address + (prop.city ? ', ' + prop.city : '') + '</strong></div>'
+          + '<div style="font-size:12px;color:#7A8FA6;margin-top:4px">Reported by: ' + (tenant ? tenant.name : 'Tenant') + (submittedStr ? ' on ' + submittedStr : '') + '</div>'
+          + (job.priority ? '<div style="font-size:11px;font-weight:700;color:' + priCol + ';margin-top:4px">Priority: ' + job.priority + '</div>' : '')
+          + '</div>'
+          + (job.description ? '<div style="background:#f8fafc;border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:13px;line-height:1.7;color:#1A2B45"><strong>Description:</strong><br>' + job.description + '</div>' : '')
+          + photoBlock
+          + '<p style="font-size:13px;margin-top:14px">Log in to NexLet to view the job, assign a contractor, and notify your tenant.</p>'
+          + '<p style="font-size:11px;color:#7A8FA6;margin-top:8px">If this involves damp, mould, or a health hazard, Awaab\'s Law requires investigation within 14 days.</p>'
+        );
+        await sendReminder(
+          'Tenant maintenance: ' + (job.category||'Issue') + ' at ' + prop.address,
+          html, 'REMINDER_TENANT_MAINT', job.id, 'tm_notif'
+        );
+        await sb.from('tenant_maintenance').update({ landlord_notified: true }).eq('id', job.id).catch(function(){});
+      }
+    }
+  } catch(e) { _logError('tenant_maint_reminder', e); }
 }
 
 // ── PAGE: REMINDERS ──
@@ -11797,7 +11863,7 @@ async function moveStage(id,stage){
         <div style="border-bottom:2px solid #0B1E3D;padding-bottom:10px;margin-bottom:16px"><span style="font-size:16px;font-weight:700;color:#0B1E3D">NexLet</span></div>
         <h2 style="font-size:15px;margin-bottom:8px">Maintenance Update — ${m?.title||'Job'}</h2>
         <p style="font-size:13px;color:#7A8FA6">${prop.address}, ${prop.city}</p>
-        <div style="background:#f0fdf9;border:1px solid var(--green);border-radius:8px;padding:14px;margin:16px 0">
+        <div style="background:#f0fdf9;border:1px solid #00A87A;border-radius:8px;padding:14px;margin:16px 0">
           <div style="font-size:12px;font-weight:700;color:#00A87A;margin-bottom:4px">Status update: ${stage}</div>
           <div style="font-size:13px;color:#1A2B45">${stageMsg}</div>
         </div>
@@ -11837,6 +11903,9 @@ function moIssueDetail(id){
   const stages=['Reported','Assigned','In Progress','Completed','Closed'];
   const stageCol={'Reported':'#7A8FA6','Assigned':'#3B6FE8','In Progress':'#D97706','Completed':'var(--green)','Closed':'#556678'};
   const tenant = D.tenants.find(t=>String(t.prop_id)===String(m.prop_id)&&t.status==='Active');
+  // Check for tenant-submitted version of this job via job_assignments
+  const _tenantJob = D.jobAssignments && D.jobAssignments.find(j => j.tenant_maintenance && String(j.tenant_maintenance.prop_id)===String(m.prop_id));
+  const _tenantPhotos = _tenantJob?.tenant_maintenance?.photo_urls || m.photo_urls || [];
   const commLogs = D.emailLog.filter(e=>e.template_id==='maintenance_notification'&&D.maintenance.find(x=>String(x.id)===String(id))&&String(e.prop_id)===String(m.prop_id));
   const commLogHtml = commLogs.length ? `<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
     <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:8px">📬 Communication log</div>
@@ -11851,6 +11920,7 @@ function moIssueDetail(id){
       ${[['Property',p.address],['Category',m.cat||'—'],['Priority',m.priority||'Low'],['Reported',FMS(m.date||m.issue_date)],['Assigned to',m.assigned_to||'Not assigned'],['Cost',m.cost?'£'+m.cost:'Not set'],['Completed',m.completed_date?FMS(m.completed_date):'—'],['Awaab',m.awaab?'⚠️ Yes':'No']].map(([l,v])=>`<div class="det-f"><label>${l}</label><span>${v}</span></div>`).join('')}
     </div>
     <div style="background:var(--off);border-radius:8px;padding:12px;margin-bottom:14px;font-size:13px;line-height:1.6">${m.description||m.desc||'—'}</div>
+    ${_tenantPhotos.length ? `<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:8px">📷 Photos (${_tenantPhotos.length})</div><div style="display:flex;gap:8px;flex-wrap:wrap">${_tenantPhotos.map(u=>`<img src="${u}" style="width:90px;height:70px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:pointer" onclick="dvoOpen('${u}','Photo','Maintenance')">`).join('')}</div></div>` : ''}
     ${(()=>{ const sla=getAwaabSLA(m); if(!sla) return ''; const breach=sla.breach14d||sla.breach24h; const bg=sla.resolved?'var(--green-bg)':breach?'rgba(229,62,62,0.07)':'rgba(217,119,6,0.06)'; const bdr=sla.resolved?'rgba(0,168,122,0.25)':breach?'rgba(229,62,62,0.3)':'rgba(217,119,6,0.3)'; const col=sla.resolved?'var(--green-dark)':breach?'var(--red)':'var(--amber)'; const status=sla.resolved?'✓ Resolved within SLA':sla.breach14d?`🚨 14-day investigation deadline BREACHED (${sla.daysElapsed}d elapsed)`:sla.breach24h?`⚠ 24h emergency deadline breached · ${sla.daysLeft14}d of 14-day window left`:`⏱ ${sla.hoursLeft24>0?sla.hoursLeft24+'h until 24h deadline · ':''} ${sla.daysLeft14}d of 14-day investigation window remaining`; return `<div style="background:${bg};border:1px solid ${bdr};border-radius:8px;padding:12px 14px;margin-bottom:14px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:${col};margin-bottom:6px">⏰ Awaab's Law SLA</div><div style="font-size:12px;color:var(--txt);line-height:1.6;margin-bottom:8px">${status}</div><div style="display:flex;gap:16px;flex-wrap:wrap"><div style="font-size:11px;color:var(--muted)">Reported: <strong>${FMS(m.issue_date||m.date)}</strong></div><div style="font-size:11px;color:var(--muted)">24h deadline: <strong style="color:${sla.breach24h?'var(--red)':'var(--txt)'}">${sla.investigate24h.toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</strong></div><div style="font-size:11px;color:var(--muted)">14d deadline: <strong style="color:${sla.breach14d?'var(--red)':'var(--txt)'}">${sla.investigate14d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</strong></div></div></div>`; })()}
     <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:8px">Move to stage</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
