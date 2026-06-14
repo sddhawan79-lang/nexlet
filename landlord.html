@@ -11909,10 +11909,19 @@ function moIssueDetail(id){
   const p=P(m.prop_id)||{address:'—'};
   const stages=['Reported','Assigned','In Progress','Completed','Closed'];
   const stageCol={'Reported':'#7A8FA6','Assigned':'#3B6FE8','In Progress':'#D97706','Completed':'var(--green)','Closed':'#556678'};
-  const tenant = D.tenants.find(t=>String(t.prop_id)===String(m.prop_id)&&t.status==='Active');
+  // Find the tenant who reported — prefer lead tenant, fall back to any active
+  const _allTenants = D.tenants.filter(t=>String(t.prop_id)===String(m.prop_id)&&t.status==='Active');
+  const tenant = _allTenants.find(t=>t.is_lead) || _allTenants[0];
   // Check for tenant-submitted version of this job via job_assignments
-  const _tenantJob = D.jobAssignments && D.jobAssignments.find(j => j.tenant_maintenance && String(j.tenant_maintenance.prop_id)===String(m.prop_id));
-  const _tenantPhotos = _tenantJob?.tenant_maintenance?.photo_urls || m.photo_urls || [];
+  // Match by both prop_id and approximate time (submitted within 24h of issue_date) to avoid cross-job photo leakage
+  const _issueTs = new Date(m.issue_date || m.date || m.created_at).getTime();
+  const _tenantJob = D.jobAssignments && D.jobAssignments.find(j => {
+    if (!j.tenant_maintenance) return false;
+    if (String(j.tenant_maintenance.prop_id) !== String(m.prop_id)) return false;
+    const _jTs = new Date(j.tenant_maintenance.submitted_at).getTime();
+    return Math.abs(_jTs - _issueTs) < 48 * 3600 * 1000; // within 48h
+  });
+  const _tenantPhotos = (_tenantJob?.tenant_maintenance?.photo_urls) || m.photo_urls || [];
   const commLogs = D.emailLog.filter(e=>e.template_id==='maintenance_notification'&&D.maintenance.find(x=>String(x.id)===String(id))&&String(e.prop_id)===String(m.prop_id));
   const commLogHtml = commLogs.length ? `<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
     <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:8px">📬 Communication log</div>
@@ -19046,8 +19055,9 @@ async function addPhotosToJob(input, maintenanceId) {
 function moNotifyTenant(maintenanceId) {
   const m = D.maintenance.find(x=>String(x.id)===String(maintenanceId));
   if (!m) return;
-  const tenant = D.tenants.find(t=>String(t.prop_id)===String(m.prop_id)&&t.status==='Active');
-  if (!tenant?.email) { toast('No tenant email on file', true); return; }
+  const _allT = D.tenants.filter(t=>String(t.prop_id)===String(m.prop_id)&&t.status==='Active');
+  const tenant = _allT.find(t=>t.is_lead) || _allT[0];
+  if (!tenant?.email) { toast('No tenant email on file for this property', true); return; }
   openMo('📧 Notify tenant','Send a maintenance update',`
     <div style="background:var(--off);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--muted)">
       To: <strong style="color:var(--txt)">${tenant.name}</strong> · ${tenant.email} &nbsp;|&nbsp; Job: <strong style="color:var(--txt)">${m.title||'Maintenance'}</strong>
