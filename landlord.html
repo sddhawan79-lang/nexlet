@@ -15237,6 +15237,9 @@ ${notes ? '\nLandlord notes: ' + notes : ''}
     maintenanceack: `${PLACEHOLDER_RULE}Generate a Maintenance Request Acknowledgement Letter using:\n${contextInfo}\n\nInclude: acknowledgement of issue reported, expected response timeline (within 24 hours for urgent, 7 days for routine), contractor visit process, contact details. End with disclaimer.`,
     contractoraccess: `${PLACEHOLDER_RULE}Generate a Contractor Access Letter (24-hour notice) using:\n${contextInfo}\n\nInclude: date and time of visit, contractor name and trade, reason for visit, tenant rights, landlord contact details. End with disclaimer.`,
     rentincrease: `${PLACEHOLDER_RULE}Generate a friendly Rent Increase Cover Letter to accompany a Section 13 Notice using:\n${contextInfo}\n\nInclude: reason for increase (market rates, costs), amount of increase, effective date, reassurance about tenancy continuing. Warm but professional. End with disclaimer.`,
+    howtorent: `${PLACEHOLDER_RULE}Generate a covering letter to accompany the Government's How to Rent guide using:\n${contextInfo}\n\nExplain what the How to Rent guide is, confirm you are providing it as required by law (Housing Act 2004 as amended), note the tenant should keep it for reference, and include a receipt section for the tenant to sign confirming receipt. Professional tone. End with disclaimer.`,
+    righttorent: `${PLACEHOLDER_RULE}Generate a Right to Rent Check Record for a UK landlord using:\n${contextInfo}\n\nInclude: tenant full name, date of check, documents seen (passport number/type with field to fill), date documents expire if applicable, landlord/agent name who conducted check, date of check, property address, signature blocks for landlord and tenant. Note the legal requirement under the Immigration Act 2014. End with disclaimer.`,
+    smokeco: `${PLACEHOLDER_RULE}Generate a Smoke and CO Alarm Test Record for a UK rental property using:\n${contextInfo}\n\nInclude: property address, tenancy start date, list of all smoke alarms by location with test result (Pass/Fail), list of all CO alarms by location with test result, date tested, tested by (landlord/agent name), tenant confirmation statement, signature blocks for both landlord and tenant. Note this is required under the Smoke and Carbon Monoxide Alarm (Amendment) Regulations 2022. End with disclaimer.`,
   };
 
   // Custom template: AI fills placeholders using property/tenant data
@@ -15252,7 +15255,7 @@ ${notes ? '\nLandlord notes: ' + notes : ''}
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-5',
-        max_tokens: 1000,
+        max_tokens: 3000,
         messages: [{ role: 'user', content: prompt }]
       })
     });
@@ -15415,8 +15418,59 @@ function checkPlaceholders() {
 function downloadAsPDF() {
   const ctx = window._genContext;
   const rawText = ctx?.rawText || document.getElementById('gen-text')?.dataset?.raw || '';
+  const htmlContent = document.getElementById('gen-text')?.innerHTML || '';
   if (!rawText) { toast('Generate a document first', true); return; }
   const title = ctx?.templateName || 'Document';
+  const prop = ctx?.propId ? D.properties.find(p=>String(p.id)===String(ctx.propId)) : null;
+  const genDate = new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
+
+  // Open a styled print window — preserves all formatting
+  const win = window.open('','_blank','width=800,height=900');
+  if (!win) { toast('Pop-up blocked — allow pop-ups and try again', true); return; }
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
+  <title>${title}</title>
+  <style>
+    @page { margin: 25mm 20mm; }
+    body { font-family: Georgia, serif; font-size: 13px; line-height: 1.8; color: #1A2B45; max-width: 680px; margin: 0 auto; padding: 20px; }
+    .header { border-bottom: 2px solid #0B1E3D; padding-bottom: 12px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-end; }
+    .header .logo { font-size: 18px; font-weight: 700; color: #0B1E3D; font-family: Arial, sans-serif; }
+    .header .meta { font-size: 10px; color: #999; text-align: right; font-family: Arial, sans-serif; }
+    h3 { font-size: 15px; font-weight: 700; margin: 20px 0 6px; color: #0B1E3D; }
+    h4 { font-size: 13px; font-weight: 700; margin: 16px 0 4px; }
+    h5 { font-size: 12px; font-weight: 700; margin: 12px 0 3px; }
+    strong { font-weight: 700; }
+    em { font-style: italic; }
+    hr { border: none; border-top: 1px solid #ddd; margin: 14px 0; }
+    .sig-block { margin-top: 40px; padding-top: 16px; border-top: 2px solid #0B1E3D; page-break-inside: avoid; }
+    .sig-line { display: flex; gap: 20px; margin-top: 24px; }
+    .sig-field { flex: 1; border-bottom: 1px solid #000; padding-bottom: 2px; font-size: 11px; color: #666; }
+    .footer { margin-top: 32px; padding-top: 10px; border-top: 1px solid #eee; font-size: 10px; color: #999; font-family: Arial, sans-serif; }
+    @media print { body { padding: 0; } .no-print { display: none; } }
+  </style>
+  </head><body>
+  <div class="header">
+    <div><div class="logo">NexLet</div><div style="font-size:11px;color:#555;font-family:Arial,sans-serif;margin-top:2px">${title}</div></div>
+    <div class="meta">${prop ? prop.address + (prop.city?', '+prop.city:'') + '<br>' : ''}Generated: ${genDate}</div>
+  </div>
+  <div class="body-content">${htmlContent}</div>
+  <div class="sig-block">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#0B1E3D;margin-bottom:4px">Signature</div>
+    <div class="sig-line">
+      <div class="sig-field">Signed: ___________________________</div>
+      <div class="sig-field">Name: ___________________________</div>
+      <div class="sig-field">Date: ___________________________</div>
+    </div>
+  </div>
+  <div class="footer">Generated by NexLet &middot; documents@nexlet.co.uk &middot; For reference only &mdash; not legal advice. Verify with a qualified solicitor before serving.</div>
+  <div class="no-print" style="text-align:center;margin-top:20px;font-family:Arial,sans-serif">
+    <button onclick="window.print()" style="padding:10px 28px;background:#0B1E3D;color:#fff;border:none;border-radius:7px;font-size:14px;cursor:pointer;font-family:Arial,sans-serif">🖨 Print / Save as PDF</button>
+    <p style="font-size:11px;color:#999;margin-top:8px">Use your browser's print dialog → Save as PDF</p>
+  </div>
+  </body></html>`);
+  win.document.close();
+  toast('✓ Print window opened — click "Print / Save as PDF"');
+  return; // Skip old jsPDF flow below
+  const title2 = title; // unreachable — old code below preserved as fallback
 
   try {
     const { jsPDF } = window.jspdf;
