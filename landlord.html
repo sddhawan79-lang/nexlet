@@ -2156,14 +2156,15 @@ async function saveIssueToDB() {
     const photoUrls = [];
     for (const file of photoFiles.slice(0,5)) {
       try {
-        const ext = file.name.split('.').pop();
-        const path = `${currentUser.id}/maintenance/${data.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const ext = (file.name.split('.').pop()||'jpg').toLowerCase();
+        const path = `maintenance/${currentUser.id}/${data.id}/${Date.now()}.${ext}`;
         const { error: upErr } = await sb.storage.from('property-documents').upload(path, file, { upsert: true, contentType: file.type || 'image/jpeg' });
-        if (!upErr) {
+        if (upErr) { console.warn('[photo upload]', upErr.message); }
+        else {
           const { data: urlData } = sb.storage.from('property-documents').getPublicUrl(path);
           if (urlData?.publicUrl) photoUrls.push(urlData.publicUrl);
         }
-      } catch(_) {}
+      } catch(e) { console.warn('[photo upload exception]', e); }
     }
     if (photoUrls.length) {
       const { error: puErr } = await sb.from('maintenance').update({ photo_urls: photoUrls }).eq('id', data.id);
@@ -19026,14 +19027,15 @@ async function addPhotosToJob(input, maintenanceId) {
   const newUrls = [];
   for (const file of files) {
     try {
-      const ext = file.name.split('.').pop();
-      const path = `${currentUser.id}/maintenance/${maintenanceId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const ext = (file.name.split('.').pop()||'jpg').toLowerCase();
+      const path = `maintenance/${currentUser.id}/${maintenanceId}/${Date.now()}.${ext}`;
       const { error: upErr } = await sb.storage.from('property-documents').upload(path, file, { upsert: true, contentType: file.type || 'image/jpeg' });
-      if (!upErr) {
+      if (upErr) { console.warn('[addPhoto upload error]', upErr.message); }
+      else {
         const { data: urlData } = sb.storage.from('property-documents').getPublicUrl(path);
         if (urlData?.publicUrl) newUrls.push(urlData.publicUrl);
       }
-    } catch(_) {}
+    } catch(e) { console.warn('[addPhoto exception]', e); }
   }
   if (!newUrls.length) { toast('Upload failed — check storage permissions', true); return; }
   const allUrls = [...existing, ...newUrls];
