@@ -3461,7 +3461,7 @@ function moBulkScan(pid) {
   if (!D.properties.length) { toast('Add a property first', true); return; }
   window._bulkScan = { files:[], results:[], pid: pid||String(D.properties[0]?.id||''), returnPage: window._currentPage, returnParam: window._currentParam };
 
-  openMo('✦ Bulk document scan','Upload multiple certs — AI scans and fills all details',`
+  openMo('✦ AI Scan & Upload','Drop multiple certs — AI reads each one and fills all details automatically',`
     <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Drop up to 10 documents at once — Gas Safety, EICR, EPC, licences. AI reads each one and creates records automatically.</div>
 
     <div class="fg" style="margin-bottom:14px"><label>Property</label>
@@ -4456,7 +4456,7 @@ function moTenantComms(tid) {
   if (!t) return;
   const p = P(t.prop_id) || { address: '—' };
 
-  openMo('✉ Send Message to Tenant', `${t.name} · ${p.address}`, `
+  openMo('✉ Send Email to Tenant', `${t.name} · ${p.address}`, `
     <div style="display:flex;flex-direction:column;gap:14px">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div>
@@ -6522,8 +6522,12 @@ async function markRentReceived(pid, monthLabel, dueDateStr, amount) {
       if (error) { toast('Error saving — ' + error.message, true); return; }
       existing.status = 'Paid'; existing.paid_date = today; existing.paid = today;
     } else {
+      const _lead = D.tenants.find(t => String(t.prop_id)===String(pid) && t.is_lead && t.status==='Active')
+                 || D.tenants.find(t => String(t.prop_id)===String(pid) && t.status==='Active');
       const payload = {
         prop_id: String(pid), user_id: currentUser.id,
+        tenant_id: _lead?.id || null,
+        month: dueDateStr.slice(0,7),
         due_date: dueDateStr,
         amount: parseFloat(amount) || 0, status: 'Paid', paid_date: today
       };
@@ -8236,7 +8240,7 @@ function pgCompliance(){
       <span class="tb-title">Compliance</span>
       <div class="tb-right">
         <button class="btn btn-navy"
-          onclick="moBulkScan()">✦ Bulk scan</button>
+          onclick="moBulkScan()">✦ AI scan & upload</button>
         <button class="btn"
           onclick="moCert()">+ Add certificate</button>
       </div>
@@ -9338,7 +9342,7 @@ function pgTenantDetail(tid) {
         <div style="display:flex;gap:6px">
           ${t.status === 'Ended' ? '<span style="font-size:11px;font-weight:600;background:var(--off);color:var(--muted);padding:5px 10px;border-radius:6px;border:1px solid var(--border)">📦 Archived</span>' : `<button class="btn btn-sm" onclick="moTenantDetail('${t.id}')">✎ Edit</button><button class="btn btn-sm" style="margin-left:4px;border-color:var(--blue);color:var(--blue)" onclick="moTenantDocs('${t.id}','${t.prop_id}')">📄 Upload Docs</button>`}
           <button class="btn btn-sm btn-navy" onclick="moSection8('${t.prop_id}')">⚖️ Section 8</button>
-          <button class="btn btn-sm btn-navy" onclick="moTenantComms('${t.id}')">✉ Message</button>
+          <button class="btn btn-sm btn-navy" onclick="moTenantComms('${t.id}')">✉ Send Email</button>
           ${t.status === 'Ended' ? '' : `<button class="btn btn-sm" style="border-color:var(--red);color:var(--red)" onclick="moEndTenancy('${t.id}')">⏻ End Tenancy</button>`}
         </div>
       </div>
