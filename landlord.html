@@ -2166,8 +2166,14 @@ async function saveIssueToDB() {
       } catch(_) {}
     }
     if (photoUrls.length) {
-      await sb.from('maintenance').update({ photo_urls: photoUrls }).eq('id', data.id).catch(()=>{});
-      D.maintenance[0].photo_urls = photoUrls;
+      const { error: puErr } = await sb.from('maintenance').update({ photo_urls: photoUrls }).eq('id', data.id);
+      if (!puErr) {
+        // Update in-memory record
+        const rec = D.maintenance.find(x => String(x.id) === String(data.id));
+        if (rec) rec.photo_urls = photoUrls;
+      } else if (puErr.message?.includes('photo_urls')) {
+        toast('⚠ Photos uploaded to storage but DB column missing — run SQL migration', true);
+      }
     }
   }
 
