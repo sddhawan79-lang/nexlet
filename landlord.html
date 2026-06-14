@@ -2158,7 +2158,7 @@ async function saveIssueToDB() {
       try {
         const ext = file.name.split('.').pop();
         const path = `${currentUser.id}/maintenance/${data.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-        const { error: upErr } = await sb.storage.from('property-documents').upload(path, file, { upsert: true });
+        const { error: upErr } = await sb.storage.from('property-documents').upload(path, file, { upsert: true, contentType: file.type || 'image/jpeg' });
         if (!upErr) {
           const { data: urlData } = sb.storage.from('property-documents').getPublicUrl(path);
           if (urlData?.publicUrl) photoUrls.push(urlData.publicUrl);
@@ -11929,7 +11929,13 @@ function moIssueDetail(id){
     <div style="background:var(--off);border-radius:8px;padding:12px;margin-bottom:14px;font-size:13px;line-height:1.6">${m.description||m.desc||'—'}</div>
     ${_tenantPhotos.length ? `<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:8px">📷 Photos (${_tenantPhotos.length})</div><div style="display:flex;gap:8px;flex-wrap:wrap">${_tenantPhotos.map(u=>`<img src="${u}" style="width:90px;height:70px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:pointer" onclick="dvoOpen('${u}','Photo','Maintenance')">`).join('')}</div></div>` : ''}
     ${(()=>{ const sla=getAwaabSLA(m); if(!sla) return ''; const breach=sla.breach14d||sla.breach24h; const bg=sla.resolved?'var(--green-bg)':breach?'rgba(229,62,62,0.07)':'rgba(217,119,6,0.06)'; const bdr=sla.resolved?'rgba(0,168,122,0.25)':breach?'rgba(229,62,62,0.3)':'rgba(217,119,6,0.3)'; const col=sla.resolved?'var(--green-dark)':breach?'var(--red)':'var(--amber)'; const status=sla.resolved?'✓ Resolved within SLA':sla.breach14d?`🚨 14-day investigation deadline BREACHED (${sla.daysElapsed}d elapsed)`:sla.breach24h?`⚠ 24h emergency deadline breached · ${sla.daysLeft14}d of 14-day window left`:`⏱ ${sla.hoursLeft24>0?sla.hoursLeft24+'h until 24h deadline · ':''} ${sla.daysLeft14}d of 14-day investigation window remaining`; return `<div style="background:${bg};border:1px solid ${bdr};border-radius:8px;padding:12px 14px;margin-bottom:14px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:${col};margin-bottom:6px">⏰ Awaab's Law SLA</div><div style="font-size:12px;color:var(--txt);line-height:1.6;margin-bottom:8px">${status}</div><div style="display:flex;gap:16px;flex-wrap:wrap"><div style="font-size:11px;color:var(--muted)">Reported: <strong>${FMS(m.issue_date||m.date)}</strong></div><div style="font-size:11px;color:var(--muted)">24h deadline: <strong style="color:${sla.breach24h?'var(--red)':'var(--txt)'}">${sla.investigate24h.toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</strong></div><div style="font-size:11px;color:var(--muted)">14d deadline: <strong style="color:${sla.breach14d?'var(--red)':'var(--txt)'}">${sla.investigate14d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</strong></div></div></div>`; })()}
-    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:8px">Move to stage</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Move to stage</div>
+      <label style="font-size:11px;color:var(--blue);cursor:pointer;display:flex;align-items:center;gap:5px;font-weight:600">
+        <input type="file" accept="image/*" multiple style="display:none" onchange="addPhotosToJob(this,'${m.id}')">
+        📷 Add photos
+      </label>
+    </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
       ${stages.map(s=>`<button onclick="moveStage('${m.id}','${s}');closeMo()" style="font-size:12px;padding:6px 12px;border-radius:6px;border:2px solid ${(m.stage||'Reported')===s?stageCol[s]:'var(--border)'};background:${(m.stage||'Reported')===s?stageCol[s]:'var(--white)'};color:${(m.stage||'Reported')===s?'#fff':'var(--muted)'};cursor:pointer;font-family:var(--font);font-weight:${(m.stage||'Reported')===s?'700':'400'}">${s}</button>`).join('')}
     </div>
@@ -19001,6 +19007,42 @@ function closeMobSidebar(){
 }
 
 // ── MAINTENANCE: NOTIFY TENANT ──
+async function addPhotosToJob(input, maintenanceId) {
+  const files = [...(input.files||[])].slice(0,5);
+  if (!files.length) return;
+  const m = D.maintenance.find(x => String(x.id) === String(maintenanceId));
+  if (!m) return;
+  toast('⏳ Uploading photos…');
+  const existing = m.photo_urls || [];
+  const newUrls = [];
+  for (const file of files) {
+    try {
+      const ext = file.name.split('.').pop();
+      const path = `${currentUser.id}/maintenance/${maintenanceId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error: upErr } = await sb.storage.from('property-documents').upload(path, file, { upsert: true, contentType: file.type || 'image/jpeg' });
+      if (!upErr) {
+        const { data: urlData } = sb.storage.from('property-documents').getPublicUrl(path);
+        if (urlData?.publicUrl) newUrls.push(urlData.publicUrl);
+      }
+    } catch(_) {}
+  }
+  if (!newUrls.length) { toast('Upload failed — check storage permissions', true); return; }
+  const allUrls = [...existing, ...newUrls];
+  const { error } = await sb.from('maintenance').update({ photo_urls: allUrls }).eq('id', maintenanceId);
+  if (error) {
+    if (error.message?.includes('photo_urls')) {
+      toast('⚠ Run SQL migration first: ALTER TABLE maintenance ADD COLUMN IF NOT EXISTS photo_urls jsonb;', true);
+    } else {
+      toast('Error saving photos: ' + error.message, true);
+    }
+    return;
+  }
+  m.photo_urls = allUrls;
+  toast(`✓ ${newUrls.length} photo${newUrls.length !== 1 ? 's' : ''} added`);
+  // Refresh the modal to show new photos
+  moIssueDetail(maintenanceId);
+}
+
 function moNotifyTenant(maintenanceId) {
   const m = D.maintenance.find(x=>String(x.id)===String(maintenanceId));
   if (!m) return;
