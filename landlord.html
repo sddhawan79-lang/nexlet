@@ -4879,6 +4879,147 @@ async function sendWelcomeKit(pid) {
 }
 
 
+// ── MODAL: WELCOME LETTER ──
+function moWelcomeLetter(pid) {
+  if (_expiredGuard('Generate welcome letter')) return;
+  const p = pid ? P(pid) : (D.properties[0] || null);
+  const tenant = p ? (D.tenants.find(t => String(t.prop_id)===String(p?.id) && t.status==='Active')) : null;
+  const propOpts = activeProperties().map(pr => `<option value="${pr.id}"${pr.id==p?.id?' selected':''}>${pr.address}, ${pr.city}</option>`).join('');
+
+  openMo('Welcome Letter', 'Personalised property welcome letter for your tenant', `
+    <div style="font-size:13px;color:var(--muted);margin-bottom:16px;background:var(--blue-bg);border:1px solid rgba(59,111,232,0.2);border-radius:8px;padding:10px 14px">
+      ℹ️ Fill in the property details below — the letter will be generated and can be emailed directly to your tenant.
+    </div>
+    <div class="fg-row">
+      <div class="fg"><label>Property <span class="req">*</span></label><select id="wl-prop">${propOpts}</select></div>
+      <div class="fg"><label>Tenant name</label><input type="text" id="wl-tenant" value="${tenant?.name||''}" placeholder="Auto-filled from active tenant"></div>
+    </div>
+    <div style="font-size:12px;font-weight:700;color:var(--txt);margin:14px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--border)">Property details</div>
+    <div class="fg-row">
+      <div class="fg"><label>Boiler location</label><input type="text" id="wl-boiler" placeholder="e.g. Airing cupboard, first floor"></div>
+      <div class="fg"><label>Stopcock location</label><input type="text" id="wl-stopcock" placeholder="e.g. Under kitchen sink"></div>
+    </div>
+    <div class="fg-row">
+      <div class="fg"><label>Fuse box location</label><input type="text" id="wl-fusebox" placeholder="e.g. Under stairs"></div>
+      <div class="fg"><label>Bin collection day(s)</label><input type="text" id="wl-bins" placeholder="e.g. Monday — general, Thursday — recycling"></div>
+    </div>
+    <div class="fg-row">
+      <div class="fg"><label>Parking details</label><input type="text" id="wl-parking" placeholder="e.g. 1 space, bay 4. No overnight street parking."></div>
+      <div class="fg"><label>Meter readings (at move-in)</label><input type="text" id="wl-meters" placeholder="e.g. Gas: 1234, Electric: 5678"></div>
+    </div>
+    <div style="font-size:12px;font-weight:700;color:var(--txt);margin:14px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--border)">Emergency contacts</div>
+    <div class="fg-row">
+      <div class="fg"><label>Landlord / agent name</label><input type="text" id="wl-contact-name" value="${_profileName()}" placeholder="Your name or agency"></div>
+      <div class="fg"><label>Emergency contact number</label><input type="text" id="wl-contact-phone" placeholder="e.g. 07700 900000"></div>
+    </div>
+    <div class="fg"><label>Additional notes <span style="color:var(--muted);font-weight:400">(optional)</span></label><textarea id="wl-notes" rows="3" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-family:var(--font);font-size:13px;box-sizing:border-box;resize:vertical" placeholder="Any other info — house rules, Wi-Fi details, key fob instructions, etc."></textarea></div>
+    <div class="fg-row" style="margin-top:4px">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="wl-email" checked style="width:14px;height:14px"> Email letter to tenant${tenant?.email?' ('+tenant.email+')':' — add email to tenant first'}</label>
+    </div>
+  `, [
+    { label: 'Cancel', onclick: 'closeMo()' },
+    { label: '✦ Generate letter', cls: 'btn-navy', onclick: '_sendWelcomeLetter()' },
+  ]);
+}
+
+async function _sendWelcomeLetter() {
+  const pid = document.getElementById('wl-prop')?.value;
+  const p = P(pid); if (!p) { toast('Select a property', true); return; }
+  const tenant = D.tenants.find(t => String(t.prop_id)===String(pid) && t.status==='Active');
+  const tenantName = document.getElementById('wl-tenant')?.value.trim() || tenant?.name || 'Tenant';
+  const boiler    = document.getElementById('wl-boiler')?.value.trim();
+  const stopcock  = document.getElementById('wl-stopcock')?.value.trim();
+  const fusebox   = document.getElementById('wl-fusebox')?.value.trim();
+  const bins      = document.getElementById('wl-bins')?.value.trim();
+  const parking   = document.getElementById('wl-parking')?.value.trim();
+  const meters    = document.getElementById('wl-meters')?.value.trim();
+  const contactName  = document.getElementById('wl-contact-name')?.value.trim() || _profileName();
+  const contactPhone = document.getElementById('wl-contact-phone')?.value.trim();
+  const notes     = document.getElementById('wl-notes')?.value.trim();
+  const sendEmail = document.getElementById('wl-email')?.checked;
+  const propAddr  = [p.address, p.city, p.postcode].filter(Boolean).join(', ');
+  const today     = new Date().toLocaleDateString('en-GB', {day:'numeric', month:'long', year:'numeric'});
+
+  const btn = document.querySelector('#mo-f .btn-navy');
+  if (btn) { btn.disabled=true; btn.innerHTML='<span class="spin"></span>Generating…'; }
+
+  // Build property info section for AI prompt
+  const propInfo = [
+    boiler    ? `Boiler location: ${boiler}` : null,
+    stopcock  ? `Stopcock location: ${stopcock}` : null,
+    fusebox   ? `Fuse box location: ${fusebox}` : null,
+    bins      ? `Bin collection: ${bins}` : null,
+    parking   ? `Parking: ${parking}` : null,
+    meters    ? `Meter readings at move-in: ${meters}` : null,
+    contactPhone ? `Emergency contact: ${contactName} — ${contactPhone}` : `Landlord/agent: ${contactName}`,
+    notes     ? `Additional info: ${notes}` : null,
+  ].filter(Boolean).join('\n');
+
+  const prompt = `Write a warm, professional welcome letter from a UK landlord to a new tenant.
+
+Tenant name: ${tenantName}
+Property address: ${propAddr}
+Date: ${today}
+Landlord/agent: ${contactName}
+
+Property information to include:
+${propInfo}
+
+The letter should:
+- Open warmly welcoming them to their new home
+- Cover all the property details provided in a clear, easy-to-read format
+- Include a section on what to do in an emergency
+- Remind them to update their address with banks, DVLA, GP, and electoral roll
+- Close professionally with contact details
+- Be formatted in clean HTML using inline styles suitable for email (no external CSS)
+- Use a professional but friendly tone appropriate for UK private rented sector
+- Be concise — no padding, no unnecessary repetition
+
+Return ONLY the HTML letter body (no DOCTYPE, no html/head/body tags). Start directly with the letter content.`;
+
+  try {
+    const resp = await fetch(`https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/super-processor`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${(await sb.auth.getSession()).data.session?.access_token}` },
+      body: JSON.stringify({ prompt, model: 'claude-sonnet-4-5', max_tokens: 2000 }),
+    });
+    const data = await resp.json();
+    const letterHtml = data.content?.[0]?.text || data.response || data.text || '';
+    if (!letterHtml) throw new Error('No content returned');
+
+    // Save to email log
+    if (tenant?.email && sendEmail) {
+      const emailBody = emailWrap(`Welcome to ${p.address}`, `Welcome letter · ${today}`, letterHtml);
+      await sendViaResend(tenant.email, `Welcome to your new home — ${p.address}`, emailBody);
+      await sb.from('email_log').insert({
+        user_id: currentUser.id, prop_id: String(pid), tenant_id: tenant ? String(tenant.id) : null,
+        to_email: tenant.email, subject: `Welcome to your new home — ${p.address}`,
+        template_id: 'welcome_letter', template_name: 'Welcome Letter', status: 'sent',
+        sent_at: new Date().toISOString(),
+      });
+      toast('✓ Welcome letter sent to ' + tenant.email);
+    } else {
+      toast('✓ Welcome letter generated');
+    }
+
+    await logAudit('WELCOME_LETTER', 'properties', pid, `Welcome letter generated for ${tenantName} at ${propAddr}`);
+
+    // Show preview in modal
+    openMo('Welcome Letter — Preview', propAddr, `
+      <div style="background:#fff;border:1.5px solid var(--border);border-radius:10px;padding:18px;overflow:auto;max-height:420px;font-size:13px">
+        ${letterHtml}
+      </div>
+    `, [
+      { label: 'Close', onclick: 'closeMo()' },
+      { label: '📋 Copy HTML', cls: 'btn-navy', onclick: `navigator.clipboard.writeText(${JSON.stringify(letterHtml)}).then(()=>toast('Copied to clipboard'))` },
+    ]);
+  } catch(e) {
+    _logError('moWelcomeLetter', e);
+    toast('Failed to generate letter — check connection', true);
+    if (btn) { btn.disabled=false; btn.innerHTML='✦ Generate letter'; }
+  }
+}
+
 // ── ESIGN POLL ──
 function _pollEsignSigned(pid) {
   const propTenants = D.tenants.filter(t => String(t.prop_id) === String(pid) && t.status === 'Active' && t.email);
@@ -5817,7 +5958,7 @@ function getPropCheckItems(mode){
     {id:'ob16', group:'Move-In Day',       label:'Emergency lighting tested & logged',         detail:'Log date, result, any remedial action taken.'},
     {id:'ob17', group:'Move-In Day',       label:'Pest control check completed',               detail:'Log inspection date and outcome.'},
     {id:'ob18', group:'Move-In Day',       label:'Contact details & repair process provided',  detail:'Landlord name, phone, email, UK address. Emergency repair procedure explained.'},
-    {id:'ob18b',group:'Move-In Day',       label:'Welcome letter given to tenant',              detail:"Give tenants a welcome letter covering: boiler location & operation, stopcock, fuse box, bin collection days, parking rules, meter readings, and who to call in an emergency. Generate one via Documents library."},
+    {id:'ob18b',group:'Move-In Day',       label:'Welcome letter given to tenant',              detail:"Give tenants a welcome letter covering: boiler location & operation, stopcock, fuse box, bin collection days, parking rules, meter readings, and who to call in an emergency.", cta:'Generate letter', ctaAction:'moWelcomeLetter()'},
     {id:'ob19', group:'Admin',             label:'Insurers notified of new tenancy',           detail:'Update buildings & contents insurance. Policy may be invalid if not notified.'},
   ];
   return [
@@ -7169,18 +7310,18 @@ function pdTabContent(pid, tab) {
            or has docs after filtering -->
       ${propDocs.licensing.docs.length
         ? renderCompGroup(
-            'licensing', propDocs.licensing, pc, pi, '', false, pNaDocs
+            'licensing', propDocs.licensing, pc, pi, addCertBtn, false, pNaDocs
           )
         : ''}
 
       <!-- Group 3: Tenancy Documents -->
       ${renderCompGroup(
-        'tenancy', propDocs.tenancy, pc, pi, '', false, pNaDocs
+        'tenancy', propDocs.tenancy, pc, pi, addCertBtn, false, pNaDocs
       )}
 
       <!-- Group 4: Move-In Pack -->
       ${renderCompGroup(
-        'movein', propDocs.movein, pc, pi, '', false, pNaDocs
+        'movein', propDocs.movein, pc, pi, addCertBtn, false, pNaDocs
       )}
 
       <!-- Group 5: Insurance -->
@@ -14418,6 +14559,7 @@ function pgTemplates() {
         { id: 'maintenanceack', name: 'Maintenance Acknowledgement', desc: 'Confirm receipt of tenant maintenance request with timeline', tag: 'Maintenance', ai: true },
         { id: 'contractoraccess', name: 'Contractor Access Letter', desc: '24-hour notice to tenant of contractor visit', tag: 'Access', ai: true },
         { id: 'rentincrease', name: 'Rent Increase Cover Letter', desc: 'Informal letter accompanying a Section 13 notice', tag: 'Rent', ai: true },
+        { id: 'welcomeletter', name: 'Welcome Letter', desc: 'Personalised welcome letter with property details — boiler, bins, meters, emergency contacts', tag: 'Move-in', ai: true, customAction: 'moWelcomeLetter()' },
       ]
     }
   ];
@@ -14489,7 +14631,7 @@ function pgTemplates() {
                   </div>
                   <div style="font-size:12px;color:var(--muted);flex:1">${t.desc}</div>
                   <div style="display:flex;gap:6px;margin-top:4px">
-                    ${t.s8 ? `<button class="btn btn-sm btn-navy" onclick="s8LaunchFromTemplates()">⚖️ Open Section 8 Generator</button>` : t.id === 'section13' ? `<button class="btn btn-sm btn-navy" onclick="moSection13()">📈 Open S.13 Generator</button>` : t.ai ? `<button class="btn btn-sm btn-navy" onclick="moGenerate('${t.id}')">✦ Generate with AI</button>` : `<button class="btn btn-sm btn-navy" onclick="moGenerate('${t.id}')">Generate</button>`}
+                    ${t.s8 ? `<button class="btn btn-sm btn-navy" onclick="s8LaunchFromTemplates()">⚖️ Open Section 8 Generator</button>` : t.id === 'section13' ? `<button class="btn btn-sm btn-navy" onclick="moSection13()">📈 Open S.13 Generator</button>` : t.customAction ? `<button class="btn btn-sm btn-navy" onclick="${t.customAction}">✦ Generate with AI</button>` : t.ai ? `<button class="btn btn-sm btn-navy" onclick="moGenerate('${t.id}')">✦ Generate with AI</button>` : `<button class="btn btn-sm btn-navy" onclick="moGenerate('${t.id}')">Generate</button>`}
                     ${t.id === 'writtenstatement' ? `<div style="display:flex;flex-direction:column;gap:2px;flex:1"><button class="btn btn-sm" style="border-color:var(--green-dark);color:var(--green-dark);font-weight:600" onclick="(function(){const _t=D.tenants.find(x=>x.status==='Active');if(!_t){toast('Add a tenant first',true);return;}moEsign(_t.prop_id,_t.id);})()">✍ Send for e-sign</button><span style=\"font-size:10px;color:var(--muted);text-align:center;margin-top:1px\">AI generates &amp; tenant signs online</span></div>` : ''}
                     <button class="btn btn-sm" onclick="moUploadTemplate('${t.id}','${t.name}')">↑ Use my own</button>
                   </div>
@@ -15449,7 +15591,7 @@ const S8_GROUNDS = [
     evidence:'Estate agent instructions, valuation report, or marketing evidence confirming intent to sell.',
     fields:[]},
   { num:'1B',  type:'M', cat:'landlord', label:'Rent-to-buy scheme — purchase period expired',
-    plain:'The landlord is a private registered provider of social housing and the property was let under a rent-to-buy agreement. The stated period in the agreement has expired and the landlord has complied with any obligation to offer the property for sale. (RRA 2025 — applies only to registered providers under rent-to-buy schemes. Does not apply to private landlords.)',
+    plain:'The dwelling-house is let under a rent-to-buy tenancy agreement by a private registered provider of social housing, and the period specified in the tenancy agreement during which the tenant is entitled to exercise the right to purchase the dwelling-house has expired.\n(RRA 2025 — applies only to registered providers of social housing letting under rent-to-buy schemes. Does not apply to private landlords.)',
     notice:'4 months', days:122, restrict12:false,
     evidence:'Rent-to-buy agreement documentation. Evidence that the offer period has expired and any statutory offer obligations have been met.',
     fields:[]},
@@ -15459,22 +15601,22 @@ const S8_GROUNDS = [
     evidence:'Mortgage documentation and lender possession order.',
     fields:[]},
   { num:'2ZA', type:'M', cat:'other', label:'Landlord holds under a superior tenancy ending soon (social/agricultural)',
-    plain:'The landlord holds the property under a superior tenancy that will end within 12 months, and the landlord is a registered provider of social housing, agricultural tenant, supported accommodation provider, or local authority company. (RRA 2025 — mainly applies to social landlords, not typical private landlords.)',
+    plain:'The landlord\'s interest in the dwelling-house is held under a tenancy, and that tenancy will come to an end within 12 months from the date on which the notice under section 8 is served, and the landlord is—\n(a) a private registered provider of social housing;\n(b) a person who has acquired the interest under the tenancy as a result of the operation of section 18 (new leases) of the Agricultural Holdings Act 1986 or section 36 (notice to quit sub-let land: right of landlord to resume possession) of that Act;\n(c) a supported accommodation provider; or\n(d) a local authority or a company owned by a local authority.\n(RRA 2025 — specialist ground applying mainly to social/agricultural landlords.)',
     notice:'4 months', days:122, restrict12:false,
     evidence:'Evidence of the superior tenancy and its impending end. Confirmation of landlord type (registered provider / agricultural / supported accommodation).',
     fields:[]},
   { num:'2ZB', type:'M', cat:'other', label:'Superior long-lease (21+ years) expiring within 12 months',
-    plain:'The landlord holds under a long fixed-term superior tenancy (21+ years) which will expire within 12 months. (RRA 2025 — applies where an intermediate landlord\'s long lease is ending.)',
+    plain:'The landlord\'s interest in the dwelling-house is held under a fixed-term tenancy for a term of more than 21 years, and that tenancy will expire within 12 months from the date on which the notice under section 8 is served.\n(RRA 2025 — applies where an intermediate landlord\'s long lease is coming to an end.)',
     notice:'4 months', days:122, restrict12:false,
     evidence:'Documentation of the superior fixed-term tenancy and its expiry date.',
     fields:[]},
   { num:'2ZC', type:'M', cat:'other', label:'New landlord via section 18 — previous landlord was social/agricultural',
-    plain:'The current landlord became landlord via section 18 of the Housing Act 1988 within the last 6 months, and the previous landlord was a registered provider of social housing, agricultural tenant, supported accommodation provider, or local authority company. (RRA 2025 — specialist ground, rarely applies to private landlords.)',
+    plain:'Within the period of 6 months ending with the date on which the notice under section 8 is served, the landlord became the landlord under the tenancy as a result of section 18 of this Act (change of landlord under assured tenancy), and the former landlord was—\n(a) a private registered provider of social housing;\n(b) an agricultural tenant as described in Ground 2ZA;\n(c) a supported accommodation provider; or\n(d) a local authority or a company owned by a local authority.\n(RRA 2025 — specialist ground, rarely applies to private landlords.)',
     notice:'4 months', days:122, restrict12:false,
     evidence:'Evidence that the previous landlord fell into one of the qualifying categories. Documentation of how you became the landlord.',
     fields:[]},
   { num:'2ZD', type:'M', cat:'other', label:'New landlord via section 18 — long lease expiry',
-    plain:'The current landlord became landlord via section 18 of the Housing Act 1988 as a result of a long fixed-term superior tenancy (21+ years) coming to an end, and this happened within the past 6 months. (RRA 2025 — specialist ground.)',
+    plain:'Within the period of 6 months ending with the date on which the notice under section 8 is served, the landlord became the landlord under the tenancy as a result of section 18 of this Act, and that was because a fixed-term tenancy for a term of more than 21 years came to an end.\n(RRA 2025 — specialist ground.)',
     notice:'4 months', days:122, restrict12:false,
     evidence:'Documentation of the long superior tenancy that ended and evidence of how you became the landlord.',
     fields:[]},
@@ -15485,7 +15627,7 @@ const S8_GROUNDS = [
     evidence:'Educational institution documentation.',
     fields:[]},
   { num:'4A',  type:'M', cat:'other', label:'Student HMO — end of academic year',
-    plain:'At least half the occupants are full-time students and the tenancy was for 12 months or less.',
+    plain:'The dwelling-house is a house in multiple occupation and was let for a fixed term of not more than 12 months; at least half of the people who occupied the dwelling-house at any time during the 12 months before the beginning of the tenancy were full-time students at a specified educational institution; and the landlord gave notice in writing before the tenancy began that possession might be recovered under this ground.\n(RRA 2025 — requires written prior notice to tenant at start of tenancy.)',
     notice:'4 months', days:122, restrict12:false,
     evidence:'Student status of occupants. Written notice at start of tenancy that Ground 4A may be used.',
     fields:[]},
@@ -15500,7 +15642,7 @@ const S8_GROUNDS = [
     evidence:'Agricultural occupancy documentation. Evidence that the worker has left the employment.',
     fields:[]},
   { num:'5B',  type:'M', cat:'other', label:'Social housing — employment requirements not met (social landlord)',
-    plain:'The tenancy was granted on condition of employment but the requirements are not met. (RRA 2025 — social housing providers only, does not apply to private landlords.)',
+    plain:'The tenancy was granted to the tenant in order to meet an obligation imposed on the landlord under an enactment relating to the provision of accommodation for persons employed in a specified capacity, and the tenant ceases to be employed in that capacity.\n(RRA 2025 — applies to social housing providers only. Does not apply to private landlords.)',
     notice:'2 months', days:61, restrict12:false,
     evidence:'Employment conditions documentation. Evidence conditions are not being met.',
     fields:[]},
@@ -15510,7 +15652,7 @@ const S8_GROUNDS = [
     evidence:'Employment contract. Termination documentation.',
     fields:[]},
   { num:'5D',  type:'M', cat:'other', label:'Social housing — employment condition breached (social landlord)',
-    plain:'A condition of the tenancy related to employment has been breached by the tenant. (RRA 2025 — social housing providers only, does not apply to private landlords.)',
+    plain:'The tenancy was granted to the tenant subject to a condition relating to the tenant\'s employment, and the condition has been broken by the tenant.\n(RRA 2025 — applies to social housing providers only. Does not apply to private landlords.)',
     notice:'2 months', days:61, restrict12:false,
     evidence:'Tenancy agreement showing employment condition. Evidence of breach.',
     fields:[]},
@@ -15530,7 +15672,7 @@ const S8_GROUNDS = [
     evidence:'Local authority confirmation that homelessness duty has been discharged.',
     fields:[]},
   { num:'5H',  type:'M', cat:'other', label:'Eligibility conditions no longer met (social/charity landlord)',
-    plain:'The tenant no longer meets the eligibility conditions for the tenancy set by the social or charitable landlord. (RRA 2025 — social housing/charitable providers only, does not apply to private landlords.)',
+    plain:'The tenancy was granted to the tenant subject to conditions about the tenant\'s eligibility for the dwelling-house (including conditions about the tenant\'s personal circumstances), and the tenant no longer satisfies those conditions.\n(RRA 2025 — applies to registered providers of social housing, local authorities, or charities. Does not apply to private landlords.)',
     notice:'4 weeks', days:28, restrict12:false,
     evidence:'Tenancy eligibility criteria. Evidence that conditions are no longer met.',
     fields:[]},
@@ -15542,17 +15684,17 @@ const S8_GROUNDS = [
       {id:'s8_works', label:'Describe the planned works', type:'textarea', placeholder:'e.g. Full structural renovation — new roof, rewire, new bathroom and extension', req:true}
     ]},
   { num:'6A',  type:'M', cat:'other', label:'Registered provider refurbishment',
-    plain:'The landlord is a registered provider needing possession for refurbishment, providing suitable alternative accommodation.',
+    plain:'The landlord is a private registered provider of social housing and intends to carry out works on the dwelling-house or on the building of which it forms part, and the works are such that they cannot reasonably be carried out without the tenant giving up possession; and the landlord will provide suitable alternative accommodation to the tenant when the tenant gives up possession.\n(RRA 2025 — applies to registered providers of social housing only. Does not apply to private landlords.)',
     notice:'4 months', days:122, restrict12:false,
     evidence:'Registered provider status. Alternative accommodation details.',
     fields:[]},
   { num:'6B',  type:'M', cat:'other', label:'Compliance with enforcement action',
-    plain:'Possession needed to comply with enforcement action by a local authority or other body.',
+    plain:'A relevant person has taken or proposes to take enforcement action in relation to the dwelling-house, and it is necessary for the landlord to obtain possession of the dwelling-house in order to comply with any requirement or proposed requirement arising from that enforcement action.\n"Relevant person" means a local housing authority, fire and rescue authority, or any other public authority with enforcement functions relating to housing.\n(RRA 2025 — available to both private and social landlords where enforcement action has been taken.)',
     notice:'4 months', days:122, restrict12:false,
     evidence:'Local authority enforcement notice or order.',
     fields:[]},
   { num:'7',   type:'M', cat:'other', label:'Death of tenant — no succession right',
-    plain:'The tenancy passed on the tenant\'s death but the successor does not have the right to remain.',
+    plain:'The tenant under the tenancy has died and the tenancy has passed on the death of that tenant—\n(a) under the will or intestacy of that tenant; or\n(b) by operation of law;\nto a person who is not a person who (by virtue of section 17 of this Act) is entitled to an assured tenancy of the dwelling-house by succession, and the proceedings for possession are begun within 12 months of—\n(i) the date on which the landlord became aware of the death of the tenant; or\n(ii) if later, the date of the grant of probate or administration.',
     notice:'2 months', days:61, restrict12:false,
     evidence:'Death certificate. Succession documentation.',
     fields:[]},
