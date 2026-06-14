@@ -13629,7 +13629,11 @@ function pgDocLibrary(){
     </div>
     <div class="panel" style="border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)">
       <div class="ph2"><h2>Stored Documents</h2><span style="font-size:12px;color:var(--muted)">${docs.length} document${docs.length!==1?'s':''}</span></div>
-      <div style="padding:0 18px 18px">
+      <div style="padding:0 18px 10px;display:flex;gap:8px;align-items:center">
+        <input type="text" id="dl-search" placeholder="Search documents..." oninput="dlFilterDocs(this.value)" style="flex:1;padding:8px 12px;border:1.5px solid var(--border);border-radius:7px;font-family:var(--font);font-size:13px">
+        <select id="dl-filter-prop" onchange="dlFilterDocs(document.getElementById('dl-search').value)" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-family:var(--font);font-size:12px;color:var(--txt)"><option value="">All properties</option>${props.map(p=>`<option value="${p.id}">${p.address}</option>`).join('')}</select>
+      </div>
+      <div style="padding:0 18px 18px" id="dl-docs-list">
         ${docs.length===0?`<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">No documents uploaded yet. Use the form above to add your first document.</div>`
         :docs.map(d=>{
           const name=d.type.replace('__DOC__:','');
@@ -13651,6 +13655,42 @@ function pgDocLibrary(){
       </div>
     </div>
   </div>`;
+}
+
+function dlFilterDocs(query) {
+  const q = (query||'').toLowerCase().trim();
+  const propId = document.getElementById('dl-filter-prop')?.value || '';
+  const docs = D.certs.filter(c => c.type && c.type.startsWith('__DOC__:'));
+  const props = D.properties;
+  const list = document.getElementById('dl-docs-list');
+  if (!list) return;
+  const filtered = docs.filter(d => {
+    const name = d.type.replace('__DOC__:', '').toLowerCase();
+    const prop = props.find(p => String(p.id) === String(d.prop_id));
+    const addr = (prop?.address || '').toLowerCase();
+    const matchQ = !q || name.includes(q) || addr.includes(q);
+    const matchP = !propId || String(d.prop_id) === String(propId);
+    return matchQ && matchP;
+  });
+  if (!filtered.length) {
+    list.innerHTML = `<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">No documents match your search.</div>`;
+    return;
+  }
+  list.innerHTML = filtered.map(d => {
+    const name = d.type.replace('__DOC__:', '');
+    const prop = props.find(p => String(p.id) === String(d.prop_id));
+    const uploadedAt = d.created_at ? new Date(d.created_at).toLocaleDateString('en-GB') : '—';
+    return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:20px">📄</span>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600;color:var(--txt)">${name}</div>
+        <div style="font-size:11px;color:var(--muted)">${prop ? prop.address : 'All properties'} · Uploaded ${uploadedAt}</div>
+      </div>
+      ${d.engineer ? `<button class="btn btn-sm" onclick="dvoOpen('${d.engineer}','${name.replace(/'/g,"\\'")}','${(prop?.address||'').replace(/'/g,"\\'")}')">👁 View</button><a href="${d.engineer}" target="_blank" class="btn btn-sm">⬇ Download</a>` : ''}
+      <button class="btn btn-sm" onclick="moEditCert('${d.id}')">✎ Edit</button>
+      <button class="btn btn-sm" style="color:var(--red);border-color:var(--red)" onclick="dlDelete('${d.id}','doclibrary')">Delete</button>
+    </div>`;
+  }).join('');
 }
 
 async function dlScanDoc(input){
@@ -17489,7 +17529,7 @@ function pgContractors(){
         <td class="td-bold">${c.name}</td>
         <td><span class="badge b-blue">${c.trade||'Other'}</span></td>
         <td style="font-size:12px">${c.phone?`<a href="tel:${c.phone}" style="color:var(--blue)">${c.phone}</a>`:'—'}</td>
-        <td style="font-size:12px;color:var(--muted)">${c.email||'—'}</td>
+        <td style="font-size:12px">${c.email?`<a href="mailto:${c.email}" style="color:var(--blue)">${c.email}</a>`:`<span style="color:var(--muted)">—</span>`}</td>
         <td style="font-size:12px;color:var(--muted);max-width:160px">${c.notes||'—'}</td>
         <td><div style="display:flex;gap:4px">
           <button class="btn btn-sm" onclick="moEditContractor('${c.id}')">✎</button>
