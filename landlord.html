@@ -6968,7 +6968,7 @@ function pdTabContent(pid, tab) {
         }
 
         const _viewBtn = _certUrl ? '<button onclick="event.stopPropagation();dvoOpen(\'' + _certUrl + '\',\'' + doc.label.replace(/\'/g, "\\'") + '\',\'' + (p ? p.address : '') + '\')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:600">View</button>' : '';
-        const _deleteBtn = _certRec ? '<button onclick="event.stopPropagation();dlDelete(\'' + _certRec.id + '\',\'prop-detail\')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid rgba(229,62,62,0.3);background:rgba(229,62,62,0.05);color:var(--red);cursor:pointer;font-family:var(--font)">x</button>' : '';
+        const _deleteBtn = _certRec ? '<button onclick="event.stopPropagation();dlDelete(\'' + _certRec.id + '\',\'prop-detail\',' + JSON.stringify(String(pid)) + ')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid rgba(229,62,62,0.3);background:rgba(229,62,62,0.05);color:var(--red);cursor:pointer;font-family:var(--font)">x</button>' : '';
         const _editBtn = _certRec ? '<button onclick="event.stopPropagation();moEditCert(\'' + _certRec.id + '\')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);white-space:nowrap">Edit</button>' : '';
 
         // N/A toggle — only on non-mandatory, non-insurance docs
@@ -7187,6 +7187,60 @@ function pdTabContent(pid, tab) {
       ${renderCompGroup(
         'insurance', propDocs.insurance, pc, pi, '', false, pNaDocs
       )}
+
+      <!-- Group 6: KYC — per-tenant identity docs -->
+      ${(()=>{
+        const kycTenants = D.tenants.filter(t => String(t.prop_id)===String(pid) && t.status==='Active');
+        if (!kycTenants.length) return '';
+        const KYC_MANDATORY = ['passport','right_to_rent','address_1','address_2','reference'];
+        const KYC_LABELS = { passport:'Passport / Photo ID', right_to_rent:'Right to Rent', address_1:'Address Proof 1', address_2:'Address Proof 2', reference:'Reference Check' };
+        const KYC_ICONS  = { passport:'🪪', right_to_rent:'✅', address_1:'📬', address_2:'📬', reference:'📋' };
+        const allDone = kycTenants.every(t => {
+          const docs = (D.tenantDocs||[]).filter(d=>String(d.tenant_id)===String(t.id));
+          return KYC_MANDATORY.every(slot => slot==='right_to_rent' ? !!(t.rtr_check_date||docs.some(d=>d.slot===slot)) : docs.some(d=>d.slot===slot));
+        });
+        const someDone = !allDone && kycTenants.some(t => {
+          const docs = (D.tenantDocs||[]).filter(d=>String(d.tenant_id)===String(t.id));
+          return KYC_MANDATORY.some(slot => slot==='right_to_rent' ? !!(t.rtr_check_date||docs.some(d=>d.slot===slot)) : docs.some(d=>d.slot===slot));
+        });
+        const ragC = allDone ? 'var(--green)' : 'var(--red)';
+        const ragLbl = allDone ? 'COMPLETE' : someDone ? 'INCOMPLETE' : 'MISSING';
+        const gid = 'ct-'+pid+'-kyc';
+        const rows = kycTenants.map(t => {
+          const docs = (D.tenantDocs||[]).filter(d=>String(d.tenant_id)===String(t.id));
+          const tDone = KYC_MANDATORY.every(slot => slot==='right_to_rent' ? !!(t.rtr_check_date||docs.some(d=>d.slot===slot)) : docs.some(d=>d.slot===slot));
+          const missing = KYC_MANDATORY.filter(slot => slot==='right_to_rent' ? !(t.rtr_check_date||docs.some(d=>d.slot===slot)) : !docs.some(d=>d.slot===slot));
+          const slotRows = KYC_MANDATORY.map(slot => {
+            const done = slot==='right_to_rent' ? !!(t.rtr_check_date||docs.some(d=>d.slot===slot)) : docs.some(d=>d.slot===slot);
+            const doc = docs.find(d=>d.slot===slot);
+            const docUrl = doc?.file_name ? 'https://mahtcfukgzbonwibtsxz.supabase.co/storage/v1/object/public/tenant-documents/'+doc.file_name : null;
+            const viewBtn = docUrl ? '<button onclick="event.stopPropagation();dvoOpen(\''+docUrl+'\',\''+KYC_LABELS[slot]+'\',\''+t.name.replace(/'/g,"\\'")+'\')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);font-weight:600">👁 View</button>' : '';
+            const uploadBtn = !done ? (slot==='right_to_rent'
+              ? '<button onclick="event.stopPropagation();moRTRWizard(\''+t.id+'\')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--green-dark);background:var(--green-bg);color:var(--green-dark);cursor:pointer;font-family:var(--font);font-weight:600">Run RTR check</button>'
+              : '<button onclick="event.stopPropagation();moTenantDocs(\''+t.id+'\',\''+t.prop_id+'\')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font)">+ Upload</button>') : '';
+            return '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:'+(done?'var(--green-bg)':'rgba(229,62,62,0.05)')+';border:1px solid '+(done?'var(--green-bg)':'rgba(229,62,62,0.15)')+';border-radius:7px;gap:8px">'
+              +'<div style="display:flex;align-items:center;gap:7px;flex:1;min-width:0"><span style="font-size:13px">'+KYC_ICONS[slot]+'</span><span style="font-size:12px;font-weight:500;color:var(--txt)">'+KYC_LABELS[slot]+'</span></div>'
+              +'<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">'+viewBtn+uploadBtn+'<span style="font-size:10px;font-weight:700;color:'+(done?'var(--green-dark)':'var(--red)')+'">'+( done?'✓ DONE':'MISSING')+'</span></div>'
+              +'</div>';
+          }).join('');
+          return '<div style="margin-bottom:10px">'
+            +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
+            +'<div style="font-size:12px;font-weight:700;color:var(--txt)">'+t.name+'</div>'
+            +(tDone ? '<span style="font-size:10px;font-weight:700;color:var(--green-dark);background:var(--green-bg);padding:2px 8px;border-radius:100px">✓ Complete</span>'
+                    : '<span style="font-size:10px;font-weight:700;color:var(--red);background:rgba(229,62,62,0.08);padding:2px 8px;border-radius:100px">'+missing.length+' missing</span>')
+            +'</div>'
+            +'<div style="display:flex;flex-direction:column;gap:5px">'+slotRows+'</div>'
+            +'</div>';
+        }).join('<div style="height:1px;background:var(--border);margin:10px 0"></div>');
+        return '<div class="panel" style="margin-bottom:12px">'
+          +'<div class="ph2" style="cursor:pointer;user-select:none" onclick="(function(el){var b=document.getElementById(\''+gid+'\');var open=b.style.display!==\'none\';b.style.display=open?\'none\':\'block\';el.querySelector(\'.cg-chev\').textContent=open?\'▸\':\'▾\';})(this)">'
+          +'<div><div style="display:flex;align-items:center;gap:8px"><h2>🗂 KYC &amp; Identity</h2><span style="font-size:10px;font-weight:700;color:'+(allDone?'var(--green-dark)':'var(--red)')+';background:'+(allDone?'var(--green-bg)':'rgba(229,62,62,0.08)')+';padding:2px 8px;border-radius:100px">'+ragLbl+'</span></div>'
+          +'<p style="font-size:11px;color:var(--muted);margin-top:2px">Passport, Right to Rent, address proof &amp; reference — all active tenants</p></div>'
+          +'<span class="cg-chev" style="font-size:13px;color:var(--muted)">'+(allDone?'▸':'▾')+'</span>'
+          +'</div>'
+          +'<div id="'+gid+'" style="'+(allDone?'display:none':'')+'"><div style="padding:10px 16px 14px">'+rows+'</div></div>'
+          +'</div>';
+      })()}
 
       <!-- Recommended — neutral, always collapsed -->
       <div class="panel" style="margin-bottom:12px;
@@ -7936,7 +7990,7 @@ function pgCompliance(){
                     white-space:nowrap">${st.lbl}</span>
                   ${(() => {
                     const _vb = _cu ? `<button onclick="event.stopPropagation();dvoOpen('${_cu}','${_escLab}','${_escAd}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);white-space:nowrap;font-weight:600">👁 View</button>` : '';
-                    const _db = _cr ? `<button onclick="event.stopPropagation();dlDelete('${_cr.id}','compliance')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid rgba(229,62,62,0.3);background:rgba(229,62,62,0.05);color:var(--red);cursor:pointer;font-family:var(--font);white-space:nowrap">✕</button>` : '';
+                    const _db = _cr ? `<button onclick="event.stopPropagation();dlDelete('${_cr.id}','compliance','${selPid}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid rgba(229,62,62,0.3);background:rgba(229,62,62,0.05);color:var(--red);cursor:pointer;font-family:var(--font);white-space:nowrap">✕</button>` : '';
                     const _eb = _cr ? `<button onclick="event.stopPropagation();moEditCert('${_cr.id}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);white-space:nowrap">✎</button>` : '';
                     if (st.action==='insurance') {
                       return `<button onclick="moCert('${selPid}')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font)">Manage →</button>`;
@@ -13469,15 +13523,16 @@ async function dlUpload(){
   nav('doclibrary');
 }
 
-async function dlDelete(id, returnPage){
+async function dlDelete(id, returnPage, returnId){
   if(!confirm('Delete this document? This action is timestamped in your audit log.'))return;
   const cert = D.certs.find(c=>String(c.id)===String(id));
+  const pid = returnId || cert?.prop_id;
   const{error}=await sb.from('certificates').delete().eq('id',id);
   if(error){toast('Delete failed',true);return;}
   D.certs=D.certs.filter(c=>String(c.id)!==String(id));
   await logAudit('DELETE_CERT','certificates',id,`Deleted: ${cert?.type||'document'} · ${cert?.expiry||'no expiry'}`);
   toast('Document deleted — logged to audit trail');
-  nav(returnPage||'doclibrary');
+  nav(returnPage||'doclibrary', pid||undefined);
 }
 
 async function moEditCert(id) {
