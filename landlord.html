@@ -1437,7 +1437,25 @@ async function loadData() {
   if (el.data?.length) D.emailLog = el.data;
   if (ct.data?.length) D.customTemplates = ct.data;
   if (con.data?.length) D.contractors = con.data;
-  if (ja.data?.length) D.jobAssignments = ja.data;
+  if (ja.data?.length) {
+    D.jobAssignments = ja.data;
+    // Merge tenant_maintenance photo_urls into matching maintenance records
+    // A tenant portal job matches a maintenance record if same prop_id and within 48h
+    ja.data.forEach(j => {
+      const tm = j.tenant_maintenance;
+      if (!tm || !tm.photo_urls?.length) return;
+      const tmTs = new Date(tm.submitted_at).getTime();
+      const match = D.maintenance.find(m => {
+        if (String(m.prop_id) !== String(tm.prop_id)) return false;
+        const mTs = new Date(m.issue_date || m.date || m.created_at).getTime();
+        return Math.abs(mTs - tmTs) < 48 * 3600 * 1000;
+      });
+      if (match && !match.photo_urls?.length) {
+        match.photo_urls = tm.photo_urls;
+        match._photos_from_portal = true;
+      }
+    });
+  }
   if (td.data?.length) D.tenantDocs = td.data;
   if (up.data) D.userProfile = up.data;
   // If newsletter_opted_in is null and auth metadata has it from signup,
@@ -11937,7 +11955,7 @@ function moIssueDetail(id){
       ${[['Property',p.address],['Category',m.cat||'—'],['Priority',m.priority||'Low'],['Reported',FMS(m.date||m.issue_date)],['Assigned to',m.assigned_to||'Not assigned'],['Cost',m.cost?'£'+m.cost:'Not set'],['Completed',m.completed_date?FMS(m.completed_date):'—'],['Awaab',m.awaab?'⚠️ Yes':'No']].map(([l,v])=>`<div class="det-f"><label>${l}</label><span>${v}</span></div>`).join('')}
     </div>
     <div style="background:var(--off);border-radius:8px;padding:12px;margin-bottom:14px;font-size:13px;line-height:1.6">${m.description||m.desc||'—'}</div>
-    ${_tenantPhotos.length ? `<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:8px">📷 Photos (${_tenantPhotos.length})</div><div style="display:flex;gap:8px;flex-wrap:wrap">${_tenantPhotos.map(u=>`<img src="${u}" style="width:90px;height:70px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:pointer" onclick="dvoOpen('${u}','Photo','Maintenance')">`).join('')}</div></div>` : ''}
+    ${_tenantPhotos.length ? `<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:8px">📷 Photos (${_tenantPhotos.length})${m._photos_from_portal ? '<span style="font-size:9px;font-weight:600;color:var(--blue);background:var(--blue-bg);padding:1px 6px;border-radius:100px;margin-left:6px">from tenant portal</span>' : ''}</div><div style="display:flex;gap:8px;flex-wrap:wrap">${_tenantPhotos.map(u=>`<img src="${u}" style="width:90px;height:70px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:pointer" onclick="dvoOpen('${u}','Photo','Maintenance')">`).join('')}</div></div>` : ''}
     ${(()=>{ const sla=getAwaabSLA(m); if(!sla) return ''; const breach=sla.breach14d||sla.breach24h; const bg=sla.resolved?'var(--green-bg)':breach?'rgba(229,62,62,0.07)':'rgba(217,119,6,0.06)'; const bdr=sla.resolved?'rgba(0,168,122,0.25)':breach?'rgba(229,62,62,0.3)':'rgba(217,119,6,0.3)'; const col=sla.resolved?'var(--green-dark)':breach?'var(--red)':'var(--amber)'; const status=sla.resolved?'✓ Resolved within SLA':sla.breach14d?`🚨 14-day investigation deadline BREACHED (${sla.daysElapsed}d elapsed)`:sla.breach24h?`⚠ 24h emergency deadline breached · ${sla.daysLeft14}d of 14-day window left`:`⏱ ${sla.hoursLeft24>0?sla.hoursLeft24+'h until 24h deadline · ':''} ${sla.daysLeft14}d of 14-day investigation window remaining`; return `<div style="background:${bg};border:1px solid ${bdr};border-radius:8px;padding:12px 14px;margin-bottom:14px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:${col};margin-bottom:6px">⏰ Awaab's Law SLA</div><div style="font-size:12px;color:var(--txt);line-height:1.6;margin-bottom:8px">${status}</div><div style="display:flex;gap:16px;flex-wrap:wrap"><div style="font-size:11px;color:var(--muted)">Reported: <strong>${FMS(m.issue_date||m.date)}</strong></div><div style="font-size:11px;color:var(--muted)">24h deadline: <strong style="color:${sla.breach24h?'var(--red)':'var(--txt)'}">${sla.investigate24h.toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</strong></div><div style="font-size:11px;color:var(--muted)">14d deadline: <strong style="color:${sla.breach14d?'var(--red)':'var(--txt)'}">${sla.investigate14d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</strong></div></div></div>`; })()}
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Move to stage</div>
