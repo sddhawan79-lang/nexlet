@@ -175,7 +175,7 @@ tr:hover td{background:rgba(59,111,232,0.04);transition:background .12s}
 .det-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:4px}
 .det-f label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);display:block;margin-bottom:3px}
 .det-f span{font-size:13.5px;color:var(--txt)}
-.mo{position:fixed;inset:0;background:rgba(0,0,0,0.38);z-index:1000;display:none;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
+.mo{position:fixed;inset:0;background:rgba(0,0,0,0.38);z-index:1000;display:none;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;overflow-x:hidden}
 .mo.open{display:flex}
 .mo-box{background:var(--white);border-radius:12px;width:520px;max-width:100%;max-height:90vh;overflow-y:auto;scrollbar-gutter:stable;margin:auto}
 .mo-hd{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;position:sticky;top:0;background:var(--white);z-index:1}
@@ -2228,7 +2228,7 @@ function openMo(t,s,b,f){
   document.getElementById('mo-s').textContent=s||'';
   document.getElementById('mo-b').innerHTML=b;
   document.getElementById('mo-f').innerHTML=f||'';
-  
+  document.body.style.overflow='hidden';
   document.getElementById('mo').classList.add('open');
 }
 // ── WIZARD DRAFT SAVE / RESTORE ──
@@ -2291,6 +2291,7 @@ function closeMo(){
   if (window._propStep && window._propStep > 0) _savePropDraft();
   if (window._tsetup && (window._tsetup.name || window._tsetup.email)) _saveTenantDraft();
   document.getElementById('mo').classList.remove('open');
+  document.body.style.overflow='';
   const box = document.querySelector('.mo-box');
   if (box) box.classList.remove('mo-wide');
   // After any modal closes, refresh resume nudges in case a step was completed or interrupted
@@ -17815,7 +17816,7 @@ function moEsign(pid, tid) {
             <button onclick="document.getElementById('esign-preview-a').style.display='none';document.getElementById('esign-generate-row').style.display='block';document.getElementById('esign-send-row-a').style.display='none';document.getElementById('esign-gen-btn').disabled=false;document.getElementById('esign-gen-btn').innerHTML='✦ Generate Document'" style="font-size:11px;color:var(--muted);background:none;border:none;cursor:pointer">✎ Regenerate</button>
           </div>
         </div>
-        <div id="esign-doc-preview" style="border:1px solid var(--border);border-radius:8px;height:45vh;max-height:45vh;overflow-y:auto;padding:20px 24px;font-size:13.5px;line-height:1.8;background:var(--white);width:100%"></div>
+        <div id="esign-doc-preview" style="border:1px solid var(--border);border-radius:8px;height:45vh;max-height:45vh;overflow-y:auto;overflow-x:hidden;padding:20px 24px;font-size:13.5px;line-height:1.8;background:var(--white);width:100%;box-sizing:border-box"></div>
         <textarea id="esign-doc-editor" style="display:none;width:100%;min-height:500px;border:1px solid var(--blue);border-radius:8px;padding:14px 16px;font-size:12px;line-height:1.6;font-family:var(--font);background:var(--white);color:var(--txt);resize:vertical;outline:none"></textarea>
         <div style="margin-top:10px;padding:10px 14px;background:rgba(59,111,232,0.05);border:1px solid rgba(59,111,232,0.2);border-radius:8px;font-size:12px;color:var(--muted)">
           💡 Download the draft, read it carefully, then return here to sign and send when ready.
@@ -18395,7 +18396,7 @@ Return only the HTML content, no preamble or markdown.`
     if (!_rawHtml || _rawHtml.length < 100) throw new Error('Generated document was empty — please try again');
     _esignDocHtml = _rawHtml;
     _esignSaveDraft(pid, tid, _esignDocHtml);
-    document.getElementById('esign-doc-preview').innerHTML = '<div style="all:initial;font-family:Georgia,serif;font-size:13px;line-height:1.8;color:#1a2332;padding:4px">' + _esignDocHtml + '</div>';
+    document.getElementById('esign-doc-preview').innerHTML = '<div style="all:initial;font-family:Georgia,serif;font-size:13px;line-height:1.8;color:#1a2332;padding:4px;display:block;max-width:100%;box-sizing:border-box;overflow-wrap:break-word;word-break:break-word"><style>table{width:100%!important;max-width:100%!important;table-layout:fixed}td,th{word-break:break-word;overflow-wrap:break-word}img{max-width:100%!important}</style>' + _esignDocHtml + '</div>';
     document.getElementById('esign-doc-editor').value = _esignDocHtml;
     document.getElementById('esign-doc-preview').scrollTop = 0;
     document.getElementById('esign-preview-a').style.display = 'block';
