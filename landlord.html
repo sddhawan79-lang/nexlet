@@ -7062,7 +7062,19 @@ function pdTabContent(pid, tab) {
     ) {
       if (!group.docs.length) return '';
 
-      const items = group.docs.map(doc => {
+      // Sort: MISSING mandatory first, then OVERDUE, then EXPIRING SOON, then OK/N/A
+      const _sortWeight = doc => {
+        const st = getDocStatus(doc, certList, insuranceList, naDocs);
+        if (st.isNA) return 4;
+        if (st.lbl === 'MISSING' && doc.mandatory) return 0;
+        if (st.lbl === 'MISSING') return 1;
+        if (st.overdue) return 1;
+        if (st.days !== null && st.days <= 30) return 2;
+        return 3;
+      };
+      const sortedDocs = [...group.docs].sort((a,b) => _sortWeight(a) - _sortWeight(b));
+
+      const items = sortedDocs.map(doc => {
         const st = getDocStatus(
           doc, certList, insuranceList, naDocs
         );
@@ -7305,33 +7317,29 @@ function pdTabContent(pid, tab) {
         </button>
       </div>
 
-      <!-- Group 1: Safety Certificates -->
-      ${renderCompGroup(
-        'safety', propDocs.safety, pc, pi, addCertBtn, false, pNaDocs
-      )}
-
-      <!-- Group 2: Licensing — only renders if HMO
-           or has docs after filtering -->
-      ${propDocs.licensing.docs.length
-        ? renderCompGroup(
-            'licensing', propDocs.licensing, pc, pi, addCertBtn, false, pNaDocs
-          )
-        : ''}
-
-      <!-- Group 3: Tenancy Documents -->
-      ${renderCompGroup(
-        'tenancy', propDocs.tenancy, pc, pi, addCertBtn, false, pNaDocs
-      )}
-
-      <!-- Group 4: Move-In Pack -->
-      ${renderCompGroup(
-        'movein', propDocs.movein, pc, pi, addCertBtn, false, pNaDocs
-      )}
-
-      <!-- Group 5: Insurance -->
-      ${renderCompGroup(
-        'insurance', propDocs.insurance, pc, pi, '', false, pNaDocs
-      )}
+      <!-- Groups 1-5: sorted so highest-urgency groups render first -->
+      ${(()=>{
+        const _groups = [
+          { key:'safety',   group:propDocs.safety,   btn:addCertBtn },
+          ...(propDocs.licensing.docs.length ? [{ key:'licensing', group:propDocs.licensing, btn:addCertBtn }] : []),
+          { key:'tenancy',  group:propDocs.tenancy,  btn:addCertBtn },
+          { key:'movein',   group:propDocs.movein,   btn:addCertBtn },
+          { key:'insurance',group:propDocs.insurance,btn:'' },
+        ];
+        const _groupUrgency = g => {
+          const missing = g.group.docs.filter(d => { const s=getDocStatus(d,pc,pi,pNaDocs); return s.lbl==='MISSING'&&d.mandatory&&!s.isNA; }).length;
+          const overdue = g.group.docs.filter(d => { const s=getDocStatus(d,pc,pi,pNaDocs); return s.overdue&&!s.isNA; }).length;
+          const soon    = g.group.docs.filter(d => { const s=getDocStatus(d,pc,pi,pNaDocs); return s.days!==null&&s.days<=30&&!s.overdue&&!s.isNA; }).length;
+          if (missing > 0) return 0;
+          if (overdue > 0) return 1;
+          if (soon    > 0) return 2;
+          return 3;
+        };
+        return _groups
+          .sort((a,b) => _groupUrgency(a) - _groupUrgency(b))
+          .map(g => renderCompGroup(g.key, g.group, pc, pi, g.btn, false, pNaDocs))
+          .join('');
+      })()}
 
       <!-- Group 6: KYC — per-tenant identity docs -->
       ${(()=>{
