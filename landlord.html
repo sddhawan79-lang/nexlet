@@ -11811,6 +11811,7 @@ function pgMaintenance(){
   })();
 
   return`<div class="topbar"><span class="tb-title">Maintenance</span><div class="tb-right">
+    <button class="btn" onclick="moMaintenanceAuditPicker()" style="font-size:12px;border-color:var(--navy);color:var(--navy)">📄 Audit Log PDF</button>
     <button class="btn btn-navy" onclick="moIssue()">+ Report issue</button>
   </div></div>
   <div class="content">
@@ -19771,6 +19772,31 @@ function _exportMaintenance(pid) {
 }
 
 // ── MAINTENANCE AUDIT LOG PDF ──
+function moMaintenanceAuditPicker() {
+  const propsWithJobs = activeProperties().filter(p => D.maintenance.some(m => String(m.prop_id) === String(p.id)));
+  if (!propsWithJobs.length) { toast('No maintenance records to export', true); return; }
+  if (propsWithJobs.length === 1) { moMaintenanceAuditPDF(propsWithJobs[0].id); return; }
+  openMo('📄 Maintenance Audit Log', 'Select a property to generate the PDF report', `
+    <div style="font-size:13px;color:var(--muted);margin-bottom:16px">
+      This PDF is suitable for council inspection, housing officer visits, court submissions, and Awaab's Law audit purposes. It includes every logged job, Awaab's Law SLA status, dates, costs, and contractor details.
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${propsWithJobs.map(p => {
+        const jobs = D.maintenance.filter(m => String(m.prop_id) === String(p.id));
+        const open = jobs.filter(m => m.status !== 'Resolved').length;
+        const awaab = jobs.filter(m => m.awaab && m.status !== 'Resolved').length;
+        return `<div onclick="closeMo();moMaintenanceAuditPDF('${p.id}')" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border:1.5px solid var(--border);border-radius:10px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--navy)'" onmouseout="this.style.borderColor='var(--border)'">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:var(--txt)">${p.address}${p.city ? ', ' + p.city : ''}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">${jobs.length} total job${jobs.length !== 1 ? 's' : ''} · ${open} open${awaab ? ` · <span style="color:var(--red);font-weight:700">${awaab} Awaab flagged</span>` : ''}</div>
+          </div>
+          <span style="font-size:18px;color:var(--navy)">→</span>
+        </div>`;
+      }).join('')}
+    </div>
+  `, `<button class="btn" onclick="closeMo()">Cancel</button>`);
+}
+
 function moMaintenanceAuditPDF(pid) {
   const p = P(pid);
   if (!p) { toast('Property not found', true); return; }
@@ -19875,11 +19901,31 @@ function moMaintenanceAuditPDF(pid) {
         y += noteLines.length * 4 + 2;
       }
 
-      // Awaab flag
+      // Awaab flag + SLA timing
       if (isAwaab) {
-        doc.setFontSize(8); doc.setTextColor(180, 40, 40); doc.setFont(undefined, 'bold');
-        doc.text("⚠  Awaab's Law flagged — landlord must investigate within 14 days and begin emergency repairs within 24 hours", 16, y + 1);
-        y += 5;
+        const sla = getAwaabSLA(m);
+        doc.setFontSize(8); doc.setFont(undefined, 'bold');
+        if (sla) {
+          const slaCol = sla.resolved ? [0, 168, 122] : sla.breach14d ? [130, 0, 0] : sla.breach24h ? [180, 40, 40] : [180, 100, 0];
+          doc.setTextColor(...slaCol);
+          const slaStatus = sla.resolved
+            ? 'Awaab\'s Law: Resolved within SLA'
+            : sla.breach14d
+            ? `Awaab's Law: 14-DAY DEADLINE BREACHED (${Math.round(sla.daysElapsed)} days elapsed)`
+            : sla.breach24h
+            ? `Awaab's Law: 24h emergency deadline passed - ${sla.daysLeft14} days of 14-day window remaining`
+            : `Awaab's Law flagged - ${sla.hoursLeft24}h until 24h deadline - ${sla.daysLeft14} days of 14-day window remaining`;
+          doc.text('⚠  ' + slaStatus, 16, y + 1);
+          y += 5;
+          const slaInvestigate = '24h investigation deadline: ' + sla.investigate24h.toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) + '  |  14-day deadline: ' + sla.investigate14d.toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric'});
+          doc.setFontSize(7.5); doc.setFont(undefined, 'normal'); doc.setTextColor(100, 100, 100);
+          doc.text(slaInvestigate, 16, y + 1);
+          y += 4;
+        } else {
+          doc.setTextColor(180, 40, 40);
+          doc.text("⚠  Awaab's Law flagged - investigate within 14 days, emergency repairs within 24 hours", 16, y + 1);
+          y += 5;
+        }
       }
 
       y += 4;
@@ -19906,8 +19952,21 @@ function moMaintenanceAuditPDF(pid) {
         ty += nl.length * 4 + 2;
       }
       if (isAwaab) {
-        doc.setFontSize(8); doc.setTextColor(180, 40, 40); doc.setFont(undefined, 'bold');
-        doc.text("⚠  Awaab's Law flagged — landlord must investigate within 14 days and begin emergency repairs within 24 hours", 16, ty);
+        const _sla2 = getAwaabSLA(m);
+        const _slaCol2 = _sla2 ? (_sla2.resolved ? [0,168,122] : _sla2.breach14d ? [130,0,0] : _sla2.breach24h ? [180,40,40] : [180,100,0]) : [180,40,40];
+        doc.setFontSize(8); doc.setFont(undefined, 'bold'); doc.setTextColor(..._slaCol2);
+        const _slaText2 = _sla2
+          ? (_sla2.resolved ? "Awaab's Law: Resolved within SLA"
+            : _sla2.breach14d ? `Awaab's Law: 14-DAY DEADLINE BREACHED (${Math.round(_sla2.daysElapsed)}d elapsed)`
+            : _sla2.breach24h ? `Awaab's Law: 24h deadline passed - ${_sla2.daysLeft14}d of 14-day window left`
+            : `Awaab's Law flagged - ${_sla2.hoursLeft24}h to 24h deadline - ${_sla2.daysLeft14}d remaining`)
+          : "Awaab's Law flagged";
+        doc.text('⚠  ' + _slaText2, 16, ty);
+        if (_sla2) {
+          ty += 4;
+          doc.setFontSize(7.5); doc.setFont(undefined, 'normal'); doc.setTextColor(100,100,100);
+          doc.text('24h deadline: ' + _sla2.investigate24h.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) + '  |  14d deadline: ' + _sla2.investigate14d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}), 16, ty);
+        }
       }
 
       y += 4;
