@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Billing &amp; Subscription Policy — NEXLET</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --navy: #0f2744; --teal: #1a6b6b; --amber: #c8832a; --cream: #faf7f2;
+      --slate: #4a5568; --muted: #718096; --rule: #ddd5c8; --white: #ffffff;
+    }
+    html { scroll-behavior: smooth; }
+    body { font-family: 'DM Sans', sans-serif; font-size: 15px; line-height: 1.75; color: #2d3748; background: var(--cream); }
+    header { background: var(--navy); color: var(--white); padding: 28px 40px; display: flex; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 3px solid var(--amber); }
+    .logo { font-family: 'DM Sans', sans-serif; font-size: 22px; font-weight: 600; letter-spacing: -0.02em; color: var(--white); text-decoration: none; }
+    .logo span { color: var(--amber); }
+    header p { font-size: 12px; color: rgba(255,255,255,0.55); text-align: right; line-height: 1.5; }
+    .page-wrap { max-width: 820px; margin: 0 auto; padding: 56px 40px 80px; }
+    .doc-title { border-bottom: 2px solid var(--navy); padding-bottom: 28px; margin-bottom: 36px; }
+    .doc-title h1 { font-family: 'Lora', Georgia, serif; font-size: 32px; font-weight: 600; color: var(--navy); letter-spacing: -0.01em; line-height: 1.25; margin-bottom: 10px; }
+    .doc-meta { display: flex; flex-wrap: wrap; gap: 20px; font-size: 13px; color: var(--muted); }
+    .doc-meta span { display: flex; align-items: center; gap: 6px; }
+    .doc-meta strong { color: var(--slate); }
+    .notice { background: #fff8ec; border-left: 4px solid var(--amber); border-radius: 4px; padding: 16px 20px; margin-bottom: 40px; font-size: 13.5px; color: #5a3d10; line-height: 1.6; }
+    .notice strong { font-weight: 600; }
+    section { margin-bottom: 44px; }
+    section + section { border-top: 1px solid var(--rule); padding-top: 40px; }
+    h2.section-title { font-family: 'Lora', Georgia, serif; font-size: 20px; font-weight: 600; color: var(--navy); margin-bottom: 20px; display: flex; align-items: baseline; gap: 10px; }
+    h2.section-title .num { font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: var(--amber); text-transform: uppercase; min-width: 28px; }
+    h3 { font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600; color: var(--navy); margin: 22px 0 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+    p { margin-bottom: 14px; }
+    p:last-child { margin-bottom: 0; }
+    ul, ol { padding-left: 22px; margin-bottom: 14px; }
+    li { margin-bottom: 7px; }
+    .highlight { background: #eaf3f3; border-left: 3px solid var(--teal); border-radius: 4px; padding: 14px 18px; margin: 16px 0; font-size: 14px; color: var(--navy); }
+    .price-table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 20px 0; border-radius: 8px; overflow: hidden; border: 1px solid var(--rule); }
+    .price-table thead tr { background: var(--navy); color: var(--white); }
+    .price-table th, .price-table td { padding: 11px 14px; text-align: left; vertical-align: top; }
+    .price-table tbody tr:nth-child(even) { background: var(--white); }
+    .price-table tbody tr:nth-child(odd) { background: var(--cream); }
+    .green-box { background: #f0fff4; border-left: 4px solid #38a169; border-radius: 4px; padding: 16px 20px; margin: 16px 0; font-size: 14px; color: #1c4532; }
+    footer { background: var(--navy); color: rgba(255,255,255,0.5); text-align: center; font-size: 12px; padding: 28px 40px; line-height: 1.7; }
+    footer a { color: rgba(255,255,255,0.7); }
+    @media (max-width: 640px) { .page-wrap { padding: 32px 20px 60px; } header { padding: 20px; flex-direction: column; align-items: flex-start; } header p { text-align: left; } }
+  </style>
+</head>
+<body>
+
+<header>
+  <a class="logo" href="https://nexlet.co.uk">NEXLET</a>
+  <p>A trading name of Beacon Residentials Ltd<br>Company No. 10990778 · England &amp; Wales</p>
+</header>
+
+<div class="page-wrap">
+
+  <div class="doc-title">
+    <h1>Billing &amp; Subscription Policy</h1>
+    <div class="doc-meta">
+      <span><strong>Version:</strong> 1.0</span>
+      <span><strong>Effective date:</strong> 31 May 2026</span>
+      <span><strong>Last updated:</strong> May 2026</span>
+    </div>
+  </div>
+
+  <div class="notice">
+    <strong>Summary:</strong> NEXLET is a paid monthly subscription service. By starting a subscription you authorise us to charge your payment method on a recurring monthly basis until you cancel. You may cancel at any time. This policy explains exactly how billing works, what happens when you cancel, and your rights.
+  </div>
+
+  <!-- 1 -->
+  <section id="b1">
+    <h2 class="section-title"><span class="num">1</span>Who We Are</h2>
+    <p>NEXLET is a trading name of <strong>Beacon Residentials Ltd</strong>, a company registered in England and Wales (Company No. 10990778). Our registered office is at 115 Canterbury Road, Harrow, HA1 4AP. We are registered with the Information Commissioner's Office (ICO Registration No. <strong>ZC164221</strong>).</p>
+    <p>Payments are processed securely by <strong>Stripe, Inc.</strong> We do not store your card details. All payment data is handled by Stripe and subject to their own terms and privacy policy at stripe.com.</p>
+  </section>
+
+  <!-- 2 -->
+  <section id="b2">
+    <h2 class="section-title"><span class="num">2</span>Subscription Plans &amp; Pricing</h2>
+    <p>NEXLET offers three subscription tiers. Prices shown are per calendar month, billed monthly in advance, inclusive of VAT where applicable.</p>
+
+    <table class="price-table">
+      <thead>
+        <tr>
+          <th>Plan</th>
+          <th>Founding Price<br><small>(first 100 subscribers)</small></th>
+          <th>Standard Price</th>
+          <th>Property Limit</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Starter</strong></td>
+          <td>£4.99 / month</td>
+          <td>£7.99 / month</td>
+          <td>Up to 2 properties</td>
+        </tr>
+        <tr>
+          <td><strong>Landlord</strong></td>
+          <td>£11.99 / month</td>
+          <td>£18.99 / month</td>
+          <td>Up to 10 properties</td>
+        </tr>
+        <tr>
+          <td><strong>Portfolio</strong></td>
+          <td>£23.99 / month</td>
+          <td>£39.99 / month</td>
+          <td>Unlimited properties</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="highlight">
+      <strong>Founding price lock:</strong> If you subscribe during the founding period (first 100 subscribers), your price is locked at the founding rate for as long as your subscription remains active and in good standing. If you cancel and later re-subscribe, the then-current standard price will apply.
+    </div>
+
+    <p>All prices are displayed in British Pounds Sterling (GBP). We reserve the right to change standard prices at any time with at least <strong>30 days' written notice</strong> by email. Price changes will never affect an active billing cycle already paid for.</p>
+  </section>
+
+  <!-- 3 -->
+  <section id="b3">
+    <h2 class="section-title"><span class="num">3</span>Free Trial</h2>
+    <p>New accounts receive a <strong>30-day free trial</strong>. No payment card is required to start a trial. At the end of the trial period you will be prompted to select a plan and enter payment details to continue using the Service. If you do not subscribe, your account will be downgraded to read-only access.</p>
+    <p>Trial accounts are limited to the features of the Starter plan. We reserve the right to modify or withdraw trial offers at any time for new sign-ups.</p>
+  </section>
+
+  <!-- 4 -->
+  <section id="b4">
+    <h2 class="section-title"><span class="num">4</span>Billing &amp; Payment</h2>
+
+    <h3>4.1 Recurring charges</h3>
+    <p>By subscribing you authorise Beacon Residentials Ltd (via Stripe) to charge your chosen payment method the applicable monthly subscription fee <strong>automatically on a recurring basis</strong>, on the same calendar date each month (your "billing date"), until you cancel.</p>
+    <p>Your first payment is taken immediately upon completing checkout. Subsequent payments are taken automatically each month on your billing date. You will receive a receipt by email after each successful payment.</p>
+
+    <h3>4.2 Payment methods</h3>
+    <p>We accept all major credit and debit cards (Visa, Mastercard, American Express) and any other payment methods enabled by Stripe from time to time. Payment details are stored securely by Stripe — we never have access to your full card number.</p>
+
+    <h3>4.3 Failed payments</h3>
+    <p>If a payment fails, Stripe will automatically retry the charge. We will notify you by email. If payment cannot be collected after <strong>3 attempts over 7 days</strong>, your account will be suspended. Suspended accounts can be reactivated immediately upon updating your payment method and settling the outstanding balance.</p>
+
+    <h3>4.4 VAT</h3>
+    <p>NEXLET is not currently VAT registered. Prices shown are the total amount you will be charged. If we become VAT registered in the future, existing subscribers will receive at least 30 days' notice before any VAT is added to their subscription price.</p>
+  </section>
+
+  <!-- 5 -->
+  <section id="b5">
+    <h2 class="section-title"><span class="num">5</span>Cancellation</h2>
+
+    <div class="green-box">
+      <strong>✓ Cancel anytime.</strong> There are no minimum terms, no exit fees, and no cancellation charges. You can cancel your subscription at any time from your account settings.
+    </div>
+
+    <h3>5.1 How to cancel</h3>
+    <p>You can cancel your subscription at any time by:</p>
+    <ul>
+      <li>Logging in to your NEXLET account → Profile → Billing → Cancel subscription; or</li>
+      <li>Emailing <strong>support@nexlet.co.uk</strong> with the subject line "Cancel subscription" from your registered email address.</li>
+    </ul>
+    <p>Cancellation takes effect at the end of your current billing period. You will retain full access to the Service until that date.</p>
+
+    <h3>5.2 What happens to your data on cancellation</h3>
+    <p>Upon cancellation your account enters a <strong>30-day grace period</strong> during which you can export your data. After 30 days your account and all associated data will be permanently deleted in accordance with our <a href="privacy.html">Privacy Policy</a>. We strongly recommend downloading a data export before cancelling.</p>
+
+    <h3>5.3 No refunds for partial months</h3>
+    <p>We do not provide refunds or credits for partial months of service. If you cancel part-way through a billing period, you will retain access until the end of that period and no further charges will be made.</p>
+  </section>
+
+  <!-- 6 -->
+  <section id="b6">
+    <h2 class="section-title"><span class="num">6</span>Refunds</h2>
+    <p>All sales are final. We do not offer refunds except in the following limited circumstances:</p>
+    <ul>
+      <li><strong>Duplicate charge:</strong> If you are charged twice for the same billing period due to a technical error, we will refund the duplicate charge within 5 business days of it being brought to our attention;</li>
+      <li><strong>Statutory rights:</strong> If you are a consumer (not a business customer) and you have a statutory right to a refund under the Consumer Contracts Regulations 2013 or other applicable UK consumer law, we will honour that right. Note: most NEXLET subscribers are business customers and these regulations may not apply;</li>
+      <li><strong>Service failure:</strong> If the Service is unavailable for more than 72 consecutive hours due to a fault on our part (excluding scheduled maintenance or force majeure), you may request a pro-rated credit for the period of unavailability.</li>
+    </ul>
+    <p>To request a refund in any of the above circumstances, contact us at <strong>support@nexlet.co.uk</strong> within 14 days of the charge.</p>
+  </section>
+
+  <!-- 7 -->
+  <section id="b7">
+    <h2 class="section-title"><span class="num">7</span>Plan Changes &amp; Upgrades</h2>
+    <p>You may upgrade or downgrade your plan at any time from your account settings.</p>
+    <ul>
+      <li><strong>Upgrades</strong> take effect immediately. The price difference for the remainder of the current billing period is charged on a pro-rated basis.</li>
+      <li><strong>Downgrades</strong> take effect at the start of the next billing period. You retain access to your current plan's features until then. If your property count exceeds the limit of your new plan, you will need to archive properties before the downgrade takes effect.</li>
+    </ul>
+  </section>
+
+  <!-- 8 -->
+  <section id="b8">
+    <h2 class="section-title"><span class="num">8</span>Price Changes</h2>
+    <p>We may change our standard subscription prices at any time. We will give you at least <strong>30 days' written notice by email</strong> before any price change takes effect on your account.</p>
+    <p>If you do not wish to accept a price change, you may cancel your subscription before the new price takes effect and you will not be charged at the new rate. Continuing to use the Service after the effective date of a price change constitutes acceptance of the new price.</p>
+    <p>Founding price subscribers are protected from standard price increases for as long as their subscription remains active and in good standing (see Section 2).</p>
+  </section>
+
+  <!-- 9 -->
+  <section id="b9">
+    <h2 class="section-title"><span class="num">9</span>Account Suspension &amp; Termination by Us</h2>
+    <p>We reserve the right to suspend or terminate your subscription without refund if:</p>
+    <ul>
+      <li>You breach our <a href="terms.html">Terms &amp; Conditions</a>;</li>
+      <li>You use the Service in a way that is illegal, harmful, or abusive;</li>
+      <li>Payment cannot be collected after repeated attempts and you do not respond to our communications within 14 days;</li>
+      <li>We are required to do so by law or a regulatory authority.</li>
+    </ul>
+    <p>Where possible we will give reasonable notice before termination and provide an opportunity to remedy the breach. In cases of serious or repeated breach we may terminate immediately.</p>
+  </section>
+
+  <!-- 10 -->
+  <section id="b10">
+    <h2 class="section-title"><span class="num">10</span>Disputes &amp; Chargebacks</h2>
+    <p>If you believe a charge on your account is incorrect, please contact us at <strong>support@nexlet.co.uk</strong> before initiating a chargeback with your bank or card provider. Most billing queries can be resolved quickly and directly.</p>
+    <p>Initiating a chargeback without first contacting us may result in immediate suspension of your account pending investigation. If a chargeback is found to be unjustified, we reserve the right to recover our reasonable costs.</p>
+  </section>
+
+  <!-- 11 -->
+  <section id="b11">
+    <h2 class="section-title"><span class="num">11</span>Changes to This Policy</h2>
+    <p>We may update this Billing &amp; Subscription Policy from time to time. We will notify you of any material changes by email at least <strong>14 days</strong> before they take effect. Continued use of the Service after the effective date constitutes acceptance of the revised policy.</p>
+    <p>The current version of this policy is always available at <strong>nexlet.co.uk/billing.html</strong>.</p>
+  </section>
+
+  <!-- 12 -->
+  <section id="b12">
+    <h2 class="section-title"><span class="num">12</span>Contact</h2>
+    <p>For any billing queries or disputes, please contact us:</p>
+    <ul>
+      <li><strong>Email:</strong> support@nexlet.co.uk</li>
+      <li><strong>Post:</strong> Beacon Residentials Ltd, 115 Canterbury Road, Harrow, HA1 4AP</li>
+    </ul>
+    <p>We aim to respond to all billing queries within 2 business days.</p>
+  </section>
+
+</div>
+
+<footer>
+  <p>NEXLET is a trading name of <strong>Beacon Residentials Ltd</strong> · Registered in England and Wales · Company No. 10990778<br>
+  Registered Office: 115 Canterbury Road, Harrow, HA1 4AP · support@nexlet.co.uk · ICO Registration No. ZC164221</p>
+  <p style="margin-top:8px">© 2026 Beacon Residentials Ltd. All rights reserved. ·
+    <a href="terms.html">Terms &amp; Conditions</a> ·
+    <a href="privacy.html">Privacy Policy</a> ·
+    <a href="cookies.html">Cookie Notice</a> ·
+    <a href="dpa.html">Data Processing Agreement</a>
+  </p>
+</footer>
+
+</body>
+</html>
