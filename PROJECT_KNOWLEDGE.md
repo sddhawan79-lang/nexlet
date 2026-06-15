@@ -5306,6 +5306,97 @@ Wrong notice period = invalid notice. These are now correct per [GOV.UK assured 
 
 ---
 
+---
+
+## Session 45 — Changes & Features
+
+### 1. ICO Registration Number — ZC164221 Added Everywhere
+
+**ICO number:** `ZC164221`
+
+**Added to landlord.html:**
+- Sidebar footer — "Beacon Residentials Ltd · ICO Reg. ZC164221" below username
+- Cookie banner — appended to privacy notice text
+- Delete account modal — alongside data retention notice
+- Legal Audit Trail PDF footer
+
+**Added to separate legal files (all 4 updated and pushed):**
+- `privacy.html` — `[INSERT ICO NUMBER]` placeholder replaced in body text + footer
+- `terms.html` — `[INSERT ICO NUMBER]` placeholder replaced in body text + footer
+- `dpa.html` — added to footer
+- `cookies.html` — added to footer
+
+---
+
+### 2. Billing & Subscription Policy Page — billing.html (NEW FILE)
+
+**New file:** `billing.html` added to repo root.
+
+**Covers:** pricing table (founding vs standard), free trial terms, recurring charge notice, failed payment retry logic, cancellation (anytime, no fees), refund conditions, upgrades/downgrades, chargeback policy, price change notice. ICO number included.
+
+---
+
+### 3. Pre-Checkout Consent Modal — Stripe Gate
+
+**Problem:** `redirectToCheckout()` fired immediately on plan selection with no consent record — weak position for chargeback disputes.
+
+**Fix:** `redirectToCheckout()` now intercepts and shows a consent modal first:
+- Plan name and price displayed clearly
+- Three mandatory checkboxes — Terms & Conditions, Privacy Policy, Billing & Subscription Policy (each opens in new tab)
+- Error message if any box is unticked
+- "Proceed to Payment" button disabled until all three are ticked
+- Button changes to "Redirecting to Stripe…" while processing (prevents double-clicks)
+- Footer confirming consent and ICO number
+
+All "Choose plan" buttons across the app already call `redirectToCheckout()` — they all get the consent gate automatically.
+
+---
+
+### 4. App Loading Screen
+
+**Problem:** Large single-file SPA had a blank screen during JS initialisation — testers would think it was broken.
+
+**Fix:** Loading overlay added immediately after `<body>` tag:
+- NexLet logo + "Loading…" spinner
+- Hides automatically once `initApp()` completes
+- Also hides on auth redirect to login
+
+---
+
+### 5. Anthropic API Retry Logic — aiProxy() Helper
+
+**Added:** `aiProxy(payload, retries=3, backoffMs=1000)` helper function:
+- Wraps Anthropic API calls with exponential backoff
+- 3 retries by default before showing error toast
+- Defined in landlord.html — not yet wired to all AI call sites
+
+**TODO (next session):** Switch high-traffic AI calls (assistant chat, template generation) to use `aiProxy()` instead of raw fetch.
+
+---
+
+### Known Issues — Updated After Session 45
+
+| # | Issue | Status |
+|---|---|------|
+| 1 | ICO number placeholder in legal docs | ✅ RESOLVED — ZC164221 added everywhere |
+| 2 | MX record for inbound email | Parked post-launch |
+| 3 | `login.html` newsletter signup checkbox | Not built |
+| 4 | `moFinancials` PDF export | Post-launch backlog |
+| 5 | Section 8 UX handoff to Form 3A | Documented in modal — complete |
+| 6 | WhatsApp reminders | Post-launch backlog |
+| 7 | Free public compliance checker | Marketing priority |
+| 8 | Blog / content hub | Marketing priority |
+| 9 | Postcode finder — replace with getAddress.io | Post-launch backlog |
+| 13 | `relet_prepared` column needed on tenants | Pending SQL |
+| 24 | `start_date` amber warning | Not traced |
+| 32 | Cert view button — old certs with null file_url | Data issue |
+| 33 | Welcome letter modal (`moWelcomeLetterr`) | Not yet built |
+| 34 | Guarantor progress bar step | Partially done |
+| 35 | Full KYC panel in compliance tab | Pending — RTR done, remaining slots pending |
+| 36 | `company_name` column on `user_profiles` | Pending SQL — `_profileName()` ready to use it |
+| 37 | S8 grounds without official statutory wording (1B, 2ZA–2ZD, 4A, 5B, 5D, 5H, 6A, 6B, 7, 9) | Mostly social housing — verify before use |
+| 38 | `aiProxy()` retry logic not yet wired to all AI call sites | Next session |
+
 ### Known Issues — Updated After Session 43
 
 | # | Issue | Status |
