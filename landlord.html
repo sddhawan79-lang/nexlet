@@ -342,6 +342,40 @@ tr:hover td{background:rgba(59,111,232,0.04);transition:background .12s}
 </style>
 </head>
 <body>
+
+<!-- LOADING SCREEN -->
+<div id="nexlet-loader" style="position:fixed;inset:0;z-index:99999;background:#0B1E3D;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;transition:opacity 0.4s ease">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+    <svg width="36" height="36" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><rect width="32" height="32" rx="6" fill="#0B1E3D"/><path d="M8 22V13l8-6 8 6v9" stroke="#00C896" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M13 22v-5h6v5" stroke="#00C896" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span style="font-family:sans-serif;font-size:24px;font-weight:700;color:#fff;letter-spacing:-0.02em">NEXLET</span>
+  </div>
+  <div style="width:180px;height:3px;background:rgba(255,255,255,0.1);border-radius:99px;overflow:hidden">
+    <div id="nexlet-loader-bar" style="height:100%;width:0%;background:#00C896;border-radius:99px;transition:width 0.3s ease"></div>
+  </div>
+  <div id="nexlet-loader-msg" style="font-family:sans-serif;font-size:12px;color:rgba(255,255,255,0.45);letter-spacing:0.04em">Loading your dashboard…</div>
+</div>
+<script>
+(function(){
+  const bar = document.getElementById('nexlet-loader-bar');
+  const msg = document.getElementById('nexlet-loader-msg');
+  const steps = [
+    [300,  20, 'Checking your session…'],
+    [900,  50, 'Loading your properties…'],
+    [1800, 75, 'Fetching compliance data…'],
+    [2800, 90, 'Almost ready…'],
+  ];
+  steps.forEach(([delay, pct, text]) => {
+    setTimeout(() => { if(bar) bar.style.width = pct + '%'; if(msg) msg.textContent = text; }, delay);
+  });
+})();
+function _hideLoader() {
+  const el = document.getElementById('nexlet-loader');
+  if (!el) return;
+  el.style.opacity = '0';
+  setTimeout(() => { el.style.display = 'none'; }, 420);
+}
+</script>
+
 <div class="app" style="flex-direction:column">
 
 <!-- MOBILE HEADER -->
@@ -626,6 +660,33 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let currentUser = null;
+
+// ── AI PROXY — fetch with retry + exponential backoff ──
+// Wraps all calls to ai-proxy edge function. Retries on 429 (rate limit) and 5xx.
+async function aiProxy(payload, { maxRetries = 3, label = 'AI' } = {}) {
+  const url = `${SUPABASE_URL}/functions/v1/ai-proxy`;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.status === 429 || res.status >= 500) {
+        if (attempt === maxRetries) throw new Error(`${label} service busy (${res.status}). Please try again in a moment.`);
+        const wait = Math.min(1000 * Math.pow(2, attempt - 1), 8000); // 1s, 2s, 4s, max 8s
+        console.warn(`[aiProxy] attempt ${attempt} got ${res.status}, retrying in ${wait}ms…`);
+        await new Promise(r => setTimeout(r, wait));
+        continue;
+      }
+      return res;
+    } catch (e) {
+      if (attempt === maxRetries) throw e;
+      const wait = Math.min(1000 * Math.pow(2, attempt - 1), 8000);
+      await new Promise(r => setTimeout(r, wait));
+    }
+  }
+}
 
 // ── DEBUG ──
 const NEXLET_DEBUG = true; // Set to false to suppress console.error in production
@@ -1589,61 +1650,7 @@ const PRICE_MAP = {
   portfolio: 'price_1TcSPs2LDL4FOJhEJS7VUati',   // £23.99/mo founding
 };
 
-// Pre-checkout consent modal — shown before every Stripe redirect
-function redirectToCheckout(plan) {
-  const planLabels = { starter: 'Starter (£4.99/mo)', landlord: 'Landlord (£11.99/mo)', portfolio: 'Portfolio (£23.99/mo)' };
-  const label = planLabels[plan] || plan;
-  const moHtml = `
-    <div style="padding:4px 0">
-      <div style="background:var(--off);border-radius:10px;padding:16px 18px;margin-bottom:18px">
-        <div style="font-size:13px;font-weight:600;color:var(--txt);margin-bottom:4px">You are subscribing to</div>
-        <div style="font-size:18px;font-weight:700;color:var(--green)">${label}</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:4px">Recurring monthly subscription · Cancel anytime from your account</div>
-      </div>
-      <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Before proceeding to payment, please confirm you have read and agreed to all three policies:</p>
-      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px">
-        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;color:var(--txt)">
-          <input type="checkbox" id="consent-terms" style="margin-top:2px;width:16px;height:16px;accent-color:var(--green);flex-shrink:0">
-          <span>I have read and agree to the <a href="terms.html" target="_blank" style="color:var(--green);text-decoration:none;font-weight:500">Terms &amp; Conditions</a></span>
-        </label>
-        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;color:var(--txt)">
-          <input type="checkbox" id="consent-privacy" style="margin-top:2px;width:16px;height:16px;accent-color:var(--green);flex-shrink:0">
-          <span>I have read and agree to the <a href="privacy.html" target="_blank" style="color:var(--green);text-decoration:none;font-weight:500">Privacy Policy</a></span>
-        </label>
-        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;color:var(--txt)">
-          <input type="checkbox" id="consent-billing" style="margin-top:2px;width:16px;height:16px;accent-color:var(--green);flex-shrink:0">
-          <span>I have read and agree to the <a href="billing.html" target="_blank" style="color:var(--green);text-decoration:none;font-weight:500">Billing &amp; Subscription Policy</a>, including recurring monthly charges and cancellation terms</span>
-        </label>
-      </div>
-      <div id="consent-error" style="display:none;background:#3d0000;color:#ff8080;border-radius:8px;padding:10px 14px;font-size:12px;margin-bottom:14px">
-        ⚠️ Please tick all three boxes to continue. By proceeding you confirm you have read and agreed to all policies.
-      </div>
-      <div style="display:flex;gap:10px">
-        <button class="btn" style="flex:1;font-size:13px" onclick="closeMo()">Cancel</button>
-        <button class="btn btn-navy" id="consent-proceed-btn" style="flex:2;font-size:13px;background:var(--green);color:#0B1E3D;border:none;font-weight:700" onclick="_proceedToCheckout('${plan}')">
-          Proceed to Payment →
-        </button>
-      </div>
-      <p style="font-size:11px;color:var(--muted);text-align:center;margin-top:12px;line-height:1.5">
-        By clicking "Proceed to Payment" and completing checkout you confirm agreement with all policies above.<br>
-        Beacon Residentials Ltd · ICO Reg. ZC164221 · Powered by Stripe
-      </p>
-    </div>`;
-  openMo('Confirm &amp; Subscribe', '', moHtml);
-}
-
-async function _proceedToCheckout(plan) {
-  const t = document.getElementById('consent-terms');
-  const p = document.getElementById('consent-privacy');
-  const b = document.getElementById('consent-billing');
-  const err = document.getElementById('consent-error');
-  if (!t?.checked || !p?.checked || !b?.checked) {
-    err.style.display = 'block';
-    return;
-  }
-  err.style.display = 'none';
-  const btn = document.getElementById('consent-proceed-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Redirecting to Stripe…'; }
+async function redirectToCheckout(plan) {
   try {
     const { data: { session } } = await sb.auth.getSession();
     if (!session) return;
@@ -1659,7 +1666,6 @@ async function _proceedToCheckout(plan) {
     window.location.href = url;
   } catch(e) {
     toast('Could not start checkout — please try again.', true);
-    if (btn) { btn.disabled = false; btn.textContent = 'Proceed to Payment →'; }
     console.error('[checkout]', e);
   }
 }
@@ -1704,6 +1710,10 @@ async function initApp() {
   document.getElementById('th-av').textContent = email.slice(0,2).toUpperCase();
 
   try { await loadData(); } catch(e) { _logError('loadData', e); }
+  // complete loader bar then fade out
+  const bar = document.getElementById('nexlet-loader-bar');
+  if (bar) bar.style.width = '100%';
+  setTimeout(_hideLoader, 300);
   // ── TRIAL RESOLUTION (inline — avoids hoisting issues) ──
   (function(){
     const up = D.userProfile||{};
