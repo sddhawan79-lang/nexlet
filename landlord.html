@@ -9206,7 +9206,7 @@ async function checkAllReminders() {
           'Tenant maintenance: ' + (job.category||'Issue') + ' at ' + prop.address,
           html, 'REMINDER_TENANT_MAINT', job.id, 'tm_notif'
         );
-        await sb.from('tenant_maintenance').update({ landlord_notified: true }).eq('id', job.id).catch(function(){});
+        try { await sb.from('tenant_maintenance').update({ landlord_notified: true }).eq('id', job.id); } catch(e) {}
       }
     }
   } catch(e) { _logError('tenant_maint_reminder', e); }
