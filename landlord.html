@@ -12015,16 +12015,26 @@ function moIssueDetail(id){
   // Find the tenant who reported — prefer lead tenant, fall back to any active
   const _allTenants = D.tenants.filter(t=>String(t.prop_id)===String(m.prop_id)&&t.status==='Active');
   const tenant = _allTenants.find(t=>t.is_lead) || _allTenants[0];
-  // Check for tenant-submitted version of this job via job_assignments
-  // Match by both prop_id and approximate time (submitted within 24h of issue_date) to avoid cross-job photo leakage
+  // Find photos from tenant portal — check job_assignments, direct tenant_maintenance table, and merged m.photo_urls
   const _issueTs = new Date(m.issue_date || m.date || m.created_at).getTime();
   const _tenantJob = D.jobAssignments && D.jobAssignments.find(j => {
     if (!j.tenant_maintenance) return false;
     if (String(j.tenant_maintenance.prop_id) !== String(m.prop_id)) return false;
     const _jTs = new Date(j.tenant_maintenance.submitted_at).getTime();
-    return Math.abs(_jTs - _issueTs) < 48 * 3600 * 1000; // within 48h
+    return Math.abs(_jTs - _issueTs) < 48 * 3600 * 1000;
   });
-  const _tenantPhotos = (_tenantJob?.tenant_maintenance?.photo_urls) || m.photo_urls || [];
+  // Also search D.tenantMaintenance directly — catches submissions with no job_assignment row
+  // Use widened 7-day window to handle delays between tenant submission and landlord creating the job
+  const _tmDirect = D.tenantMaintenance && D.tenantMaintenance.find(tm => {
+    if (String(tm.prop_id) !== String(m.prop_id)) return false;
+    if (!tm.photo_urls?.length) return false;
+    const _jTs = new Date(tm.submitted_at).getTime();
+    return Math.abs(_jTs - _issueTs) < 7 * 24 * 3600 * 1000; // within 7 days
+  });
+  const _tenantPhotos = (_tenantJob?.tenant_maintenance?.photo_urls)
+    || (_tmDirect?.photo_urls)
+    || m.photo_urls
+    || [];
   const commLogs = D.emailLog.filter(e=>e.template_id==='maintenance_notification'&&D.maintenance.find(x=>String(x.id)===String(id))&&String(e.prop_id)===String(m.prop_id));
   const commLogHtml = commLogs.length ? `<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
     <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:8px">📬 Communication log</div>
