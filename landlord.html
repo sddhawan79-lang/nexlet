@@ -1454,13 +1454,13 @@ async function loadData() {
     sb.from('email_log').select('*').order('sent_at', {ascending: false}),
     sb.from('custom_templates').select('*').order('created_at', {ascending: false}),
     sb.from('contractors').select('*').order('name', {ascending: true}),
-    sb.from('job_assignments').select('*, tenant_maintenance(id, prop_id, tenant_id, category, description, priority, photo_urls, submitted_at, landlord_notified)'),
+    sb.from('job_assignments').select('*, tenant_maintenance(id, prop_id, tenancy_ref, category, description, priority, photo_urls, submitted_at, landlord_notified)'),
     sb.from('tenant_documents').select('*').order('uploaded_at', {ascending: false}),
     sb.from('user_profiles').select('*').eq('id', currentUser.id).maybeSingle(),
     sb.from('stripe_subscriptions').select('plan_name').eq('user_id', currentUser.id).maybeSingle(),
     sb.from('esign_requests').select('*').order('created_at', {ascending: false}),
     sb.from('calendar_events').select('*').eq('user_id', currentUser.id).order('date', {ascending: true}),
-    sb.from('tenant_maintenance').select('id, prop_id, tenant_id, category, description, priority, photo_urls, submitted_at').order('submitted_at', {ascending: false}),
+    sb.from('tenant_maintenance').select('id, prop_id, tenancy_ref, category, description, priority, photo_urls, submitted_at').order('submitted_at', {ascending: false}),
   ]);
 
   if (p.data?.length) {
@@ -9172,7 +9172,7 @@ async function checkAllReminders() {
   try {
     const { data: newJobs } = await sb
       .from('tenant_maintenance')
-      .select('id, prop_id, tenant_id, category, description, priority, photo_urls, submitted_at')
+      .select('id, prop_id, tenancy_ref, category, description, priority, photo_urls, submitted_at')
       .eq('landlord_notified', false)
       .order('submitted_at', { ascending: false })
       .limit(20);
