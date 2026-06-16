@@ -205,14 +205,33 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ── HANDLE MAGIC LINK + SESSION ──
 (async () => {
-  // Let Supabase process the magic link hash automatically
+  // Check for expired/invalid reset link error in URL hash
+  const hash = window.location.hash;
+  if (hash.includes('error=access_denied') || hash.includes('error_code=otp_expired')) {
+    document.getElementById('login-view').style.display = 'none';
+    document.getElementById('reset-view').style.display = 'block';
+    const err = document.getElementById('reset-error-msg');
+    err.textContent = 'Your reset link has expired. Enter your email below to get a new one.';
+    err.style.display = 'block';
+    window.history.replaceState(null, '', window.location.pathname);
+    return;
+  }
+
   const { data: { session } } = await sb.auth.getSession();
   if (session) {
     window.location.href = 'landlord.html';
     return;
   }
-  // Listen for auth state change (magic link sets session async)
+
+  // Listen for auth state change — intercept PASSWORD_RECOVERY event
   sb.auth.onAuthStateChange((event, session) => {
+    if (event === 'PASSWORD_RECOVERY') {
+      // Show the new password form instead of redirecting
+      document.getElementById('login-view').style.display = 'none';
+      document.getElementById('reset-view').style.display = 'none';
+      document.getElementById('newpass-view').style.display = 'block';
+      return;
+    }
     if (session) window.location.href = 'landlord.html';
   });
 })();
@@ -303,6 +322,37 @@ async function sendReset() {
   } else {
     ok.textContent = 'Reset link sent! Check your email inbox.';
     ok.style.display = 'block';
+  }
+}
+
+// ── SET NEW PASSWORD (after reset link) ──
+async function setNewPassword() {
+  const pw = document.getElementById('new-password').value;
+  const pw2 = document.getElementById('confirm-password').value;
+  const btn = document.getElementById('newpass-btn');
+  const err = document.getElementById('newpass-error-msg');
+  const ok = document.getElementById('newpass-success-msg');
+
+  err.style.display = 'none';
+  ok.style.display = 'none';
+
+  if (!pw || pw.length < 6) { showError(err, 'Password must be at least 6 characters.'); return; }
+  if (pw !== pw2) { showError(err, 'Passwords do not match.'); return; }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Saving…';
+
+  const { error } = await sb.auth.updateUser({ password: pw });
+
+  btn.disabled = false;
+  btn.innerHTML = 'Save new password';
+
+  if (error) {
+    showError(err, error.message);
+  } else {
+    ok.textContent = 'Password updated! Taking you to your dashboard…';
+    ok.style.display = 'block';
+    setTimeout(() => { window.location.href = 'landlord.html'; }, 1500);
   }
 }
 
