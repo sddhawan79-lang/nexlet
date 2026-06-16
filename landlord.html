@@ -12199,7 +12199,7 @@ async function sendChat(){
   cm.innerHTML+=`<div class="msg user">${q}</div><div class="msg ai" id="at"><div class="mlbl">NexLet</div><span style="color:var(--muted)">Thinking…</span></div>`;
   cm.scrollTop=cm.scrollHeight;
   try{
-    const r=await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:800,system:SYSTEM_PROMPT,messages:D.chat.filter(m=>m.role!=='system').map(m=>({role:m.role==='ai'?'assistant':'user',content:m.text}))})});
+    const r=await aiProxy({model:'claude-sonnet-4-5',max_tokens:800,system:SYSTEM_PROMPT,messages:D.chat.filter(m=>m.role!=='system').map(m=>({role:m.role==='ai'?'assistant':'user',content:m.text}))},{label:'Chat'});
     const d=await r.json(),reply=d.content?.[0]?.text||'No response.';
     D.chat.push({role:'ai',text:reply});
     document.getElementById('at').innerHTML=`<div class="mlbl">NexLet</div>${reply}`;
@@ -15316,15 +15316,11 @@ ${notes ? '\nLandlord notes: ' + notes : ''}
     : (prompts[templateId] || `Generate a professional UK landlord document for: ${templateId}\n${contextInfo}`);
 
   try {
-    const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    const res = await aiProxy({
         model: 'claude-sonnet-4-5',
         max_tokens: 3000,
         messages: [{ role: 'user', content: prompt }]
-      })
-    });
+      }, { label: 'Template' });
     const data = await res.json();
     const rawText = data.content?.[0]?.text || '';
     const text = _stripCSSCrap(rawText) || 'Could not generate document. Please try again.';
