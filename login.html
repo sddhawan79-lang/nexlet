@@ -259,7 +259,9 @@ async function login() {
     btn.innerHTML = 'Log in';
     var msg = error.message || '';
     if (msg.toLowerCase().indexOf('email not confirmed') !== -1 || msg.toLowerCase().indexOf('not confirmed') !== -1) {
-      showError(err, 'Email not confirmed. Please check your inbox for the confirmation link.');
+      err.innerHTML = 'Email not confirmed. <a href="#" onclick="resendConfirmation();return false" style="color:var(--red);font-weight:600;text-decoration:underline">Resend confirmation email</a>';
+      err.style.display = 'block';
+      window._unconfirmedEmail = email;
     } else {
       showError(err, 'Incorrect email or password. Please try again.');
     }
@@ -322,6 +324,24 @@ async function sendReset() {
   } else {
     ok.textContent = 'Reset link sent! Check your email inbox.';
     ok.style.display = 'block';
+  }
+}
+
+// ── RESEND CONFIRMATION EMAIL ──
+async function resendConfirmation() {
+  const email = window._unconfirmedEmail || document.getElementById('email').value.trim();
+  if (!email) return;
+  const err = document.getElementById('error-msg');
+  err.innerHTML = '<span class="spinner" style="border-top-color:var(--red);border-color:rgba(229,62,62,0.3)"></span> Sending…';
+  err.style.display = 'block';
+  const { error } = await sb.auth.resend({ type: 'signup', email });
+  if (error) {
+    err.textContent = 'Could not resend — ' + error.message;
+  } else {
+    err.style.background = 'rgba(0,200,150,0.06)';
+    err.style.borderColor = 'rgba(0,200,150,0.3)';
+    err.style.color = 'var(--green-dark)';
+    err.textContent = 'Confirmation email sent! Check your inbox.';
   }
 }
 
