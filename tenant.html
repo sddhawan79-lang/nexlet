@@ -375,6 +375,8 @@ const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let currentTenant = null;
+let _selectedPhotoFiles = []; // holds files across photo-box innerHTML replacement
+let _selectedPhotoFiles = []; // holds files across photo-box innerHTML replacement
 let tenantJobs = [];
 let _toastTimer;
 
@@ -635,8 +637,8 @@ async function submitJob(){
   btn.innerHTML = '<span class="spin"></span> Submitting…';
 
   // 3. Upload photos to storage and collect public URLs
-  const photoInput = document.getElementById('job-photos');
-  const photoFiles = photoInput.files ? [...photoInput.files].slice(0, 5) : [];
+  const photoFiles = (_selectedPhotoFiles || []).slice(0, 5);
+  _selectedPhotoFiles = []; // reset after reading
   const photoUrls = [];
   console.log('[photos] files selected:', photoFiles.length);
   for (const file of photoFiles) {
@@ -711,6 +713,7 @@ async function submitJob(){
   document.getElementById('job-category').value = '';
   document.getElementById('job-description').value = '';
   document.getElementById('job-notes').value = '';
+  _selectedPhotoFiles = [];
   document.getElementById('job-photos').value = '';
   document.getElementById('photo-box').innerHTML = `
     <input type="file" accept="image/*" multiple id="job-photos" onchange="photosSelected(this)">
@@ -841,6 +844,7 @@ async function emailLandlord(job, priority, category, description){
 // ── PHOTOS ──
 function photosSelected(input){
   const files = [...input.files];
+  _selectedPhotoFiles = files; // store so submitJob can access after innerHTML replacement
   const box = document.getElementById('photo-box');
   if(box){
     box.innerHTML = `
