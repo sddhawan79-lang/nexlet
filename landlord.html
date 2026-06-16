@@ -1444,7 +1444,7 @@ async function logout() {
 
 // ── LOAD DATA ──
 async function loadData() {
-  const [p, t, c, m, r, i, el, ct, con, ja, td, up, sub, er, ce] = await Promise.all([
+  const [p, t, c, m, r, i, el, ct, con, ja, td, up, sub, er, ce, tm] = await Promise.all([
     sb.from('properties').select('*').order('created_at', {ascending: false}),
     sb.from('tenants').select('*'),
     sb.from('certificates').select('*'),
@@ -1460,6 +1460,7 @@ async function loadData() {
     sb.from('stripe_subscriptions').select('plan_name').eq('user_id', currentUser.id).maybeSingle(),
     sb.from('esign_requests').select('*').order('created_at', {ascending: false}),
     sb.from('calendar_events').select('*').eq('user_id', currentUser.id).order('date', {ascending: true}),
+    sb.from('tenant_maintenance').select('id, prop_id, tenant_id, category, description, priority, photo_urls, submitted_at').order('submitted_at', {ascending: false}),
   ]);
 
   if (p.data?.length) {
@@ -1514,6 +1515,23 @@ async function loadData() {
       });
       if (match && !match.photo_urls?.length) {
         match.photo_urls = tm.photo_urls;
+        match._photos_from_portal = true;
+      }
+    });
+  }
+  // Also merge directly from tenant_maintenance table (catches submissions with no job_assignment row)
+  if (tm?.data?.length) {
+    D.tenantMaintenance = tm.data;
+    tm.data.forEach(job => {
+      if (!job.photo_urls?.length) return;
+      const tmTs = new Date(job.submitted_at).getTime();
+      const match = D.maintenance.find(mnt => {
+        if (String(mnt.prop_id) !== String(job.prop_id)) return false;
+        const mTs = new Date(mnt.issue_date || mnt.date || mnt.created_at).getTime();
+        return Math.abs(mTs - tmTs) < 48 * 3600 * 1000;
+      });
+      if (match && !match.photo_urls?.length) {
+        match.photo_urls = job.photo_urls;
         match._photos_from_portal = true;
       }
     });
@@ -12199,7 +12217,7 @@ async function sendChat(){
   cm.innerHTML+=`<div class="msg user">${q}</div><div class="msg ai" id="at"><div class="mlbl">NexLet</div><span style="color:var(--muted)">Thinking…</span></div>`;
   cm.scrollTop=cm.scrollHeight;
   try{
-    const r=await aiProxy({model:'claude-sonnet-4-5',max_tokens:800,system:SYSTEM_PROMPT,messages:D.chat.filter(m=>m.role!=='system').map(m=>({role:m.role==='ai'?'assistant':'user',content:m.text}))},{label:'Chat'});
+    const r=await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:800,system:SYSTEM_PROMPT,messages:D.chat.filter(m=>m.role!=='system').map(m=>({role:m.role==='ai'?'assistant':'user',content:m.text}))})});
     const d=await r.json(),reply=d.content?.[0]?.text||'No response.';
     D.chat.push({role:'ai',text:reply});
     document.getElementById('at').innerHTML=`<div class="mlbl">NexLet</div>${reply}`;
@@ -15316,11 +15334,15 @@ ${notes ? '\nLandlord notes: ' + notes : ''}
     : (prompts[templateId] || `Generate a professional UK landlord document for: ${templateId}\n${contextInfo}`);
 
   try {
-    const res = await aiProxy({
+    const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
         model: 'claude-sonnet-4-5',
         max_tokens: 3000,
         messages: [{ role: 'user', content: prompt }]
-      }, { label: 'Template' });
+      })
+    });
     const data = await res.json();
     const rawText = data.content?.[0]?.text || '';
     const text = _stripCSSCrap(rawText) || 'Could not generate document. Please try again.';
