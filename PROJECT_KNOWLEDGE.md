@@ -5429,3 +5429,144 @@ ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS company_name text;
 ```
 Once added, `_profileName()` will auto-use it: `company_name || full_name || email prefix`.
 
+
+## Session 46 — 17 June 2026 — Auth Fixes, Tenant Photo Pipeline, AI Proxy Retry
+
+### 1. PAT Testing Compliance Weight — Verified Correct (No Change)
+
+**Investigation:** Checked `calcRAG()` scoring logic and `COMPLIANCE_DOCS` definition against UK legal reality.
+
+**Finding:** PAT Testing was already correctly classified:
+- Group: `recommended` (not `safety`, `licensing`, `tenancy`, or `movein`)
+- `mandatory: false`
+- `calcRAG()` only iterates mandatory groups — PAT Testing never contributes to red RAG or score deduction
+
+Smoke alarms and Gas Safety correctly remain mandatory (red when missing). No code change required.
+
+---
+
+### 2. High-Traffic AI Calls Switched to `aiProxy()` Retry Helper
+
+**Problem:** Assistant chat (`sendChat`) and template generation (`runGenerate`) used raw `fetch()` to `ai-proxy` edge function with no retry on failure.
+
+**Fix:** Both switched to `aiProxy()` helper (added Session 45) which provides 3 attempts with exponential backoff and handles 429/5xx errors.
+
+| Function | Line | Change |
+|---|---|---|
+| `sendChat()` | ~12202 | `fetch(url, {...})` → `aiProxy({...}, {label:'Chat'})` |
+| `runGenerate()` | ~15319 | `fetch(url, {...})` → `aiProxy({...}, {label:'Template'})` |
+
+All other raw `fetch` calls to `ai-proxy` left untouched.
+
+---
+
+### 3. Email Auth — Resend SMTP Configured
+
+**Problem:** Account signup with non-Gmail emails was not working — verification emails not arriving. Root cause: Supabase was using its built-in email service (rate-limited, poor deliverability).
+
+**Fix:** Configured Resend as Supabase SMTP provider:
+- Supabase → Authentication → Sign In / Providers → Email → SMTP Settings
+- Host: `smtp.resend.com` · Port: `465` · Username: `resend`
+- Sender: `noreply@nexlet.co.uk` · Sender name: `NexLet`
+- New Resend API key created (`Supabase SMTP`) as existing key value was not retrievable
+
+**Result:** Confirmation emails now route through `documents@nexlet.co.uk` domain via Resend — consistent deliverability across all email providers.
+
+---
+
+### 4. Login Page — Resend Confirmation + Expired Link Handling
+
+**File modified:** `login.html`
+
+**Fix 1 — Expired reset link:** When user clicks an expired password reset link, URL contains `#error=access_denied&error_code=otp_expired`. Previously app silently loaded the login page with no feedback.
+
+**New behaviour:** Hash is intercepted on load, reset-view shown automatically with message: *"Your reset link has expired. Enter your email below to get a new one."*
+
+**Fix 2 — Password recovery flow:** Supabase fires `PASSWORD_RECOVERY` event when a valid reset link is clicked. Previously `onAuthStateChange` redirected to `landlord.html` on any session — catching recovery links and skipping the password form.
+
+**New behaviour:** `PASSWORD_RECOVERY` event now shows `#newpass-view` (new password form) instead of redirecting.
+
+**Fix 3 — New password form:** Added `#newpass-view` with two password fields. On submit: `sb.auth.updateUser({ password })` → redirect to dashboard after 1.5 seconds.
+
+**Fix 4 — Resend confirmation email:** When login fails with "email not confirmed", error message now shows inline link *"Resend confirmation email"*. Clicking calls `sb.auth.resend({ type: 'signup', email })`. Success turns message green. Email stored in `window._unconfirmedEmail` when login is attempted so resend knows which address to use.
+
+**New functions:** `resendConfirmation()`, `setNewPassword()`
+
+---
+
+### 5. Tenant Maintenance Photos — Root Cause Fixed
+
+**Problem:** Photos uploaded by tenants from the portal were not appearing in the NexLet maintenance section. Multiple layers of bugs:
+
+**Bug 1 — `tenant_id` column missing from `tenant_maintenance` table:**
+All three queries selecting `tenant_id` from `tenant_maintenance` returned HTTP 400. Column does not exist — table uses `tenancy_ref` instead.
+
+**Fix:** SQL run: `ALTER TABLE tenant_maintenance ADD COLUMN IF NOT EXISTS tenant_id uuid;`
+
+All three `tenant_maintenance` queries updated to select `tenancy_ref` instead of `tenant_id`:
+- `job_assignments` join query
+- Direct `tenant_maintenance` fetch in `loadData`
+- `checkAllReminders` query
+
+**Bug 2 — `.catch()` chain on Supabase query:**
+`await sb.from('tenant_maintenance').update(...).eq(...).catch(function(){})` — Supabase queries don't support `.catch()` chaining. TypeError at runtime.
+
+**Fix:** Wrapped in `try/catch` block instead.
+
+**Bug 3 — `tenant_maintenance` never fetched directly:**
+`loadData()` only received `tenant_maintenance` data via a join on `job_assignments`. But tenant portal submissions create `tenant_maintenance` rows without creating `job_assignments` rows. Photos were invisible until a contractor was manually assigned.
+
+**Fix:** Added `tenant_maintenance` as a 16th parallel query in `loadData()` Promise.all. Stored in `D.tenantMaintenance`. Second merge pass runs after the existing `job_assignments` merge — catches all portal submissions with no job assignment row.
+
+**Bug 4 — 48h timestamp matching window too narrow:**
+`moIssueDetail` photo lookup matched `tenant_maintenance.submitted_at` against `maintenance.issue_date` within 48h. Tenants often submit days before the landlord logs the job. Photos invisible if gap > 48h.
+
+**Fix:** Added third lookup path in `moIssueDetail` — searches `D.tenantMaintenance` directly by `prop_id` within **7-day window**. Priority: `job_assignments join → D.tenantMaintenance direct → m.photo_urls`.
+
+**Bug 5 — `photo_urls` column missing from `maintenance` table:**
+Tenant portal inserts into `maintenance` with `photo_urls` but the column didn't exist — Supabase silently dropped the field on insert.
+
+**Fix:** SQL run: `ALTER TABLE maintenance ADD COLUMN IF NOT EXISTS photo_urls jsonb;`
+
+**Bug 6 — Tenant portal photo upload path requires auth:**
+Tenant portal uploads to `property-documents` bucket under `maintenance/{landlord_uid}/portal/...` path. Storage RLS required `auth.uid()` to match the folder prefix. Tenant portal has no auth session — all uploads silently failed, `photo_urls` stayed null.
+
+**Fix:** Changed upload to `tenant-documents` bucket under `portal/{prop_id}/...` path. Added two new storage policies:
+```sql
+CREATE POLICY "tenant portal uploads"
+ON storage.objects FOR INSERT TO anon
+WITH CHECK (bucket_id = 'tenant-documents' AND (storage.foldername(name))[1] = 'portal');
+
+CREATE POLICY "tenant portal reads"  
+ON storage.objects FOR SELECT TO anon
+USING (bucket_id = 'tenant-documents' AND (storage.foldername(name))[1] = 'portal');
+```
+
+**Bug 7 — Root cause: `photosSelected()` destroyed file input:**
+`photosSelected()` replaced `#photo-box` innerHTML with a new `<input>` — destroying the original file element. When `submitJob()` called `document.getElementById('job-photos').files`, it read a brand new empty input. 0 files → 0 uploads → null `photo_urls` on every submission.
+
+**Fix (`tenant.html`):** Added `_selectedPhotoFiles = []` module-level variable. `photosSelected()` stores `[...input.files]` to `_selectedPhotoFiles` before replacing innerHTML. `submitJob()` reads from `_selectedPhotoFiles` instead of the DOM. Variable reset after read and on form reset.
+
+---
+
+### Schema Changes — Session 46
+
+| Table | Column | Type | Notes |
+|---|---|---|---|
+| `tenant_maintenance` | `tenant_id` | uuid | Was missing — all queries selecting it returned 400 |
+| `maintenance` | `photo_urls` | jsonb | Was missing — tenant portal inserts silently dropped this field |
+
+### Storage Policy Changes — Session 46
+
+| Policy | Bucket | Operation | Role | Condition |
+|---|---|---|---|---|
+| `tenant portal uploads` | `tenant-documents` | INSERT | anon | folder[1] = 'portal' |
+| `tenant portal reads` | `tenant-documents` | SELECT | anon | folder[1] = 'portal' |
+
+### Files Modified — Session 46
+
+| File | Changes |
+|---|---|
+| `landlord.html` | `aiProxy()` for chat + template; `tenant_maintenance` 16th query; `D.tenantMaintenance` merge pass; 7-day photo window in `moIssueDetail`; `tenant_id` → `tenancy_ref` in 3 queries; `.catch()` → `try/catch` fix |
+| `login.html` | Expired link handler; `PASSWORD_RECOVERY` intercept; new password form; resend confirmation link; `resendConfirmation()` + `setNewPassword()` functions |
+| `tenant.html` | `_selectedPhotoFiles` module var; `photosSelected()` stores files; `submitJob()` reads from var; upload path changed to `tenant-documents/portal/`; storage policies added |
