@@ -404,6 +404,11 @@ function _hideLoader() {
       <span class="sb-label">Dashboard</span>
     </button>
 
+    <button class="sb-item" data-page="discover">
+      <svg class="sb-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"/><path d="M10.6 5.4 9.1 9.1 5.4 10.6 6.9 6.9z"/></svg>
+      <span class="sb-label">Discover</span>
+    </button>
+
     <!-- My Portfolio -->
     <div class="sb-group-hdr" onclick="toggleSbGroup('portfolio')">
       <span>My Portfolio</span><span class="sb-chev" id="sbchev-portfolio">▾</span>
@@ -5568,6 +5573,78 @@ window._toggleDashDD = function () {
     setTimeout(function () { document.addEventListener('click', closeFn); }, 0);
   }
 };
+
+function pgDiscover(){
+  const KEY = [
+    { ic:'\uD83D\uDD17', name:'Tenant portal link', desc:'Give each tenant a private link \u2014 no password \u2014 to view documents, see rent and report repairs themselves.', go:`nav('tenants');toast('Open a tenant to send their portal link')` },
+    { ic:'\u270D\uFE0F', name:'E-signature', desc:'Send a tenancy agreement and your tenant signs it on their phone \u2014 no printing or scanning.', go:`nav('tenants');toast('Open a tenant to send an agreement for e-signature')` },
+    { ic:'\uD83D\uDCCB', name:'Inventory reports', desc:'Snap a few photos and AI writes a full room-by-room condition report you can send to the tenant.', go:`nav('properties');toast('Open a property \u2192 Compliance tab to create an inventory report')` },
+  ];
+  const GROUPS = [
+    { t:'Your properties & tenants', rows:[
+      { bg:'var(--blue-bg)', ic:'\uD83C\uDFE0', name:'Properties', desc:'Add and manage your rental properties.', go:`nav('properties')` },
+      { bg:'var(--blue-bg)', ic:'\uD83D\uDC65', name:'Tenants', desc:'Tenant details, Right-to-Rent checks, and portal invites.', go:`nav('tenants')` },
+    ]},
+    { t:'Stay legal & safe', rows:[
+      { bg:'var(--status-green-bg)', ic:'\uD83D\uDEE1\uFE0F', name:'Compliance & certificates', desc:'Gas, electrics and EPC \u2014 with reminders before anything expires.', go:`nav('compliance')` },
+      { bg:'var(--status-green-bg)', ic:'\uD83D\uDD0D', name:'Inspections', desc:'Record property visits with a simple pass or fail.', go:`nav('properties');toast('Open a property \u2192 Compliance tab to log an inspection')` },
+      { bg:'var(--blue-bg)', ic:'\uD83D\uDCC5', name:'Calendar', desc:'Every expiry and rent date in one view.', go:`nav('calendar')` },
+      { bg:'var(--amber-bg)', ic:'\uD83D\uDD27', name:'Maintenance & repairs', desc:'Track repair jobs, including damp and mould.', go:`nav('maintenance')` },
+    ]},
+    { t:'Paperwork & documents', rows:[
+      { bg:'var(--green-bg)', ic:'\uD83D\uDCC4', name:'Legal document templates', desc:'Ready-made notices and letters, including Section 8 and Section 13.', go:`window._docTab='templates';nav('documents')` },
+      { bg:'var(--navy);color:#fff', ic:'\u2696\uFE0F', name:'Court-ready audit pack', desc:'One PDF with all your evidence for a property, ready for court or a solicitor.', go:`nav('properties');toast('Open a property \u2192 Compliance tab \u2192 Legal Audit Trail')` },
+      { bg:'var(--off)', ic:'\uD83D\uDDC2\uFE0F', name:'Document library', desc:'Store and find any property document.', go:`window._docTab='library';nav('documents')` },
+    ]},
+    { t:'Money & tax', rows:[
+      { bg:'var(--green-bg)', ic:'\uD83D\uDCB7', name:'Rent tracking', desc:'Mark rent received and send receipts.', go:`window._rfTab='rent';nav('rent-finance')` },
+      { bg:'var(--blue-bg)', ic:'\uD83D\uDCCA', name:'Income & profit', desc:'See what each property earns after costs.', go:`window._rfTab='finance';nav('rent-finance')` },
+      { bg:'var(--status-green-bg)', ic:'\uD83E\uDDFE', name:'Tax (MTD)', desc:'Making Tax Digital filings and a tax calculator.', go:`window._rfTab='mtd';nav('rent-finance')` },
+    ]},
+    { t:'Need a hand?', rows:[
+      { bg:'var(--status-green-bg)', ic:'\uD83D\uDCAC', name:'AI Assistant', desc:'Ask about the law or where to find anything \u2014 in plain English.', go:`showAssistant()` },
+    ]},
+  ];
+  const keyHtml = KEY.map(k=>`<div class="dsc-card" onclick="${k.go}"><span class="dsc-pill">Easy to miss</span><div class="dsc-card-ic">${k.ic}</div><div class="dsc-card-name">${k.name}</div><div class="dsc-card-desc">${k.desc}</div><div class="dsc-card-go">Open \u2192</div></div>`).join('');
+  const groupsHtml = GROUPS.map(g=>`<div class="dsc-grp"><div class="dsc-grp-t">${g.t}</div><div class="dsc-list">${g.rows.map(r=>`<div class="dsc-row" onclick="${r.go}"><div class="dsc-row-ic" style="background:${r.bg}">${r.ic}</div><div class="dsc-row-body"><div class="dsc-row-name">${r.name}</div><div class="dsc-row-desc"><span>${r.desc}</span></div></div><span class="dsc-row-go">\u203A</span></div>`).join('')}</div></div>`).join('');
+  return `<style>
+#dsc-root{max-width:860px}
+#dsc-root .dsc-ph{margin-bottom:22px}
+#dsc-root .dsc-ph h1{font-size:23px;font-weight:700;color:var(--txt);margin-bottom:5px}
+#dsc-root .dsc-ph p{font-size:14px;color:var(--muted)}
+#dsc-root .dsc-key{margin-bottom:28px}
+#dsc-root .dsc-key-t{font-size:13px;font-weight:700;color:var(--txt);margin-bottom:4px;display:flex;align-items:center;gap:7px}
+#dsc-root .dsc-key-sub{font-size:12.5px;color:var(--muted);margin-bottom:13px}
+#dsc-root .dsc-key-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+#dsc-root .dsc-card{position:relative;background:linear-gradient(160deg,rgba(232,146,58,0.09),rgba(232,146,58,0.02));border:1.5px solid rgba(232,146,58,0.4);border-radius:13px;padding:16px 15px 14px;cursor:pointer;transition:box-shadow .16s,transform .12s,border-color .16s;display:flex;flex-direction:column}
+#dsc-root .dsc-card:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(232,146,58,0.18);border-color:var(--green)}
+#dsc-root .dsc-pill{position:absolute;top:11px;right:11px;font-size:9px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--green-dark);background:var(--green-bg);padding:2px 8px;border-radius:100px}
+#dsc-root .dsc-card-ic{width:44px;height:44px;border-radius:12px;background:var(--white);border:1px solid rgba(232,146,58,0.3);display:flex;align-items:center;justify-content:center;font-size:21px;margin-bottom:11px}
+#dsc-root .dsc-card-name{font-size:14.5px;font-weight:700;color:var(--txt);margin-bottom:4px}
+#dsc-root .dsc-card-desc{font-size:12px;color:var(--muted);line-height:1.5;flex:1}
+#dsc-root .dsc-card-go{margin-top:11px;font-size:12.5px;font-weight:600;color:var(--green-dark)}
+#dsc-root .dsc-grp{margin-bottom:24px}
+#dsc-root .dsc-grp-t{font-size:12px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;padding-left:2px}
+#dsc-root .dsc-list{border:1px solid var(--border);border-radius:12px;overflow:hidden}
+#dsc-root .dsc-row{display:flex;align-items:center;gap:14px;padding:13px 16px;cursor:pointer;background:var(--white);border-bottom:1px solid var(--border);transition:background .12s}
+#dsc-root .dsc-row:last-child{border-bottom:none}
+#dsc-root .dsc-row:hover{background:var(--off)}
+#dsc-root .dsc-row-ic{width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0}
+#dsc-root .dsc-row-body{flex:1;min-width:0}
+#dsc-root .dsc-row-name{font-size:14.5px;font-weight:600;color:var(--txt)}
+#dsc-root .dsc-row-desc{font-size:12.5px;color:var(--muted);line-height:1.45;display:grid;grid-template-rows:0fr;opacity:0;transition:grid-template-rows .2s ease,opacity .2s ease,margin-top .2s ease;margin-top:0}
+#dsc-root .dsc-row-desc>span{overflow:hidden}
+#dsc-root .dsc-row:hover .dsc-row-desc{grid-template-rows:1fr;opacity:1;margin-top:3px}
+#dsc-root .dsc-row-go{color:#C5D0DD;font-size:22px;flex-shrink:0;transition:color .12s,transform .12s}
+#dsc-root .dsc-row:hover .dsc-row-go{color:var(--navy);transform:translateX(2px)}
+</style>
+  <div class="topbar"><span class="tb-title">Discover</span></div>
+  <div class="content"><div id="dsc-root">
+    <div class="dsc-ph"><h1>What you can do in NexLet</h1><p>Everything in one place. Tap anything to open it \u2014 or ask the AI Assistant any time.</p></div>
+    <div class="dsc-key"><div class="dsc-key-t">\u2728 Key features</div><div class="dsc-key-sub">Powerful tools landlords often miss \u2014 worth a look.</div><div class="dsc-key-grid">${keyHtml}</div></div>
+    ${groupsHtml}
+  </div></div>`;
+}
 
 function pgDashboard(){
   const acts=UA(),tot=D.properties.reduce((s,p)=>s+(p.rent||0),0),open=D.maintenance.filter(m=>m.status!=='Resolved').length;
@@ -12753,6 +12830,7 @@ function showCalDay(yr,mo,d){
 // ── ROUTER ──
 const PAGES={
   dashboard:()=>pgDashboard(),
+  discover:()=>pgDiscover(),
   properties:()=>pgProperties(),
   tenants:(id)=>{ if (!id) window._tenantFilter = 'Active'; return pgTenants(); },
   compliance:()=>pgCompliance(),
