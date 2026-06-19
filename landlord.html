@@ -18,13 +18,13 @@
   --blue:#3B6FE8;--blue-bg:rgba(59,111,232,0.09);
   --red:#E53E3E;--red-bg:rgba(229,62,62,0.09);
   --amber:#D97706;--amber-bg:rgba(217,119,6,0.09);
-  --white:#fff;--off:#F4F5F7;--border:#E2E5EA;
+  --white:#fff;--off:#F4F5F7;--border:#E2E5EA;--bg:#EAEEF5;
   --txt:#1A2332;--muted:#64748B;
   --font:'DM Sans',system-ui,sans-serif;
   --disp:'DM Serif Display',Georgia,serif;
   --sb:228px;
 }
-html,body{height:100%;font-family:var(--font);color:var(--txt);background:var(--off);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+html,body{height:100%;font-family:var(--font);color:var(--txt);background:var(--bg);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
 /* ── APP LAYOUT ── */
 .app{display:flex;height:100vh;overflow:hidden;min-height:0}
 /* ── SIDEBAR ── */
@@ -81,16 +81,23 @@ html,body{height:100%;font-family:var(--font);color:var(--txt);background:var(--
 .ph p{font-size:13px;color:var(--muted)}
 .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px}
 .metrics-3{grid-template-columns:repeat(3,1fr)}
-.mc{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px 18px;transition:box-shadow .15s,transform .1s;box-shadow:0 1px 3px rgba(0,0,0,0.06)}
-.mc[onclick]:hover{box-shadow:0 3px 14px rgba(0,0,0,0.09);transform:translateY(-1px)}
+.mc{background:var(--white);border:1px solid transparent;border-radius:13px;padding:16px 18px;transition:box-shadow .15s,transform .1s;box-shadow:0 3px 12px rgba(11,30,61,0.06)}
+.mc[onclick]:hover{box-shadow:0 8px 22px rgba(11,30,61,0.12);transform:translateY(-2px)}
 .mc-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
 .mc-label{font-size:12px;color:var(--muted)}
-.mc-icon{width:30px;height:30px;border-radius:7px;background:var(--off);display:flex;align-items:center;justify-content:center;font-size:14px}
+.mc-icon{width:34px;height:34px;border-radius:9px;background:var(--blue-bg);color:var(--blue);display:flex;align-items:center;justify-content:center;font-size:15px}
+.mc-icon.ic-blue{background:var(--blue-bg);color:var(--blue)}
+.mc-icon.ic-green{background:var(--status-green-bg);color:var(--status-green)}
+.mc-icon.ic-orange{background:var(--green-bg);color:var(--green-dark)}
+.mc-icon.ic-amber{background:var(--amber-bg);color:var(--amber)}
+.mc-icon.ic-navy{background:rgba(11,30,61,.08);color:var(--navy)}
+.dash-hero{background:linear-gradient(135deg,#0B1E3D 0%,#27408B 100%);border-radius:16px;padding:18px 22px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;position:relative;overflow:hidden;box-shadow:0 8px 24px rgba(11,30,61,0.16)}
+.dash-hero::after{content:'';position:absolute;right:-40px;top:-40px;width:170px;height:170px;border-radius:50%;background:rgba(232,146,58,0.12);pointer-events:none}
 .mc-val{font-size:26px;font-weight:600;color:var(--txt);line-height:1}
 .mc-sub{font-size:11px;color:var(--muted);margin-top:3px}
 .mc-trend{font-size:11px;font-weight:600;margin-top:5px;line-height:1}
 .g2{display:grid;grid-template-columns:1fr 320px;gap:18px;align-items:start}
-.panel{background:var(--white);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.06)}
+.panel{background:var(--white);border:1px solid transparent;border-radius:13px;overflow:hidden;margin-bottom:16px;box-shadow:0 3px 12px rgba(11,30,61,0.06)}
 .panel:last-child{margin-bottom:0}
 .ph2{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
 .ph2 h2{font-size:13px;font-weight:600;color:var(--txt);letter-spacing:.1px}
@@ -5661,35 +5668,18 @@ function pgDashboard(){
     <div id="new-user-stepper-slot"></div>
     <div id="setup-banner-slot"></div>
 
-    <div style="margin-bottom:16px">
-      <p style="font-size:12px;color:var(--muted);
-        margin:0">
-        ${acts.length
-          ? `<span style="color:var(--red);
-              font-weight:600">${acts.length}
-              urgent</span> · `
-          : ''}
-        ${acts.filter(a=>a.b==='amber').length
-          ? `<span style="color:#D97706;
-              font-weight:600">
-              ${acts.filter(a=>a.b==='amber').length}
-              due soon</span> · `
-          : ''}
-        <span style="color:var(--muted)">
-          ${D.properties.filter(p=>
-            (p.status||'active')!=='archived'
-          ).length}
-          propert${D.properties.filter(p=>
-            (p.status||'active')!=='archived'
-          ).length!==1?'ies':'y'}
-          · ${D.tenants.filter(
-            t=>t.status==='Active'
-          ).length} active tenant${
-            D.tenants.filter(
-              t=>t.status==='Active'
-            ).length!==1?'s':''}
-        </span>
-      </p>
+    <div class="dash-hero">
+      <div style="z-index:1;min-width:200px">
+        <div style="font-size:18px;font-weight:700;color:#fff">${(new Date().getHours()<12?'Good morning':new Date().getHours()<18?'Good afternoon':'Good evening')}, ${_profileName()}</div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.7);margin-top:3px">${today}</div>
+        <div style="display:flex;gap:20px;margin-top:13px;flex-wrap:wrap">
+          ${acts.length?`<div><span style="font-size:19px;font-weight:700;color:#fff">${acts.length}</span> <span style="font-size:12px;color:rgba(255,255,255,0.7)">urgent</span></div>`:''}
+          ${acts.filter(a=>a.b==='amber').length?`<div><span style="font-size:19px;font-weight:700;color:#fff">${acts.filter(a=>a.b==='amber').length}</span> <span style="font-size:12px;color:rgba(255,255,255,0.7)">due soon</span></div>`:''}
+          <div><span style="font-size:19px;font-weight:700;color:#fff">${D.properties.filter(p=>(p.status||'active')!=='archived').length}</span> <span style="font-size:12px;color:rgba(255,255,255,0.7)">propert${D.properties.filter(p=>(p.status||'active')!=='archived').length!==1?'ies':'y'}</span></div>
+          <div><span style="font-size:19px;font-weight:700;color:#fff">${D.tenants.filter(t=>t.status==='Active').length}</span> <span style="font-size:12px;color:rgba(255,255,255,0.7)">active tenant${D.tenants.filter(t=>t.status==='Active').length!==1?'s':''}</span></div>
+        </div>
+      </div>
+      <button class="btn" style="background:#fff;color:var(--navy);border:none;font-weight:700;z-index:1;flex-shrink:0" onclick="nav('discover')">Explore features \u2192</button>
     </div>
 
     ${(function(){
@@ -5959,25 +5949,25 @@ function pgDashboard(){
 
         return `
         <div class="mc" style="cursor:pointer" onclick="nav('properties')" title="View all properties">
-          <div class="mc-top"><span class="mc-label">Properties</span><div class="mc-icon">🏠</div></div>
+          <div class="mc-top"><span class="mc-label">Properties</span><div class="mc-icon ic-blue"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M2 14V7L8 2l6 5v7"/><path d="M6 14v-4h4v4"/></svg></div></div>
           <div class="mc-val" style="color:${_propColor}">${_propCount}</div>
           ${_tenantTrend?`<div class="mc-trend">${_tenantTrend}</div>`:'<div class="mc-sub">Active</div>'}
           ${_occBar}
         </div>
         <div class="mc" style="cursor:pointer" onclick="nav('rent')" title="View rent records">
-          <div class="mc-top"><span class="mc-label">Monthly rent</span><div class="mc-icon">💷</div></div>
+          <div class="mc-top"><span class="mc-label">Monthly rent</span><div class="mc-icon ic-orange"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M8 1.5v13M5 4.5h4.5a2 2 0 010 4H6a2 2 0 000 4H11"/></svg></div></div>
           <div class="mc-val" style="color:${_rentColor}">£${tot.toLocaleString()}</div>
           ${_rentTrend?`<div class="mc-trend">${_rentTrend}</div>`:''}
           ${_rentBar}
         </div>
         <div class="mc" style="cursor:pointer" onclick="nav('compliance')" title="View certificates">
-          <div class="mc-top"><span class="mc-label">Certificates</span><div class="mc-icon">📋</div></div>
+          <div class="mc-top"><span class="mc-label">Certificates</span><div class="mc-icon ic-green"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M8 1.5L2 4v4c0 3.5 2.5 6 6 7 3.5-1 6-3.5 6-7V4L8 1.5z"/><path d="M5.5 8l2 2 3-3"/></svg></div></div>
           <div class="mc-val" style="color:${_certColor}">${_certCount}</div>
           ${_certTrend?`<div class="mc-trend">${_certTrend}</div>`:''}
           ${_certBar}
         </div>
         <div class="mc" style="cursor:pointer" onclick="nav('maintenance')" title="View maintenance">
-          <div class="mc-top"><span class="mc-label">Open issues</span><div class="mc-icon">🔧</div></div>
+          <div class="mc-top"><span class="mc-label">Open issues</span><div class="mc-icon ic-amber"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M10.5 2.5a3 3 0 00-4 4L2 11a1.5 1.5 0 002 2l4.5-4.5a3 3 0 004-4l-2 2-1.5-1.5 2-2z"/></svg></div></div>
           <div class="mc-val" style="color:${_issueColor}">${open}</div>
           <div class="mc-trend">${_issueTrend}</div>
           ${_maintBar}
