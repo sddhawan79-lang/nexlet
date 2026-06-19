@@ -5570,3 +5570,68 @@ USING (bucket_id = 'tenant-documents' AND (storage.foldername(name))[1] = 'porta
 | `landlord.html` | `aiProxy()` for chat + template; `tenant_maintenance` 16th query; `D.tenantMaintenance` merge pass; 7-day photo window in `moIssueDetail`; `tenant_id` → `tenancy_ref` in 3 queries; `.catch()` → `try/catch` fix |
 | `login.html` | Expired link handler; `PASSWORD_RECOVERY` intercept; new password form; resend confirmation link; `resendConfirmation()` + `setNewPassword()` functions |
 | `tenant.html` | `_selectedPhotoFiles` module var; `photosSelected()` stores files; `submitJob()` reads from var; upload path changed to `tenant-documents/portal/`; storage policies added |
+
+---
+
+## Session 47 — 19 June 2026 — Tenant Photo Upload RLS Fix, Cookie Banner Fix
+
+### 1. Tenant Maintenance Photos — Final Root Cause Fixed (Carried from Session 46)
+
+**Problem:** Despite Session 46 fixes, tenant portal was completely broken — JS crashed on load before any feature could run.
+
+**Bug 1 — Duplicate variable declaration crashed entire tenant portal:**
+`tenant.html` had `_selectedPhotoFiles` declared with `let` twice in a row (lines 378–379, both added in Session 46's fix). `Uncaught SyntaxError: Identifier '_selectedPhotoFiles' has already been declared` — this halted all JS execution on the page, not just the photo feature. Entire tenant portal was non-functional (no tabs, no submit, nothing).
+
+**Fix:** Removed duplicate `let` declaration. Single declaration remains at line 378.
+
+**Bug 2 — RLS policy blocked uploads despite Session 46 policy:**
+Confirmed via browser console: `StorageApiError: new row violates row-level security policy` on every upload attempt to `tenant-documents` bucket, even after Bug 1 fix and even with Session 46's `anon` INSERT policy in place.
+
+**Fix:** Added INSERT and SELECT policies for `authenticated` role on `tenant-documents` bucket (broader than the Session 46 `anon`-only policy):
+```sql
+CREATE POLICY "Tenants can upload portal photos"
+ON storage.objects FOR INSERT TO authenticated
+WITH CHECK (bucket_id = 'tenant-documents' AND (storage.foldername(name))[1] = 'portal');
+
+CREATE POLICY "Authenticated users can read tenant-documents"
+ON storage.objects FOR SELECT TO authenticated
+USING (bucket_id = 'tenant-documents');
+```
+
+**Verified working end-to-end:** Console showed successful upload (`error: null`), public URL generated, and photo confirmed visible in landlord maintenance job detail modal by Saby.
+
+**Note:** `tenant_maintenance` and `maintenance` table columns (`tenant_id`, `photo_urls`) confirmed still present via `information_schema.columns` query — no schema drift since Session 46.
+
+---
+
+### 2. Cookie Banner — Stuck Visible on Login, Not Dismissing
+
+**Problem:** Cookie consent banner appeared on email login and did not disappear after clicking either button. Once inside the authenticated app it behaved correctly.
+
+**Root cause:** `#cookie-banner` inline style declared `display:none` followed later in the same style string by `display:flex` — the second declaration always wins in CSS, so the banner rendered visible on every load regardless of the IIFE visibility check or `localStorage` state. Clicking Accept/Decline correctly set `display:none` via JS for that page instance, but the bug meant the banner was never actually hideable from its default state, and any re-render would show it again.
+
+**Fix (`landlord.html` line 20692):** Removed the conflicting `display:flex` from the inline style, leaving `display:none` as the sole default. Visibility is now controlled exclusively by the existing IIFE (`if(!localStorage.getItem('rsa_cookies'))`) and the `acceptCookies()` / `declineCookies()` handlers, with no inline conflict.
+
+**Testing note:** Testers who already clicked Accept/Decline pre-fix will have `rsa_cookies` already set in `localStorage` and won't see the banner on reload — clear that key via DevTools → Application → Local Storage to re-test.
+
+---
+
+### Open Issues — Carried Forward
+
+| # | Issue | Status |
+|---|---|---|
+| — | Mobile layout in `landlord.html` — misaligned boxes, scrolling not working, logos rendering too small | Reported by tester (screenshots not yet provided) — **deferred, not investigated this session** |
+
+### Storage Policy Changes — Session 47
+
+| Policy | Bucket | Operation | Role | Condition |
+|---|---|---|---|---|
+| `Tenants can upload portal photos` | `tenant-documents` | INSERT | authenticated | folder[1] = 'portal' |
+| `Authenticated users can read tenant-documents` | `tenant-documents` | SELECT | authenticated | bucket_id = 'tenant-documents' |
+
+### Files Modified — Session 47
+
+| File | Changes |
+|---|---|
+| `tenant.html` | Removed duplicate `let _selectedPhotoFiles` declaration (line 379) that was crashing entire portal JS |
+| `landlord.html` | Cookie banner inline style fix — removed conflicting `display:flex` that overrode `display:none` (line 20692) |
