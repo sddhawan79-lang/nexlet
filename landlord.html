@@ -341,6 +341,15 @@ tr:hover td{background:rgba(59,111,232,0.04);transition:background .12s}
   .dash-hero{flex-direction:column;align-items:stretch;gap:14px;padding:16px}
   .dash-hero .dh-side{align-items:flex-start!important;width:100%;flex-direction:row;justify-content:space-between;flex-wrap:wrap;gap:14px}
   .dash-hero .dh-side button{flex-shrink:0}
+  /* Wide tables become stacked cards on mobile */
+  .tw{overflow-x:visible}
+  .tw table,.tw tbody,.tw tr,.tw td{display:block;width:100%}
+  .tw thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .tw tr{border:1px solid var(--border);border-radius:10px;margin-bottom:10px;padding:4px 14px;background:var(--white);box-shadow:0 1px 3px rgba(11,30,61,.05)}
+  .tw td{border:none!important;padding:8px 0!important;display:flex;justify-content:space-between;align-items:center;gap:14px;text-align:right;min-height:0}
+  .tw td::before{content:attr(data-label);font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;text-align:left;flex-shrink:0;white-space:nowrap}
+  .tw td:not([data-label])::before,.tw td[data-label='']::before{display:none}
+  .tw tr:hover td{background:transparent}
 }
 @media(max-width:480px){
   .content{padding:12px 10px}
@@ -353,6 +362,11 @@ tr:hover td{background:rgba(59,111,232,0.04);transition:background .12s}
   /* Stack action buttons */
   .mo-ft{flex-wrap:wrap;gap:8px}
   .mo-ft .btn{flex:1;justify-content:center;min-width:100px}
+  /* Calendar — ease cramping on small phones */
+  .cc{min-height:44px;font-size:12px;padding:4px 1px 3px}
+  .cal-wrap{padding:10px 8px}
+  .cal-nav{padding:12px 12px}
+  .cal-dn{font-size:9px}
 }
 </style>
 </head>
@@ -14856,6 +14870,18 @@ function renderNewUserStepper() {
     '</div>';
 }
 
+function _mobileTableLabels(){
+  try{
+    document.querySelectorAll('.tw table').forEach(function(tbl){
+      var heads=[].slice.call(tbl.querySelectorAll('thead th')).map(function(th){return th.textContent.trim();});
+      if(!heads.length) return;
+      tbl.querySelectorAll('tbody tr').forEach(function(tr){
+        [].slice.call(tr.children).forEach(function(td,i){ if(heads[i]!==undefined) td.setAttribute('data-label', heads[i]); });
+      });
+    });
+  }catch(e){}
+}
+
 function nav(page, param){
   window._currentPage = page;
   window._currentParam = param || null;
@@ -14904,6 +14930,7 @@ function nav(page, param){
   }
   try {
     main.innerHTML=(PAGES[page]||pgDashboard)(param);
+    _mobileTableLabels();
   } catch(err) {
     main.innerHTML='<div style="padding:32px;font-family:sans-serif"><h2 style="color:#E53E3E">Page Error: '+page+'</h2><pre style="background:#fff5f5;padding:16px;border-radius:8px;font-size:12px;overflow:auto;white-space:pre-wrap">'+err.stack+'</pre></div>';
   }
