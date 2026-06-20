@@ -10089,9 +10089,9 @@ function pgTenantDetail(tid) {
       ${renderMandatoryBanner(t)}
       ${summaryGrid}
 
-      <div class="coll td-acc td-acc-notitle"><div class="coll-hd" onclick="toggleColl('td-tenancy')"><div class="coll-l"><span>Tenancy Details</span></div><div class="coll-r"><span class="coll-arr op" id="ca-td-tenancy">▾</span></div></div><div class="coll-body" id="cb-td-tenancy">${tenancyCard}</div></div>
+      <div class="coll td-acc td-acc-notitle"><div class="coll-hd" onclick="toggleColl('td-tenancy')"><div class="coll-l"><span>Tenancy Details</span></div><div class="coll-r"><span class="coll-arr" id="ca-td-tenancy">▾</span></div></div><div class="coll-body hidden" id="cb-td-tenancy">${tenancyCard}</div></div>
 
-      <div class="coll td-acc td-acc-noheader"><div class="coll-hd" onclick="toggleColl('td-docs')"><div class="coll-l"><span>Documents &amp; Compliance</span>${docsChip}</div><div class="coll-r"><span class="coll-arr op" id="ca-td-docs">▾</span></div></div><div class="coll-body" id="cb-td-docs">${unifiedDocsCard}</div></div>
+      <div class="coll td-acc td-acc-noheader"><div class="coll-hd" onclick="toggleColl('td-docs')"><div class="coll-l"><span>Documents &amp; Compliance</span>${docsChip}</div><div class="coll-r"><span class="coll-arr ${missing.length?'op':''}" id="ca-td-docs">▾</span></div></div><div class="coll-body ${missing.length?'':'hidden'}" id="cb-td-docs">${unifiedDocsCard}</div></div>
 
       <div class="coll td-acc"><div class="coll-hd" onclick="toggleColl('td-onb')"><div class="coll-l"><span>Onboarding (Day 1 / Day 30)</span>${onbChip}</div><div class="coll-r"><span class="coll-arr" id="ca-td-onb">▾</span></div></div><div class="coll-body hidden" id="cb-td-onb" style="padding:14px 16px 2px">${journeyCards}</div></div>
 
