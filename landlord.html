@@ -181,6 +181,13 @@ tr:hover td{background:rgba(59,111,232,0.04);transition:background .12s}
 .coll-arr.op{transform:rotate(180deg)}
 .coll-body{border-top:1px solid var(--border);padding:18px}
 .coll-body.hidden{display:none}
+/* Tenant-detail accordions */
+.td-acc{margin-bottom:12px}
+.td-acc .coll-l{font-size:14px;font-weight:600;gap:10px}
+.td-acc .coll-body{padding:0}
+.td-acc .coll-body>.panel{margin:0;border:none;box-shadow:none;background:transparent;border-radius:0}
+.td-acc-notitle .coll-body>.panel>.ph2>div:first-child{display:none}
+.td-acc-noheader .coll-body>.panel>.ph2{display:none}
 .det-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:4px}
 .det-f label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);display:block;margin-bottom:3px}
 .det-f span{font-size:13.5px;color:var(--txt)}
@@ -10023,6 +10030,28 @@ function pgTenantDetail(tid) {
       }).join('')
     : `<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">No emails sent yet</div>`;
 
+  const _totTasks=day1Items.length+day30Items.length+total, _doneTasks=day1Done+day30Done+uploadedCount;
+  const compliancePct=_totTasks?Math.round(_doneTasks/_totTasks*100):0;
+  const _compCol=compliancePct>=90?'var(--status-green)':compliancePct>=60?'var(--amber)':'var(--red)';
+  const _depProt=!!(t.scheme&&t.scheme_ref);
+  const _portalLabel=t.invite_used?'Accessed':(t.invite_token?'Invite sent':'Not sent');
+  const _portalCls=t.invite_used?'b-green':(t.invite_token?'b-amber':'b-red');
+  const _rentOrd=t.rent_day?`${t.rent_day}${({1:'st',2:'nd',3:'rd'})[t.rent_day]||'th'}`:'';
+  const _onbTot=day1Items.length+day30Items.length,_onbDone=day1Done+day30Done;
+  const docsChip=missing.length?`<span class="badge b-red">${uploadedCount}/${total} · ${missing.length} missing</span>`:`<span class="badge b-green">All uploaded</span>`;
+  const onbChip=`<span class="badge ${_onbDone===_onbTot?'b-green':'b-amber'}">${_onbDone}/${_onbTot} done</span>`;
+  const portalChip=`<span class="badge ${_portalCls}">${_portalLabel}</span>`;
+  const commsChip=`<span class="badge b-gray">${tenantLog.length} sent</span>`;
+  const _bar=`<span style="width:46px;height:5px;background:var(--border);border-radius:100px;overflow:hidden;display:inline-block"><span style="display:block;height:100%;border-radius:100px;width:${compliancePct}%;background:${_compCol}"></span></span>`;
+  const _cell=(lbl,val)=>`<div style="background:var(--white);border:1px solid var(--border);border-radius:11px;padding:13px 15px;box-shadow:0 1px 3px rgba(11,30,61,.05)"><div style="font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);margin-bottom:6px">${lbl}</div><div style="font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px;flex-wrap:wrap">${val}</div></div>`;
+  const summaryGrid=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
+    ${_cell('Compliance',`${compliancePct}%${_bar}`)}
+    ${_cell('KYC docs',`${uploadedCount}/${total} ${missing.length?`<span class="badge b-red">${missing.length} missing</span>`:`<span class="badge b-green">Complete</span>`}`)}
+    ${_cell('Rent',`${t.rent?`£${t.rent.toLocaleString()}`:'—'}${t.rent_day?`<span style="font-size:11px;font-weight:500;color:var(--muted)">/mo · due ${_rentOrd}</span>`:''}`)}
+    ${_cell('Deposit',`${t.deposit?`£${t.deposit.toLocaleString()}`:'—'} ${_depProt?`<span class="badge b-green">${t.scheme}</span>`:`<span class="badge b-red">Unprotected</span>`}`)}
+    ${_cell('Portal',portalChip)}
+    ${_cell('Tenancy',`<span style="font-size:14px">${p.address}</span><span style="font-size:11px;font-weight:500;color:var(--muted)">${t.end_date?'Fixed term':'Periodic (APT)'}</span>`)}
+  </div>`;
   return `
     <div class="topbar"><span class="tb-title">Tenants</span><div class="tb-right">
       <button class="btn btn-sm" onclick="moLegalPack('${t.prop_id}','${tid}')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M2 4.5h4l1.3 1.5H14v7H2z"/></svg> Evidence Pack</button>
@@ -10056,21 +10085,26 @@ function pgTenantDetail(tid) {
         </div>
       </div>
 
-      ${tenancyCard}
-      ${stickyCard}
       ${(()=>{ const g8=getGround8Status(t.id); if(!g8||!g8.warning) return ''; const isHit=g8.threshold; return `<div style="background:${isHit?'rgba(229,62,62,0.07)':'rgba(217,119,6,0.06)'};border:1px solid ${isHit?'rgba(229,62,62,0.3)':'rgba(217,119,6,0.3)'};border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><div style="font-size:13px;font-weight:700;color:${isHit?'var(--red)':'var(--amber)'};margin-bottom:4px">${isHit?'🔴 Ground 8 threshold reached':'⚠️ Rent arrears warning'}</div><div style="font-size:12px;color:var(--txt);line-height:1.6">${g8.monthsArrears} month${g8.monthsArrears!==1?'s':''} in arrears · £${g8.totalUnpaid.toLocaleString()} unpaid across ${g8.unpaidCount} payment${g8.unpaidCount!==1?'s':''}${isHit?' · Ground 8 requires 2+ months — you may now serve a Section 8 notice':' · Ground 8 triggers at 2 months'}</div></div><button class="btn btn-sm" style="${isHit?'border-color:var(--red);color:var(--red)':'border-color:var(--amber);color:var(--amber)'}" onclick="moSection8('${t.prop_id}')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M8 2.5v11"/><path d="M4 5h8"/><path d="M4 5 2.2 8.8h3.6z"/><path d="M12 5l-1.8 3.8h3.6z"/><path d="M5.5 13.5h5"/></svg> Section 8 →</button></div>`; })()}
       ${renderMandatoryBanner(t)}
-      ${unifiedDocsCard}
-      ${portalCard}
+      ${summaryGrid}
 
-      ${journeyCards}
+      <div class="coll td-acc td-acc-notitle"><div class="coll-hd" onclick="toggleColl('td-tenancy')"><div class="coll-l"><span>Tenancy Details</span></div><div class="coll-r"><span class="coll-arr op" id="ca-td-tenancy">▾</span></div></div><div class="coll-body" id="cb-td-tenancy">${tenancyCard}</div></div>
+
+      <div class="coll td-acc td-acc-noheader"><div class="coll-hd" onclick="toggleColl('td-docs')"><div class="coll-l"><span>Documents &amp; Compliance</span>${docsChip}</div><div class="coll-r"><span class="coll-arr op" id="ca-td-docs">▾</span></div></div><div class="coll-body" id="cb-td-docs">${unifiedDocsCard}</div></div>
+
+      <div class="coll td-acc"><div class="coll-hd" onclick="toggleColl('td-onb')"><div class="coll-l"><span>Onboarding (Day 1 / Day 30)</span>${onbChip}</div><div class="coll-r"><span class="coll-arr" id="ca-td-onb">▾</span></div></div><div class="coll-body hidden" id="cb-td-onb" style="padding:14px 16px 2px">${journeyCards}</div></div>
+
+      <div class="coll td-acc td-acc-notitle"><div class="coll-hd" onclick="toggleColl('td-portal')"><div class="coll-l"><span>Tenant Portal</span>${portalChip}</div><div class="coll-r"><span class="coll-arr" id="ca-td-portal">▾</span></div></div><div class="coll-body hidden" id="cb-td-portal">${portalCard}</div></div>
+
+      <div class="coll td-acc td-acc-notitle"><div class="coll-hd" onclick="toggleColl('td-comm')"><div class="coll-l"><span>Communications</span>${commsChip}</div><div class="coll-r"><span class="coll-arr" id="ca-td-comm">▾</span></div></div><div class="coll-body hidden" id="cb-td-comm">
 
       <div class="panel" style="border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)">
         <div class="ph2"><div><h2><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><rect x="2" y="3.5" width="12" height="9" rx="1.5"/><path d="m2.5 4.5 5.5 4 5.5-4"/></svg> Communications</h2><p>All documents &amp; correspondence sent to this tenant</p></div>
           <button class="btn btn-sm btn-navy" onclick="moCommunicationsHub('${tid}')">+ Send document</button>
         </div>
         <div>${logRows}</div>
-      </div>
+      </div></div></div>
     </div>`;
 
   // Auto-rescan docs with no extracted_name — one-shot, no re-render loop
