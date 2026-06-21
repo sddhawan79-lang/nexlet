@@ -181,13 +181,6 @@ tr:hover td{background:rgba(59,111,232,0.04);transition:background .12s}
 .coll-arr.op{transform:rotate(180deg)}
 .coll-body{border-top:1px solid var(--border);padding:18px}
 .coll-body.hidden{display:none}
-/* Tenant-detail accordions */
-.td-acc{margin-bottom:12px}
-.td-acc .coll-l{font-size:14px;font-weight:600;gap:10px}
-.td-acc .coll-body{padding:0}
-.td-acc .coll-body>.panel{margin:0;border:none;box-shadow:none;background:transparent;border-radius:0}
-.td-acc-notitle .coll-body>.panel>.ph2>div:first-child{display:none}
-.td-acc-noheader .coll-body>.panel>.ph2{display:none}
 .det-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:4px}
 .det-f label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);display:block;margin-bottom:3px}
 .det-f span{font-size:13.5px;color:var(--txt)}
@@ -1674,7 +1667,26 @@ async function execDeleteAccount() {
   }
 }
 const PLAN_LIMITS = { starter:2, landlord:10, portfolio:999 };
-const PLAN_FEATURES = { starter:['compliance','certificates','maintenance','templates','calendar','assistant'], landlord:['compliance','certificates','maintenance','templates','calendar','assistant','financials','rent','insurance','contractors'], portfolio:['compliance','certificates','maintenance','templates','calendar','assistant','financials','rent','insurance','contractors','mtd','inventory-reports'] };
+const STARTER_FEATURES = ['compliance','certificates','maintenance','templates','calendar','assistant'];
+const LANDLORD_FEATURES = [...STARTER_FEATURES,'financials','rent','insurance','contractors','mtd'];
+const PORTFOLIO_FEATURES = [...LANDLORD_FEATURES,'inventory-reports'];
+const PLAN_FEATURES = { starter:STARTER_FEATURES, landlord:LANDLORD_FEATURES, portfolio:PORTFOLIO_FEATURES };
+// Feature -> upsell plan + label. Single source of truth for every gate + the upgrade modal.
+const FEATURE_META = {
+  rent:{label:'Rent Tracker',plan:'landlord'},
+  financials:{label:'Income & Profit',plan:'landlord'},
+  insurance:{label:'Insurance',plan:'landlord'},
+  contractors:{label:'Contractor Book',plan:'landlord'},
+  mtd:{label:'MTD Tax',plan:'landlord'},
+  'inventory-reports':{label:'AI Inventory Reports',plan:'portfolio'}
+};
+// Page id -> feature it requires (drives the central gate in nav()).
+const PAGE_FEATURE = { 'rent-finance':'rent','financials':'financials','rent':'rent','mtd':'mtd','contractors':'contractors','insurance':'insurance','inventory-reports':'inventory-reports','inventory-report':'inventory-reports' };
+// trial = full access; expired = handled by soft-lock/_expiredGuard, never blocked here.
+function planHas(feature){ const p=getUserPlan(); if(p==='trial'||p==='expired') return true; return (PLAN_FEATURES[p]||STARTER_FEATURES).includes(feature); }
+function featMeta(feature){ return FEATURE_META[feature]||{label:feature,plan:'landlord'}; }
+/** Central gate: returns true (and shows the upgrade modal) if the current plan lacks `feature`. */
+function featureGate(feature){ if(!feature||planHas(feature)) return false; const m=featMeta(feature); upgradePrompt(m.label,m.plan); return true; }
 function getPropLimit(){ if(isExpired()) return 0; return PLAN_LIMITS[getUserPlan()]||2; }
 
 // ── PROPERTY STATUS ──
@@ -5633,7 +5645,7 @@ function pgDiscover(){
   const KEY = [
     { ic:I.portal, name:'Tenant portal link', desc:'Give each tenant a private link \u2014 no password \u2014 to view documents, see rent and report repairs themselves.', go:`nav('tenants');toast('Open a tenant to send their portal link')` },
     { ic:I.esign, name:'E-signature', desc:'Send a tenancy agreement and your tenant signs it on their phone \u2014 no printing or scanning.', go:`nav('tenants');toast('Open a tenant to send an agreement for e-signature')` },
-    { ic:I.inventory, name:'Inventory reports', desc:'Snap a few photos and AI writes a full room-by-room condition report you can send to the tenant.', go:`nav('properties');toast('Open a property \u2192 Compliance tab to create an inventory report')` },
+    { ic:I.inventory, feat:'inventory-reports', name:'Inventory reports', desc:'Snap a few photos and AI writes a full room-by-room condition report you can send to the tenant.', go:`nav('properties');toast('Open a property \u2192 Compliance tab to create an inventory report')` },
   ];
   const GROUPS = [
     { t:'Your properties & tenants', rows:[
@@ -5652,18 +5664,31 @@ function pgDiscover(){
       { bg:'var(--off)', col:'var(--navy)', ic:I.folder, name:'Document library', desc:'Store and find any property document.', go:`window._docTab='library';nav('documents')` },
     ]},
     { t:'Money & tax', rows:[
-      { bg:'var(--green-bg)', col:'var(--green-dark)', ic:I.note, name:'Rent tracking', desc:'Mark rent received and send receipts.', go:`window._rfTab='rent';nav('rent-finance')` },
-      { bg:'var(--blue-bg)', col:'var(--blue)', ic:I.chart, name:'Income & profit', desc:'See what each property earns after costs.', go:`window._rfTab='finance';nav('rent-finance')` },
-      { bg:'var(--status-green-bg)', col:'var(--status-green)', ic:I.receipt, name:'Tax (MTD)', desc:'Making Tax Digital filings and a tax calculator.', go:`window._rfTab='mtd';nav('rent-finance')` },
+      { bg:'var(--green-bg)', col:'var(--green-dark)', ic:I.note, feat:'rent', name:'Rent tracking', desc:'Mark rent received and send receipts.', go:`window._rfTab='rent';nav('rent-finance')` },
+      { bg:'var(--blue-bg)', col:'var(--blue)', ic:I.chart, feat:'financials', name:'Income & profit', desc:'See what each property earns after costs.', go:`window._rfTab='finance';nav('rent-finance')` },
+      { bg:'var(--status-green-bg)', col:'var(--status-green)', ic:I.receipt, feat:'mtd', name:'Tax (MTD)', desc:'Making Tax Digital filings and a tax calculator.', go:`window._rfTab='mtd';nav('rent-finance')` },
     ]},
     { t:'Need a hand?', rows:[
       { bg:'var(--status-green-bg)', col:'var(--status-green)', ic:I.chat, name:'AI Assistant', desc:'Ask about the law or where to find anything \u2014 in plain English.', go:`showAssistant()` },
     ]},
   ];
-  const keyHtml = KEY.map(k=>`<div class="dsc-card" onclick="${k.go}"><span class="dsc-pill">Easy to miss</span><div class="dsc-card-ic">${k.ic}</div><div class="dsc-card-name">${k.name}</div><div class="dsc-card-desc">${k.desc}</div><div class="dsc-card-go">Open \u2192</div></div>`).join('');
-  const groupsHtml = GROUPS.map(g=>`<div class="dsc-grp"><div class="dsc-grp-t">${g.t}</div><div class="dsc-list">${g.rows.map(r=>`<div class="dsc-row" onclick="${r.go}"><div class="dsc-row-ic" style="background:${r.bg};color:${r.col}">${r.ic}</div><div class="dsc-row-body"><div class="dsc-row-name">${r.name}</div><div class="dsc-row-desc"><span>${r.desc}</span></div></div><span class="dsc-row-go">\u203A</span></div>`).join('')}</div></div>`).join('');
+  const _planLbl = {starter:'Starter',landlord:'Landlord',portfolio:'Portfolio'};
+  const keyHtml = KEY.map(k=>{
+    const locked = k.feat && !planHas(k.feat); const m = locked ? featMeta(k.feat) : null;
+    const click = locked ? `upgradePrompt('${m.label}','${m.plan}')` : k.go;
+    const pill = locked ? `<span class="dsc-pill" style="background:var(--navy);color:#fff">🔒 ${_planLbl[m.plan]}</span>` : `<span class="dsc-pill">Easy to miss</span>`;
+    return `<div class="dsc-card${locked?' dsc-locked':''}" onclick="${click}">${pill}<div class="dsc-card-ic">${k.ic}</div><div class="dsc-card-name">${k.name}</div><div class="dsc-card-desc">${k.desc}</div><div class="dsc-card-go">${locked?'Upgrade to unlock \u2192':'Open \u2192'}</div></div>`;
+  }).join('');
+  const _dscRow = r=>{
+    const locked = r.feat && !planHas(r.feat); const m = locked ? featMeta(r.feat) : null;
+    const click = locked ? `upgradePrompt('${m.label}','${m.plan}')` : r.go;
+    const tail = locked ? `<span style="font-size:10px;font-weight:700;color:#fff;background:var(--navy);padding:2px 8px;border-radius:100px;flex-shrink:0;white-space:nowrap">🔒 ${_planLbl[m.plan]}</span>` : `<span class="dsc-row-go">\u203A</span>`;
+    return `<div class="dsc-row${locked?' dsc-locked':''}" onclick="${click}"><div class="dsc-row-ic" style="background:${r.bg};color:${r.col}">${r.ic}</div><div class="dsc-row-body"><div class="dsc-row-name">${r.name}</div><div class="dsc-row-desc"><span>${r.desc}</span></div></div>${tail}</div>`;
+  };
+  const groupsHtml = GROUPS.map(g=>`<div class="dsc-grp"><div class="dsc-grp-t">${g.t}</div><div class="dsc-list">${g.rows.map(_dscRow).join('')}</div></div>`).join('');
   return `<style>
 #dsc-root{max-width:860px}
+#dsc-root .dsc-locked .dsc-row-ic,#dsc-root .dsc-locked .dsc-card-ic{opacity:.5}
 #dsc-root .dsc-ph{margin-bottom:22px}
 #dsc-root .dsc-ph h1{font-size:23px;font-weight:700;color:var(--txt);margin-bottom:5px}
 #dsc-root .dsc-ph p{font-size:14px;color:var(--muted)}
@@ -9661,6 +9686,23 @@ function renderTenantDocCard(doc, isLast, tid, tenantName) {
     </div>`;
 }
 
+function _tdSetTab(tid, name){
+  try{
+    window._tdTab = window._tdTab || {};
+    window._tdTab[String(tid)] = name;
+    ['overview','docs','activity'].forEach(function(n){
+      var p = document.getElementById('td-pane-'+n);
+      if(p) p.style.display = (n===name ? 'block' : 'none');
+    });
+    document.querySelectorAll('.td-tab').forEach(function(b){
+      var on = b.dataset.tab===name;
+      b.style.background = on ? 'var(--navy)' : 'var(--white)';
+      b.style.color = on ? '#fff' : 'var(--muted)';
+      b.style.borderColor = on ? 'var(--navy)' : 'var(--border)';
+    });
+  }catch(e){}
+}
+
 function pgTenantDetail(tid) {
   try {
   const t = D.tenants.find(x => String(x.id) === String(tid));
@@ -9669,6 +9711,8 @@ function pgTenantDetail(tid) {
   if (t.prop_id) setTimeout(() => _markTenancyStep(String(t.prop_id), 'tenant_docs_done', false), 300);
   const rawP = P(t.prop_id) || {}; const p = { address: rawP.address || '—', city: rawP.city || '', postcode: rawP.postcode || '' };
   const docs = D.tenantDocs.filter(d => String(d.tenant_id) === String(tid));
+  window._tdTab = window._tdTab || {};
+  const activeTab = window._tdTab[String(tid)] || 'overview';
 
   const KYC_SLOTS = [
     { slot: 'passport',      icon: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><rect x="2" y="4" width="12" height="8" rx="1.5"/><circle cx="5.5" cy="8" r="1.5"/><path d="M9 7h3M9 9.5h2"/></svg>', label: 'Passport / Photo ID',   mandatory: true  },
@@ -10030,28 +10074,6 @@ function pgTenantDetail(tid) {
       }).join('')
     : `<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">No emails sent yet</div>`;
 
-  const _totTasks=day1Items.length+day30Items.length+total, _doneTasks=day1Done+day30Done+uploadedCount;
-  const compliancePct=_totTasks?Math.round(_doneTasks/_totTasks*100):0;
-  const _compCol=compliancePct>=90?'var(--status-green)':compliancePct>=60?'var(--amber)':'var(--red)';
-  const _depProt=!!(t.scheme&&t.scheme_ref);
-  const _portalLabel=t.invite_used?'Accessed':(t.invite_token?'Invite sent':'Not sent');
-  const _portalCls=t.invite_used?'b-green':(t.invite_token?'b-amber':'b-red');
-  const _rentOrd=t.rent_day?`${t.rent_day}${({1:'st',2:'nd',3:'rd'})[t.rent_day]||'th'}`:'';
-  const _onbTot=day1Items.length+day30Items.length,_onbDone=day1Done+day30Done;
-  const docsChip=missing.length?`<span class="badge b-red">${uploadedCount}/${total} · ${missing.length} missing</span>`:`<span class="badge b-green">All uploaded</span>`;
-  const onbChip=`<span class="badge ${_onbDone===_onbTot?'b-green':'b-amber'}">${_onbDone}/${_onbTot} done</span>`;
-  const portalChip=`<span class="badge ${_portalCls}">${_portalLabel}</span>`;
-  const commsChip=`<span class="badge b-gray">${tenantLog.length} sent</span>`;
-  const _bar=`<span style="width:46px;height:5px;background:var(--border);border-radius:100px;overflow:hidden;display:inline-block"><span style="display:block;height:100%;border-radius:100px;width:${compliancePct}%;background:${_compCol}"></span></span>`;
-  const _cell=(lbl,val)=>`<div style="background:var(--white);border:1px solid var(--border);border-radius:11px;padding:13px 15px;box-shadow:0 1px 3px rgba(11,30,61,.05)"><div style="font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);margin-bottom:6px">${lbl}</div><div style="font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px;flex-wrap:wrap">${val}</div></div>`;
-  const summaryGrid=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
-    ${_cell('Compliance',`${compliancePct}%${_bar}`)}
-    ${_cell('KYC docs',`${uploadedCount}/${total} ${missing.length?`<span class="badge b-red">${missing.length} missing</span>`:`<span class="badge b-green">Complete</span>`}`)}
-    ${_cell('Rent',`${t.rent?`£${t.rent.toLocaleString()}`:'—'}${t.rent_day?`<span style="font-size:11px;font-weight:500;color:var(--muted)">/mo · due ${_rentOrd}</span>`:''}`)}
-    ${_cell('Deposit',`${t.deposit?`£${t.deposit.toLocaleString()}`:'—'} ${_depProt?`<span class="badge b-green">${t.scheme}</span>`:`<span class="badge b-red">Unprotected</span>`}`)}
-    ${_cell('Portal',portalChip)}
-    ${_cell('Tenancy',`<span style="font-size:14px">${p.address}</span><span style="font-size:11px;font-weight:500;color:var(--muted)">${t.end_date?'Fixed term':'Periodic (APT)'}</span>`)}
-  </div>`;
   return `
     <div class="topbar"><span class="tb-title">Tenants</span><div class="tb-right">
       <button class="btn btn-sm" onclick="moLegalPack('${t.prop_id}','${tid}')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M2 4.5h4l1.3 1.5H14v7H2z"/></svg> Evidence Pack</button>
@@ -10087,24 +10109,28 @@ function pgTenantDetail(tid) {
 
       ${(()=>{ const g8=getGround8Status(t.id); if(!g8||!g8.warning) return ''; const isHit=g8.threshold; return `<div style="background:${isHit?'rgba(229,62,62,0.07)':'rgba(217,119,6,0.06)'};border:1px solid ${isHit?'rgba(229,62,62,0.3)':'rgba(217,119,6,0.3)'};border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><div style="font-size:13px;font-weight:700;color:${isHit?'var(--red)':'var(--amber)'};margin-bottom:4px">${isHit?'🔴 Ground 8 threshold reached':'⚠️ Rent arrears warning'}</div><div style="font-size:12px;color:var(--txt);line-height:1.6">${g8.monthsArrears} month${g8.monthsArrears!==1?'s':''} in arrears · £${g8.totalUnpaid.toLocaleString()} unpaid across ${g8.unpaidCount} payment${g8.unpaidCount!==1?'s':''}${isHit?' · Ground 8 requires 2+ months — you may now serve a Section 8 notice':' · Ground 8 triggers at 2 months'}</div></div><button class="btn btn-sm" style="${isHit?'border-color:var(--red);color:var(--red)':'border-color:var(--amber);color:var(--amber)'}" onclick="moSection8('${t.prop_id}')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M8 2.5v11"/><path d="M4 5h8"/><path d="M4 5 2.2 8.8h3.6z"/><path d="M12 5l-1.8 3.8h3.6z"/><path d="M5.5 13.5h5"/></svg> Section 8 →</button></div>`; })()}
       ${renderMandatoryBanner(t)}
-      ${summaryGrid}
-
-      <div class="coll td-acc td-acc-notitle"><div class="coll-hd" onclick="toggleColl('td-tenancy')"><div class="coll-l"><span>Tenancy Details</span></div><div class="coll-r"><span class="coll-arr" id="ca-td-tenancy">▾</span></div></div><div class="coll-body hidden" id="cb-td-tenancy">${tenancyCard}</div></div>
-
-      <div class="coll td-acc td-acc-noheader"><div class="coll-hd" onclick="toggleColl('td-docs')"><div class="coll-l"><span>Documents &amp; Compliance</span>${docsChip}</div><div class="coll-r"><span class="coll-arr ${missing.length?'op':''}" id="ca-td-docs">▾</span></div></div><div class="coll-body ${missing.length?'':'hidden'}" id="cb-td-docs">${unifiedDocsCard}</div></div>
-
-      <div class="coll td-acc"><div class="coll-hd" onclick="toggleColl('td-onb')"><div class="coll-l"><span>Onboarding (Day 1 / Day 30)</span>${onbChip}</div><div class="coll-r"><span class="coll-arr" id="ca-td-onb">▾</span></div></div><div class="coll-body hidden" id="cb-td-onb" style="padding:14px 16px 2px">${journeyCards}</div></div>
-
-      <div class="coll td-acc td-acc-notitle"><div class="coll-hd" onclick="toggleColl('td-portal')"><div class="coll-l"><span>Tenant Portal</span>${portalChip}</div><div class="coll-r"><span class="coll-arr" id="ca-td-portal">▾</span></div></div><div class="coll-body hidden" id="cb-td-portal">${portalCard}</div></div>
-
-      <div class="coll td-acc td-acc-notitle"><div class="coll-hd" onclick="toggleColl('td-comm')"><div class="coll-l"><span>Communications</span>${commsChip}</div><div class="coll-r"><span class="coll-arr" id="ca-td-comm">▾</span></div></div><div class="coll-body hidden" id="cb-td-comm">
-
+      <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap">
+        <button onclick="_tdSetTab('${tid}','overview')" class="td-tab" data-tab="overview" style="padding:8px 16px;border-radius:8px;font-size:13px;font-weight:500;font-family:var(--font);cursor:pointer;border:1px solid ${activeTab==='overview'?'var(--navy)':'var(--border)'};background:${activeTab==='overview'?'var(--navy)':'var(--white)'};color:${activeTab==='overview'?'#fff':'var(--muted)'};transition:all .15s">Overview</button>
+        <button onclick="_tdSetTab('${tid}','docs')" class="td-tab" data-tab="docs" style="padding:8px 16px;border-radius:8px;font-size:13px;font-weight:500;font-family:var(--font);cursor:pointer;border:1px solid ${activeTab==='docs'?'var(--navy)':'var(--border)'};background:${activeTab==='docs'?'var(--navy)':'var(--white)'};color:${activeTab==='docs'?'#fff':'var(--muted)'};transition:all .15s">Documents & Compliance</button>
+        <button onclick="_tdSetTab('${tid}','activity')" class="td-tab" data-tab="activity" style="padding:8px 16px;border-radius:8px;font-size:13px;font-weight:500;font-family:var(--font);cursor:pointer;border:1px solid ${activeTab==='activity'?'var(--navy)':'var(--border)'};background:${activeTab==='activity'?'var(--navy)':'var(--white)'};color:${activeTab==='activity'?'#fff':'var(--muted)'};transition:all .15s">Activity</button>
+      </div>
+      <div id="td-pane-overview" style="display:${activeTab==='overview'?'block':'none'}">
+      ${tenancyCard}
+      ${portalCard}
+      ${journeyCards}
+      </div>
+      <div id="td-pane-docs" style="display:${activeTab==='docs'?'block':'none'}">
+      ${stickyCard}
+      ${unifiedDocsCard}
+      </div>
+      <div id="td-pane-activity" style="display:${activeTab==='activity'?'block':'none'}">
       <div class="panel" style="border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)">
         <div class="ph2"><div><h2><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><rect x="2" y="3.5" width="12" height="9" rx="1.5"/><path d="m2.5 4.5 5.5 4 5.5-4"/></svg> Communications</h2><p>All documents &amp; correspondence sent to this tenant</p></div>
           <button class="btn btn-sm btn-navy" onclick="moCommunicationsHub('${tid}')">+ Send document</button>
         </div>
         <div>${logRows}</div>
-      </div></div></div>
+      </div>
+      </div>
     </div>`;
 
   // Auto-rescan docs with no extracted_name — one-shot, no re-render loop
@@ -12989,7 +13015,7 @@ function pgRentFinance(){
     ${(()=>{
       if(window._rfTab==='finance') return pgFinancials();
       if(window._rfTab==='mtd'){
-        if(!isPort) return '<div class="panel"><div class="ph2"><h2>MTD Tax Reporting</h2><p>Available on Portfolio plan</p></div><div style="padding:20px;text-align:center"><button class="btn btn-navy" onclick="redirectToCheckout(\'portfolio\')">Upgrade to Portfolio</button></div></div>';
+        if(!planHas('mtd')) return '<div class="panel"><div class="ph2"><h2>MTD Tax Reporting</h2><p>Available on Landlord plan and above</p></div><div style="padding:20px;text-align:center"><button class="btn btn-navy" onclick="redirectToCheckout(\'landlord\')">Upgrade to Landlord</button></div></div>';
         return pgMTD();
       }
       // Default: rent view
@@ -14917,6 +14943,9 @@ function _mobileTableLabels(){
 }
 
 function nav(page, param){
+  // ── PLAN GATING (central) ── runs before any state change; blocks EVERY entry point
+  // (sidebar, Discover, dashboard buttons, deep links) for features outside the user's plan.
+  if (featureGate(PAGE_FEATURE[page])) return;
   window._currentPage = page;
   window._currentParam = param || null;
   setTimeout(_refreshResumeNudges, 400);
@@ -17709,6 +17738,7 @@ function updateNavBadges() {
 
 // ── AI INVENTORY REPORT ──
 function moInventoryReport(pid){
+  if (featureGate('inventory-reports')) return;
   const propOpts=activeProperties().map(p=>`<option value="${p.id}"${String(p.id)===String(pid)?' selected':''}>${p.address}, ${p.city}</option>`).join('');
   openMo('AI Inventory Report','Upload room photos — AI generates a written condition report',`
     <div style="background:linear-gradient(135deg,#0B1E3D,#1a3a6b);border-radius:10px;padding:14px 16px;margin-bottom:16px">
