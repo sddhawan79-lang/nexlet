@@ -10030,11 +10030,9 @@ function pgTenantDetail(tid) {
   }).join('');
 
   const unifiedDocsCard = `
-    <div id="unified-docs-section" class="panel" style="margin-bottom:16px;border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)">
-      <div class="ph2" style="padding:14px 18px 10px">
-        <div><h2><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M2 4.5h4l1.3 1.5H14v7H2z"/><path d="M4 4.5V3h5l1 1.5"/></svg> Documents &amp; Compliance</h2><p>KYC identity docs, then tenancy compliance</p></div>
-      </div>
-      <div style="padding:0 18px 12px">
+    <div id="unified-docs-section" class="panel" style="margin-bottom:0;border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)">
+      ${totalDocs > 0 ? `<div style="padding:12px 18px 2px;display:flex;justify-content:flex-end"><button class="btn btn-sm" onclick="viewAllDocs('${tid}')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><rect x="2" y="3" width="12" height="10" rx="1.5"/><circle cx="5.5" cy="6" r="1"/><path d="m3 11 3-3 2.5 2.5L11 7l2 2.5"/></svg> View all docs</button></div>` : ''}
+      <div style="padding:14px 18px 12px">
         ${_kycUploadRows}
         <div style="margin:14px 0 10px;display:flex;align-items:center;gap:10px">
           <div style="flex:1;height:1px;background:var(--border)"></div>
@@ -10295,14 +10293,14 @@ function pgTenantDetail(tid) {
           </div>
           <div style="display:${open?'block':'none'};margin-top:10px">${body}</div>
         </div>`;
-        const docsBadge=`<span class="badge ${allDone?'b-green':'b-red'}" style="font-size:11px">${uploadedCount} of ${total}${missing.length?' · '+missing.length+' missing':''}</span>`;
+        const docsBadge=`<span class="badge ${allDone?'b-green':'b-red'}" style="font-size:11px">${uploadedCount} of ${total}${missing.length?' · '+missing.length+' missing':''}</span>` + missing.map(s=>`<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:100px;background:rgba(229,62,62,0.08);color:var(--red);border:1px solid rgba(229,62,62,0.18)">${s.label}</span>`).join('');
         const onbTotal=day1Items.length+day30Items.length, onbDone=day1Done+day30Done;
         const onbBadge=`<span class="badge ${onbDone===onbTotal?'b-green':'b-amber'}" style="font-size:11px">${onbDone} of ${onbTotal} done</span>`;
         const portalBadge=`<span class="badge" style="font-size:11px;background:${_p[2]};color:${_p[1]}">${_p[0]}</span>`;
         const commBadge=`<span class="badge" style="font-size:11px;background:rgba(11,30,61,0.05);color:var(--navy)">${tenantLog.length} email${tenantLog.length!==1?'s':''}</span>`;
         const commPanel=`<div class="panel" style="border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)"><div class="ph2"><div><h2>Communications</h2><p>All documents &amp; correspondence sent to this tenant</p></div><button class="btn btn-sm btn-navy" onclick="moCommunicationsHub('${tid}')">+ Send document</button></div><div>${logRows}</div></div>`;
         return grid
-          + sec('Documents & Compliance', docsBadge, stickyCard+unifiedDocsCard, true)
+          + sec('Documents & Compliance', docsBadge, unifiedDocsCard, false)
           + sec('Tenancy & Portal', portalBadge, tenancyCard+(typeof portalCard!=='undefined'?(portalCard||''):''), false)
           + sec('Onboarding (Day 1 / Day 30)', onbBadge, journeyCards, false)
           + sec('Communications', commBadge, commPanel, false);
