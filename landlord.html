@@ -2024,10 +2024,10 @@ function _scanBoxSuccess(boxId, file, parsed) {
     ? `<button type="button" onclick="dvoOpen('${blobUrl}','${name.replace(/'/g,"\\'")}','Uploaded document')" style="margin-top:8px;background:var(--white);border:1px solid var(--navy);border-radius:6px;padding:4px 12px;font-size:11px;font-weight:600;color:var(--navy);cursor:pointer;font-family:var(--font)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M1.5 8S4 4 8 4s6.5 4 6.5 4-2.5 4-6.5 4-6.5-4-6.5-4z"/><circle cx="8" cy="8" r="1.8"/></svg> View uploaded file</button>`
     : '';
   const warnings = parsed?._warnings || [];
-  const warnNote = warnings.length ? `<div style="font-size:10px;color:var(--amber);margin-top:4px">⚠️ Could not read: ${warnings.join(', ')}</div>` : '';
+  const warnNote = warnings.length ? `<div style="font-size:10px;color:var(--amber);margin-top:4px">⚠️ Could not read: ${esc(warnings.join(', '))}</div>` : '';
   box.innerHTML = `
     <div style="font-size:13px;color:var(--green-dark);font-weight:600">✓ Scanned — fields filled below</div>
-    <div style="font-size:11px;color:var(--muted);margin-top:3px;word-break:break-all">${name}</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:3px;word-break:break-all">${esc(name)}</div>
     ${warnNote}
     ${viewBtn}`;
 }
@@ -2047,7 +2047,7 @@ function _scanBoxError(boxId, file) {
   const viewBtn = blobUrl
     ? `<button type="button" onclick="dvoOpen('${blobUrl}','${name.replace(/'/g,"\\'")}','Uploaded document')" style="margin-top:8px;background:var(--white);border:1px solid var(--border);border-radius:6px;padding:4px 12px;font-size:11px;font-weight:600;color:var(--navy);cursor:pointer;font-family:var(--font)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M1.5 8S4 4 8 4s6.5 4 6.5 4-2.5 4-6.5 4-6.5-4-6.5-4z"/><circle cx="8" cy="8" r="1.8"/></svg> View uploaded file</button>`
     : '';
-  box.innerHTML = `<div style="font-size:13px;color:var(--amber);font-weight:500">⚠️ Could not scan — please fill in manually</div><div style="font-size:11px;color:var(--muted);margin-top:3px">${name}</div>${viewBtn}`;
+  box.innerHTML = `<div style="font-size:13px;color:var(--amber);font-weight:500">⚠️ Could not scan — please fill in manually</div><div style="font-size:11px;color:var(--muted);margin-top:3px">${esc(name)}</div>${viewBtn}`;
 }
 // Every document upload in the app MUST follow this pattern:
 //
@@ -2546,7 +2546,7 @@ function _certFileChange(input) {
   if (!input.files[0]) return;
   window._lastCertFile = input.files[0];
   const box = document.getElementById('cert-upload-box');
-  if (box) box.innerHTML = '<div style="font-size:13px;color:var(--green-dark);font-weight:600;padding:8px 0">✓ ' + input.files[0].name + '</div>';
+  if (box) box.innerHTML = '<div style="font-size:13px;color:var(--green-dark);font-weight:600;padding:8px 0">✓ ' + esc(input.files[0].name) + '</div>';
 }
 
 function moCert(pid, docType){
@@ -3606,7 +3606,7 @@ function scanIDDoc(num, input) {
       const result = document.getElementById(`ts-id${num}-ai-result`);
       if (result) {
         result.style.display = 'block';
-        result.innerHTML = `✦ Detected: <strong>${parsed.doc_type||'Unknown'}</strong>${parsed.issuing_authority?` · Issued by ${parsed.issuing_authority}`:''}${parsed.expiry?` · Expires ${parsed.expiry}`:''}${parsed.nationality?' · '+parsed.nationality:''} — confirm below`;
+        result.innerHTML = `✦ Detected: <strong>${esc(parsed.doc_type||'Unknown')}</strong>${parsed.issuing_authority?` · Issued by ${esc(parsed.issuing_authority)}`:''}${parsed.expiry?` · Expires ${esc(parsed.expiry)}`:''}${parsed.nationality?' · '+esc(parsed.nationality):''} — confirm below`;
       }
       if (box) _scanBoxSuccess(`ts-id${num}-scan-box`, file, parsed);
       toast('✓ ID document scanned');
@@ -3655,7 +3655,7 @@ function scanRTRDoc(input) {
       const result = document.getElementById('ts-rtr-ai-result');
       if (result) {
         result.style.display = 'block';
-        result.innerHTML = `✦ Detected: <strong>${parsed.doc_type||'Unknown'}</strong>${parsed.issuing_authority?` · Issued by ${parsed.issuing_authority}`:''}${parsed.expiry?` · Expires ${parsed.expiry}`:''}${parsed.nationality?' · '+parsed.nationality:''} — confirm below`;
+        result.innerHTML = `✦ Detected: <strong>${esc(parsed.doc_type||'Unknown')}</strong>${parsed.issuing_authority?` · Issued by ${esc(parsed.issuing_authority)}`:''}${parsed.expiry?` · Expires ${esc(parsed.expiry)}`:''}${parsed.nationality?' · '+esc(parsed.nationality):''} — confirm below`;
       }
       _scanBoxSuccess('ts-rtr-scan-box', file, parsed);
       toast('✓ RTR document scanned');
@@ -14107,7 +14107,7 @@ function pgDocLibrary(){
           return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
             <span style="font-size:20px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/><path d="M6 8.5h4M6 11h4"/></svg></span>
             <div style="flex:1">
-              <div style="font-size:13px;font-weight:600;color:var(--txt)">${name}</div>
+              <div style="font-size:13px;font-weight:600;color:var(--txt)">${esc(name)}</div>
               <div style="font-size:11px;color:var(--muted)">${prop?prop.address:'All properties'} · Uploaded ${uploadedAt}</div>
             </div>
             ${d.engineer ? `
@@ -14148,7 +14148,7 @@ function dlFilterDocs(query) {
     return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
       <span style="font-size:20px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/><path d="M6 8.5h4M6 11h4"/></svg></span>
       <div style="flex:1">
-        <div style="font-size:13px;font-weight:600;color:var(--txt)">${name}</div>
+        <div style="font-size:13px;font-weight:600;color:var(--txt)">${esc(name)}</div>
         <div style="font-size:11px;color:var(--muted)">${prop ? prop.address : 'All properties'} · Uploaded ${uploadedAt}</div>
       </div>
       ${d.engineer ? `<button class="btn btn-sm" onclick="dvoOpen('${d.engineer}','${name.replace(/'/g,"\\'")}','${(prop?.address||'').replace(/'/g,"\\'")}')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M1.5 8S4 4 8 4s6.5 4 6.5 4-2.5 4-6.5 4-6.5-4-6.5-4z"/><circle cx="8" cy="8" r="1.8"/></svg> View</button><a href="${d.engineer}" target="_blank" class="btn btn-sm">⬇ Download</a>` : ''}
