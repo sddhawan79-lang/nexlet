@@ -1581,8 +1581,10 @@ async function loadData() {
     D.userProfile.newsletter_opted_in = nlVal;
     D.userProfile.newsletter_opted_at = now;
   }
-  // Resolve user plan from Stripe subscription, fallback to portfolio (grandfather existing users)
-  window._userPlan = (sub.data && sub.data.plan_name) ? sub.data.plan_name : 'portfolio';
+  // Resolve PAID plan from Stripe (null if none). Final access is decided in TRIAL RESOLUTION
+  // (initApp): paid plan > active trial > read-only. Never fail open to a paid tier.
+  window._paidPlan = (sub.data && sub.data.plan_name) ? sub.data.plan_name : null;
+  window._userPlan = window._paidPlan || 'expired';
   if (er.data?.length) D.esignReq = er.data;
   if (ce.data?.length) D.calEvents = ce.data;
   await checkComplianceReminders();
@@ -1803,9 +1805,15 @@ async function initApp() {
       _trialState = { isTrialing:true, daysLeft:30, hasExpired:false, plan:'trial', expiresAt:expiry.getTime() };
     }
 
-    // Override plan
-    if (isTrialing) { window._userPlan = 'portfolio'; }
-    if (hasExpired && plan === 'trial') { window._userPlan = 'expired'; }
+    // ── ACCESS DECISION (fail-closed) ──
+    // 1) active paid plan wins  2) else inside 30-day trial = full access  3) else read-only.
+    if (window._paidPlan) {
+      window._userPlan = window._paidPlan;
+    } else if (_trialState.isTrialing) {
+      window._userPlan = 'portfolio';
+    } else {
+      window._userPlan = 'expired';
+    }
 
     // ── UI ──
     // Indicator

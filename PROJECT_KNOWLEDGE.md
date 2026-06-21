@@ -633,20 +633,31 @@ All migrations run manually in **Supabase → SQL Editor** (no automated migrati
 
 The `user_profiles` row is queried by `currentUser.id` via `.maybeSingle()` and stored in `D.userProfile`. Use the `_profileName()` helper (not raw `email.split('@')[0]`) for all landlord name references in AI prompts and legal documents — it resolves `full_name` from the profile, falling back to email username.
 
-### Subscription Plan Gating (Session 9 → Updated May 2026)
-**Trial state:** All trial functions stubbed to always return full access (`isTrialActive() → true`, `isTrialExpired() → false`, `trialDaysLeft() → 30`). `getTrialState()` returns a safe full-access state with both old (`isTrialing`, `daysLeft`) and new (`isExpired`, `daysRemaining`) key shapes preserved.
+### Subscription Plan Gating (Session 9 → rebuilt June 2026)
 
-**Plan resolution:** `window._userPlan` set at startup from `stripe_subscriptions.plan_name` (falls back to `'trial'`). `getUserPlan()` reads from this cached value. Trial users get full Portfolio access via `effectivePlan()`.
+**Access model (fail-closed, June 2026):** the effective plan is decided once at startup, in the TRIAL RESOLUTION block inside `initApp`, in priority order:
+1. **Active paid plan** (`stripe_subscriptions.plan_name`) → that plan's features. A paid subscription ALWAYS wins, even if `user_profiles.plan` is still `'trial'` (fixes paying users being force-expired after 30 days).
+2. **No paid plan but inside the 30-day trial** → `'portfolio'` (full access).
+3. **Neither** (trial ended, cancelled, lapsed, payment failed, or unknown) → `'expired'` = **read-only**: user can view their own data but not add/edit; write actions blocked by `_expiredGuard()`; restricted pages show the upgrade / trial-expiry prompt.
 
-| Plan | Property limit | Features gated |
+`window._paidPlan` holds the resolved paid plan (or `null`); `window._userPlan` holds the final effective plan; `getUserPlan()` reads the cached value. The previous fail-**open** default (`|| 'portfolio'`, which silently gave non-payers the top tier free) has been removed.
+
+| Plan | Property limit | Features |
 |---|---|---|
-| Starter | 2 | Core only: compliance, certificates, maintenance, templates, calendar, AI assistant. NO financials, rent, insurance, contractors, MTD, inventory. |
-| Landlord | **5** (was 10) | Starter + financials, rent, insurance, contractors. NO MTD, NO inventory. |
-| Portfolio | Unlimited | All features: compliance, certificates, maintenance, templates, calendar, assistant, financials, rent, insurance, contractors, MTD, inventory-reports. |
+| Starter | 2 | compliance, certificates, maintenance, templates, calendar, AI assistant, properties, tenants/portal, documents (incl. Section 8 + all legal templates). |
+| Landlord | 10 | Starter + financials (P&L), rent tracker, insurance, contractors, **MTD tax** (moved down from Portfolio, June 2026). |
+| Portfolio | Unlimited | Landlord + **AI inventory reports**. |
+| expired / read-only | 0 (writes blocked) | View-only access to whatever the user already created. |
 
-**Gating enforcement:** `PLAN_FEATURES` constant (line 911) maps each plan to an array of allowed feature slugs. `nav()` checks feature access before rendering restricted pages. `PLAN_LIMITS = { starter:2, landlord:5, portfolio:999 }` controls property creation.
+**Single source of truth:** `PLAN_FEATURES` (built from `STARTER_FEATURES` → `LANDLORD_FEATURES` → `PORTFOLIO_FEATURES`). `FEATURE_META` maps each gated feature → `{label, plan}` for the upgrade modal; `PAGE_FEATURE` maps a page id → the feature it requires.
 
-**Active plan helpers:** `getUserPlan()`, `isPortfolio()`, `isLandlordOrAbove()`, `isStarter()`, `getPropLimit()`, `upgradePrompt(feature, targetPlan)`, `redirectToCheckout(plan)`, `applyPlanGating()`. `redirectToCheckout()` recreates the Stripe checkout session and falls back to `profile.html` on edge function failure. Trial modals (`showTrialExpiryPopup`, `showTrialUpgradeModal`) use `btn-navy btn-sm` for non-highlighted plan cards.
+**Central gate:** `featureGate(feature)` returns `true` (and shows `upgradePrompt`) when the current plan lacks the feature. It runs at the TOP of `nav()` via `PAGE_FEATURE[page]`, so EVERY entry point — sidebar, Discover, dashboard buttons, deep links / hash URLs — is gated in one place (previously only the sidebar button was checked). `planHas(feature)` is the boolean check (`trial`/`expired` short-circuit so the trial / soft-lock logic owns those states). Action-level gate added to `moInventoryReport()` (Portfolio-only); the MTD tab in `pgRentFinance` gates on `planHas('mtd')` (Landlord+).
+
+**Discover page (`pgDiscover`):** each feature row/card carries an optional `feat`. Out-of-plan items render a 🔒 Landlord / 🔒 Portfolio badge and, on click, show the upgrade prompt instead of navigating into the feature.
+
+**Helpers:** `getUserPlan()`, `planHas()`, `featureGate()`, `featMeta()`, `isPortfolio()`, `isLandlordOrAbove()`, `isStarter()`, `isExpired()`, `getPropLimit()`, `upgradePrompt(feature, targetPlan)`, `redirectToCheckout(plan)`.
+
+> ⚠️ **Enforcement is client-side only.** A technical user can call Supabase tables / functions directly and bypass these checks. Real protection requires mirroring the plan + property-limit checks in RLS / edge functions (see Known Issues #61).
 
 ### AI Chat Assistant (`sendChat()` in `landlord.html`)
 - Powered by Claude via `ai-proxy` edge function (replaced `super-processor` — Session 6)
@@ -695,6 +706,12 @@ Session 8 introduced a 3-checkbox pre-generation consent gate for 4 legal docume
 | 51 | `user_profiles` missing `plan` + `newsletter_opted_in` columns | Database | **FIXED 23 May 2026** — ALTER TABLE run in SQL Editor |
 | 52 | `inventory_reports` table missing | Database | **FIXED 23 May 2026** — CREATE TABLE + RLS run in SQL Editor |
 | 53 | No favicon.ico | Static files | Pending — add to repo root |
+| 58 | Plan defaulted **open** to `portfolio` — non-payers / cancelled / lapsed users got the top tier free | Billing / Access | **FIXED June 2026** — access now fail-closed: paid plan > active trial > read-only (`expired`). See §9. |
+| 59 | Plan gating bypassable via non-sidebar entry points (Discover, dashboard buttons, hash URLs); `pgFinancials`, MTD tab, `moInventoryReport` reachable un-gated | Access / Revenue | **FIXED June 2026** — central `featureGate()` in `nav()` + action gate on `moInventoryReport` + Discover lock badges. |
+| 60 | Paying customers still flagged `plan:'trial'` could be force-expired after 30 days | Billing | **FIXED June 2026** — an active paid subscription always wins in the access decision. |
+| 61 | **Plan enforcement is client-side only** — Supabase tables / functions are not plan-guarded; a technical user can bypass gating | Security | **Open** — add plan + property-limit checks to RLS / edge functions. |
+| 62 | User data interpolated into `innerHTML` / inline `onclick` without escaping (stored XSS risk) | Security | **Open** — escape user-supplied strings before render. |
+| 63 | AI inventory is photo-heavy (storage + per-report AI cost) yet sold flat under Portfolio | Cost / Pricing | **Planned** — pay-per-report credits available to all tiers; compress photos client-side, keep report PDF as the durable artifact. |
 | 11 | `parseInt()` on UUID `prop_id`/`tenant_id` values — produces NaN | Data integrity | **FIXED Session 7** — replaced with `String()` (22 locations) |
 | 12 | `tenant_documents` table missing from DB — KYC scanning fails silently | Database | **SQL created** — run `session7_tenant_documents.sql` in Supabase SQL Editor |
 | 13 | `tenant-documents` Storage bucket RLS — uploads fail with "row-level security policy" | Storage | **FIXED** — INSERT + SELECT policies added via SQL Editor |
@@ -725,6 +742,20 @@ Pricing uses a **founding / standard** two-tier model displayed via a billing to
 | Portfolio | £23.99/mo | £19.99/mo | £39.99/mo | £33.32/mo | Unlimited | Portfolio landlords |
 
 Annual billing: 2 months free (pay 10 months, get 12)
+
+### Feature access by plan (June 2026)
+
+| Feature | Starter | Landlord | Portfolio |
+|---|---|---|---|
+| Properties | 2 | 10 | Unlimited |
+| Compliance, certificates, maintenance, calendar, templates (incl. Section 8 + legal docs), tenants/portal, AI assistant | ✅ | ✅ | ✅ |
+| Rent tracker, P&L / finance, insurance, contractors | — | ✅ | ✅ |
+| **MTD tax** | — | ✅ | ✅ |
+| AI inventory reports | — | — | ✅ |
+
+- **MTD moved Portfolio → Landlord (June 2026)** to undercut competitors (August £8.99, Landlord Vision £15, Latch £20 all bundle MTD lower down).
+- **AI inventory** kept Portfolio-only for now; planned to become a **pay-per-report add-on** available to every tier (high per-use cost: AI vision + photo storage).
+- Unknown / lapsed / cancelled users → **read-only** (fail-closed), never free top tier.
 
 ---
 
@@ -967,6 +998,16 @@ When **touching any of these files for a new feature or bug fix**, follow this p
 
 > Add an entry here whenever a new feature, modification, or architectural decision is made.
 > Format: `## Sprint N — [Date] — Brief Title` followed by bullet points.
+
+### Session 24 — June 2026 — Plan Gating Lockdown & Fail-Closed Access
+- **Fail-closed access model:** rewrote the startup access decision (TRIAL RESOLUTION in `initApp`) to: active paid plan > inside 30-day trial > read-only (`expired`). Removed the fail-open `|| 'portfolio'` default that gave non-payers / cancelled / lapsed users the top tier free. Added `window._paidPlan`.
+- **Central feature gate:** `PLAN_FEATURES` rebuilt (`STARTER_/LANDLORD_/PORTFOLIO_FEATURES`); added `FEATURE_META`, `PAGE_FEATURE`, `planHas()`, `featMeta()`, `featureGate()`. `featureGate()` now runs at the top of `nav()`, so every entry point (sidebar, Discover, buttons, hash URLs) is gated in one place — not just the sidebar button.
+- **Closed leaks:** `moInventoryReport()` action-gated (Portfolio); MTD tab gates on `planHas('mtd')`; `pgFinancials` / finance tab no longer reachable by Starter.
+- **MTD moved Portfolio → Landlord.** AI inventory remains the sole Portfolio-exclusive feature (besides unlimited properties).
+- **Discover (`pgDiscover`) gated:** out-of-plan rows/cards show a 🔒 badge + upgrade prompt instead of opening the feature.
+- **Section 8 stays available to all** — it is a document template (Starter feature), not gated.
+- **Files:** all changes in `landlord.html` — `PLAN_FEATURES`/helpers block (~line 1669), `nav()`, `pgRentFinance` MTD tab, `pgDiscover`, `moInventoryReport`, TRIAL RESOLUTION in `initApp`.
+- **Follow-ups (open):** mirror plan + property-limit checks server-side (RLS / edge functions); escape user data before `innerHTML` (XSS); build pay-per-report credits for AI inventory; confirm Stripe checkout writes `stripe_subscriptions.plan_name` / `user_profiles.plan` after payment.
 
 ### Sprint 10 — Email Alert System
 **Deployed:** See `SPRINT10_DEPLOY.md` for full deployment guide.
