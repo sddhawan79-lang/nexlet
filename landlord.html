@@ -1375,6 +1375,21 @@ function B(s){
   return `<span class="badge b-${m[s]||'gray'}">${s}</span>`;
 }
 
+// ── HTML ESCAPING — XSS protection for user/AI-supplied text rendered via innerHTML ──
+// Use esc(...) around ANY value that originates from a tenant, a landlord free-text
+// field, an uploaded file name, or an AI document scan before placing it in HTML.
+function esc(v){
+  if (v === null || v === undefined) return '';
+  return String(v)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}
+// Same rules work for quoted attribute values (incl. inline on* handlers).
+function escAttr(v){ return esc(v); }
+
 // ── CHECKLIST & METER SUPABASE HELPERS ──
 const _checkCache = {};  // key: `${prefix}_${pid}` → {itemId: true}
 const _meterCache = {};  // key: pid → {gas_in: '12345', ...}
@@ -1609,7 +1624,7 @@ async function loadData() {
 }
 
 // ── PLAN GATING HELPERS ──
-function getUserPlan(){ return window._userPlan || 'trial'; }
+function getUserPlan(){ return window._userPlan || 'expired'; }
 function isPortfolio(){ return getUserPlan()==='portfolio'; }
 function isLandlordOrAbove(){ return ['landlord','portfolio'].includes(getUserPlan()); }
 function isStarter(){ return getUserPlan()==='starter'; }
@@ -1655,10 +1670,16 @@ async function execDeleteAccount() {
     if (!uid) return;
     closeMo();
     toast('Deleting account…');
-    const tables = ['certificates','maintenance','rent','tenants','insurance','legal_movein_packs','signatures','documents','properties','user_profiles','stripe_subscriptions','profiles'];
-    for (const table of tables) {
-      await sb.from(table).delete().eq('user_id', uid).then(() => {}).catch(() => {});
-      await sb.from(table).delete().eq('id', uid).then(() => {}).catch(() => {});
+    // Server-side, transactional delete (all-or-nothing) via the
+    // delete_my_account() SECURITY DEFINER function. Replaces the old
+    // client-side loop, which deleted table-by-table and silently swallowed
+    // partial failures (leaving orphaned data). Requires the function to be
+    // created in Supabase first (see account-deletion.sql).
+    const { error } = await sb.rpc('delete_my_account');
+    if (error) {
+      console.error('delete_my_account error:', error);
+      toast('Error deleting account — please contact support', true);
+      return;
     }
     await sb.auth.signOut();
     toast('Account deleted');
@@ -6933,8 +6954,8 @@ function propMaintHtml(pid){
     return`<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="moIssueDetail('${m.id}')" onmouseenter="this.style.background='var(--off)'" onmouseleave="this.style.background='transparent'">
       <div style="width:8px;height:8px;border-radius:50%;background:${sc};flex-shrink:0"></div>
       <div style="flex:1">
-        <div style="font-size:12px;font-weight:500;color:var(--txt)">${m.title||m.desc||'—'}</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:1px">${m.cat||'—'}${m.assigned_to?' · <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><circle cx="8" cy="8" r="2.6"/><path d="M3.5 7a4.5 4.5 0 0 1 9 0"/><path d="M3.5 7h9"/><path d="M3 13.5c.7-2 2.6-3 5-3s4.3 1 5 3"/></svg> '+m.assigned_to:''}</div>
+        <div style="font-size:12px;font-weight:500;color:var(--txt)">${esc(m.title||m.desc||'—')}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:1px">${esc(m.cat||'—')}${m.assigned_to?' · <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><circle cx="8" cy="8" r="2.6"/><path d="M3.5 7a4.5 4.5 0 0 1 9 0"/><path d="M3.5 7h9"/><path d="M3 13.5c.7-2 2.6-3 5-3s4.3 1 5 3"/></svg> '+m.assigned_to:''}</div>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
         ${m.awaab?'<span style="font-size:10px;font-weight:700;color:var(--red)">⚠️</span>':''}
@@ -7869,7 +7890,7 @@ function pdTabContent(pid, tab) {
           ? `<div class="tw"><table><thead><tr><th>Date</th><th>Description</th><th>Priority</th><th>Flags</th><th>Status</th></tr></thead>
               <tbody>${allM.map(m=>`<tr>
                 <td style="font-size:12px;white-space:nowrap">${FMT(m.date||m.issue_date)}</td>
-                <td style="max-width:220px;font-size:13px">${m.desc||m.description||'—'}</td>
+                <td style="max-width:220px;font-size:13px">${esc(m.desc||m.description||'—')}</td>
                 <td>${B(m.priority||'Low')}</td>
                 <td>${m.awaab?'<span class="badge b-red">Awaab</span>':'—'}</td>
                 <td><div class="sf">
@@ -12070,7 +12091,7 @@ function pgMaintenance(){
           const p=P(m.prop_id)||{address:'—'};
           const priCol=m.priority==='Urgent'?'var(--red)':m.priority==='High'?'var(--amber)':'var(--muted)';
           return`<div style="background:var(--white);border:1px solid ${m.awaab?'var(--red)':'var(--border)'};border-radius:10px;padding:12px;margin-bottom:8px;cursor:pointer;transition:box-shadow .15s;border-left:3px solid ${m.awaab?'var(--red)':col}" onclick="moIssueDetail('${m.id}')" onmouseenter="this.style.boxShadow='0 2px 12px rgba(0,0,0,0.08)'" onmouseleave="this.style.boxShadow='none'">
-            <div style="font-size:12px;font-weight:600;color:var(--txt);margin-bottom:4px;line-height:1.4">${m.title||m.desc||'—'}</div>
+            <div style="font-size:12px;font-weight:600;color:var(--txt);margin-bottom:4px;line-height:1.4">${esc(m.title||m.desc||'—')}</div>
             <div style="font-size:11px;color:var(--muted);margin-bottom:8px">${p.address}</div>
             <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:6px">
               <span style="font-size:10px;font-weight:600;color:${priCol};background:${m.priority==='Urgent'?'rgba(229,62,62,0.08)':m.priority==='High'?'rgba(217,119,6,0.08)':'var(--off)'};padding:2px 7px;border-radius:100px">${m.priority||'Low'}</span>
@@ -12134,8 +12155,8 @@ function pgMaintenance(){
             return `<div style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s" onclick="moIssueDetail('${m.id}')" onmouseenter="this.style.background='var(--off)'" onmouseleave="this.style.background='transparent'">
               <div style="width:8px;height:8px;border-radius:50%;background:${sc};flex-shrink:0"></div>
               <div style="flex:1">
-                <div style="font-size:12px;font-weight:500;color:var(--txt)">${m.title||m.desc||'—'}</div>
-                <div style="font-size:11px;color:var(--muted);margin-top:1px">${m.cat||'—'}${m.assigned_to?' · <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><circle cx="8" cy="8" r="2.6"/><path d="M3.5 7a4.5 4.5 0 0 1 9 0"/><path d="M3.5 7h9"/><path d="M3 13.5c.7-2 2.6-3 5-3s4.3 1 5 3"/></svg> '+m.assigned_to:''}</div>
+                <div style="font-size:12px;font-weight:500;color:var(--txt)">${esc(m.title||m.desc||'—')}</div>
+                <div style="font-size:11px;color:var(--muted);margin-top:1px">${esc(m.cat||'—')}${m.assigned_to?' · <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><circle cx="8" cy="8" r="2.6"/><path d="M3.5 7a4.5 4.5 0 0 1 9 0"/><path d="M3.5 7h9"/><path d="M3 13.5c.7-2 2.6-3 5-3s4.3 1 5 3"/></svg> '+m.assigned_to:''}</div>
               </div>
               <div style="display:flex;align-items:center;gap:6px">
                 ${m.awaab?'<span style="font-size:10px;font-weight:700;color:var(--red)">⚠️</span>':''}
@@ -12275,7 +12296,7 @@ function moIssueDetail(id){
       <span class="badge b-green" style="font-size:9px">✓ Sent</span>
     </div>`).join('')}
   </div>` : '';
-  openMo(m.title||'Maintenance job',`${p.address} · ${m.cat||'—'}`,`
+  openMo(m.title||'Maintenance job',`${p.address} · ${esc(m.cat||'—')}`,`
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
       ${[['Property',p.address],['Category',m.cat||'—'],['Priority',m.priority||'Low'],['Reported',FMS(m.date||m.issue_date)],['Assigned to',m.assigned_to||'Not assigned'],['Cost',m.cost?'£'+m.cost:'Not set'],['Completed',m.completed_date?FMS(m.completed_date):'—'],['Awaab',m.awaab?'⚠️ Yes':'No']].map(([l,v])=>`<div class="det-f"><label>${l}</label><span>${v}</span></div>`).join('')}
     </div>
