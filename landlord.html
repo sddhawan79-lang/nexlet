@@ -10275,7 +10275,8 @@ function pgTenantDetail(tid) {
           } else { compliancePct = total?Math.round(uploadedCount/total*100):0; }
         } catch(e){ compliancePct = total?Math.round(uploadedCount/total*100):0; }
         const _pMap={accessed:['Active','var(--green-dark)','var(--green-bg)'],sent:['Invite sent','var(--amber)','var(--amber-bg)'],'link-ready':['Link ready','var(--blue)','rgba(59,111,232,0.08)'],'not-sent':['Not sent','var(--red)','rgba(229,62,62,0.08)']};
-        const _p=_pMap[portalStatus]||_pMap['not-sent'];
+        const _pStatus = t.invite_used ? 'accessed' : (D.emailLog.find(e=>String(e.tenant_id)===String(tid)&&(e.template_id?.includes('portal')||e.template_id?.includes('invite'))) ? 'sent' : (t.invite_token ? 'link-ready' : 'not-sent'));
+        const _p=_pMap[_pStatus]||_pMap['not-sent'];
         const _ord=n=>n+(['','st','nd','rd'][n]||'th');
         const card=(label,main,sub,extra)=>`<div style="background:var(--white);border:1px solid var(--border);border-radius:11px;padding:13px 15px;box-shadow:0 1px 3px rgba(11,30,61,.05)"><div style="font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:7px">${label}</div><div style="font-size:18px;font-weight:700;color:var(--txt);display:flex;align-items:center;gap:8px;flex-wrap:wrap">${main}${extra||''}</div>${sub?`<div style="font-size:11px;color:var(--muted);margin-top:3px">${sub}</div>`:''}</div>`;
         const grid=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px">
