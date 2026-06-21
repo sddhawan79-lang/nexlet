@@ -1880,10 +1880,125 @@ async function initApp() {
     }
     setTimeout(renderNewUserStepper, 50);
     setTimeout(_refreshResumeNudges, 600);
+    _injectTourLauncher();
+    setTimeout(maybeStartTour, 900);
   } catch(err) {
     document.getElementById('main').innerHTML = '<div style="padding:32px;font-family:sans-serif"><h2 style="color:#E53E3E">Dashboard Error</h2><pre style="background:#fff5f5;padding:16px;border-radius:8px;font-size:12px;overflow:auto">'+err.stack+'</pre><p style="margin-top:12px;color:#666">Please share this error with the developer.</p></div>';
     _logError('Dashboard', err);
   }
+}
+
+// ── FIRST-LOGIN GUIDED TOUR ──
+const _TOUR_KEY = 'nxl_tour_v1';
+const _TOUR_STEPS = [
+  { sel:'[data-page="dashboard"]',   title:'Dashboard',    body:'Your home base \u2014 portfolio health, urgent alerts, and what needs your attention today.' },
+  { sel:'[data-page="properties"]',  title:'Properties',   body:'Add and manage every property here \u2014 details, compliance and tenants together in one place.' },
+  { sel:'[data-page="tenants"]',     title:'Tenants',      body:'Each tenant\u2019s documents, compliance checklist and portal access. Use the search box to find anyone fast.' },
+  { sel:'[data-page="compliance"]',  title:'Compliance',   body:'Track gas, electrical, EPC and more \u2014 NexLet warns you before anything expires.' },
+  { sel:'[data-page="maintenance"]', title:'Maintenance',  body:'Log repair jobs and track them through. Tenants can report issues straight from their portal.' },
+  { sel:'[data-page="rent-finance"]',title:'Rent & Finance',body:'Record rent, spot arrears early, and keep your records ready for tax time.' },
+  { sel:'[data-page="documents"]',   title:'Documents',    body:'Generate notices, store signed agreements, and find any file with search.' },
+  { sel:'#sb-ai-card',               title:'AI Assistant', body:'Stuck on anything? Ask the assistant about your portfolio or UK lettings law.' },
+];
+let _tourIdx = 0;
+
+function maybeStartTour(){
+  try { if (localStorage.getItem(_TOUR_KEY)) return; } catch(e){}
+  if (window.innerWidth < 900) return; // skip on narrow screens; show next desktop login
+  _showTourWelcome();
+}
+
+function _tourCleanup(){ document.querySelectorAll('.nxl-tour-el').forEach(el=>el.remove()); }
+
+function _endTour(){
+  try { localStorage.setItem(_TOUR_KEY, JSON.stringify({done:true, ts:Date.now()})); } catch(e){}
+  _tourCleanup();
+}
+
+function _skipTour(){ _endTour(); }
+
+function _showTourWelcome(){
+  _tourCleanup();
+  const ov = document.createElement('div');
+  ov.className = 'nxl-tour-el';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(11,30,61,.45);z-index:100000;display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.innerHTML = '<div style="background:#fff;border-radius:16px;max-width:420px;width:100%;padding:32px 30px;box-shadow:0 20px 60px rgba(0,0,0,.3);text-align:center;font-family:var(--font),sans-serif">'
+    + '<div style="width:54px;height:54px;border-radius:14px;background:#0B1E3D;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;font-size:24px">\uD83D\uDC4B</div>'
+    + '<h2 style="font-size:22px;font-weight:700;color:#0B1E3D;margin:0 0 8px">Welcome to NexLet</h2>'
+    + '<p style="font-size:14px;line-height:1.6;color:#5A6B82;margin:0 0 24px">Let\u2019s take a 30-second tour so you know where everything lives. You can replay it anytime from the <strong>?</strong> button in the corner.</p>'
+    + '<div style="display:flex;gap:10px">'
+    + '<button onclick="_skipTour()" style="flex:1;padding:11px;border:1px solid var(--border);background:#fff;border-radius:10px;font-size:13px;font-weight:600;color:#5A6B82;cursor:pointer;font-family:inherit">Skip for now</button>'
+    + '<button onclick="_beginTourSteps()" style="flex:1;padding:11px;border:none;background:#0B1E3D;border-radius:10px;font-size:13px;font-weight:700;color:#fff;cursor:pointer;font-family:inherit">Take the tour \u2192</button>'
+    + '</div></div>';
+  document.body.appendChild(ov);
+}
+
+function _beginTourSteps(){
+  _tourCleanup();
+  document.querySelectorAll('.sb-group-body').forEach(b=>{ b.style.display='block'; });
+  _tourIdx = 0;
+  _renderTourStep();
+}
+
+function _renderTourStep(){
+  _tourCleanup();
+  const step = _TOUR_STEPS[_tourIdx];
+  if (!step){ _endTour(); return; }
+  const target = document.querySelector(step.sel);
+  if (!target){ _tourIdx++; if (_tourIdx >= _TOUR_STEPS.length){ _endTour(); return; } return _renderTourStep(); }
+  const r = target.getBoundingClientRect();
+  const pad = 6;
+
+  const catcher = document.createElement('div');
+  catcher.className = 'nxl-tour-el';
+  catcher.style.cssText = 'position:fixed;inset:0;z-index:99999;background:transparent';
+  document.body.appendChild(catcher);
+
+  const hl = document.createElement('div');
+  hl.className = 'nxl-tour-el';
+  hl.style.cssText = 'position:fixed;left:'+(r.left-pad)+'px;top:'+(r.top-pad)+'px;width:'+(r.width+pad*2)+'px;height:'+(r.height+pad*2)+'px;border-radius:10px;box-shadow:0 0 0 9999px rgba(11,30,61,.55);border:2px solid #00C896;z-index:100000;pointer-events:none;transition:all .2s';
+  document.body.appendChild(hl);
+
+  const isLast = _tourIdx === _TOUR_STEPS.length-1;
+  const tip = document.createElement('div');
+  tip.className = 'nxl-tour-el';
+  tip.style.cssText = 'position:fixed;z-index:100001;background:#fff;border-radius:12px;width:280px;padding:18px 18px 14px;box-shadow:0 12px 40px rgba(0,0,0,.28);font-family:var(--font),sans-serif';
+  tip.innerHTML = '<div style="font-size:11px;font-weight:700;color:#00A37A;letter-spacing:.4px;margin-bottom:5px">STEP '+(_tourIdx+1)+' OF '+_TOUR_STEPS.length+'</div>'
+    + '<div style="font-size:16px;font-weight:700;color:#0B1E3D;margin-bottom:5px">'+step.title+'</div>'
+    + '<div style="font-size:13px;line-height:1.55;color:#5A6B82;margin-bottom:14px">'+step.body+'</div>'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">'
+    + '<button onclick="_skipTour()" style="background:none;border:none;font-size:12px;color:#9AA8BC;cursor:pointer;font-family:inherit">Skip</button>'
+    + '<div style="display:flex;gap:8px">'
+    + (_tourIdx>0 ? '<button onclick="_tourNav(-1)" style="padding:8px 14px;border:1px solid var(--border);background:#fff;border-radius:8px;font-size:12px;font-weight:600;color:#5A6B82;cursor:pointer;font-family:inherit">Back</button>' : '')
+    + '<button onclick="_tourNav(1)" style="padding:8px 16px;border:none;background:#0B1E3D;border-radius:8px;font-size:12px;font-weight:700;color:#fff;cursor:pointer;font-family:inherit">'+(isLast?'Done':'Next \u2192')+'</button>'
+    + '</div></div>';
+  document.body.appendChild(tip);
+
+  let left = r.right + 14;
+  let top = r.top - 4;
+  const tw = 280, th = tip.offsetHeight;
+  if (left + tw > window.innerWidth - 10) left = Math.max(10, r.left - tw - 14);
+  if (top + th > window.innerHeight - 10) top = Math.max(10, window.innerHeight - th - 10);
+  tip.style.left = left+'px';
+  tip.style.top = top+'px';
+}
+
+function _tourNav(dir){
+  _tourIdx += dir;
+  if (_tourIdx >= _TOUR_STEPS.length){ _endTour(); return; }
+  if (_tourIdx < 0) _tourIdx = 0;
+  _renderTourStep();
+}
+
+function _injectTourLauncher(){
+  if (document.getElementById('nxl-tour-launch')) return;
+  const b = document.createElement('button');
+  b.id = 'nxl-tour-launch';
+  b.title = 'Take a tour';
+  b.textContent = '?';
+  b.onclick = function(){ _tourIdx = 0; _showTourWelcome(); };
+  b.style.cssText = 'position:fixed;right:18px;bottom:76px;width:36px;height:36px;border-radius:50%;background:#0B1E3D;color:#fff;border:none;font-size:17px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(11,30,61,.3);z-index:9000';
+  document.body.appendChild(b);
 }
 
 // ── SAVE: PROPERTY ──
@@ -8982,7 +9097,7 @@ async function checkAllReminders() {
         if (d < ms-TOL || d > ms+TOL) continue;
         if (await alreadySent('REMINDER_LICENCE', prop.id, `lic_${ms}d`)) continue;
         const html = emailWrap(`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><rect x="3.5" y="3" width="9" height="11" rx="1.5"/><path d="M6 3V2h4v1"/><path d="M6 7h4M6 9.5h4M6 12h2.5"/></svg> Licence expiry — ${prop.address}`,`Property licence reminder · ${ms} days`,`<p style="font-size:13px">Your <strong>${prop.licence_type||'property licence'}</strong> for <strong>${prop.address}</strong> expires in <strong>${d} days</strong> (${new Date(prop.licence_expiry).toLocaleDateString('en-GB')}).</p><p style="font-size:13px;margin-top:10px;color:#7A8FA6">Non-compliance with licensing requirements can result in fines up to £30,000. Please arrange renewal.</p>`);
-        await sendReminder(`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><rect x="3.5" y="3" width="9" height="11" rx="1.5"/><path d="M6 3V2h4v1"/><path d="M6 7h4M6 9.5h4M6 12h2.5"/></svg> Licence expiry in ${d} days — ${prop.address}`, html, 'REMINDER_LICENCE', prop.id, `lic_${ms}d`);
+        await sendReminder(`Licence expiry in ${d} days — ${prop.address}`, html, 'REMINDER_LICENCE', prop.id, `lic_${ms}d`);
       }
     }
   }
@@ -8996,7 +9111,7 @@ async function checkAllReminders() {
         const prop = P(ins.prop_id)||{address:'—'};
         if (await alreadySent('REMINDER_INSURANCE', ins.id, `ins_${ms}d`)) continue;
         const html = emailWrap(`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M8 1.5 2.5 4v4c0 3.3 2.4 5.8 5.5 6.5 3.1-.7 5.5-3.2 5.5-6.5V4z"/></svg> Insurance renewal — ${prop.address}`,`Insurance reminder · ${ms} days`,`<p style="font-size:13px">Your <strong>${ins.type||'insurance policy'}</strong> for <strong>${prop.address}</strong> renews in <strong>${d} days</strong> (${new Date(ins.expiry).toLocaleDateString('en-GB')}).</p><p style="font-size:13px;margin-top:10px;color:#7A8FA6">Provider: ${ins.provider||'—'} · Policy: ${ins.policy||'—'}. Please arrange renewal to maintain cover.</p>`);
-        await sendReminder(`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M8 1.5 2.5 4v4c0 3.3 2.4 5.8 5.5 6.5 3.1-.7 5.5-3.2 5.5-6.5V4z"/></svg> Insurance renewal in ${d} days — ${prop.address}`, html, 'REMINDER_INSURANCE', ins.id, `ins_${ms}d`);
+        await sendReminder(`Insurance renewal in ${d} days — ${prop.address}`, html, 'REMINDER_INSURANCE', ins.id, `ins_${ms}d`);
       }
     }
   }
@@ -9009,7 +9124,7 @@ async function checkAllReminders() {
         if (d < ms-TOL || d > ms+TOL) continue;
         if (await alreadySent('REMINDER_MORTGAGE', prop.id, `mort_${ms}d`)) continue;
         const html = emailWrap(`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M2 6 8 2.5 14 6"/><path d="M3 6.5v6M6 6.5v6M10 6.5v6M13 6.5v6"/><path d="M2 13.5h12"/></svg> Mortgage ending — ${prop.address}`,`Mortgage reminder · ${ms} days`,`<p style="font-size:13px">The mortgage on <strong>${prop.address}</strong> ends in <strong>${d} days</strong> (${new Date(prop.mortgage_end).toLocaleDateString('en-GB')}).</p><p style="font-size:13px;margin-top:10px;color:#7A8FA6">Lender: ${prop.mortgage_lender||'—'} · Outstanding: £${(prop.mortgage_outstanding||0).toLocaleString()}. Please arrange remortgage or contact your lender.</p>`);
-        await sendReminder(`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M2 6 8 2.5 14 6"/><path d="M3 6.5v6M6 6.5v6M10 6.5v6M13 6.5v6"/><path d="M2 13.5h12"/></svg> Mortgage ending in ${d} days — ${prop.address}`, html, 'REMINDER_MORTGAGE', prop.id, `mort_${ms}d`);
+        await sendReminder(`Mortgage ending in ${d} days — ${prop.address}`, html, 'REMINDER_MORTGAGE', prop.id, `mort_${ms}d`);
       }
     }
   }
@@ -9036,7 +9151,7 @@ async function checkAllReminders() {
         if (d < ms-TOL || d > ms+TOL) continue;
         if (await alreadySent('REMINDER_BOILER', prop.id, `boil_${ms}d`)) continue;
         const html = emailWrap(`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M10.5 2.5a3 3 0 0 0-4 4L2 11a1.5 1.5 0 0 0 2 2l4.5-4.5a3 3 0 0 0 4-4l-2 2-1.5-1.5 2-2z"/></svg> Boiler service due — ${prop.address}`,`Boiler service reminder · ${ms} days`,`<p style="font-size:13px">The annual boiler service for <strong>${prop.address}</strong> is due in <strong>${d} days</strong> (${new Date(prop.boiler_next_service).toLocaleDateString('en-GB')}).</p><p style="font-size:13px;margin-top:10px;color:#7A8FA6">${prop.boiler_engineer?'Last engineer: '+prop.boiler_engineer+'. ':''} Annual servicing is a legal requirement for landlords under gas safety regulations.</p>`);
-        await sendReminder(`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M10.5 2.5a3 3 0 0 0-4 4L2 11a1.5 1.5 0 0 0 2 2l4.5-4.5a3 3 0 0 0 4-4l-2 2-1.5-1.5 2-2z"/></svg> Boiler service due in ${d} days — ${prop.address}`, html, 'REMINDER_BOILER', prop.id, `boil_${ms}d`);
+        await sendReminder(`Boiler service due in ${d} days — ${prop.address}`, html, 'REMINDER_BOILER', prop.id, `boil_${ms}d`);
       }
     }
   }
@@ -9050,7 +9165,7 @@ async function checkAllReminders() {
         const prop = P(t.prop_id)||{address:'—'};
         if (await alreadySent('REMINDER_RTR', t.id, `rtr_${ms}d`)) continue;
         const html = emailWrap(`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg> Right to Rent re-check — ${t.name}`,`Right to Rent reminder · ${ms} days`,`<p style="font-size:13px">The Right to Rent document for <strong>${t.name}</strong> at <strong>${prop.address}</strong> expires in <strong>${d} days</strong> (${new Date(t.rtr_expiry).toLocaleDateString('en-GB')}).</p><p style="font-size:13px;margin-top:10px;color:#7A8FA6">You must carry out a follow-up Right to Rent check before the document expires. Failure to do so is a criminal offence with unlimited fines.</p>`);
-        await sendReminder(`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg> Right to Rent re-check due — ${t.name}`, html, 'REMINDER_RTR', t.id, `rtr_${ms}d`);
+        await sendReminder(`Right to Rent re-check due — ${t.name}`, html, 'REMINDER_RTR', t.id, `rtr_${ms}d`);
       }
     }
   }
@@ -9068,7 +9183,7 @@ async function checkAllReminders() {
       const prop = P(t.prop_id)||{address:'—'};
       if (await alreadySent('REMINDER_RENT_LATE', t.id, `rent_${daysLate}d`)) continue;
       const html = emailWrap(`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><circle cx="8" cy="8" r="6"/><path d="M9.5 5.5a2 2 0 0 0-3.2.4C5.8 6.8 6 8 6 9.2 6 10 5.7 10.5 5.5 10.8h4M6 8h2.5"/></svg> Rent overdue — ${t.name}`,`Rent reminder · ${daysLate} day${daysLate!==1?'s':''} late`,`<p style="font-size:13px">Rent from <strong>${t.name}</strong> at <strong>${prop.address}</strong> was due on the <strong>${t.rent_day}${t.rent_day===1?'st':t.rent_day===2?'nd':t.rent_day===3?'rd':'th'}</strong> and appears to be <strong>${daysLate} day${daysLate!==1?'s':''} late</strong>.</p><p style="font-size:13px;margin-top:10px;color:#7A8FA6">Expected: £${(t.rent||0).toLocaleString()}/mo. Log in to mark as paid or begin the arrears process if needed.</p>`);
-      await sendReminder(`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><circle cx="8" cy="8" r="6"/><path d="M9.5 5.5a2 2 0 0 0-3.2.4C5.8 6.8 6 8 6 9.2 6 10 5.7 10.5 5.5 10.8h4M6 8h2.5"/></svg> Rent ${daysLate}d overdue — ${t.name}`, html, 'REMINDER_RENT_LATE', t.id, `rent_${daysLate}d`);
+      await sendReminder(`Rent ${daysLate}d overdue — ${t.name}`, html, 'REMINDER_RENT_LATE', t.id, `rent_${daysLate}d`);
     }
   }
 
@@ -9226,7 +9341,7 @@ async function checkAllReminders() {
     </div>`;
 
     await sendReminder(
-      `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M2.5 13.5h11"/><rect x="3.5" y="8" width="2" height="4"/><rect x="7" y="5" width="2" height="7"/><rect x="10.5" y="9.5" width="2" height="2.5"/></svg> Weekly compliance digest — Portfolio score: ${portfolioScore}/100`,
+      `Weekly compliance digest — Portfolio score: ${portfolioScore}/100`,
       html, 'REMINDER_COMPLIANCE_DIGEST', 'portfolio',       `digest_${today.toISOString().slice(0,10)}`
     );
     } // end shouldSendDigest
@@ -9243,7 +9358,7 @@ async function checkAllReminders() {
         if (d < ms-TOL || d > ms+TOL) continue;
         if (await alreadySent('REMINDER_INSPECTION', prop.id, `insp_${ms}d`)) continue;
         const html = emailWrap(`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg> Inspection due in ${d} day${d!==1?'s':''} — ${prop.address}`,`Property inspection reminder`,`<p style="font-size:13px">A property inspection is due in <strong>${d} day${d!==1?'s':''}</strong> at <strong>${prop.address}${prop.city?', '+prop.city:''}</strong>.</p><p style="font-size:13px;margin-top:10px;color:#7A8FA6">Log in to confirm the inspection or reschedule if needed.</p>`);
-        await sendReminder(`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg> Inspection due in ${d}d — ${prop.address}`, html, 'REMINDER_INSPECTION', prop.id, `insp_${ms}d`);
+        await sendReminder(`Inspection due in ${d}d — ${prop.address}`, html, 'REMINDER_INSPECTION', prop.id, `insp_${ms}d`);
       }
     }
   }
@@ -9352,8 +9467,7 @@ async function checkAllReminders() {
           </div>
         </div>`;
 
-        await sendReminder(
-          `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><rect x="2" y="3" width="12" height="11" rx="1.5"/><path d="M2 6.5h12M5 1.5V4M11 1.5V4"/></svg> Your ${monthLabel} property calendar — ${monthEvs.length} event${monthEvs.length!==1?'s':''}`,
+        await sendReminder(`Your ${monthLabel} property calendar — ${monthEvs.length} event${monthEvs.length!==1?'s':''}`,
           html, 'REMINDER_MONTHLY_CALENDAR', 'portfolio', `monthly_${monthKey}`
         );
       }
@@ -9605,10 +9719,21 @@ function pgTenants(){
 
   const endedBadge = '<span style="font-size:10px;font-weight:600;background:var(--off);color:var(--muted);padding:2px 7px;border-radius:100px;margin-left:6px">Archived</span>';
 
-  const rows = visibleList.length
+  // ── Search filter ──
+  const _tsq = (window._tenantSearch || '').toLowerCase().trim();
+  const shownList = _tsq
+    ? visibleList.filter(t => { const raw = P(t.prop_id) || {}; return (t.name||'').toLowerCase().includes(_tsq) || (raw.address||'').toLowerCase().includes(_tsq) || (t.email||'').toLowerCase().includes(_tsq); })
+    : visibleList;
+  const searchBar = `<div style="position:relative;margin-bottom:16px;max-width:340px">
+      <input id="tenant-search" type="text" placeholder="Search name, address, email\u2026" value="${(window._tenantSearch||'').replace(/"/g,'&quot;')}" oninput="window._tenantSearch=this.value;nav('tenants')" style="width:100%;padding:9px 30px 9px 32px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:var(--font);box-sizing:border-box">
+      <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:14px;height:14px;display:block"><circle cx="7" cy="7" r="4.5"/><path d="m11 11 3 3"/></svg></span>
+      ${_tsq?`<button onclick="window._tenantSearch='';nav('tenants')" style="position:absolute;right:7px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--muted);font-size:17px;line-height:1">&times;</button>`:''}
+    </div>`;
+
+  const rows = shownList.length
     ? `<div class="panel"><div class="tw"><table>
       <thead><tr><th>Name</th><th>Start</th><th>Deposit</th><th>Compliance</th><th>Docs</th><th>Status</th></tr></thead>
-      <tbody>${visibleList.map(t=>{const raw=P(t.prop_id)||{};const p={address:raw.address||'—',city:raw.city||'',postcode:raw.postcode||''};const isEnded=t.status==='Ended'||t.archived;
+      <tbody>${shownList.map(t=>{const raw=P(t.prop_id)||{};const p={address:raw.address||'—',city:raw.city||'',postcode:raw.postcode||''};const isEnded=t.status==='Ended'||t.archived;
         const ragDots = CHECKLIST_ITEMS.map(item => {
           const cl = _checklistRAG(t, item.key);
           return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${RAG_COLORS[cl.ra]};margin:0 1px" title="${item.label}: ${cl.status}"></span>`;
@@ -9623,12 +9748,13 @@ function pgTenants(){
         <td>${isEnded?B('Ended'):B(t.status||'Active')}</td>
       </tr>`}).join('')}</tbody>
     </table></div></div>`
+    : _tsq ? `<div class="empty"><div class="empty-ic"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><circle cx="7" cy="7" r="4.5"/><path d="m11 11 3 3"/></svg></div><div class="empty-t">No matches for “${_tsq}”</div><div class="empty-s">Try a different name, address or email</div><div style="margin-top:14px"><button class="btn" onclick="window._tenantSearch='';nav('tenants')">Clear search</button></div></div>`
     : `<div class="empty"><div class="empty-ic">${filter==='Ended'?'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M2.5 5 8 2.5 13.5 5v6L8 13.5 2.5 11z"/><path d="M2.5 5 8 7.5 13.5 5M8 7.5v6"/></svg>':'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><circle cx="8" cy="5.5" r="2.8"/><path d="M3 13.5c0-2.6 2.2-4.2 5-4.2s5 1.6 5 4.2"/></svg>'}</div><div class="empty-t">${filter==='Ended'?'No ended tenancies':'No tenants yet'}</div><div class="empty-s">${filter==='Ended'?'Ended tenancies will appear here — their data is preserved for disputes':'Add your first tenant to get started'}</div>${filter==='Active'?'<div style="margin-top:16px"><button class="btn btn-navy" onclick="moTenant()">+ Add tenant</button></div>':''}</div>`;
 
   return`<div class="topbar"><span class="tb-title">Tenants</span><div class="tb-right"><button class="btn btn-navy" onclick="moTenant()">+ Add tenant</button></div></div>
   <div class="content">
     <div class="ph"><h1>Tenants</h1><p>${activeList.length} active · ${endedList.length} ended · Click any row for quick view</p></div>
-    ${filterTabs}
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">${filterTabs}${searchBar}</div>
     ${rows}
     <div id="tenant-slide-panel" style="position:fixed;top:0;right:0;width:380px;max-width:90vw;height:100vh;background:var(--white);box-shadow:-4px 0 20px rgba(0,0,0,0.15);z-index:9999;transform:translateX(100%);transition:transform .25s cubic-bezier(.4,0,.2,1);overflow-y:auto;display:flex;flex-direction:column">
       <div style="padding:16px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
@@ -10138,28 +10264,48 @@ function pgTenantDetail(tid) {
 
       ${(()=>{ const g8=getGround8Status(t.id); if(!g8||!g8.warning) return ''; const isHit=g8.threshold; return `<div style="background:${isHit?'rgba(229,62,62,0.07)':'rgba(217,119,6,0.06)'};border:1px solid ${isHit?'rgba(229,62,62,0.3)':'rgba(217,119,6,0.3)'};border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><div style="font-size:13px;font-weight:700;color:${isHit?'var(--red)':'var(--amber)'};margin-bottom:4px">${isHit?'🔴 Ground 8 threshold reached':'⚠️ Rent arrears warning'}</div><div style="font-size:12px;color:var(--txt);line-height:1.6">${g8.monthsArrears} month${g8.monthsArrears!==1?'s':''} in arrears · £${g8.totalUnpaid.toLocaleString()} unpaid across ${g8.unpaidCount} payment${g8.unpaidCount!==1?'s':''}${isHit?' · Ground 8 requires 2+ months — you may now serve a Section 8 notice':' · Ground 8 triggers at 2 months'}</div></div><button class="btn btn-sm" style="${isHit?'border-color:var(--red);color:var(--red)':'border-color:var(--amber);color:var(--amber)'}" onclick="moSection8('${t.prop_id}')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M8 2.5v11"/><path d="M4 5h8"/><path d="M4 5 2.2 8.8h3.6z"/><path d="M12 5l-1.8 3.8h3.6z"/><path d="M5.5 13.5h5"/></svg> Section 8 →</button></div>`; })()}
       ${renderMandatoryBanner(t)}
-      <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap">
-        <button onclick="_tdSetTab('${tid}','overview')" class="td-tab" data-tab="overview" style="padding:8px 16px;border-radius:8px;font-size:13px;font-weight:500;font-family:var(--font);cursor:pointer;border:1px solid ${activeTab==='overview'?'var(--navy)':'var(--border)'};background:${activeTab==='overview'?'var(--navy)':'var(--white)'};color:${activeTab==='overview'?'#fff':'var(--muted)'};transition:all .15s">Overview</button>
-        <button onclick="_tdSetTab('${tid}','docs')" class="td-tab" data-tab="docs" style="padding:8px 16px;border-radius:8px;font-size:13px;font-weight:500;font-family:var(--font);cursor:pointer;border:1px solid ${activeTab==='docs'?'var(--navy)':'var(--border)'};background:${activeTab==='docs'?'var(--navy)':'var(--white)'};color:${activeTab==='docs'?'#fff':'var(--muted)'};transition:all .15s">Documents & Compliance</button>
-        <button onclick="_tdSetTab('${tid}','activity')" class="td-tab" data-tab="activity" style="padding:8px 16px;border-radius:8px;font-size:13px;font-weight:500;font-family:var(--font);cursor:pointer;border:1px solid ${activeTab==='activity'?'var(--navy)':'var(--border)'};background:${activeTab==='activity'?'var(--navy)':'var(--white)'};color:${activeTab==='activity'?'#fff':'var(--muted)'};transition:all .15s">Activity</button>
-      </div>
-      <div id="td-pane-overview" style="display:${activeTab==='overview'?'block':'none'}">
-      ${tenancyCard}
-      ${portalCard}
-      ${journeyCards}
-      </div>
-      <div id="td-pane-docs" style="display:${activeTab==='docs'?'block':'none'}">
-      ${stickyCard}
-      ${unifiedDocsCard}
-      </div>
-      <div id="td-pane-activity" style="display:${activeTab==='activity'?'block':'none'}">
-      <div class="panel" style="border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)">
-        <div class="ph2"><div><h2><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><rect x="2" y="3.5" width="12" height="9" rx="1.5"/><path d="m2.5 4.5 5.5 4 5.5-4"/></svg> Communications</h2><p>All documents &amp; correspondence sent to this tenant</p></div>
-          <button class="btn btn-sm btn-navy" onclick="moCommunicationsHub('${tid}')">+ Send document</button>
-        </div>
-        <div>${logRows}</div>
-      </div>
-      </div>
+            ${(()=>{
+        let compliancePct;
+        try {
+          const cc = t.compliance_checklist || {};
+          const ks = Object.keys(cc);
+          if (ks.length){
+            const done = ks.filter(k=>{const o=cc[k]||{};const s=(o.status||'').toLowerCase();return o.ra==='green'||['complete','protected','served','sent','valid','verified','done','active'].includes(s);}).length;
+            compliancePct = Math.round(done/ks.length*100);
+          } else { compliancePct = total?Math.round(uploadedCount/total*100):0; }
+        } catch(e){ compliancePct = total?Math.round(uploadedCount/total*100):0; }
+        const _pMap={accessed:['Active','var(--green-dark)','var(--green-bg)'],sent:['Invite sent','var(--amber)','var(--amber-bg)'],'link-ready':['Link ready','var(--blue)','rgba(59,111,232,0.08)'],'not-sent':['Not sent','var(--red)','rgba(229,62,62,0.08)']};
+        const _p=_pMap[portalStatus]||_pMap['not-sent'];
+        const _ord=n=>n+(['','st','nd','rd'][n]||'th');
+        const card=(label,main,sub,extra)=>`<div style="background:var(--white);border:1px solid var(--border);border-radius:11px;padding:13px 15px;box-shadow:0 1px 3px rgba(11,30,61,.05)"><div style="font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:7px">${label}</div><div style="font-size:18px;font-weight:700;color:var(--txt);display:flex;align-items:center;gap:8px;flex-wrap:wrap">${main}${extra||''}</div>${sub?`<div style="font-size:11px;color:var(--muted);margin-top:3px">${sub}</div>`:''}</div>`;
+        const grid=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px">
+          ${card('Compliance',compliancePct+'%','',`<span style="flex:1;min-width:40px;max-width:90px;height:5px;border-radius:3px;background:var(--border);position:relative;overflow:hidden;display:inline-block"><span style="position:absolute;left:0;top:0;bottom:0;width:${compliancePct}%;background:${compliancePct>=80?'var(--green-dark)':compliancePct>=50?'var(--amber)':'var(--red)'}"></span></span>`)}
+          ${card('KYC Docs',uploadedCount+'/'+total,'',missing.length?`<span class="badge b-red" style="font-size:10px">${missing.length} missing</span>`:`<span class="badge b-green" style="font-size:10px">complete</span>`)}
+          ${card('Rent',t.rent?'£'+t.rent.toLocaleString():'—',t.rent_day?'/mo · due '+_ord(t.rent_day):'/mo')}
+          ${card('Deposit',t.deposit?'£'+t.deposit.toLocaleString():'—','',t.scheme?`<span class="badge b-green" style="font-size:10px">${t.scheme}</span>`:'')}
+          ${card('Portal',`<span style="font-size:14px;font-weight:700;color:${_p[1]}">${_p[0]}</span>`,'')}
+          ${card('Tenancy',p.address||'—',t.type||t.tenant_type||'')}
+        </div>`;
+        const TGL="var b=this.nextElementSibling,o=getComputedStyle(b).display==='none';b.style.display=o?'block':'none';this.querySelector('.acc-arr').style.transform=o?'rotate(180deg)':'rotate(0deg)'";
+        const sec=(title,badge,body,open)=>`<div style="margin-bottom:10px">
+          <div onclick="${TGL}" style="background:var(--white);border:1px solid var(--border);border-radius:11px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;box-shadow:0 1px 3px rgba(11,30,61,.05)">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-size:15px;font-weight:700;color:var(--txt)">${title}</span>${badge||''}</div>
+            <span class="acc-arr" style="font-size:12px;color:var(--muted);transition:transform .2s;transform:rotate(${open?'180deg':'0deg'})">▼</span>
+          </div>
+          <div style="display:${open?'block':'none'};margin-top:10px">${body}</div>
+        </div>`;
+        const docsBadge=`<span class="badge ${allDone?'b-green':'b-red'}" style="font-size:11px">${uploadedCount} of ${total}${missing.length?' · '+missing.length+' missing':''}</span>`;
+        const onbTotal=day1Items.length+day30Items.length, onbDone=day1Done+day30Done;
+        const onbBadge=`<span class="badge ${onbDone===onbTotal?'b-green':'b-amber'}" style="font-size:11px">${onbDone} of ${onbTotal} done</span>`;
+        const portalBadge=`<span class="badge" style="font-size:11px;background:${_p[2]};color:${_p[1]}">${_p[0]}</span>`;
+        const commBadge=`<span class="badge" style="font-size:11px;background:rgba(11,30,61,0.05);color:var(--navy)">${tenantLog.length} email${tenantLog.length!==1?'s':''}</span>`;
+        const commPanel=`<div class="panel" style="border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)"><div class="ph2"><div><h2>Communications</h2><p>All documents &amp; correspondence sent to this tenant</p></div><button class="btn btn-sm btn-navy" onclick="moCommunicationsHub('${tid}')">+ Send document</button></div><div>${logRows}</div></div>`;
+        return grid
+          + sec('Documents & Compliance', docsBadge, stickyCard+unifiedDocsCard, true)
+          + sec('Tenancy & Portal', portalBadge, tenancyCard+(typeof portalCard!=='undefined'?(portalCard||''):''), false)
+          + sec('Onboarding (Day 1 / Day 30)', onbBadge, journeyCards, false)
+          + sec('Communications', commBadge, commPanel, false);
+      })()}
     </div>`;
 
   // Auto-rescan docs with no extracted_name — one-shot, no re-render loop
