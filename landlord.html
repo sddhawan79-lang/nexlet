@@ -181,6 +181,19 @@ tr:hover td{background:rgba(59,111,232,0.04);transition:background .12s}
 .coll-arr.op{transform:rotate(180deg)}
 .coll-body{border-top:1px solid var(--border);padding:18px}
 .coll-body.hidden{display:none}
+/* ── Unified disclosure chevron chips (C+) — visible, button-like ── */
+.coll-arr,.cg-chev,.banner-chevron,[id^="pg-arr-"]{
+  display:inline-flex !important;align-items:center;justify-content:center;
+  width:26px;height:26px;border-radius:8px;background:#EEF1F5;
+  color:var(--navy) !important;line-height:1;flex-shrink:0;
+  transition:transform .2s,background .18s,color .18s;
+}
+.coll-hd:hover .coll-arr,
+.ph2:hover .cg-chev,
+#mandatory-banner>div:first-child:hover .banner-chevron{
+  background:var(--navy);color:#fff !important;
+}
+.coll-arr.op{background:var(--navy);color:#fff !important;}
 .det-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:4px}
 .det-f label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);display:block;margin-bottom:3px}
 .det-f span{font-size:13.5px;color:var(--txt)}
@@ -10285,11 +10298,13 @@ function pgTenantDetail(tid) {
           ${card('Portal',`<span style="font-size:14px;font-weight:700;color:${_p[1]}">${_p[0]}</span>`,'')}
           ${card('Tenancy',p.address||'—',t.type||t.tenant_type||'')}
         </div>`;
-        const TGL="var b=this.nextElementSibling,o=getComputedStyle(b).display==='none';b.style.display=o?'block':'none';this.querySelector('.acc-arr').style.transform=o?'rotate(180deg)':'rotate(0deg)'";
+        const TGL="var b=this.nextElementSibling,o=getComputedStyle(b).display==='none';b.style.display=o?'block':'none';var c=this.querySelector('.acc-chip'),a=this.querySelector('.acc-arr');a.style.transform=o?'rotate(180deg)':'rotate(0deg)';c.style.background=o?'var(--navy)':'#EEF1F5';c.style.color=o?'#fff':'var(--navy)'";
+        const HEN="var c=this.querySelector('.acc-chip');c.style.background='var(--navy)';c.style.color='#fff'";
+        const HLV="var b=this.nextElementSibling,op=getComputedStyle(b).display!=='none',c=this.querySelector('.acc-chip');c.style.background=op?'var(--navy)':'#EEF1F5';c.style.color=op?'#fff':'var(--navy)'";
         const sec=(title,badge,body,open)=>`<div style="margin-bottom:10px">
-          <div onclick="${TGL}" style="background:var(--white);border:1px solid var(--border);border-radius:11px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;box-shadow:0 1px 3px rgba(11,30,61,.05)">
+          <div onclick="${TGL}" onmouseenter="${HEN}" onmouseleave="${HLV}" style="background:var(--white);border:1px solid var(--border);border-radius:11px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;box-shadow:0 1px 3px rgba(11,30,61,.05)">
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-size:15px;font-weight:700;color:var(--txt)">${title}</span>${badge||''}</div>
-            <span class="acc-arr" style="font-size:12px;color:var(--muted);transition:transform .2s;transform:rotate(${open?'180deg':'0deg'})">▼</span>
+            <span class="acc-chip" style="width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .18s;background:${open?'var(--navy)':'#EEF1F5'};color:${open?'#fff':'var(--navy)'}"><svg class="acc-arr" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;transition:transform .2s;transform:rotate(${open?'180deg':'0deg'})"><path d="M4 6l4 4 4-4"/></svg></span>
           </div>
           <div style="display:${open?'block':'none'};margin-top:10px">${body}</div>
         </div>`;
