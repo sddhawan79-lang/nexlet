@@ -436,13 +436,10 @@ async function init(){
 
 // ── TOKEN HANDLER ──
 async function handleToken(token){
-  const { data:tenant, error } = await sb
-    .from('tenants')
-    .select('*')
-    .eq('invite_token', token)
-    .maybeSingle();
+  // Secure: server validates the token and returns ONLY this tenant's data
+  const { data:res, error } = await sb.rpc('portal_load', { p_token: token });
 
-  if(error || !tenant){
+  if(error || !res || res.error === 'invalid'){
     localStorage.removeItem('nxl_tenant_token');
     showScreen('error');
     document.getElementById('error-title').textContent = 'Link not valid';
@@ -450,42 +447,35 @@ async function handleToken(token){
     return;
   }
 
-  if(tenant.status === 'Ended'){
+  if(res.error === 'revoked'){
     localStorage.removeItem('nxl_tenant_token');
     showScreen('error');
-    document.getElementById('error-title').textContent = 'Tenancy ended';
-    document.getElementById('error-msg').textContent = 'Your tenancy has ended and portal access is no longer active. If you have any queries, please contact your landlord directly.';
-    return;
-  }
-
-  if(tenant.status === 'revoked' || tenant.status === 'Former'){
-    localStorage.removeItem('nxl_tenant_token');
-    showScreen('error');
-    document.getElementById('error-title').textContent = 'Access revoked';
-    document.getElementById('error-msg').textContent = 'Your portal access has been revoked. Please contact your landlord.';
+    if(res.status === 'Ended'){
+      document.getElementById('error-title').textContent = 'Tenancy ended';
+      document.getElementById('error-msg').textContent = 'Your tenancy has ended and portal access is no longer active. If you have any queries, please contact your landlord directly.';
+    } else {
+      document.getElementById('error-title').textContent = 'Access revoked';
+      document.getElementById('error-msg').textContent = 'Your portal access has been revoked. Please contact your landlord.';
+    }
     return;
   }
 
   // Valid — persist token for return visits
   localStorage.setItem('nxl_tenant_token', token);
-  currentTenant = tenant;
-  await loadTenantPortal(tenant);
+  window._portalToken  = token;
+  window._portalBundle = res;
+  currentTenant = res.tenant;
+  await loadTenantPortal(res.tenant);
 }
 
 // ── LOAD PORTAL ──
 async function loadTenantPortal(tenant){
   let propAddress = 'Your property';
   let propMeta = '';
-  if(tenant.prop_id){
-    const { data:prop } = await sb
-      .from('properties')
-      .select('address,city,postcode,type,beds')
-      .eq('id', tenant.prop_id)
-      .maybeSingle();
-    if(prop){
-      propAddress = [prop.address, prop.city, prop.postcode].filter(Boolean).join(', ');
-      propMeta = [prop.type, prop.beds ? prop.beds+' bed' : null].filter(Boolean).join(' · ');
-    }
+  const prop = (window._portalBundle && window._portalBundle.property) || null;
+  if(prop){
+    propAddress = [prop.address, prop.city, prop.postcode].filter(Boolean).join(', ');
+    propMeta = [prop.type, prop.beds ? prop.beds+' bed' : null].filter(Boolean).join(' · ');
   }
 
   document.getElementById('portal-tenant-name').textContent = tenant.name || 'Tenant';
@@ -503,13 +493,10 @@ async function loadTenantPortal(tenant){
 
 // ── LOAD JOBS ──
 async function loadJobs(){
-  const { data, error } = await sb
-    .from('tenant_maintenance')
-    .select('*')
-    .eq('tenancy_ref', String(currentTenant.id))
-    .order('submitted_at', { ascending: false });
-
-  tenantJobs = data || [];
+  // Refresh via the secure function so newly-submitted jobs appear
+  const { data:res } = await sb.rpc('portal_load', { p_token: window._portalToken });
+  if(res && !res.error){ window._portalBundle = res; }
+  tenantJobs = (res && res.jobs) ? res.jobs : ((window._portalBundle && window._portalBundle.jobs) || []);
   renderJobs();
 
   // Update badge
@@ -661,49 +648,22 @@ async function submitJob(){
   // 4. Build full description
   const fullDesc = notes ? description + '\n\nAdditional notes: ' + notes : description;
 
-  // 5. Save to tenant_maintenance with photo_urls
-  const job = {
-    tenancy_ref: String(currentTenant.id),
-    prop_id: currentTenant.prop_id,
-    description: fullDesc,
-    category,
-    priority: aiPriority,
-    ai_priority: aiPriority,
-    status: 'Reported',
-    locked: true,
-    submitted_at: new Date().toISOString(),
-    user_id: currentTenant.user_id,
-    tenant_phone: currentTenant.phone || null,
-    photo_urls: photoUrls.length ? photoUrls : null
-  };
+  // 5. Save via secure function (does BOTH tenant_maintenance + landlord mirror, server-side)
+  const { data:submitRes, error } = await sb.rpc('portal_submit_job', {
+    p_token:       window._portalToken,
+    p_description: fullDesc,
+    p_category:    category,
+    p_priority:    aiPriority,
+    p_photo_urls:  photoUrls
+  });
 
-  const { data:saved, error } = await sb
-    .from('tenant_maintenance')
-    .insert(job)
-    .select()
-    .single();
-
-  if(error){
+  if(error || !submitRes || submitRes.error){
     btn.disabled=false;
     btn.innerHTML='Submit report';
-    toast('Error saving job: '+error.message, true);
+    toast('Error saving job: '+ (error?.message || submitRes?.error || 'unknown'), true);
     return;
   }
-
-  // 6. Mirror to landlord maintenance table — include photo_urls so landlord sees them immediately
-  await sb.from('maintenance').insert({
-    prop_id: currentTenant.prop_id,
-    title: ('🏠 Tenant: ' + description).slice(0, 60),
-    description: fullDesc,
-    cat: category,
-    priority: aiPriority,
-    status: 'Open',
-    stage: 'Reported',
-    issue_date: new Date().toISOString().slice(0, 10),
-    awaab: category === 'Damp & Mould',
-    user_id: currentTenant.user_id,
-    photo_urls: photoUrls.length ? photoUrls : null,
-  });
+  const saved = submitRes.job;
 
   // 7. Email landlord
   await emailLandlord(saved, aiPriority, category, description);
@@ -869,7 +829,7 @@ async function loadCerts(){
   const el = document.getElementById('certs-list');
   if(!currentTenant?.prop_id){ el.innerHTML='<div class="empty"><div class="empty-icon">📄</div><div class="empty-title">No property linked</div><div class="empty-sub">Certificates will appear here once your landlord links you to a property.</div></div>'; return; }
   el.innerHTML='<div class="empty"><div class="empty-icon">⏳</div><div class="empty-title">Loading certificates…</div></div>';
-  const { data:certs, error } = await sb.from('certificates').select('*').eq('prop_id', currentTenant.prop_id).order('expiry',{ascending:true});
+  const { data:certs, error } = await sb.rpc('portal_certs', { p_token: window._portalToken });
   if(error){ el.innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-title">Could not load certificates</div></div>'; return; }
   if(!certs||!certs.length){ el.innerHTML='<div class="empty"><div class="empty-icon">📄</div><div class="empty-title">No certificates on file</div><div class="empty-sub">Your landlord hasn\'t uploaded any certificates yet.</div></div>'; return; }
 
@@ -925,11 +885,7 @@ async function loadDocuments() {
   }
   el.innerHTML = `<div class="empty"><div class="empty-icon">⏳</div><div class="empty-title">Loading…</div></div>`;
 
-  const { data: docs, error } = await sb
-    .from('esign_requests')
-    .select('*')
-    .eq('tenant_id', currentTenant.id)
-    .order('created_at', { ascending: false });
+  const { data: docs, error } = await sb.rpc('portal_documents', { p_token: window._portalToken });
 
   if (error || !docs?.length) {
     el.innerHTML = `<div class="empty"><div class="empty-icon">📝</div><div class="empty-title">No documents yet</div><div class="empty-sub">Documents sent for signing by your landlord will appear here.</div></div>`;

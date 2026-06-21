@@ -286,16 +286,14 @@ function showError(title, msg) {
 let _esignTokenReady = false; // Bug 2 guard
 
 async function handleEsignToken(token) {
-  const { data: req, error } = await sb
-    .from('esign_requests')
-    .select('*')
-    .eq('token', token)
-    .maybeSingle();
+  const { data: res, error } = await sb.rpc('esign_load', { p_token: token });
 
-  if (error || !req) {
+  if (error || !res || res.error) {
     showError('Invalid signing link', 'This signing link is invalid or does not exist. Please contact your landlord.');
     return;
   }
+  window._esignBundle = res;
+  const req = res.request;
 
   // Bug 1 fix: only strip token from URL after confirmed valid lookup
   window.history.replaceState({}, '', window.location.pathname);
@@ -331,10 +329,8 @@ function acceptEsignConsent() {
 async function showEsignSigningFlow(req) {
   if (!req) { showError('Error', 'No signing request found. Please use the link from your email.'); return; }
 
-  const [{ data: tenant }, { data: prop }] = await Promise.all([
-    sb.from('tenants').select('name,email,user_id').eq('id', req.tenant_id).maybeSingle(),
-    sb.from('properties').select('address,city').eq('id', req.property_id).maybeSingle()
-  ]);
+  const tenant = (window._esignBundle && window._esignBundle.tenant) || null;
+  const prop   = (window._esignBundle && window._esignBundle.property) || null;
   // Bug 4 fix: landlord_email stored directly on esign_requests record
   const landlordEmail = req.landlord_email || null;
   _esignTenant = tenant ? { ...tenant, landlord_email: landlordEmail } : tenant;
@@ -442,9 +438,7 @@ async function signDocument() {
 
     const tenant     = _esignTenant;
     const tenantName = tenant?.name || 'Tenant';
-    const [{ data: prop }] = await Promise.all([
-      sb.from('properties').select('address,city').eq('id', req.property_id).maybeSingle()
-    ]);
+    const prop       = (window._esignBundle && window._esignBundle.property) || null;
     const propAddr = prop ? prop.address + (prop.city ? ', ' + prop.city : '') : '';
 
     _toast('Generating signed document…');
@@ -518,11 +512,9 @@ async function signDocument() {
     const { data: urlData } = sb.storage.from('signed-documents').getPublicUrl(filename);
     const signedPdfUrl = urlData.publicUrl;
 
-    // Update esign_requests
-    await sb.from('esign_requests').update({ status: 'signed', signed_at: signedAt.toISOString(), signed_pdf_url: signedPdfUrl, ip_address: ipAddress }).eq('id', req.id);
-
-    // Audit log
-    try { await sb.from('audit_log').insert({ action: 'document_signed', table_name: 'esign_requests', record_id: String(req.id), details: 'Signed via tenant portal. IP: ' + ipAddress, user_id: null }); } catch(e) {}
+    // Update esign_requests + write audit log via secure function (server-side)
+    const { data: signRes, error: signErr } = await sb.rpc('esign_sign', { p_token: req.token, p_signed_pdf_url: signedPdfUrl, p_ip: ipAddress });
+    if (signErr || (signRes && signRes.error)) throw new Error('Could not record signature: ' + (signErr?.message || signRes?.error));
 
     // Send confirmation emails
     _toast('Sending confirmation emails…');
