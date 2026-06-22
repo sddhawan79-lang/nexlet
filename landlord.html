@@ -181,13 +181,19 @@ tr:hover td{background:rgba(59,111,232,0.04);transition:background .12s}
 .coll-arr.op{transform:rotate(180deg)}
 .coll-body{border-top:1px solid var(--border);padding:18px}
 .coll-body.hidden{display:none}
-/* Tenant-detail accordions */
-.td-acc{margin-bottom:12px}
-.td-acc .coll-l{font-size:14px;font-weight:600;gap:10px}
-.td-acc .coll-body{padding:0}
-.td-acc .coll-body>.panel{margin:0;border:none;box-shadow:none;background:transparent;border-radius:0}
-.td-acc-notitle .coll-body>.panel>.ph2>div:first-child{display:none}
-.td-acc-noheader .coll-body>.panel>.ph2{display:none}
+/* ── Unified disclosure chevron chips (C+) — visible, button-like ── */
+.coll-arr,.cg-chev,.banner-chevron,[id^="pg-arr-"]{
+  display:inline-flex !important;align-items:center;justify-content:center;
+  width:26px;height:26px;border-radius:8px;background:#EEF1F5;
+  color:var(--navy) !important;line-height:1;flex-shrink:0;
+  transition:transform .2s,background .18s,color .18s;
+}
+.coll-hd:hover .coll-arr,
+.ph2:hover .cg-chev,
+#mandatory-banner>div:first-child:hover .banner-chevron{
+  background:var(--navy);color:#fff !important;
+}
+.coll-arr.op{background:var(--navy);color:#fff !important;}
 .det-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:4px}
 .det-f label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);display:block;margin-bottom:3px}
 .det-f span{font-size:13.5px;color:var(--txt)}
@@ -701,6 +707,10 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let currentUser = null;
+// ── SESSION TOKEN CACHE (P1) ── used to authenticate every edge-function call.
+window._sbToken = '';
+sb.auth.getSession().then(({ data:{ session } }) => { window._sbToken = session?.access_token || ''; });
+sb.auth.onAuthStateChange((_e, session) => { window._sbToken = session?.access_token || ''; });
 
 // ── AI PROXY — fetch with retry + exponential backoff ──
 // Wraps all calls to ai-proxy edge function. Retries on 429 (rate limit) and 5xx.
@@ -710,22 +720,22 @@ async function aiProxy(payload, { maxRetries = 3, label = 'AI' } = {}) {
     try {
       const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window._sbToken || '') },
         body: JSON.stringify(payload)
       });
-      if (res.status === 429 || res.status >= 500) {
-        if (attempt === maxRetries) throw new Error(`${label} service busy (${res.status}). Please try again in a moment.`);
-        const wait = Math.min(1000 * Math.pow(2, attempt - 1), 8000); // 1s, 2s, 4s, max 8s
-        console.warn(`[aiProxy] attempt ${attempt} got ${res.status}, retrying in ${wait}ms…`);
-        await new Promise(r => setTimeout(r, wait));
-        continue;
-      }
       // 402 = AI allowance reached / credit exhausted. Do NOT retry — surface so the
       // caller can fall back to manual entry (see aiUnavailable / isAIQuotaError).
       if (res.status === 402) {
         const err = new Error(`${label} allowance reached`);
         err.code = 'ai_quota'; err.status = 402; err.overQuota = true;
         throw err;
+      }
+      if (res.status === 429 || res.status >= 500) {
+        if (attempt === maxRetries) throw new Error(`${label} service busy (${res.status}). Please try again in a moment.`);
+        const wait = Math.min(1000 * Math.pow(2, attempt - 1), 8000); // 1s, 2s, 4s, max 8s
+        console.warn(`[aiProxy] attempt ${attempt} got ${res.status}, retrying in ${wait}ms…`);
+        await new Promise(r => setTimeout(r, wait));
+        continue;
       }
       return res;
     } catch (e) {
@@ -1389,6 +1399,21 @@ function B(s){
   return `<span class="badge b-${m[s]||'gray'}">${s}</span>`;
 }
 
+// ── HTML ESCAPING — XSS protection for user/AI-supplied text rendered via innerHTML ──
+// Use esc(...) around ANY value that originates from a tenant, a landlord free-text
+// field, an uploaded file name, or an AI document scan before placing it in HTML.
+function esc(v){
+  if (v === null || v === undefined) return '';
+  return String(v)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}
+// Same rules work for quoted attribute values (incl. inline on* handlers).
+function escAttr(v){ return esc(v); }
+
 // ── CHECKLIST & METER SUPABASE HELPERS ──
 const _checkCache = {};  // key: `${prefix}_${pid}` → {itemId: true}
 const _meterCache = {};  // key: pid → {gas_in: '12345', ...}
@@ -1595,8 +1620,10 @@ async function loadData() {
     D.userProfile.newsletter_opted_in = nlVal;
     D.userProfile.newsletter_opted_at = now;
   }
-  // Resolve user plan from Stripe subscription, fallback to portfolio (grandfather existing users)
-  window._userPlan = (sub.data && sub.data.plan_name) ? sub.data.plan_name : 'portfolio';
+  // Resolve PAID plan from Stripe (null if none). Final access is decided in TRIAL RESOLUTION
+  // (initApp): paid plan > active trial > read-only. Never fail open to a paid tier.
+  window._paidPlan = (sub.data && sub.data.plan_name) ? sub.data.plan_name : null;
+  window._userPlan = window._paidPlan || 'expired';
   if (er.data?.length) D.esignReq = er.data;
   if (ce.data?.length) D.calEvents = ce.data;
   await checkComplianceReminders();
@@ -1621,7 +1648,7 @@ async function loadData() {
 }
 
 // ── PLAN GATING HELPERS ──
-function getUserPlan(){ return window._userPlan || 'trial'; }
+function getUserPlan(){ return window._userPlan || 'expired'; }
 function isPortfolio(){ return getUserPlan()==='portfolio'; }
 function isLandlordOrAbove(){ return ['landlord','portfolio'].includes(getUserPlan()); }
 function isStarter(){ return getUserPlan()==='starter'; }
@@ -1667,10 +1694,16 @@ async function execDeleteAccount() {
     if (!uid) return;
     closeMo();
     toast('Deleting account…');
-    const tables = ['certificates','maintenance','rent','tenants','insurance','legal_movein_packs','signatures','documents','properties','user_profiles','stripe_subscriptions','profiles'];
-    for (const table of tables) {
-      await sb.from(table).delete().eq('user_id', uid).then(() => {}).catch(() => {});
-      await sb.from(table).delete().eq('id', uid).then(() => {}).catch(() => {});
+    // Server-side, transactional delete (all-or-nothing) via the
+    // delete_my_account() SECURITY DEFINER function. Replaces the old
+    // client-side loop, which deleted table-by-table and silently swallowed
+    // partial failures (leaving orphaned data). Requires the function to be
+    // created in Supabase first (see account-deletion.sql).
+    const { error } = await sb.rpc('delete_my_account');
+    if (error) {
+      console.error('delete_my_account error:', error);
+      toast('Error deleting account — please contact support', true);
+      return;
     }
     await sb.auth.signOut();
     toast('Account deleted');
@@ -1681,27 +1714,53 @@ async function execDeleteAccount() {
   }
 }
 const PLAN_LIMITS = { starter:2, landlord:10, portfolio:999 };
-const PLAN_FEATURES = { starter:['compliance','certificates','maintenance','templates','calendar','assistant'], landlord:['compliance','certificates','maintenance','templates','calendar','assistant','financials','rent','insurance','contractors'], portfolio:['compliance','certificates','maintenance','templates','calendar','assistant','financials','rent','insurance','contractors','mtd','inventory-reports'] };
+const STARTER_FEATURES = ['compliance','certificates','maintenance','templates','calendar','assistant'];
+const LANDLORD_FEATURES = [...STARTER_FEATURES,'financials','rent','insurance','contractors','mtd'];
+const PORTFOLIO_FEATURES = [...LANDLORD_FEATURES,'inventory-reports'];
+const PLAN_FEATURES = { starter:STARTER_FEATURES, landlord:LANDLORD_FEATURES, portfolio:PORTFOLIO_FEATURES };
+// Feature -> upsell plan + label. Single source of truth for every gate + the upgrade modal.
+const FEATURE_META = {
+  rent:{label:'Rent Tracker',plan:'landlord'},
+  financials:{label:'Income & Profit',plan:'landlord'},
+  insurance:{label:'Insurance',plan:'landlord'},
+  contractors:{label:'Contractor Book',plan:'landlord'},
+  mtd:{label:'MTD Tax',plan:'landlord'},
+  'inventory-reports':{label:'AI Inventory Reports',plan:'portfolio'}
+};
+// Page id -> feature it requires (drives the central gate in nav()).
+const PAGE_FEATURE = { 'rent-finance':'rent','financials':'financials','rent':'rent','mtd':'mtd','contractors':'contractors','insurance':'insurance','inventory-reports':'inventory-reports','inventory-report':'inventory-reports' };
+// trial = full access; expired = handled by soft-lock/_expiredGuard, never blocked here.
+function planHas(feature){ const p=getUserPlan(); if(p==='trial'||p==='expired') return true; return (PLAN_FEATURES[p]||STARTER_FEATURES).includes(feature); }
+function featMeta(feature){ return FEATURE_META[feature]||{label:feature,plan:'landlord'}; }
+/** Central gate: returns true (and shows the upgrade modal) if the current plan lacks `feature`. */
+function featureGate(feature){ if(!feature||planHas(feature)) return false; const m=featMeta(feature); upgradePrompt(m.label,m.plan); return true; }
 function getPropLimit(){ if(isExpired()) return 0; return PLAN_LIMITS[getUserPlan()]||2; }
 
 // ── AI USAGE ALLOWANCES (per landlord account, per calendar month) ──
-// These are FAIR-USE BACKSTOPS, not rations: sized far above a normal landlord's
-// real usage (a few cert/ID scans per property per year + occasional tenant docs),
-// so genuine customers never hit them. They exist only to stop bugs, abuse, and
-// bill-shock from draining the shared Anthropic credit pool.
-// ⚠ The numbers here are for UI/messaging ONLY. The REAL enforcement lives in the
-// ai-proxy edge function (server-side) — the client can be bypassed. See
-// supabase/functions/ai-proxy-gate.ts and PROJECT_KNOWLEDGE.md › "AI cost control".
+// Fair-use BACKSTOPS, not rations: sized far above a normal landlord's real usage,
+// so genuine customers never hit them. They only stop bugs, abuse, and bill-shock
+// from draining the shared Anthropic credit pool.
+// ⚠ Numbers here are for UI/messaging ONLY. REAL enforcement is server-side in the
+// ai-proxy edge function (ai-proxy-gate.ts) — the client can be bypassed.
 const AI_MONTHLY_LIMITS = { trial:15, starter:40, landlord:200, portfolio:800 };
 function getAILimit(){ if(isExpired()) return 0; return AI_MONTHLY_LIMITS[getUserPlan()] ?? 15; }
 
-// Detects a "you've hit your AI allowance" or "credit exhausted" response so we can
-// degrade gracefully (let the user fill the form in by hand) instead of looking broken.
-// Edge function returns HTTP 402 with { error:'ai_quota' | 'ai_credit' } when capped.
+// Detects a "AI allowance reached" / "credit exhausted" response (edge returns HTTP 402
+// with { error:'ai_quota' | 'ai_credit' }) so we can degrade gracefully to manual entry.
 function isAIQuotaError(resOrErr, body){
   const status = resOrErr?.status;
   const code = body?.error || resOrErr?.code || '';
   return status === 402 || /quota|credit|insufficient|limit/i.test(String(code));
+}
+
+// Call from any AI-scan path. Shows a clear, non-scary message + keeps the manual form
+// usable. Never blocks the underlying form.
+function aiUnavailable({ overQuota=false, feature='AI scan' } = {}){
+  if (overQuota){
+    toast('AI allowance reached for this month — you can still enter the details manually below.', true);
+  } else {
+    toast(feature + ' is busy right now — enter the details manually, or try again in a moment.', true);
+  }
 }
 
 // ── SHARED AI SCAN FETCH ──
@@ -1711,7 +1770,7 @@ function isAIQuotaError(resOrErr, body){
 // degrades to "enter details manually" consistently across every scanner.
 async function aiScanFetch(payload, { feature = 'AI scan' } = {}){
   const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window._sbToken || '') }, body: JSON.stringify(payload)
   });
   if (res.status === 402){
     let body = null; try { body = await res.clone().json(); } catch(e){}
@@ -1720,17 +1779,6 @@ async function aiScanFetch(payload, { feature = 'AI scan' } = {}){
     aiUnavailable({ overQuota: false, feature });
   }
   return res;
-}
-
-// Call from any AI-scan catch block. Shows a clear, non-scary message + keeps the
-// manual form usable. `overQuota` true => it's an allowance issue (offer upgrade),
-// false => transient outage (offer retry). Never blocks the underlying form.
-function aiUnavailable({ overQuota=false, feature='AI scan' } = {}){
-  if (overQuota){
-    toast('AI allowance reached for this month — you can still enter the details manually below.', true);
-  } else {
-    toast(feature + ' is busy right now — enter the details manually, or try again in a moment.', true);
-  }
 }
 
 // ── PROPERTY STATUS ──
@@ -1847,9 +1895,15 @@ async function initApp() {
       _trialState = { isTrialing:true, daysLeft:30, hasExpired:false, plan:'trial', expiresAt:expiry.getTime() };
     }
 
-    // Override plan
-    if (isTrialing) { window._userPlan = 'portfolio'; }
-    if (hasExpired && plan === 'trial') { window._userPlan = 'expired'; }
+    // ── ACCESS DECISION (fail-closed) ──
+    // 1) active paid plan wins  2) else inside 30-day trial = full access  3) else read-only.
+    if (window._paidPlan) {
+      window._userPlan = window._paidPlan;
+    } else if (_trialState.isTrialing) {
+      window._userPlan = 'portfolio';
+    } else {
+      window._userPlan = 'expired';
+    }
 
     // ── UI ──
     // Indicator
@@ -1895,10 +1949,125 @@ async function initApp() {
     }
     setTimeout(renderNewUserStepper, 50);
     setTimeout(_refreshResumeNudges, 600);
+    _injectTourLauncher();
+    setTimeout(maybeStartTour, 900);
   } catch(err) {
     document.getElementById('main').innerHTML = '<div style="padding:32px;font-family:sans-serif"><h2 style="color:#E53E3E">Dashboard Error</h2><pre style="background:#fff5f5;padding:16px;border-radius:8px;font-size:12px;overflow:auto">'+err.stack+'</pre><p style="margin-top:12px;color:#666">Please share this error with the developer.</p></div>';
     _logError('Dashboard', err);
   }
+}
+
+// ── FIRST-LOGIN GUIDED TOUR ──
+const _TOUR_KEY = 'nxl_tour_v1';
+const _TOUR_STEPS = [
+  { sel:'[data-page="dashboard"]',   title:'Dashboard',    body:'Your home base \u2014 portfolio health, urgent alerts, and what needs your attention today.' },
+  { sel:'[data-page="properties"]',  title:'Properties',   body:'Add and manage every property here \u2014 details, compliance and tenants together in one place.' },
+  { sel:'[data-page="tenants"]',     title:'Tenants',      body:'Each tenant\u2019s documents, compliance checklist and portal access. Use the search box to find anyone fast.' },
+  { sel:'[data-page="compliance"]',  title:'Compliance',   body:'Track gas, electrical, EPC and more \u2014 NexLet warns you before anything expires.' },
+  { sel:'[data-page="maintenance"]', title:'Maintenance',  body:'Log repair jobs and track them through. Tenants can report issues straight from their portal.' },
+  { sel:'[data-page="rent-finance"]',title:'Rent & Finance',body:'Record rent, spot arrears early, and keep your records ready for tax time.' },
+  { sel:'[data-page="documents"]',   title:'Documents',    body:'Generate notices, store signed agreements, and find any file with search.' },
+  { sel:'#sb-ai-card',               title:'AI Assistant', body:'Stuck on anything? Ask the assistant about your portfolio or UK lettings law.' },
+];
+let _tourIdx = 0;
+
+function maybeStartTour(){
+  try { if (localStorage.getItem(_TOUR_KEY)) return; } catch(e){}
+  if (window.innerWidth < 900) return; // skip on narrow screens; show next desktop login
+  _showTourWelcome();
+}
+
+function _tourCleanup(){ document.querySelectorAll('.nxl-tour-el').forEach(el=>el.remove()); }
+
+function _endTour(){
+  try { localStorage.setItem(_TOUR_KEY, JSON.stringify({done:true, ts:Date.now()})); } catch(e){}
+  _tourCleanup();
+}
+
+function _skipTour(){ _endTour(); }
+
+function _showTourWelcome(){
+  _tourCleanup();
+  const ov = document.createElement('div');
+  ov.className = 'nxl-tour-el';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(11,30,61,.45);z-index:100000;display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.innerHTML = '<div style="background:#fff;border-radius:16px;max-width:420px;width:100%;padding:32px 30px;box-shadow:0 20px 60px rgba(0,0,0,.3);text-align:center;font-family:var(--font),sans-serif">'
+    + '<div style="width:54px;height:54px;border-radius:14px;background:#0B1E3D;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;font-size:24px">\uD83D\uDC4B</div>'
+    + '<h2 style="font-size:22px;font-weight:700;color:#0B1E3D;margin:0 0 8px">Welcome to NexLet</h2>'
+    + '<p style="font-size:14px;line-height:1.6;color:#5A6B82;margin:0 0 24px">Let\u2019s take a 30-second tour so you know where everything lives. You can replay it anytime from the <strong>?</strong> button in the corner.</p>'
+    + '<div style="display:flex;gap:10px">'
+    + '<button onclick="_skipTour()" style="flex:1;padding:11px;border:1px solid var(--border);background:#fff;border-radius:10px;font-size:13px;font-weight:600;color:#5A6B82;cursor:pointer;font-family:inherit">Skip for now</button>'
+    + '<button onclick="_beginTourSteps()" style="flex:1;padding:11px;border:none;background:#0B1E3D;border-radius:10px;font-size:13px;font-weight:700;color:#fff;cursor:pointer;font-family:inherit">Take the tour \u2192</button>'
+    + '</div></div>';
+  document.body.appendChild(ov);
+}
+
+function _beginTourSteps(){
+  _tourCleanup();
+  document.querySelectorAll('.sb-group-body').forEach(b=>{ b.style.display='block'; });
+  _tourIdx = 0;
+  _renderTourStep();
+}
+
+function _renderTourStep(){
+  _tourCleanup();
+  const step = _TOUR_STEPS[_tourIdx];
+  if (!step){ _endTour(); return; }
+  const target = document.querySelector(step.sel);
+  if (!target){ _tourIdx++; if (_tourIdx >= _TOUR_STEPS.length){ _endTour(); return; } return _renderTourStep(); }
+  const r = target.getBoundingClientRect();
+  const pad = 6;
+
+  const catcher = document.createElement('div');
+  catcher.className = 'nxl-tour-el';
+  catcher.style.cssText = 'position:fixed;inset:0;z-index:99999;background:transparent';
+  document.body.appendChild(catcher);
+
+  const hl = document.createElement('div');
+  hl.className = 'nxl-tour-el';
+  hl.style.cssText = 'position:fixed;left:'+(r.left-pad)+'px;top:'+(r.top-pad)+'px;width:'+(r.width+pad*2)+'px;height:'+(r.height+pad*2)+'px;border-radius:10px;box-shadow:0 0 0 9999px rgba(11,30,61,.55);border:2px solid #00C896;z-index:100000;pointer-events:none;transition:all .2s';
+  document.body.appendChild(hl);
+
+  const isLast = _tourIdx === _TOUR_STEPS.length-1;
+  const tip = document.createElement('div');
+  tip.className = 'nxl-tour-el';
+  tip.style.cssText = 'position:fixed;z-index:100001;background:#fff;border-radius:12px;width:280px;padding:18px 18px 14px;box-shadow:0 12px 40px rgba(0,0,0,.28);font-family:var(--font),sans-serif';
+  tip.innerHTML = '<div style="font-size:11px;font-weight:700;color:#00A37A;letter-spacing:.4px;margin-bottom:5px">STEP '+(_tourIdx+1)+' OF '+_TOUR_STEPS.length+'</div>'
+    + '<div style="font-size:16px;font-weight:700;color:#0B1E3D;margin-bottom:5px">'+step.title+'</div>'
+    + '<div style="font-size:13px;line-height:1.55;color:#5A6B82;margin-bottom:14px">'+step.body+'</div>'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">'
+    + '<button onclick="_skipTour()" style="background:none;border:none;font-size:12px;color:#9AA8BC;cursor:pointer;font-family:inherit">Skip</button>'
+    + '<div style="display:flex;gap:8px">'
+    + (_tourIdx>0 ? '<button onclick="_tourNav(-1)" style="padding:8px 14px;border:1px solid var(--border);background:#fff;border-radius:8px;font-size:12px;font-weight:600;color:#5A6B82;cursor:pointer;font-family:inherit">Back</button>' : '')
+    + '<button onclick="_tourNav(1)" style="padding:8px 16px;border:none;background:#0B1E3D;border-radius:8px;font-size:12px;font-weight:700;color:#fff;cursor:pointer;font-family:inherit">'+(isLast?'Done':'Next \u2192')+'</button>'
+    + '</div></div>';
+  document.body.appendChild(tip);
+
+  let left = r.right + 14;
+  let top = r.top - 4;
+  const tw = 280, th = tip.offsetHeight;
+  if (left + tw > window.innerWidth - 10) left = Math.max(10, r.left - tw - 14);
+  if (top + th > window.innerHeight - 10) top = Math.max(10, window.innerHeight - th - 10);
+  tip.style.left = left+'px';
+  tip.style.top = top+'px';
+}
+
+function _tourNav(dir){
+  _tourIdx += dir;
+  if (_tourIdx >= _TOUR_STEPS.length){ _endTour(); return; }
+  if (_tourIdx < 0) _tourIdx = 0;
+  _renderTourStep();
+}
+
+function _injectTourLauncher(){
+  if (document.getElementById('nxl-tour-launch')) return;
+  const b = document.createElement('button');
+  b.id = 'nxl-tour-launch';
+  b.title = 'Take a tour';
+  b.textContent = '?';
+  b.onclick = function(){ _tourIdx = 0; _showTourWelcome(); };
+  b.style.cssText = 'position:fixed;right:18px;bottom:76px;width:36px;height:36px;border-radius:50%;background:#0B1E3D;color:#fff;border:none;font-size:17px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(11,30,61,.3);z-index:9000';
+  document.body.appendChild(b);
 }
 
 // ── SAVE: PROPERTY ──
@@ -2039,10 +2208,10 @@ function _scanBoxSuccess(boxId, file, parsed) {
     ? `<button type="button" onclick="dvoOpen('${blobUrl}','${name.replace(/'/g,"\\'")}','Uploaded document')" style="margin-top:8px;background:var(--white);border:1px solid var(--navy);border-radius:6px;padding:4px 12px;font-size:11px;font-weight:600;color:var(--navy);cursor:pointer;font-family:var(--font)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M1.5 8S4 4 8 4s6.5 4 6.5 4-2.5 4-6.5 4-6.5-4-6.5-4z"/><circle cx="8" cy="8" r="1.8"/></svg> View uploaded file</button>`
     : '';
   const warnings = parsed?._warnings || [];
-  const warnNote = warnings.length ? `<div style="font-size:10px;color:var(--amber);margin-top:4px">⚠️ Could not read: ${warnings.join(', ')}</div>` : '';
+  const warnNote = warnings.length ? `<div style="font-size:10px;color:var(--amber);margin-top:4px">⚠️ Could not read: ${esc(warnings.join(', '))}</div>` : '';
   box.innerHTML = `
     <div style="font-size:13px;color:var(--green-dark);font-weight:600">✓ Scanned — fields filled below</div>
-    <div style="font-size:11px;color:var(--muted);margin-top:3px;word-break:break-all">${name}</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:3px;word-break:break-all">${esc(name)}</div>
     ${warnNote}
     ${viewBtn}`;
 }
@@ -2062,7 +2231,7 @@ function _scanBoxError(boxId, file) {
   const viewBtn = blobUrl
     ? `<button type="button" onclick="dvoOpen('${blobUrl}','${name.replace(/'/g,"\\'")}','Uploaded document')" style="margin-top:8px;background:var(--white);border:1px solid var(--border);border-radius:6px;padding:4px 12px;font-size:11px;font-weight:600;color:var(--navy);cursor:pointer;font-family:var(--font)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M1.5 8S4 4 8 4s6.5 4 6.5 4-2.5 4-6.5 4-6.5-4-6.5-4z"/><circle cx="8" cy="8" r="1.8"/></svg> View uploaded file</button>`
     : '';
-  box.innerHTML = `<div style="font-size:13px;color:var(--amber);font-weight:500">⚠️ Could not scan — please fill in manually</div><div style="font-size:11px;color:var(--muted);margin-top:3px">${name}</div>${viewBtn}`;
+  box.innerHTML = `<div style="font-size:13px;color:var(--amber);font-weight:500">⚠️ Could not scan — please fill in manually</div><div style="font-size:11px;color:var(--muted);margin-top:3px">${esc(name)}</div>${viewBtn}`;
 }
 // Every document upload in the app MUST follow this pattern:
 //
@@ -2561,7 +2730,7 @@ function _certFileChange(input) {
   if (!input.files[0]) return;
   window._lastCertFile = input.files[0];
   const box = document.getElementById('cert-upload-box');
-  if (box) box.innerHTML = '<div style="font-size:13px;color:var(--green-dark);font-weight:600;padding:8px 0">✓ ' + input.files[0].name + '</div>';
+  if (box) box.innerHTML = '<div style="font-size:13px;color:var(--green-dark);font-weight:600;padding:8px 0">✓ ' + esc(input.files[0].name) + '</div>';
 }
 
 function moCert(pid, docType){
@@ -3618,7 +3787,7 @@ function scanIDDoc(num, input) {
       const result = document.getElementById(`ts-id${num}-ai-result`);
       if (result) {
         result.style.display = 'block';
-        result.innerHTML = `✦ Detected: <strong>${parsed.doc_type||'Unknown'}</strong>${parsed.issuing_authority?` · Issued by ${parsed.issuing_authority}`:''}${parsed.expiry?` · Expires ${parsed.expiry}`:''}${parsed.nationality?' · '+parsed.nationality:''} — confirm below`;
+        result.innerHTML = `✦ Detected: <strong>${esc(parsed.doc_type||'Unknown')}</strong>${parsed.issuing_authority?` · Issued by ${esc(parsed.issuing_authority)}`:''}${parsed.expiry?` · Expires ${esc(parsed.expiry)}`:''}${parsed.nationality?' · '+esc(parsed.nationality):''} — confirm below`;
       }
       if (box) _scanBoxSuccess(`ts-id${num}-scan-box`, file, parsed);
       toast('✓ ID document scanned');
@@ -3664,7 +3833,7 @@ function scanRTRDoc(input) {
       const result = document.getElementById('ts-rtr-ai-result');
       if (result) {
         result.style.display = 'block';
-        result.innerHTML = `✦ Detected: <strong>${parsed.doc_type||'Unknown'}</strong>${parsed.issuing_authority?` · Issued by ${parsed.issuing_authority}`:''}${parsed.expiry?` · Expires ${parsed.expiry}`:''}${parsed.nationality?' · '+parsed.nationality:''} — confirm below`;
+        result.innerHTML = `✦ Detected: <strong>${esc(parsed.doc_type||'Unknown')}</strong>${parsed.issuing_authority?` · Issued by ${esc(parsed.issuing_authority)}`:''}${parsed.expiry?` · Expires ${esc(parsed.expiry)}`:''}${parsed.nationality?' · '+esc(parsed.nationality):''} — confirm below`;
       }
       _scanBoxSuccess('ts-rtr-scan-box', file, parsed);
       toast('✓ RTR document scanned');
@@ -4119,7 +4288,7 @@ async function _nudgeUnsignedTenants(pid) {
     </div>`;
     await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window._sbToken || '') },
       body: JSON.stringify({ type: 'send_email', to: tenant.email, subject: `Reminder — please sign your tenancy document for ${p.address}`, html })
     }).catch(e => console.error('[nudge] email failed', e));
     sent++;
@@ -4311,7 +4480,7 @@ async function _saveTenantSetupToDB() {
         <p style="font-size:11px;color:#999;text-align:center;margin-top:16px">This link is unique to you and works every time. Save it or bookmark it.</p></div>`;
       try {
         await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
-          method:'POST', headers:{'Content-Type':'application/json'},
+          method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+(window._sbToken||'')},
           body: JSON.stringify({ type:'send_email', to: s.email, subject:`Your tenant portal — ${propAddr}`, html: inviteHtml })
         });
       } catch(_e) { console.warn('Portal invite email failed silently', _e); }
@@ -4798,7 +4967,7 @@ async function sendTenantComms(tid) {
   try {
     const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window._sbToken || '') },
       body: JSON.stringify({ type: 'send_email', to, subject, html: htmlBody })
     });
     const data = await res.json();
@@ -5035,7 +5204,7 @@ async function sendWelcomeKit(pid) {
       </body></html>`;
 
       const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
-        method:'POST', headers:{'Content-Type':'application/json'},
+        method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+(window._sbToken||'')},
         body: JSON.stringify({ type:'send_email', to: tenantEmail, subject: `Your tenancy welcome pack — ${propAddr}`, html, ...(attachment_urls.length ? { attachment_urls } : {}) })
       });
       const resData = await res.json().catch(()=>({}));
@@ -5679,7 +5848,7 @@ function pgDiscover(){
   const KEY = [
     { ic:I.portal, name:'Tenant portal link', desc:'Give each tenant a private link \u2014 no password \u2014 to view documents, see rent and report repairs themselves.', go:`nav('tenants');toast('Open a tenant to send their portal link')` },
     { ic:I.esign, name:'E-signature', desc:'Send a tenancy agreement and your tenant signs it on their phone \u2014 no printing or scanning.', go:`nav('tenants');toast('Open a tenant to send an agreement for e-signature')` },
-    { ic:I.inventory, name:'Inventory reports', desc:'Snap a few photos and AI writes a full room-by-room condition report you can send to the tenant.', go:`nav('properties');toast('Open a property \u2192 Compliance tab to create an inventory report')` },
+    { ic:I.inventory, feat:'inventory-reports', name:'Inventory reports', desc:'Snap a few photos and AI writes a full room-by-room condition report you can send to the tenant.', go:`nav('properties');toast('Open a property \u2192 Compliance tab to create an inventory report')` },
   ];
   const GROUPS = [
     { t:'Your properties & tenants', rows:[
@@ -5698,18 +5867,31 @@ function pgDiscover(){
       { bg:'var(--off)', col:'var(--navy)', ic:I.folder, name:'Document library', desc:'Store and find any property document.', go:`window._docTab='library';nav('documents')` },
     ]},
     { t:'Money & tax', rows:[
-      { bg:'var(--green-bg)', col:'var(--green-dark)', ic:I.note, name:'Rent tracking', desc:'Mark rent received and send receipts.', go:`window._rfTab='rent';nav('rent-finance')` },
-      { bg:'var(--blue-bg)', col:'var(--blue)', ic:I.chart, name:'Income & profit', desc:'See what each property earns after costs.', go:`window._rfTab='finance';nav('rent-finance')` },
-      { bg:'var(--status-green-bg)', col:'var(--status-green)', ic:I.receipt, name:'Tax (MTD)', desc:'Making Tax Digital filings and a tax calculator.', go:`window._rfTab='mtd';nav('rent-finance')` },
+      { bg:'var(--green-bg)', col:'var(--green-dark)', ic:I.note, feat:'rent', name:'Rent tracking', desc:'Mark rent received and send receipts.', go:`window._rfTab='rent';nav('rent-finance')` },
+      { bg:'var(--blue-bg)', col:'var(--blue)', ic:I.chart, feat:'financials', name:'Income & profit', desc:'See what each property earns after costs.', go:`window._rfTab='finance';nav('rent-finance')` },
+      { bg:'var(--status-green-bg)', col:'var(--status-green)', ic:I.receipt, feat:'mtd', name:'Tax (MTD)', desc:'Making Tax Digital filings and a tax calculator.', go:`window._rfTab='mtd';nav('rent-finance')` },
     ]},
     { t:'Need a hand?', rows:[
       { bg:'var(--status-green-bg)', col:'var(--status-green)', ic:I.chat, name:'AI Assistant', desc:'Ask about the law or where to find anything \u2014 in plain English.', go:`showAssistant()` },
     ]},
   ];
-  const keyHtml = KEY.map(k=>`<div class="dsc-card" onclick="${k.go}"><span class="dsc-pill">Easy to miss</span><div class="dsc-card-ic">${k.ic}</div><div class="dsc-card-name">${k.name}</div><div class="dsc-card-desc">${k.desc}</div><div class="dsc-card-go">Open \u2192</div></div>`).join('');
-  const groupsHtml = GROUPS.map(g=>`<div class="dsc-grp"><div class="dsc-grp-t">${g.t}</div><div class="dsc-list">${g.rows.map(r=>`<div class="dsc-row" onclick="${r.go}"><div class="dsc-row-ic" style="background:${r.bg};color:${r.col}">${r.ic}</div><div class="dsc-row-body"><div class="dsc-row-name">${r.name}</div><div class="dsc-row-desc"><span>${r.desc}</span></div></div><span class="dsc-row-go">\u203A</span></div>`).join('')}</div></div>`).join('');
+  const _planLbl = {starter:'Starter',landlord:'Landlord',portfolio:'Portfolio'};
+  const keyHtml = KEY.map(k=>{
+    const locked = k.feat && !planHas(k.feat); const m = locked ? featMeta(k.feat) : null;
+    const click = locked ? `upgradePrompt('${m.label}','${m.plan}')` : k.go;
+    const pill = locked ? `<span class="dsc-pill" style="background:var(--navy);color:#fff">🔒 ${_planLbl[m.plan]}</span>` : `<span class="dsc-pill">Easy to miss</span>`;
+    return `<div class="dsc-card${locked?' dsc-locked':''}" onclick="${click}">${pill}<div class="dsc-card-ic">${k.ic}</div><div class="dsc-card-name">${k.name}</div><div class="dsc-card-desc">${k.desc}</div><div class="dsc-card-go">${locked?'Upgrade to unlock \u2192':'Open \u2192'}</div></div>`;
+  }).join('');
+  const _dscRow = r=>{
+    const locked = r.feat && !planHas(r.feat); const m = locked ? featMeta(r.feat) : null;
+    const click = locked ? `upgradePrompt('${m.label}','${m.plan}')` : r.go;
+    const tail = locked ? `<span style="font-size:10px;font-weight:700;color:#fff;background:var(--navy);padding:2px 8px;border-radius:100px;flex-shrink:0;white-space:nowrap">🔒 ${_planLbl[m.plan]}</span>` : `<span class="dsc-row-go">\u203A</span>`;
+    return `<div class="dsc-row${locked?' dsc-locked':''}" onclick="${click}"><div class="dsc-row-ic" style="background:${r.bg};color:${r.col}">${r.ic}</div><div class="dsc-row-body"><div class="dsc-row-name">${r.name}</div><div class="dsc-row-desc"><span>${r.desc}</span></div></div>${tail}</div>`;
+  };
+  const groupsHtml = GROUPS.map(g=>`<div class="dsc-grp"><div class="dsc-grp-t">${g.t}</div><div class="dsc-list">${g.rows.map(_dscRow).join('')}</div></div>`).join('');
   return `<style>
 #dsc-root{max-width:860px}
+#dsc-root .dsc-locked .dsc-row-ic,#dsc-root .dsc-locked .dsc-card-ic{opacity:.5}
 #dsc-root .dsc-ph{margin-bottom:22px}
 #dsc-root .dsc-ph h1{font-size:23px;font-weight:700;color:var(--txt);margin-bottom:5px}
 #dsc-root .dsc-ph p{font-size:14px;color:var(--muted)}
@@ -6946,8 +7128,8 @@ function propMaintHtml(pid){
     return`<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="moIssueDetail('${m.id}')" onmouseenter="this.style.background='var(--off)'" onmouseleave="this.style.background='transparent'">
       <div style="width:8px;height:8px;border-radius:50%;background:${sc};flex-shrink:0"></div>
       <div style="flex:1">
-        <div style="font-size:12px;font-weight:500;color:var(--txt)">${m.title||m.desc||'—'}</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:1px">${m.cat||'—'}${m.assigned_to?' · <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><circle cx="8" cy="8" r="2.6"/><path d="M3.5 7a4.5 4.5 0 0 1 9 0"/><path d="M3.5 7h9"/><path d="M3 13.5c.7-2 2.6-3 5-3s4.3 1 5 3"/></svg> '+m.assigned_to:''}</div>
+        <div style="font-size:12px;font-weight:500;color:var(--txt)">${esc(m.title||m.desc||'—')}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:1px">${esc(m.cat||'—')}${m.assigned_to?' · <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><circle cx="8" cy="8" r="2.6"/><path d="M3.5 7a4.5 4.5 0 0 1 9 0"/><path d="M3.5 7h9"/><path d="M3 13.5c.7-2 2.6-3 5-3s4.3 1 5 3"/></svg> '+m.assigned_to:''}</div>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
         ${m.awaab?'<span style="font-size:10px;font-weight:700;color:var(--red)">⚠️</span>':''}
@@ -7882,7 +8064,7 @@ function pdTabContent(pid, tab) {
           ? `<div class="tw"><table><thead><tr><th>Date</th><th>Description</th><th>Priority</th><th>Flags</th><th>Status</th></tr></thead>
               <tbody>${allM.map(m=>`<tr>
                 <td style="font-size:12px;white-space:nowrap">${FMT(m.date||m.issue_date)}</td>
-                <td style="max-width:220px;font-size:13px">${m.desc||m.description||'—'}</td>
+                <td style="max-width:220px;font-size:13px">${esc(m.desc||m.description||'—')}</td>
                 <td>${B(m.priority||'Low')}</td>
                 <td>${m.awaab?'<span class="badge b-red">Awaab</span>':'—'}</td>
                 <td><div class="sf">
@@ -8929,7 +9111,7 @@ async function checkAllReminders() {
 
   async function sendReminder(subject, html, action, recordId, key) {
     try {
-      await fetch(EDGE, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ type:'send_email', to: email, subject, html }) });
+      await fetch(EDGE, { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+(window._sbToken||'')}, body: JSON.stringify({ type:'send_email', to: email, subject, html }) });
       await logAudit(action, 'reminders', recordId, key);
     } catch(e) { /* non-critical */ }
   }
@@ -8974,7 +9156,7 @@ async function checkAllReminders() {
         if (d < ms-TOL || d > ms+TOL) continue;
         if (await alreadySent('REMINDER_LICENCE', prop.id, `lic_${ms}d`)) continue;
         const html = emailWrap(`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><rect x="3.5" y="3" width="9" height="11" rx="1.5"/><path d="M6 3V2h4v1"/><path d="M6 7h4M6 9.5h4M6 12h2.5"/></svg> Licence expiry — ${prop.address}`,`Property licence reminder · ${ms} days`,`<p style="font-size:13px">Your <strong>${prop.licence_type||'property licence'}</strong> for <strong>${prop.address}</strong> expires in <strong>${d} days</strong> (${new Date(prop.licence_expiry).toLocaleDateString('en-GB')}).</p><p style="font-size:13px;margin-top:10px;color:#7A8FA6">Non-compliance with licensing requirements can result in fines up to £30,000. Please arrange renewal.</p>`);
-        await sendReminder(`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><rect x="3.5" y="3" width="9" height="11" rx="1.5"/><path d="M6 3V2h4v1"/><path d="M6 7h4M6 9.5h4M6 12h2.5"/></svg> Licence expiry in ${d} days — ${prop.address}`, html, 'REMINDER_LICENCE', prop.id, `lic_${ms}d`);
+        await sendReminder(`Licence expiry in ${d} days — ${prop.address}`, html, 'REMINDER_LICENCE', prop.id, `lic_${ms}d`);
       }
     }
   }
@@ -8988,7 +9170,7 @@ async function checkAllReminders() {
         const prop = P(ins.prop_id)||{address:'—'};
         if (await alreadySent('REMINDER_INSURANCE', ins.id, `ins_${ms}d`)) continue;
         const html = emailWrap(`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M8 1.5 2.5 4v4c0 3.3 2.4 5.8 5.5 6.5 3.1-.7 5.5-3.2 5.5-6.5V4z"/></svg> Insurance renewal — ${prop.address}`,`Insurance reminder · ${ms} days`,`<p style="font-size:13px">Your <strong>${ins.type||'insurance policy'}</strong> for <strong>${prop.address}</strong> renews in <strong>${d} days</strong> (${new Date(ins.expiry).toLocaleDateString('en-GB')}).</p><p style="font-size:13px;margin-top:10px;color:#7A8FA6">Provider: ${ins.provider||'—'} · Policy: ${ins.policy||'—'}. Please arrange renewal to maintain cover.</p>`);
-        await sendReminder(`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M8 1.5 2.5 4v4c0 3.3 2.4 5.8 5.5 6.5 3.1-.7 5.5-3.2 5.5-6.5V4z"/></svg> Insurance renewal in ${d} days — ${prop.address}`, html, 'REMINDER_INSURANCE', ins.id, `ins_${ms}d`);
+        await sendReminder(`Insurance renewal in ${d} days — ${prop.address}`, html, 'REMINDER_INSURANCE', ins.id, `ins_${ms}d`);
       }
     }
   }
@@ -9001,7 +9183,7 @@ async function checkAllReminders() {
         if (d < ms-TOL || d > ms+TOL) continue;
         if (await alreadySent('REMINDER_MORTGAGE', prop.id, `mort_${ms}d`)) continue;
         const html = emailWrap(`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M2 6 8 2.5 14 6"/><path d="M3 6.5v6M6 6.5v6M10 6.5v6M13 6.5v6"/><path d="M2 13.5h12"/></svg> Mortgage ending — ${prop.address}`,`Mortgage reminder · ${ms} days`,`<p style="font-size:13px">The mortgage on <strong>${prop.address}</strong> ends in <strong>${d} days</strong> (${new Date(prop.mortgage_end).toLocaleDateString('en-GB')}).</p><p style="font-size:13px;margin-top:10px;color:#7A8FA6">Lender: ${prop.mortgage_lender||'—'} · Outstanding: £${(prop.mortgage_outstanding||0).toLocaleString()}. Please arrange remortgage or contact your lender.</p>`);
-        await sendReminder(`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M2 6 8 2.5 14 6"/><path d="M3 6.5v6M6 6.5v6M10 6.5v6M13 6.5v6"/><path d="M2 13.5h12"/></svg> Mortgage ending in ${d} days — ${prop.address}`, html, 'REMINDER_MORTGAGE', prop.id, `mort_${ms}d`);
+        await sendReminder(`Mortgage ending in ${d} days — ${prop.address}`, html, 'REMINDER_MORTGAGE', prop.id, `mort_${ms}d`);
       }
     }
   }
@@ -9028,7 +9210,7 @@ async function checkAllReminders() {
         if (d < ms-TOL || d > ms+TOL) continue;
         if (await alreadySent('REMINDER_BOILER', prop.id, `boil_${ms}d`)) continue;
         const html = emailWrap(`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M10.5 2.5a3 3 0 0 0-4 4L2 11a1.5 1.5 0 0 0 2 2l4.5-4.5a3 3 0 0 0 4-4l-2 2-1.5-1.5 2-2z"/></svg> Boiler service due — ${prop.address}`,`Boiler service reminder · ${ms} days`,`<p style="font-size:13px">The annual boiler service for <strong>${prop.address}</strong> is due in <strong>${d} days</strong> (${new Date(prop.boiler_next_service).toLocaleDateString('en-GB')}).</p><p style="font-size:13px;margin-top:10px;color:#7A8FA6">${prop.boiler_engineer?'Last engineer: '+prop.boiler_engineer+'. ':''} Annual servicing is a legal requirement for landlords under gas safety regulations.</p>`);
-        await sendReminder(`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M10.5 2.5a3 3 0 0 0-4 4L2 11a1.5 1.5 0 0 0 2 2l4.5-4.5a3 3 0 0 0 4-4l-2 2-1.5-1.5 2-2z"/></svg> Boiler service due in ${d} days — ${prop.address}`, html, 'REMINDER_BOILER', prop.id, `boil_${ms}d`);
+        await sendReminder(`Boiler service due in ${d} days — ${prop.address}`, html, 'REMINDER_BOILER', prop.id, `boil_${ms}d`);
       }
     }
   }
@@ -9042,7 +9224,7 @@ async function checkAllReminders() {
         const prop = P(t.prop_id)||{address:'—'};
         if (await alreadySent('REMINDER_RTR', t.id, `rtr_${ms}d`)) continue;
         const html = emailWrap(`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg> Right to Rent re-check — ${t.name}`,`Right to Rent reminder · ${ms} days`,`<p style="font-size:13px">The Right to Rent document for <strong>${t.name}</strong> at <strong>${prop.address}</strong> expires in <strong>${d} days</strong> (${new Date(t.rtr_expiry).toLocaleDateString('en-GB')}).</p><p style="font-size:13px;margin-top:10px;color:#7A8FA6">You must carry out a follow-up Right to Rent check before the document expires. Failure to do so is a criminal offence with unlimited fines.</p>`);
-        await sendReminder(`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg> Right to Rent re-check due — ${t.name}`, html, 'REMINDER_RTR', t.id, `rtr_${ms}d`);
+        await sendReminder(`Right to Rent re-check due — ${t.name}`, html, 'REMINDER_RTR', t.id, `rtr_${ms}d`);
       }
     }
   }
@@ -9060,7 +9242,7 @@ async function checkAllReminders() {
       const prop = P(t.prop_id)||{address:'—'};
       if (await alreadySent('REMINDER_RENT_LATE', t.id, `rent_${daysLate}d`)) continue;
       const html = emailWrap(`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><circle cx="8" cy="8" r="6"/><path d="M9.5 5.5a2 2 0 0 0-3.2.4C5.8 6.8 6 8 6 9.2 6 10 5.7 10.5 5.5 10.8h4M6 8h2.5"/></svg> Rent overdue — ${t.name}`,`Rent reminder · ${daysLate} day${daysLate!==1?'s':''} late`,`<p style="font-size:13px">Rent from <strong>${t.name}</strong> at <strong>${prop.address}</strong> was due on the <strong>${t.rent_day}${t.rent_day===1?'st':t.rent_day===2?'nd':t.rent_day===3?'rd':'th'}</strong> and appears to be <strong>${daysLate} day${daysLate!==1?'s':''} late</strong>.</p><p style="font-size:13px;margin-top:10px;color:#7A8FA6">Expected: £${(t.rent||0).toLocaleString()}/mo. Log in to mark as paid or begin the arrears process if needed.</p>`);
-      await sendReminder(`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><circle cx="8" cy="8" r="6"/><path d="M9.5 5.5a2 2 0 0 0-3.2.4C5.8 6.8 6 8 6 9.2 6 10 5.7 10.5 5.5 10.8h4M6 8h2.5"/></svg> Rent ${daysLate}d overdue — ${t.name}`, html, 'REMINDER_RENT_LATE', t.id, `rent_${daysLate}d`);
+      await sendReminder(`Rent ${daysLate}d overdue — ${t.name}`, html, 'REMINDER_RENT_LATE', t.id, `rent_${daysLate}d`);
     }
   }
 
@@ -9218,7 +9400,7 @@ async function checkAllReminders() {
     </div>`;
 
     await sendReminder(
-      `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M2.5 13.5h11"/><rect x="3.5" y="8" width="2" height="4"/><rect x="7" y="5" width="2" height="7"/><rect x="10.5" y="9.5" width="2" height="2.5"/></svg> Weekly compliance digest — Portfolio score: ${portfolioScore}/100`,
+      `Weekly compliance digest — Portfolio score: ${portfolioScore}/100`,
       html, 'REMINDER_COMPLIANCE_DIGEST', 'portfolio',       `digest_${today.toISOString().slice(0,10)}`
     );
     } // end shouldSendDigest
@@ -9235,7 +9417,7 @@ async function checkAllReminders() {
         if (d < ms-TOL || d > ms+TOL) continue;
         if (await alreadySent('REMINDER_INSPECTION', prop.id, `insp_${ms}d`)) continue;
         const html = emailWrap(`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg> Inspection due in ${d} day${d!==1?'s':''} — ${prop.address}`,`Property inspection reminder`,`<p style="font-size:13px">A property inspection is due in <strong>${d} day${d!==1?'s':''}</strong> at <strong>${prop.address}${prop.city?', '+prop.city:''}</strong>.</p><p style="font-size:13px;margin-top:10px;color:#7A8FA6">Log in to confirm the inspection or reschedule if needed.</p>`);
-        await sendReminder(`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg> Inspection due in ${d}d — ${prop.address}`, html, 'REMINDER_INSPECTION', prop.id, `insp_${ms}d`);
+        await sendReminder(`Inspection due in ${d}d — ${prop.address}`, html, 'REMINDER_INSPECTION', prop.id, `insp_${ms}d`);
       }
     }
   }
@@ -9344,8 +9526,7 @@ async function checkAllReminders() {
           </div>
         </div>`;
 
-        await sendReminder(
-          `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><rect x="2" y="3" width="12" height="11" rx="1.5"/><path d="M2 6.5h12M5 1.5V4M11 1.5V4"/></svg> Your ${monthLabel} property calendar — ${monthEvs.length} event${monthEvs.length!==1?'s':''}`,
+        await sendReminder(`Your ${monthLabel} property calendar — ${monthEvs.length} event${monthEvs.length!==1?'s':''}`,
           html, 'REMINDER_MONTHLY_CALENDAR', 'portfolio', `monthly_${monthKey}`
         );
       }
@@ -9523,7 +9704,7 @@ async function testReminder(id) {
   </div>`;
   try {
     await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
-      method:'POST', headers:{'Content-Type':'application/json'},
+      method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+(window._sbToken||'')},
       body: JSON.stringify({ type:'send_email', to: currentUser.email, subject:`Test reminder — ${rt.label}`, html })
     });
     toast(`✓ Test sent to ${currentUser.email}`);
@@ -9597,10 +9778,21 @@ function pgTenants(){
 
   const endedBadge = '<span style="font-size:10px;font-weight:600;background:var(--off);color:var(--muted);padding:2px 7px;border-radius:100px;margin-left:6px">Archived</span>';
 
-  const rows = visibleList.length
+  // ── Search filter ──
+  const _tsq = (window._tenantSearch || '').toLowerCase().trim();
+  const shownList = _tsq
+    ? visibleList.filter(t => { const raw = P(t.prop_id) || {}; return (t.name||'').toLowerCase().includes(_tsq) || (raw.address||'').toLowerCase().includes(_tsq) || (t.email||'').toLowerCase().includes(_tsq); })
+    : visibleList;
+  const searchBar = `<div style="position:relative;margin-bottom:16px;max-width:340px">
+      <input id="tenant-search" type="text" placeholder="Search name, address, email\u2026" value="${(window._tenantSearch||'').replace(/"/g,'&quot;')}" oninput="window._tenantSearch=this.value;nav('tenants')" style="width:100%;padding:9px 30px 9px 32px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:var(--font);box-sizing:border-box">
+      <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:14px;height:14px;display:block"><circle cx="7" cy="7" r="4.5"/><path d="m11 11 3 3"/></svg></span>
+      ${_tsq?`<button onclick="window._tenantSearch='';nav('tenants')" style="position:absolute;right:7px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--muted);font-size:17px;line-height:1">&times;</button>`:''}
+    </div>`;
+
+  const rows = shownList.length
     ? `<div class="panel"><div class="tw"><table>
       <thead><tr><th>Name</th><th>Start</th><th>Deposit</th><th>Compliance</th><th>Docs</th><th>Status</th></tr></thead>
-      <tbody>${visibleList.map(t=>{const raw=P(t.prop_id)||{};const p={address:raw.address||'—',city:raw.city||'',postcode:raw.postcode||''};const isEnded=t.status==='Ended'||t.archived;
+      <tbody>${shownList.map(t=>{const raw=P(t.prop_id)||{};const p={address:raw.address||'—',city:raw.city||'',postcode:raw.postcode||''};const isEnded=t.status==='Ended'||t.archived;
         const ragDots = CHECKLIST_ITEMS.map(item => {
           const cl = _checklistRAG(t, item.key);
           return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${RAG_COLORS[cl.ra]};margin:0 1px" title="${item.label}: ${cl.status}"></span>`;
@@ -9615,12 +9807,13 @@ function pgTenants(){
         <td>${isEnded?B('Ended'):B(t.status||'Active')}</td>
       </tr>`}).join('')}</tbody>
     </table></div></div>`
+    : _tsq ? `<div class="empty"><div class="empty-ic"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><circle cx="7" cy="7" r="4.5"/><path d="m11 11 3 3"/></svg></div><div class="empty-t">No matches for “${_tsq}”</div><div class="empty-s">Try a different name, address or email</div><div style="margin-top:14px"><button class="btn" onclick="window._tenantSearch='';nav('tenants')">Clear search</button></div></div>`
     : `<div class="empty"><div class="empty-ic">${filter==='Ended'?'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M2.5 5 8 2.5 13.5 5v6L8 13.5 2.5 11z"/><path d="M2.5 5 8 7.5 13.5 5M8 7.5v6"/></svg>':'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><circle cx="8" cy="5.5" r="2.8"/><path d="M3 13.5c0-2.6 2.2-4.2 5-4.2s5 1.6 5 4.2"/></svg>'}</div><div class="empty-t">${filter==='Ended'?'No ended tenancies':'No tenants yet'}</div><div class="empty-s">${filter==='Ended'?'Ended tenancies will appear here — their data is preserved for disputes':'Add your first tenant to get started'}</div>${filter==='Active'?'<div style="margin-top:16px"><button class="btn btn-navy" onclick="moTenant()">+ Add tenant</button></div>':''}</div>`;
 
   return`<div class="topbar"><span class="tb-title">Tenants</span><div class="tb-right"><button class="btn btn-navy" onclick="moTenant()">+ Add tenant</button></div></div>
   <div class="content">
     <div class="ph"><h1>Tenants</h1><p>${activeList.length} active · ${endedList.length} ended · Click any row for quick view</p></div>
-    ${filterTabs}
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">${filterTabs}${searchBar}</div>
     ${rows}
     <div id="tenant-slide-panel" style="position:fixed;top:0;right:0;width:380px;max-width:90vw;height:100vh;background:var(--white);box-shadow:-4px 0 20px rgba(0,0,0,0.15);z-index:9999;transform:translateX(100%);transition:transform .25s cubic-bezier(.4,0,.2,1);overflow-y:auto;display:flex;flex-direction:column">
       <div style="padding:16px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
@@ -9707,6 +9900,23 @@ function renderTenantDocCard(doc, isLast, tid, tenantName) {
     </div>`;
 }
 
+function _tdSetTab(tid, name){
+  try{
+    window._tdTab = window._tdTab || {};
+    window._tdTab[String(tid)] = name;
+    ['overview','docs','activity'].forEach(function(n){
+      var p = document.getElementById('td-pane-'+n);
+      if(p) p.style.display = (n===name ? 'block' : 'none');
+    });
+    document.querySelectorAll('.td-tab').forEach(function(b){
+      var on = b.dataset.tab===name;
+      b.style.background = on ? 'var(--navy)' : 'var(--white)';
+      b.style.color = on ? '#fff' : 'var(--muted)';
+      b.style.borderColor = on ? 'var(--navy)' : 'var(--border)';
+    });
+  }catch(e){}
+}
+
 function pgTenantDetail(tid) {
   try {
   const t = D.tenants.find(x => String(x.id) === String(tid));
@@ -9715,6 +9925,8 @@ function pgTenantDetail(tid) {
   if (t.prop_id) setTimeout(() => _markTenancyStep(String(t.prop_id), 'tenant_docs_done', false), 300);
   const rawP = P(t.prop_id) || {}; const p = { address: rawP.address || '—', city: rawP.city || '', postcode: rawP.postcode || '' };
   const docs = D.tenantDocs.filter(d => String(d.tenant_id) === String(tid));
+  window._tdTab = window._tdTab || {};
+  const activeTab = window._tdTab[String(tid)] || 'overview';
 
   const KYC_SLOTS = [
     { slot: 'passport',      icon: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><rect x="2" y="4" width="12" height="8" rx="1.5"/><circle cx="5.5" cy="8" r="1.5"/><path d="M9 7h3M9 9.5h2"/></svg>', label: 'Passport / Photo ID',   mandatory: true  },
@@ -9877,11 +10089,9 @@ function pgTenantDetail(tid) {
   }).join('');
 
   const unifiedDocsCard = `
-    <div id="unified-docs-section" class="panel" style="margin-bottom:16px;border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)">
-      <div class="ph2" style="padding:14px 18px 10px">
-        <div><h2><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M2 4.5h4l1.3 1.5H14v7H2z"/><path d="M4 4.5V3h5l1 1.5"/></svg> Documents &amp; Compliance</h2><p>KYC identity docs, then tenancy compliance</p></div>
-      </div>
-      <div style="padding:0 18px 12px">
+    <div id="unified-docs-section" class="panel" style="margin-bottom:0;border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)">
+      ${totalDocs > 0 ? `<div style="padding:12px 18px 2px;display:flex;justify-content:flex-end"><button class="btn btn-sm" onclick="viewAllDocs('${tid}')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><rect x="2" y="3" width="12" height="10" rx="1.5"/><circle cx="5.5" cy="6" r="1"/><path d="m3 11 3-3 2.5 2.5L11 7l2 2.5"/></svg> View all docs</button></div>` : ''}
+      <div style="padding:14px 18px 12px">
         ${_kycUploadRows}
         <div style="margin:14px 0 10px;display:flex;align-items:center;gap:10px">
           <div style="flex:1;height:1px;background:var(--border)"></div>
@@ -9901,20 +10111,20 @@ function pgTenantDetail(tid) {
       : portalSentAt ? 'sent'
       : t.invite_token ? 'link-ready'
       : 'not-sent';
+    const _dot = c => `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${c};margin-right:7px;vertical-align:middle"></span>`;
     const _portalStatusMap = {
-      'accessed':   `<span style="font-size:11px;font-weight:600;color:var(--green-dark);display:inline-flex;align-items:center;gap:5px">✓ Tenant is active in the portal</span>`,
-      'sent':       `<span style="font-size:11px;font-weight:600;color:var(--amber);display:inline-flex;align-items:center;gap:5px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M2.5 7.5a2.5 2.5 0 0 1 5 0v5h-5z"/><path d="M7.5 7.5h4A1.5 1.5 0 0 1 13 9v3.5H7.5"/><path d="M10 7.5V4.5h2"/></svg> Link sent · ${FMS(portalSentAt)} — awaiting first login</span>`,
-      'link-ready': `<span style="font-size:11px;font-weight:600;color:var(--muted);display:inline-flex;align-items:center;gap:5px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M6.4 9.6 9.6 6.4"/><path d="M8 5.2 9 4.2a2.4 2.4 0 0 1 3.4 3.4l-1 1"/><path d="M8 10.8l-1 1a2.4 2.4 0 0 1-3.4-3.4l1-1"/></svg> Sent with the Day-1 welcome kit</span>`,
-      'not-sent':   `<span style="font-size:11px;font-weight:600;color:var(--red);display:inline-flex;align-items:center;gap:5px">⚠️ Link not yet sent</span>`,
+      'accessed':   `${_dot('var(--green-dark)')}<span style="color:var(--green-dark)">Tenant is active in the portal</span>`,
+      'sent':       `${_dot('var(--amber)')}<span style="color:var(--txt)">Link sent — awaiting first login · ${FMS(portalSentAt)}</span>`,
+      'link-ready': `${_dot('var(--muted)')}<span style="color:var(--muted)">Sent with the Day-1 welcome kit</span>`,
+      'not-sent':   `${_dot('var(--red)')}<span style="color:var(--red)">Link not sent yet</span>`,
     };
     const portalStatusHtml = _portalStatusMap[portalStatus] || _portalStatusMap['not-sent'];
     if (t.status !== 'Ended') {
       portalCard = `
       <div class="panel" style="margin-bottom:16px;border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)">
         <div class="ph2">
-          <div><h2><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M6.4 9.6 9.6 6.4"/><path d="M8 5.2 9 4.2a2.4 2.4 0 0 1 3.4 3.4l-1 1"/><path d="M8 10.8l-1 1a2.4 2.4 0 0 1-3.4-3.4l1-1"/></svg> Tenant Portal</h2><p>Magic link — sent with the Day-1 kit · resend anytime</p></div>
+          <div><h2><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M6.4 9.6 9.6 6.4"/><path d="M8 5.2 9 4.2a2.4 2.4 0 0 1 3.4 3.4l-1 1"/><path d="M8 10.8l-1 1a2.4 2.4 0 0 1-3.4-3.4l1-1"/></svg> Tenant Portal</h2><p>Magic link — sent with the Day-1 kit · resend anytime</p><div style="font-size:12px;font-weight:600;margin-top:7px">${portalStatusHtml}</div></div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            ${portalStatusHtml}
             <button class="btn btn-sm ${portalStatus==='not-sent'?'btn-navy':''}" id="invite-btn-${t.id}" onclick="sendPortalInvite('${t.id}')" title="Email the magic link to ${t.name} — e.g. if they've lost it">
               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M2 4h12v8H2z"/><path d="m2 4 6 4.5L14 4"/></svg> ${portalStatus==='not-sent'?'Send link':'Resend link'}
             </button>
@@ -10076,28 +10286,6 @@ function pgTenantDetail(tid) {
       }).join('')
     : `<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">No emails sent yet</div>`;
 
-  const _totTasks=day1Items.length+day30Items.length+total, _doneTasks=day1Done+day30Done+uploadedCount;
-  const compliancePct=_totTasks?Math.round(_doneTasks/_totTasks*100):0;
-  const _compCol=compliancePct>=90?'var(--status-green)':compliancePct>=60?'var(--amber)':'var(--red)';
-  const _depProt=!!(t.scheme&&t.scheme_ref);
-  const _portalLabel=t.invite_used?'Accessed':(t.invite_token?'Invite sent':'Not sent');
-  const _portalCls=t.invite_used?'b-green':(t.invite_token?'b-amber':'b-red');
-  const _rentOrd=t.rent_day?`${t.rent_day}${({1:'st',2:'nd',3:'rd'})[t.rent_day]||'th'}`:'';
-  const _onbTot=day1Items.length+day30Items.length,_onbDone=day1Done+day30Done;
-  const docsChip=missing.length?`<span class="badge b-red">${uploadedCount}/${total} · ${missing.length} missing</span>`:`<span class="badge b-green">All uploaded</span>`;
-  const onbChip=`<span class="badge ${_onbDone===_onbTot?'b-green':'b-amber'}">${_onbDone}/${_onbTot} done</span>`;
-  const portalChip=`<span class="badge ${_portalCls}">${_portalLabel}</span>`;
-  const commsChip=`<span class="badge b-gray">${tenantLog.length} sent</span>`;
-  const _bar=`<span style="width:46px;height:5px;background:var(--border);border-radius:100px;overflow:hidden;display:inline-block"><span style="display:block;height:100%;border-radius:100px;width:${compliancePct}%;background:${_compCol}"></span></span>`;
-  const _cell=(lbl,val)=>`<div style="background:var(--white);border:1px solid var(--border);border-radius:11px;padding:13px 15px;box-shadow:0 1px 3px rgba(11,30,61,.05)"><div style="font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);margin-bottom:6px">${lbl}</div><div style="font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px;flex-wrap:wrap">${val}</div></div>`;
-  const summaryGrid=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
-    ${_cell('Compliance',`${compliancePct}%${_bar}`)}
-    ${_cell('KYC docs',`${uploadedCount}/${total} ${missing.length?`<span class="badge b-red">${missing.length} missing</span>`:`<span class="badge b-green">Complete</span>`}`)}
-    ${_cell('Rent',`${t.rent?`£${t.rent.toLocaleString()}`:'—'}${t.rent_day?`<span style="font-size:11px;font-weight:500;color:var(--muted)">/mo · due ${_rentOrd}</span>`:''}`)}
-    ${_cell('Deposit',`${t.deposit?`£${t.deposit.toLocaleString()}`:'—'} ${_depProt?`<span class="badge b-green">${t.scheme}</span>`:`<span class="badge b-red">Unprotected</span>`}`)}
-    ${_cell('Portal',portalChip)}
-    ${_cell('Tenancy',`<span style="font-size:14px">${p.address}</span><span style="font-size:11px;font-weight:500;color:var(--muted)">${t.end_date?'Fixed term':'Periodic (APT)'}</span>`)}
-  </div>`;
   return `
     <div class="topbar"><span class="tb-title">Tenants</span><div class="tb-right">
       <button class="btn btn-sm" onclick="moLegalPack('${t.prop_id}','${tid}')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M2 4.5h4l1.3 1.5H14v7H2z"/></svg> Evidence Pack</button>
@@ -10133,24 +10321,51 @@ function pgTenantDetail(tid) {
 
       ${(()=>{ const g8=getGround8Status(t.id); if(!g8||!g8.warning) return ''; const isHit=g8.threshold; return `<div style="background:${isHit?'rgba(229,62,62,0.07)':'rgba(217,119,6,0.06)'};border:1px solid ${isHit?'rgba(229,62,62,0.3)':'rgba(217,119,6,0.3)'};border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><div style="font-size:13px;font-weight:700;color:${isHit?'var(--red)':'var(--amber)'};margin-bottom:4px">${isHit?'🔴 Ground 8 threshold reached':'⚠️ Rent arrears warning'}</div><div style="font-size:12px;color:var(--txt);line-height:1.6">${g8.monthsArrears} month${g8.monthsArrears!==1?'s':''} in arrears · £${g8.totalUnpaid.toLocaleString()} unpaid across ${g8.unpaidCount} payment${g8.unpaidCount!==1?'s':''}${isHit?' · Ground 8 requires 2+ months — you may now serve a Section 8 notice':' · Ground 8 triggers at 2 months'}</div></div><button class="btn btn-sm" style="${isHit?'border-color:var(--red);color:var(--red)':'border-color:var(--amber);color:var(--amber)'}" onclick="moSection8('${t.prop_id}')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M8 2.5v11"/><path d="M4 5h8"/><path d="M4 5 2.2 8.8h3.6z"/><path d="M12 5l-1.8 3.8h3.6z"/><path d="M5.5 13.5h5"/></svg> Section 8 →</button></div>`; })()}
       ${renderMandatoryBanner(t)}
-      ${summaryGrid}
-
-      <div class="coll td-acc td-acc-notitle"><div class="coll-hd" onclick="toggleColl('td-tenancy')"><div class="coll-l"><span>Tenancy Details</span></div><div class="coll-r"><span class="coll-arr" id="ca-td-tenancy">▾</span></div></div><div class="coll-body hidden" id="cb-td-tenancy">${tenancyCard}</div></div>
-
-      <div class="coll td-acc td-acc-noheader"><div class="coll-hd" onclick="toggleColl('td-docs')"><div class="coll-l"><span>Documents &amp; Compliance</span>${docsChip}</div><div class="coll-r"><span class="coll-arr ${missing.length?'op':''}" id="ca-td-docs">▾</span></div></div><div class="coll-body ${missing.length?'':'hidden'}" id="cb-td-docs">${unifiedDocsCard}</div></div>
-
-      <div class="coll td-acc"><div class="coll-hd" onclick="toggleColl('td-onb')"><div class="coll-l"><span>Onboarding (Day 1 / Day 30)</span>${onbChip}</div><div class="coll-r"><span class="coll-arr" id="ca-td-onb">▾</span></div></div><div class="coll-body hidden" id="cb-td-onb" style="padding:14px 16px 2px">${journeyCards}</div></div>
-
-      <div class="coll td-acc td-acc-notitle"><div class="coll-hd" onclick="toggleColl('td-portal')"><div class="coll-l"><span>Tenant Portal</span>${portalChip}</div><div class="coll-r"><span class="coll-arr" id="ca-td-portal">▾</span></div></div><div class="coll-body hidden" id="cb-td-portal">${portalCard}</div></div>
-
-      <div class="coll td-acc td-acc-notitle"><div class="coll-hd" onclick="toggleColl('td-comm')"><div class="coll-l"><span>Communications</span>${commsChip}</div><div class="coll-r"><span class="coll-arr" id="ca-td-comm">▾</span></div></div><div class="coll-body hidden" id="cb-td-comm">
-
-      <div class="panel" style="border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)">
-        <div class="ph2"><div><h2><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><rect x="2" y="3.5" width="12" height="9" rx="1.5"/><path d="m2.5 4.5 5.5 4 5.5-4"/></svg> Communications</h2><p>All documents &amp; correspondence sent to this tenant</p></div>
-          <button class="btn btn-sm btn-navy" onclick="moCommunicationsHub('${tid}')">+ Send document</button>
-        </div>
-        <div>${logRows}</div>
-      </div></div></div>
+            ${(()=>{
+        let compliancePct;
+        try {
+          const cc = t.compliance_checklist || {};
+          const ks = Object.keys(cc);
+          if (ks.length){
+            const done = ks.filter(k=>{const o=cc[k]||{};const s=(o.status||'').toLowerCase();return o.ra==='green'||['complete','protected','served','sent','valid','verified','done','active'].includes(s);}).length;
+            compliancePct = Math.round(done/ks.length*100);
+          } else { compliancePct = total?Math.round(uploadedCount/total*100):0; }
+        } catch(e){ compliancePct = total?Math.round(uploadedCount/total*100):0; }
+        const _pMap={accessed:['Active','var(--green-dark)','var(--green-bg)'],sent:['Invite sent','var(--amber)','var(--amber-bg)'],'link-ready':['Link ready','var(--blue)','rgba(59,111,232,0.08)'],'not-sent':['Not sent','var(--red)','rgba(229,62,62,0.08)']};
+        const _pStatus = t.invite_used ? 'accessed' : (D.emailLog.find(e=>String(e.tenant_id)===String(tid)&&(e.template_id?.includes('portal')||e.template_id?.includes('invite'))) ? 'sent' : (t.invite_token ? 'link-ready' : 'not-sent'));
+        const _p=_pMap[_pStatus]||_pMap['not-sent'];
+        const _ord=n=>n+(['','st','nd','rd'][n]||'th');
+        const card=(label,main,sub,extra)=>`<div style="background:var(--white);border:1px solid var(--border);border-radius:11px;padding:13px 15px;box-shadow:0 1px 3px rgba(11,30,61,.05)"><div style="font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:7px">${label}</div><div style="font-size:18px;font-weight:700;color:var(--txt);display:flex;align-items:center;gap:8px;flex-wrap:wrap">${main}${extra||''}</div>${sub?`<div style="font-size:11px;color:var(--muted);margin-top:3px">${sub}</div>`:''}</div>`;
+        const grid=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px">
+          ${card('Compliance',compliancePct+'%','',`<span style="flex:1;min-width:40px;max-width:90px;height:5px;border-radius:3px;background:var(--border);position:relative;overflow:hidden;display:inline-block"><span style="position:absolute;left:0;top:0;bottom:0;width:${compliancePct}%;background:${compliancePct>=80?'var(--green-dark)':compliancePct>=50?'var(--amber)':'var(--red)'}"></span></span>`)}
+          ${card('KYC Docs',uploadedCount+'/'+total,'',missing.length?`<span class="badge b-red" style="font-size:10px">${missing.length} missing</span>`:`<span class="badge b-green" style="font-size:10px">complete</span>`)}
+          ${card('Rent',t.rent?'£'+t.rent.toLocaleString():'—',t.rent_day?'/mo · due '+_ord(t.rent_day):'/mo')}
+          ${card('Deposit',t.deposit?'£'+t.deposit.toLocaleString():'—','',t.scheme?`<span class="badge b-green" style="font-size:10px">${t.scheme}</span>`:'')}
+          ${card('Portal',`<span style="font-size:14px;font-weight:700;color:${_p[1]}">${_p[0]}</span>`,'')}
+          ${card('Tenancy',p.address||'—',t.type||t.tenant_type||'')}
+        </div>`;
+        const TGL="var b=this.nextElementSibling,o=getComputedStyle(b).display==='none';b.style.display=o?'block':'none';var c=this.querySelector('.acc-chip'),a=this.querySelector('.acc-arr');a.style.transform=o?'rotate(180deg)':'rotate(0deg)';c.style.background=o?'var(--navy)':'#EEF1F5';c.style.color=o?'#fff':'var(--navy)'";
+        const HEN="var c=this.querySelector('.acc-chip');c.style.background='var(--navy)';c.style.color='#fff'";
+        const HLV="var b=this.nextElementSibling,op=getComputedStyle(b).display!=='none',c=this.querySelector('.acc-chip');c.style.background=op?'var(--navy)':'#EEF1F5';c.style.color=op?'#fff':'var(--navy)'";
+        const sec=(title,badge,body,open)=>`<div style="margin-bottom:10px">
+          <div onclick="${TGL}" onmouseenter="${HEN}" onmouseleave="${HLV}" style="background:var(--white);border:1px solid var(--border);border-radius:11px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;box-shadow:0 1px 3px rgba(11,30,61,.05)">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-size:15px;font-weight:700;color:var(--txt)">${title}</span>${badge||''}</div>
+            <span class="acc-chip" style="width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .18s;background:${open?'var(--navy)':'#EEF1F5'};color:${open?'#fff':'var(--navy)'}"><svg class="acc-arr" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;transition:transform .2s;transform:rotate(${open?'180deg':'0deg'})"><path d="M4 6l4 4 4-4"/></svg></span>
+          </div>
+          <div style="display:${open?'block':'none'};margin-top:10px">${body}</div>
+        </div>`;
+        const docsBadge=`<span class="badge ${allDone?'b-green':'b-red'}" style="font-size:11px">${uploadedCount} of ${total}${missing.length?' · '+missing.length+' missing':''}</span>` + missing.map(s=>`<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:100px;background:rgba(229,62,62,0.08);color:var(--red);border:1px solid rgba(229,62,62,0.18)">${s.label}</span>`).join('');
+        const onbTotal=day1Items.length+day30Items.length, onbDone=day1Done+day30Done;
+        const onbBadge=`<span class="badge ${onbDone===onbTotal?'b-green':'b-amber'}" style="font-size:11px">${onbDone} of ${onbTotal} done</span>`;
+        const portalBadge=`<span class="badge" style="font-size:11px;background:${_p[2]};color:${_p[1]}">${_p[0]}</span>`;
+        const commBadge=`<span class="badge" style="font-size:11px;background:rgba(11,30,61,0.05);color:var(--navy)">${tenantLog.length} email${tenantLog.length!==1?'s':''}</span>`;
+        const commPanel=`<div class="panel" style="border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)"><div class="ph2"><div><h2>Communications</h2><p>All documents &amp; correspondence sent to this tenant</p></div><button class="btn btn-sm btn-navy" onclick="moCommunicationsHub('${tid}')">+ Send document</button></div><div>${logRows}</div></div>`;
+        return grid
+          + sec('Documents & Compliance', docsBadge, unifiedDocsCard, false)
+          + sec('Tenancy & Portal', portalBadge, tenancyCard+(typeof portalCard!=='undefined'?(portalCard||''):''), false)
+          + sec('Onboarding (Day 1 / Day 30)', onbBadge, journeyCards, false)
+          + sec('Communications', commBadge, commPanel, false);
+      })()}
     </div>`;
 
   // Auto-rescan docs with no extracted_name — one-shot, no re-render loop
@@ -11398,7 +11613,7 @@ async function sendPaymentReceipt({ prop_id, month, amount, paid, editId, status
       </div>
       <p style="font-size:12px;color:#7A8FA6">Please keep this email as your receipt. Thank you.</p>`);
     await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
-      method:'POST', headers:{'Content-Type':'application/json'},
+      method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+(window._sbToken||'')},
       body: JSON.stringify({ type:'send_email', to: tenant.email, subject: `Rent receipt — ${month} — ${p.address}`, html })
     });
     await logAudit('RENT_RECEIPT_SENT', 'rent_payments', editId || 'new', `Receipt sent to ${tenant.email} for ${month}`);
@@ -11884,7 +12099,7 @@ async function sendInventoryNow(id) {
   try {
     const htmlBody = body.replace(/\n/g,'<br>');
     const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy',{
-      method:'POST', headers:{'Content-Type':'application/json'},
+      method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+(window._sbToken||'')},
       body: JSON.stringify({
         type:'send_email', to: t.email, subject,
         html: `<div style="font-family:Arial,sans-serif;max-width:600px">${htmlBody}</div>`,
@@ -12078,7 +12293,7 @@ function pgMaintenance(){
           const p=P(m.prop_id)||{address:'—'};
           const priCol=m.priority==='Urgent'?'var(--red)':m.priority==='High'?'var(--amber)':'var(--muted)';
           return`<div style="background:var(--white);border:1px solid ${m.awaab?'var(--red)':'var(--border)'};border-radius:10px;padding:12px;margin-bottom:8px;cursor:pointer;transition:box-shadow .15s;border-left:3px solid ${m.awaab?'var(--red)':col}" onclick="moIssueDetail('${m.id}')" onmouseenter="this.style.boxShadow='0 2px 12px rgba(0,0,0,0.08)'" onmouseleave="this.style.boxShadow='none'">
-            <div style="font-size:12px;font-weight:600;color:var(--txt);margin-bottom:4px;line-height:1.4">${m.title||m.desc||'—'}</div>
+            <div style="font-size:12px;font-weight:600;color:var(--txt);margin-bottom:4px;line-height:1.4">${esc(m.title||m.desc||'—')}</div>
             <div style="font-size:11px;color:var(--muted);margin-bottom:8px">${p.address}</div>
             <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:6px">
               <span style="font-size:10px;font-weight:600;color:${priCol};background:${m.priority==='Urgent'?'rgba(229,62,62,0.08)':m.priority==='High'?'rgba(217,119,6,0.08)':'var(--off)'};padding:2px 7px;border-radius:100px">${m.priority||'Low'}</span>
@@ -12142,8 +12357,8 @@ function pgMaintenance(){
             return `<div style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s" onclick="moIssueDetail('${m.id}')" onmouseenter="this.style.background='var(--off)'" onmouseleave="this.style.background='transparent'">
               <div style="width:8px;height:8px;border-radius:50%;background:${sc};flex-shrink:0"></div>
               <div style="flex:1">
-                <div style="font-size:12px;font-weight:500;color:var(--txt)">${m.title||m.desc||'—'}</div>
-                <div style="font-size:11px;color:var(--muted);margin-top:1px">${m.cat||'—'}${m.assigned_to?' · <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><circle cx="8" cy="8" r="2.6"/><path d="M3.5 7a4.5 4.5 0 0 1 9 0"/><path d="M3.5 7h9"/><path d="M3 13.5c.7-2 2.6-3 5-3s4.3 1 5 3"/></svg> '+m.assigned_to:''}</div>
+                <div style="font-size:12px;font-weight:500;color:var(--txt)">${esc(m.title||m.desc||'—')}</div>
+                <div style="font-size:11px;color:var(--muted);margin-top:1px">${esc(m.cat||'—')}${m.assigned_to?' · <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><circle cx="8" cy="8" r="2.6"/><path d="M3.5 7a4.5 4.5 0 0 1 9 0"/><path d="M3.5 7h9"/><path d="M3 13.5c.7-2 2.6-3 5-3s4.3 1 5 3"/></svg> '+m.assigned_to:''}</div>
               </div>
               <div style="display:flex;align-items:center;gap:6px">
                 ${m.awaab?'<span style="font-size:10px;font-weight:700;color:var(--red)">⚠️</span>':''}
@@ -12220,7 +12435,7 @@ async function moveStage(id,stage){
       </div>`;
       try {
         await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy',{
-          method:'POST',headers:{'Content-Type':'application/json'},
+          method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+(window._sbToken||'')},
           body:JSON.stringify({type:'send_email',to:tenant.email,subject:`Maintenance update: ${m?.title||'Job'} — ${stage}`,html})
         });
         // Log to email_log
@@ -12283,7 +12498,7 @@ function moIssueDetail(id){
       <span class="badge b-green" style="font-size:9px">✓ Sent</span>
     </div>`).join('')}
   </div>` : '';
-  openMo(m.title||'Maintenance job',`${p.address} · ${m.cat||'—'}`,`
+  openMo(m.title||'Maintenance job',`${p.address} · ${esc(m.cat||'—')}`,`
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
       ${[['Property',p.address],['Category',m.cat||'—'],['Priority',m.priority||'Low'],['Reported',FMS(m.date||m.issue_date)],['Assigned to',m.assigned_to||'Not assigned'],['Cost',m.cost?'£'+m.cost:'Not set'],['Completed',m.completed_date?FMS(m.completed_date):'—'],['Awaab',m.awaab?'⚠️ Yes':'No']].map(([l,v])=>`<div class="det-f"><label>${l}</label><span>${v}</span></div>`).join('')}
     </div>
@@ -12466,7 +12681,7 @@ async function sendChat(){
   cm.innerHTML+=`<div class="msg user">${q}</div><div class="msg ai" id="at"><div class="mlbl">NexLet</div><span style="color:var(--muted)">Thinking…</span></div>`;
   cm.scrollTop=cm.scrollHeight;
   try{
-    const r=await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:800,system:SYSTEM_PROMPT,messages:D.chat.filter(m=>m.role!=='system').map(m=>({role:m.role==='ai'?'assistant':'user',content:m.text}))})});
+    const r=await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+(window._sbToken||'')},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:800,system:SYSTEM_PROMPT,messages:D.chat.filter(m=>m.role!=='system').map(m=>({role:m.role==='ai'?'assistant':'user',content:m.text}))})});
     const d=await r.json(),reply=d.content?.[0]?.text||'No response.';
     D.chat.push({role:'ai',text:reply});
     document.getElementById('at').innerHTML=`<div class="mlbl">NexLet</div>${reply}`;
@@ -13031,7 +13246,7 @@ function pgRentFinance(){
     ${(()=>{
       if(window._rfTab==='finance') return pgFinancials();
       if(window._rfTab==='mtd'){
-        if(!isPort) return '<div class="panel"><div class="ph2"><h2>MTD Tax Reporting</h2><p>Available on Portfolio plan</p></div><div style="padding:20px;text-align:center"><button class="btn btn-navy" onclick="redirectToCheckout(\'portfolio\')">Upgrade to Portfolio</button></div></div>';
+        if(!planHas('mtd')) return '<div class="panel"><div class="ph2"><h2>MTD Tax Reporting</h2><p>Available on Landlord plan and above</p></div><div style="padding:20px;text-align:center"><button class="btn btn-navy" onclick="redirectToCheckout(\'landlord\')">Upgrade to Landlord</button></div></div>';
         return pgMTD();
       }
       // Default: rent view
@@ -13519,7 +13734,7 @@ async function sendDay30Kit(pid) {
       </body></html>`;
 
       const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
-        method:'POST', headers:{'Content-Type':'application/json'},
+        method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+(window._sbToken||'')},
         body: JSON.stringify({ type:'send_email', to: toEmail, subject: `Your Day 30 tenancy documents — ${propAddr}`, html, ...(attachment_urls.length ? { attachment_urls } : {}) })
       });
       const resData = await res.json().catch(()=>({}));
@@ -13780,7 +13995,7 @@ async function sendPrescribedInfo(tid) {
     // 4. Send via edge function with PDF attached
     const _piAttachments = await _urlsToAttachments([{ url: fileUrl, filename }]);
     const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window._sbToken || '') },
       body: JSON.stringify({ type: 'send_email', to: t.email, subject: `Prescribed Information — ${propAddr}`, html, ...(_piAttachments.length ? { attachments: _piAttachments } : {}) })
     });
     const resData = await res.json().catch(() => ({}));
@@ -14094,7 +14309,7 @@ function pgDocLibrary(){
           return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
             <span style="font-size:20px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/><path d="M6 8.5h4M6 11h4"/></svg></span>
             <div style="flex:1">
-              <div style="font-size:13px;font-weight:600;color:var(--txt)">${name}</div>
+              <div style="font-size:13px;font-weight:600;color:var(--txt)">${esc(name)}</div>
               <div style="font-size:11px;color:var(--muted)">${prop?prop.address:'All properties'} · Uploaded ${uploadedAt}</div>
             </div>
             ${d.engineer ? `
@@ -14135,7 +14350,7 @@ function dlFilterDocs(query) {
     return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
       <span style="font-size:20px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/><path d="M6 8.5h4M6 11h4"/></svg></span>
       <div style="flex:1">
-        <div style="font-size:13px;font-weight:600;color:var(--txt)">${name}</div>
+        <div style="font-size:13px;font-weight:600;color:var(--txt)">${esc(name)}</div>
         <div style="font-size:11px;color:var(--muted)">${prop ? prop.address : 'All properties'} · Uploaded ${uploadedAt}</div>
       </div>
       ${d.engineer ? `<button class="btn btn-sm" onclick="dvoOpen('${d.engineer}','${name.replace(/'/g,"\\'")}','${(prop?.address||'').replace(/'/g,"\\'")}')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M1.5 8S4 4 8 4s6.5 4 6.5 4-2.5 4-6.5 4-6.5-4-6.5-4z"/><circle cx="8" cy="8" r="1.8"/></svg> View</button><a href="${d.engineer}" target="_blank" class="btn btn-sm">⬇ Download</a>` : ''}
@@ -14959,6 +15174,9 @@ function _mobileTableLabels(){
 }
 
 function nav(page, param){
+  // ── PLAN GATING (central) ── runs before any state change; blocks EVERY entry point
+  // (sidebar, Discover, dashboard buttons, deep links) for features outside the user's plan.
+  if (featureGate(PAGE_FEATURE[page])) return;
   window._currentPage = page;
   window._currentParam = param || null;
   setTimeout(_refreshResumeNudges, 400);
@@ -15599,7 +15817,7 @@ ${notes ? '\nLandlord notes: ' + notes : ''}
   try {
     const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window._sbToken || '') },
       body: JSON.stringify({
         model: 'claude-sonnet-4-5',
         max_tokens: 3000,
@@ -15959,7 +16177,7 @@ async function sendEmailNow() {
   try {
     const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window._sbToken || '') },
       body: JSON.stringify({ type: 'send_email', to, subject, html: htmlBody })
     });
     const data = await res.json();
@@ -17130,7 +17348,7 @@ async function s8SendToTenant() {
   try {
     const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window._sbToken || '') },
       body: JSON.stringify({ type: 'send_email', to: t.email, subject, html: htmlBody })
     });
     const data = await res.json();
@@ -17493,7 +17711,7 @@ async function sendH2RGuide(tid) {
     </div>`;
     const _h2rAttachments = await _urlsToAttachments([{ url: h2rUrl, filename: 'How_to_Rent_Guide.pdf' }]);
     const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window._sbToken || '') },
       body: JSON.stringify({ type: 'send_email', to: t.email, subject: `How to Rent Guide — ${p.address}`, html, ...(_h2rAttachments.length ? { attachments: _h2rAttachments } : {}) })
     });
     const rd = await res.json().catch(() => ({}));
@@ -17609,7 +17827,7 @@ Keep it under 200 words. Professional but warm. Plain text, no markdown.`;
 
     const aiRes = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window._sbToken || '') },
       body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 600, messages: [{ role: 'user', content: prompt }] })
     });
     const aiData = await aiRes.json();
@@ -17633,7 +17851,7 @@ Keep it under 200 words. Professional but warm. Plain text, no markdown.`;
 
     const emailRes = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window._sbToken || '') },
       body: JSON.stringify({
         type: 'send_email',
         to: t.email,
@@ -17751,6 +17969,7 @@ function updateNavBadges() {
 
 // ── AI INVENTORY REPORT ──
 function moInventoryReport(pid){
+  if (featureGate('inventory-reports')) return;
   const propOpts=activeProperties().map(p=>`<option value="${p.id}"${String(p.id)===String(pid)?' selected':''}>${p.address}, ${p.city}</option>`).join('');
   openMo('AI Inventory Report','Upload room photos — AI generates a written condition report',`
     <div style="background:linear-gradient(135deg,#0B1E3D,#1a3a6b);border-radius:10px;padding:14px 16px;margin-bottom:16px">
@@ -17885,7 +18104,7 @@ Tenant signature: ___________________ Date: ___________
 Be specific and factual. Note exact defects visible in photos. Never invent defects not visible. This report may be used as evidence in deposit disputes or court proceedings.`}
     ];
     const res=await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy',{
-      method:'POST',headers:{'Content-Type':'application/json'},
+      method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+(window._sbToken||'')},
       body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:3000,messages:[{role:'user',content}]})
     });
     const data=await res.json();
@@ -18147,7 +18366,7 @@ async function sendPortalInvite(tenantId) {
     <div style="margin-top:20px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#999">Sent via NexLet · documents@nexlet.co.uk</div>
   </div>`;
   const emailRes = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window._sbToken || '') },
     body: JSON.stringify({ type: 'send_email', to: t.email, subject: `You're invited to your tenant portal — ${propAddr}`, html })
   });
   const emailData = await emailRes.json();
@@ -18493,7 +18712,7 @@ async function _esignApplyStructuredEdit() {
   try {
     const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window._sbToken || '') },
       body: JSON.stringify({
         model: 'claude-sonnet-4-5',
         max_tokens: 6000,
@@ -18832,7 +19051,7 @@ async function esignGenerateDoc(pid, tid) {
   try {
     const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window._sbToken || '') },
       body: JSON.stringify({
         model: 'claude-sonnet-4-5',
         max_tokens: 5000,
@@ -19011,7 +19230,7 @@ async function _sendEsignRequest(pid, tid, mode) {
 
     await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window._sbToken || '') },
       body: JSON.stringify({ type: 'send_email', to: tenant.email, subject: 'Action required — please sign your tenancy document', html })
     }).catch(e => { console.error('[esign] Email failed for', tenant.email, e); });
 
@@ -19372,7 +19591,7 @@ async function _sendS13() {
         </div>
       </div>`;
       await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
-        method:'POST', headers:{'Content-Type':'application/json'},
+        method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+(window._sbToken||'')},
         body: JSON.stringify({ type:'send_email', to: tenant.email, subject:`Section 13 Rent Increase Notice — ${propAddr}`, html: emailHtml })
       }).catch(()=>{});
     }
@@ -19510,7 +19729,7 @@ async function sendMaintenanceNotify(maintenanceId) {
   </div>`;
   try {
     await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy',{
-      method:'POST',headers:{'Content-Type':'application/json'},
+      method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+(window._sbToken||'')},
       body:JSON.stringify({type:'send_email',to:tenant.email,subject:`Maintenance update: ${m.title||'Job'}`,html})
     });
     const logEntry = {
@@ -19788,7 +20007,7 @@ async function sendTrialEmail(type) {
   };
   try {
     await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
-      method:'POST', headers:{'Content-Type':'application/json'},
+      method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+(window._sbToken||'')},
       body: JSON.stringify({
         type:'send_email', to: currentUser.email,
         subject: subjectMap[type] || 'Trial update',
@@ -20011,7 +20230,7 @@ async function nlSubscribe(source) {
     if (email) {
       fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/resend-audience-sync', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window._sbToken || '') },
         body: JSON.stringify({ action: 'subscribe', email, source: source || 'settings' })
       }).catch(e => console.warn('Resend sync:', e));
     }
@@ -20053,7 +20272,7 @@ async function nlUnsubscribe(source) {
     if (email) {
       fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/resend-audience-sync', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window._sbToken || '') },
         body: JSON.stringify({ action: 'unsubscribe', email, source: source || 'settings' })
       }).catch(() => {});
     }

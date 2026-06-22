@@ -539,8 +539,8 @@ async function signDocument() {
       '<div style="text-align:center;margin:24px 0"><a href="' + signedPdfUrl + '" style="background:#0B1E3D;color:#fff;padding:13px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;display:inline-block">⬇ Download signed document</a></div>' +
       '<div style="margin-top:20px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#999">Sent via NexLet · documents@nexlet.co.uk</div></div>';
 
-    if (tenant?.email) fetch(EDGE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'send_email', to: tenant.email, subject: 'Your signed document — ' + propAddr, html: tenantEmailHtml }) }).catch(e => console.error('[esign] Tenant email failed:', e));
-    if (tenant?.landlord_email) fetch(EDGE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'send_email', to: tenant.landlord_email, subject: 'Tenant has signed — ' + tenantName + ', ' + propAddr, html: landlordEmailHtml }) }).catch(e => console.error('[esign] Landlord email failed:', e));
+    if (tenant?.email) fetch(EDGE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ p_token: req.token, type: 'send_email', to: tenant.email, subject: 'Your signed document — ' + propAddr, html: tenantEmailHtml }) }).catch(e => console.error('[esign] Tenant email failed:', e));
+    if (tenant?.landlord_email) fetch(EDGE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ p_token: req.token, type: 'send_email', to: tenant.landlord_email, subject: 'Tenant has signed — ' + tenantName + ', ' + propAddr, html: landlordEmailHtml }) }).catch(e => console.error('[esign] Landlord email failed:', e));
 
     document.getElementById('esign-sign-flow').style.display = 'none';
     document.getElementById('esign-success').style.display = 'block';
