@@ -720,6 +720,13 @@ async function aiProxy(payload, { maxRetries = 3, label = 'AI' } = {}) {
         await new Promise(r => setTimeout(r, wait));
         continue;
       }
+      // 402 = AI allowance reached / credit exhausted. Do NOT retry — surface so the
+      // caller can fall back to manual entry (see aiUnavailable / isAIQuotaError).
+      if (res.status === 402) {
+        const err = new Error(`${label} allowance reached`);
+        err.code = 'ai_quota'; err.status = 402; err.overQuota = true;
+        throw err;
+      }
       return res;
     } catch (e) {
       if (attempt === maxRetries) throw e;
@@ -1677,6 +1684,55 @@ const PLAN_LIMITS = { starter:2, landlord:10, portfolio:999 };
 const PLAN_FEATURES = { starter:['compliance','certificates','maintenance','templates','calendar','assistant'], landlord:['compliance','certificates','maintenance','templates','calendar','assistant','financials','rent','insurance','contractors'], portfolio:['compliance','certificates','maintenance','templates','calendar','assistant','financials','rent','insurance','contractors','mtd','inventory-reports'] };
 function getPropLimit(){ if(isExpired()) return 0; return PLAN_LIMITS[getUserPlan()]||2; }
 
+// ── AI USAGE ALLOWANCES (per landlord account, per calendar month) ──
+// These are FAIR-USE BACKSTOPS, not rations: sized far above a normal landlord's
+// real usage (a few cert/ID scans per property per year + occasional tenant docs),
+// so genuine customers never hit them. They exist only to stop bugs, abuse, and
+// bill-shock from draining the shared Anthropic credit pool.
+// ⚠ The numbers here are for UI/messaging ONLY. The REAL enforcement lives in the
+// ai-proxy edge function (server-side) — the client can be bypassed. See
+// supabase/functions/ai-proxy-gate.ts and PROJECT_KNOWLEDGE.md › "AI cost control".
+const AI_MONTHLY_LIMITS = { trial:15, starter:40, landlord:200, portfolio:800 };
+function getAILimit(){ if(isExpired()) return 0; return AI_MONTHLY_LIMITS[getUserPlan()] ?? 15; }
+
+// Detects a "you've hit your AI allowance" or "credit exhausted" response so we can
+// degrade gracefully (let the user fill the form in by hand) instead of looking broken.
+// Edge function returns HTTP 402 with { error:'ai_quota' | 'ai_credit' } when capped.
+function isAIQuotaError(resOrErr, body){
+  const status = resOrErr?.status;
+  const code = body?.error || resOrErr?.code || '';
+  return status === 402 || /quota|credit|insufficient|limit/i.test(String(code));
+}
+
+// ── SHARED AI SCAN FETCH ──
+// Drop-in for `fetch(ai-proxy,{…})` used by every document/cert/ID auto-scan.
+// Returns the Response unchanged (downstream `res.json()` still works), but on a
+// quota/credit (402) or transient failure it fires ONE friendly toast so the scan
+// degrades to "enter details manually" consistently across every scanner.
+async function aiScanFetch(payload, { feature = 'AI scan' } = {}){
+  const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+  });
+  if (res.status === 402){
+    let body = null; try { body = await res.clone().json(); } catch(e){}
+    aiUnavailable({ overQuota: true, feature });
+  } else if (!res.ok){
+    aiUnavailable({ overQuota: false, feature });
+  }
+  return res;
+}
+
+// Call from any AI-scan catch block. Shows a clear, non-scary message + keeps the
+// manual form usable. `overQuota` true => it's an allowance issue (offer upgrade),
+// false => transient outage (offer retry). Never blocks the underlying form.
+function aiUnavailable({ overQuota=false, feature='AI scan' } = {}){
+  if (overQuota){
+    toast('AI allowance reached for this month — you can still enter the details manually below.', true);
+  } else {
+    toast(feature + ' is busy right now — enter the details manually, or try again in a moment.', true);
+  }
+}
+
 // ── PROPERTY STATUS ──
 const PROPERTY_STATUS = {
   vacant:          { label:'Vacant',          colour:'var(--amber)',  badge:'🟡' },
@@ -1955,7 +2011,7 @@ async function scanAndFill(file, onResult, customPrompt){
   const msgContent=isImg
     ?[{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:prompt}]
     :[{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},{type:'text',text:prompt}];
-  const res=await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:500,messages:[{role:'user',content:msgContent}]})});
+  const res=await aiScanFetch({model:'claude-sonnet-4-5',max_tokens:500,messages:[{role:'user',content:msgContent}]},{feature:'Certificate scan'});
   const data=await res.json();
   const txt=data.content?.[0]?.text||'{}';
   try {
@@ -3540,10 +3596,7 @@ function scanIDDoc(num, input) {
       ? [{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:'This is an identity document. Extract: document type (e.g. Passport, Driving Licence, BRP, National ID Card), document/reference number, expiry date (YYYY-MM-DD if present, null if none), issuing authority (e.g. HMPO, DVLA, UKVI, or issuing country), nationality if visible. Return JSON only, keys: doc_type, ref, expiry, issuing_authority, nationality.'}]
       : [{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},{type:'text',text:'This is an identity document. Extract: document type, reference number, expiry date (YYYY-MM-DD if present, null if none), issuing authority (e.g. HMPO, DVLA, UKVI, or issuing country), nationality if visible. Return JSON only, keys: doc_type, ref, expiry, issuing_authority, nationality.'}];
     try {
-      const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({model:'claude-sonnet-4-5',max_tokens:300,messages:[{role:'user',content:msgContent}]})
-      });
+      const res = await aiScanFetch({model:'claude-sonnet-4-5',max_tokens:300,messages:[{role:'user',content:msgContent}]}, {feature:'ID document scan'});
       const data = await res.json();
       const parsed = JSON.parse((data.content?.[0]?.text||'{}').replace(/```json|```/g,'').trim());
 
@@ -3592,10 +3645,7 @@ function scanRTRDoc(input) {
       ? [{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:'This is a UK Right to Rent identity document. Extract: document type (e.g. Passport, Biometric Residence Permit, Share Code, Birth Certificate), document/reference number, expiry date (YYYY-MM-DD if present, null if none), nationality if visible, issuing_authority (Home Office, UKVI, DVLA, or issuing country). Return JSON only, keys: doc_type, ref, expiry, nationality, issuing_authority.'}]
       : [{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},{type:'text',text:'This is a UK Right to Rent identity document. Extract: document type, reference number, expiry date (YYYY-MM-DD if present, null if none), nationality if visible, issuing_authority (Home Office, UKVI, DVLA, or issuing country). Return JSON only, keys: doc_type, ref, expiry, nationality, issuing_authority.'}];
     try {
-      const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({model:'claude-sonnet-4-5',max_tokens:300,messages:[{role:'user',content:msgContent}]})
-      });
+      const res = await aiScanFetch({model:'claude-sonnet-4-5',max_tokens:300,messages:[{role:'user',content:msgContent}]}, {feature:'ID document scan'});
       const data = await res.json();
       const parsed = JSON.parse((data.content?.[0]?.text||'{}').replace(/```json|```/g,'').trim());
 
@@ -4705,11 +4755,7 @@ Rules:
 - End with a warm professional sign-off using landlord name: ${_profileName()}`;
 
   try {
-    const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'ai', prompt })
-    });
+    const res = await aiScanFetch({ type: 'ai', prompt }, { feature:'AI scan' });
     const data = await res.json();
     const draft = data.content?.[0]?.text || data.text || data.response || '';
     if (draft) {
@@ -10242,8 +10288,7 @@ async function scanTenantDoc(docId, tid, slot, file, tenantName) {
       ? [{ type:'image', source:{ type:'base64', media_type:file.type, data:b64 } }, { type:'text', text:prompt }]
       : [{ type:'document', source:{ type:'base64', media_type:'application/pdf', data:b64 } }, { type:'text', text:prompt }];
 
-    const res  = await fetch(EDGE, { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ model:'claude-sonnet-4-5', max_tokens:400, messages:[{ role:'user', content:msgContent }] }) });
+    const res  = await aiScanFetch({ model:'claude-sonnet-4-5', max_tokens:400, messages:[{ role:'user', content:msgContent }] }, { feature:'Document scan' });
     const data = await res.json();
 
     // Check for API-level errors before parsing
@@ -10479,10 +10524,7 @@ async function moTenantDocsScan(tid, slot) {
       other: 'Extract all key information from this document. Include: full_name if present, doc_number if present, expiry (YYYY-MM-DD or null), address if present, issuing_authority (issuing organisation), doc_type_extracted (describe the document type). Return JSON only, no other text.',
     };
     const prompt = prompts[slot] || prompts.other;
-    const res = await fetch(EDGE, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ type:'scan_doc', docUrl: url, prompt, max_tokens: 300 })
-    });
+    const res = await aiScanFetch({ type:'scan_doc', docUrl: url, prompt, max_tokens: 300 }, { feature:'Document scan' });
     const aiData = await res.json();
     const text = aiData.content?.[0]?.text || '';
     let parsed = {};
@@ -19516,7 +19558,7 @@ function scanPropLicence(input) {
       ? [{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:'UK property licence document. Extract: licence type (e.g. Selective, Mandatory HMO, Additional HMO), licence reference number, expiry date (YYYY-MM-DD), issuing council. Return JSON only, keys: type, ref, expiry, council.'}]
       : [{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},{type:'text',text:'UK property licence document. Extract: licence type (e.g. Selective, Mandatory HMO, Additional HMO), licence reference number, expiry date (YYYY-MM-DD), issuing council. Return JSON only, keys: type, ref, expiry, council.'}];
     try {
-      const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:300,messages:[{role:'user',content:msgContent}]})});
+      const res = await aiScanFetch({model:'claude-sonnet-4-5',max_tokens:300,messages:[{role:'user',content:msgContent}]},{feature:'Document scan'});
       const data = await res.json();
       const parsed = JSON.parse((data.content?.[0]?.text||'{}').replace(/```json|```/g,'').trim());
       if (parsed.expiry) { const el=document.getElementById('p-lic-expiry'); if(el) el.value=parsed.expiry; }
@@ -19550,7 +19592,7 @@ function scanPropEPC(input) {
       ? [{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:'UK EPC (Energy Performance Certificate). Extract: energy rating (single letter A-G), expiry or valid until date (YYYY-MM-DD). Return JSON only, keys: rating, expiry.'}]
       : [{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},{type:'text',text:'UK EPC (Energy Performance Certificate). Extract: energy rating (single letter A-G), expiry or valid until date (YYYY-MM-DD). Return JSON only, keys: rating, expiry.'}];
     try {
-      const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:200,messages:[{role:'user',content:msgContent}]})});
+      const res = await aiScanFetch({model:'claude-sonnet-4-5',max_tokens:200,messages:[{role:'user',content:msgContent}]},{feature:'Document scan'});
       const data = await res.json();
       const parsed = JSON.parse((data.content?.[0]?.text||'{}').replace(/```json|```/g,'').trim());
       if (parsed.expiry) { const el=document.getElementById('p-epc-expiry'); if(el) el.value=parsed.expiry; }
@@ -19779,7 +19821,7 @@ function scanPropDeposit(input) {
       ? [{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:'UK tenancy deposit protection certificate. Extract: scheme name (DPS, MyDeposits, or TDS), deposit amount in GBP (number only), protection reference number. Return JSON only, keys: scheme, amount, ref.'}]
       : [{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},{type:'text',text:'UK tenancy deposit protection certificate. Extract: scheme name (DPS, MyDeposits, or TDS), deposit amount in GBP (number only), protection reference number. Return JSON only, keys: scheme, amount, ref.'}];
     try {
-      const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:200,messages:[{role:'user',content:msgContent}]})});
+      const res = await aiScanFetch({model:'claude-sonnet-4-5',max_tokens:200,messages:[{role:'user',content:msgContent}]},{feature:'Document scan'});
       const data = await res.json();
       const parsed = JSON.parse((data.content?.[0]?.text||'{}').replace(/```json|```/g,'').trim());
       if (parsed.amount) { const el=document.getElementById('p-deposit'); if(el) el.value=parsed.amount; }
