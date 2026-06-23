@@ -709,6 +709,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let currentUser = null;
 // ── SESSION TOKEN CACHE (P1) ── used to authenticate every edge-function call.
 window._sbToken = '';
+window._supabase = sb; // alias used by the signed-URL layer + doc viewer
 sb.auth.getSession().then(({ data:{ session } }) => { window._sbToken = session?.access_token || ''; });
 sb.auth.onAuthStateChange((_e, session) => { window._sbToken = session?.access_token || ''; });
 
@@ -10376,7 +10377,7 @@ function pgTenantDetail(tid) {
       _unscanned.forEach(async d => {
         if (window._scanningDocs?.has(String(d.id))) return;
         try {
-          const resp = await fetch(`https://mahtcfukgzbonwibtsxz.supabase.co/storage/v1/object/public/tenant-documents/${d.file_name}`);
+          const resp = await fetch(await signedDocUrl(`https://mahtcfukgzbonwibtsxz.supabase.co/storage/v1/object/public/tenant-documents/${d.file_name}`));
           if (!resp.ok) return;
           const blob = await resp.blob();
           const file = new File([blob], d.doc_label || d.file_name, { type: blob.type || 'application/pdf' });
@@ -10605,7 +10606,7 @@ async function _rescanDoc(docId, tid, slot) {
   toast('&#10006; Re-scanning…');
   try {
     const url = `https://mahtcfukgzbonwibtsxz.supabase.co/storage/v1/object/public/tenant-documents/${doc.file_name}`;
-    const resp = await fetch(url);
+    const resp = await fetch(await signedDocUrl(url));
     const blob = await resp.blob();
     const file = new File([blob], doc.doc_label || doc.file_name, { type: blob.type });
     await scanTenantDoc(docId, tid, slot, file, t?.name || '');
@@ -10739,7 +10740,7 @@ async function moTenantDocsScan(tid, slot) {
       other: 'Extract all key information from this document. Include: full_name if present, doc_number if present, expiry (YYYY-MM-DD or null), address if present, issuing_authority (issuing organisation), doc_type_extracted (describe the document type). Return JSON only, no other text.',
     };
     const prompt = prompts[slot] || prompts.other;
-    const res = await aiScanFetch({ type:'scan_doc', docUrl: url, prompt, max_tokens: 300 }, { feature:'Document scan' });
+    const res = await aiScanFetch({ type:'scan_doc', docUrl: await signedDocUrl(url), prompt, max_tokens: 300 }, { feature:'Document scan' });
     const aiData = await res.json();
     const text = aiData.content?.[0]?.text || '';
     let parsed = {};
@@ -11155,26 +11156,27 @@ async function _rtrManualSave(tid) {
 }
 
 // ── In-app document viewer ──
-function viewDocInline(url, label) {
+async function viewDocInline(url, label) {
   const isPDF = url.toLowerCase().endsWith('.pdf');
   const isImg = /\.(jpe?g|png|gif|webp|bmp)$/i.test(url);
   const title = label || 'Document';
+  const viewUrl = await signedDocUrl(url); // P3: sign private-bucket files before rendering
 
   if (isImg) {
     openMo(title, '', `
       <div style="display:flex;justify-content:center;align-items:center;min-height:50vh;background:var(--off);border-radius:8px">
-        <img src="${url}" alt="${title}" style="max-width:100%;max-height:75vh;object-fit:contain;border-radius:6px">
+        <img src="${viewUrl}" alt="${title}" style="max-width:100%;max-height:75vh;object-fit:contain;border-radius:6px">
       </div>
     `, `<button class="btn" onclick="closeMo()">Close</button>
-      <a href="${url}" download class="btn btn-navy">⬇ Download</a>`);
+      <a href="${viewUrl}" download class="btn btn-navy">⬇ Download</a>`);
     document.getElementById('mo-x').style.width = 'min(95vw, 900px)';
     return;
   }
 
   openMo(title, '', `
-    <iframe src="${url}" style="width:100%;height:75vh;border:none;border-radius:8px;background:var(--off)"></iframe>
+    <iframe src="${viewUrl}" style="width:100%;height:75vh;border:none;border-radius:8px;background:var(--off)"></iframe>
   `, `<button class="btn" onclick="closeMo()">Close</button>
-    <a href="${url}" target="_blank" class="btn btn-navy"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M6.4 9.6 9.6 6.4"/><path d="M8 5.2 9 4.2a2.4 2.4 0 0 1 3.4 3.4l-1 1"/><path d="M8 10.8l-1 1a2.4 2.4 0 0 1-3.4-3.4l1-1"/></svg> Open in new tab</a>`);
+    <a href="${viewUrl}" target="_blank" class="btn btn-navy"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M6.4 9.6 9.6 6.4"/><path d="M8 5.2 9 4.2a2.4 2.4 0 0 1 3.4 3.4l-1 1"/><path d="M8 10.8l-1 1a2.4 2.4 0 0 1-3.4-3.4l1-1"/></svg> Open in new tab</a>`);
   document.getElementById('mo-x').style.width = 'min(95vw, 1000px)';
 }
 
@@ -11212,7 +11214,7 @@ function viewAllDocs(tid) {
             return `
               <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--white);cursor:pointer" onclick="viewDocInline('${url}','${(d.doc_label||d.file_name||'File').replace(/'/g,"\\'")}')">
                 ${isImg
-                  ? `<img src="${url}" style="width:100%;height:140px;object-fit:cover;display:block" loading="lazy" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 200 140%22><rect fill=%22%23f0f2f5%22 width=%22200%22 height=%22140%22/><text x=%22100%22 y=%2275%22 text-anchor=%22middle%22 fill=%22%23999%22 font-size=%2214%22><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/><path d="M6 8.5h4M6 11h4"/></svg></text></svg>'">`
+                  ? `<img data-sign="${url}" src="${_SIGN_PX}" style="width:100%;height:140px;object-fit:cover;display:block" loading="lazy" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 200 140%22><rect fill=%22%23f0f2f5%22 width=%22200%22 height=%22140%22/><text x=%22100%22 y=%2275%22 text-anchor=%22middle%22 fill=%22%23999%22 font-size=%2214%22><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/><path d="M6 8.5h4M6 11h4"/></svg></text></svg>'">`
                   : `<div style="width:100%;height:140px;background:var(--off);display:flex;align-items:center;justify-content:center;font-size:32px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/><path d="M6 8.5h4M6 11h4"/></svg></div>`}
                 <div style="padding:8px 10px">
                   <div style="font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.doc_label||d.file_name||'File'}</div>
@@ -11657,7 +11659,7 @@ function pgInspections() {
           <div>
             <div style="font-size:12px;font-weight:600">${FMS(i.date)} · <span style="color:var(--muted)">${i.type||'Routine'}</span></div>
             <div style="font-size:11px;color:var(--muted)">${i.inspector?'Inspector: '+i.inspector:''} ${i.notes?'· '+i.notes.slice(0,50)+(i.notes.length>50?'…':''):''}</div>
-            ${i.photos&&i.photos.length?`<div style="display:flex;gap:4px;margin-top:5px;flex-wrap:wrap">${i.photos.map(url=>`<img src="${url}" style="width:36px;height:36px;object-fit:cover;border-radius:5px;border:1px solid var(--border);cursor:pointer" onclick="event.stopPropagation();dvoOpen('${url}','Inspection Photo')" title="View photo">`).join('')}</div>`:''}
+            ${i.photos&&i.photos.length?`<div style="display:flex;gap:4px;margin-top:5px;flex-wrap:wrap">${i.photos.map(url=>`<img data-sign="${url}" src="${_SIGN_PX}" style="width:36px;height:36px;object-fit:cover;border-radius:5px;border:1px solid var(--border);cursor:pointer" onclick="event.stopPropagation();dvoOpen('${url}','Inspection Photo')" title="View photo">`).join('')}</div>`:''}
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:8px">
@@ -12503,7 +12505,7 @@ function moIssueDetail(id){
       ${[['Property',p.address],['Category',m.cat||'—'],['Priority',m.priority||'Low'],['Reported',FMS(m.date||m.issue_date)],['Assigned to',m.assigned_to||'Not assigned'],['Cost',m.cost?'£'+m.cost:'Not set'],['Completed',m.completed_date?FMS(m.completed_date):'—'],['Awaab',m.awaab?'⚠️ Yes':'No']].map(([l,v])=>`<div class="det-f"><label>${l}</label><span>${v}</span></div>`).join('')}
     </div>
     <div style="background:var(--off);border-radius:8px;padding:12px;margin-bottom:14px;font-size:13px;line-height:1.6">${m.description||m.desc||'—'}</div>
-    ${_tenantPhotos.length ? `<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:8px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><rect x="2" y="4.5" width="12" height="8.5" rx="1.5"/><circle cx="8" cy="8.7" r="2.3"/><path d="M5.5 4.5 6.5 3h3l1 1.5"/></svg> Photos (${_tenantPhotos.length})${m._photos_from_portal ? '<span style="font-size:9px;font-weight:600;color:var(--blue);background:var(--blue-bg);padding:1px 6px;border-radius:100px;margin-left:6px">from tenant portal</span>' : ''}</div><div style="display:flex;gap:8px;flex-wrap:wrap">${_tenantPhotos.map(u=>`<img src="${u}" style="width:90px;height:70px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:pointer" onclick="dvoOpen('${u}','Photo','Maintenance')">`).join('')}</div></div>` : ''}
+    ${_tenantPhotos.length ? `<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:8px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><rect x="2" y="4.5" width="12" height="8.5" rx="1.5"/><circle cx="8" cy="8.7" r="2.3"/><path d="M5.5 4.5 6.5 3h3l1 1.5"/></svg> Photos (${_tenantPhotos.length})${m._photos_from_portal ? '<span style="font-size:9px;font-weight:600;color:var(--blue);background:var(--blue-bg);padding:1px 6px;border-radius:100px;margin-left:6px">from tenant portal</span>' : ''}</div><div style="display:flex;gap:8px;flex-wrap:wrap">${_tenantPhotos.map(u=>`<img data-sign="${u}" src="${_SIGN_PX}" style="width:90px;height:70px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:pointer" onclick="dvoOpen('${u}','Photo','Maintenance')">`).join('')}</div></div>` : ''}
     ${(()=>{ const sla=getAwaabSLA(m); if(!sla) return ''; const breach=sla.breach14d||sla.breach24h; const bg=sla.resolved?'var(--green-bg)':breach?'rgba(229,62,62,0.07)':'rgba(217,119,6,0.06)'; const bdr=sla.resolved?'rgba(0,168,122,0.25)':breach?'rgba(229,62,62,0.3)':'rgba(217,119,6,0.3)'; const col=sla.resolved?'var(--green-dark)':breach?'var(--red)':'var(--amber)'; const status=sla.resolved?'✓ Resolved within SLA':sla.breach14d?`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M4 12V8a4 4 0 0 1 8 0v4"/><path d="M2.5 12h11M8 2v1.5"/></svg> 14-day investigation deadline BREACHED (${sla.daysElapsed}d elapsed)`:sla.breach24h?`⚠️ 24h emergency deadline breached · ${sla.daysLeft14}d of 14-day window left`:`⏱ ${sla.hoursLeft24>0?sla.hoursLeft24+'h until 24h deadline · ':''} ${sla.daysLeft14}d of 14-day investigation window remaining`; return `<div style="background:${bg};border:1px solid ${bdr};border-radius:8px;padding:12px 14px;margin-bottom:14px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:${col};margin-bottom:6px">⏰ Awaab's Law SLA</div><div style="font-size:12px;color:var(--txt);line-height:1.6;margin-bottom:8px">${status}</div><div style="display:flex;gap:16px;flex-wrap:wrap"><div style="font-size:11px;color:var(--muted)">Reported: <strong>${FMS(m.issue_date||m.date)}</strong></div><div style="font-size:11px;color:var(--muted)">24h deadline: <strong style="color:${sla.breach24h?'var(--red)':'var(--txt)'}">${sla.investigate24h.toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</strong></div><div style="font-size:11px;color:var(--muted)">14d deadline: <strong style="color:${sla.breach14d?'var(--red)':'var(--txt)'}">${sla.investigate14d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</strong></div></div></div>`; })()}
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">Move to stage</div>
@@ -20068,9 +20070,57 @@ function scanPropDeposit(input) {
 window._dvoUrl = null;
 window._dvoFilename = null;
 
-// Detect if URL is from private bucket
+// ── P3: SIGNED-URL LAYER ──────────────────────────────────────────────────
+// Sensitive buckets that must be PRIVATE in Supabase. Every read of their files
+// goes through a short-lived signed URL instead of a public URL.
+const _PRIVATE_BUCKETS = ['tenant-documents','property-documents','esign-documents','pretenancy-audits','certificates','user-feedback-documents'];
+function _sbClient(){ return window._supabase || sb; }
+// Parse { bucket, path } out of a stored public/sign URL or a "bucket/path" string.
+function _bucketPath(u){
+  if (!u) return null;
+  const m = String(u).match(/\/object\/(?:sign\/|public\/)?([^?]+)/);
+  const raw = m ? m[1] : String(u).replace(/^\/+/, '');
+  const dec = decodeURIComponent(raw);
+  const i = dec.indexOf('/');
+  if (i <= 0) return null;
+  return { bucket: dec.slice(0, i), path: dec.slice(i + 1) };
+}
+// Convert any stored public URL / path into a fresh signed URL (works on public
+// buckets too, so this is safe to ship BEFORE flipping the buckets private).
+async function signedDocUrl(urlOrPath, expiry = 600){
+  if (!urlOrPath || /^(blob:|data:)/.test(urlOrPath)) return urlOrPath;
+  const bp = _bucketPath(urlOrPath);
+  if (!bp || !_PRIVATE_BUCKETS.includes(bp.bucket)) return urlOrPath;
+  try {
+    const { data, error } = await _sbClient().storage.from(bp.bucket).createSignedUrl(bp.path, expiry);
+    if (!error && data?.signedUrl) return data.signedUrl;
+  } catch(e){ console.warn('[signedDocUrl]', e); }
+  return urlOrPath;
+}
+// Auto-sign any <img data-sign="<public-url-or-path>"> added to the DOM, now or later.
+const _SIGN_PX = 'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%221%22%20height%3D%221%22%3E%3C/svg%3E';
+async function _hydrateSignImg(img){
+  const key = img.getAttribute('data-sign'); if (!key) return;
+  img.removeAttribute('data-sign');
+  const u = await signedDocUrl(key);
+  img.src = u || key;
+}
+function _initSignedMedia(){
+  document.querySelectorAll('img[data-sign]').forEach(_hydrateSignImg);
+  new MutationObserver(muts => {
+    for (const m of muts) for (const n of m.addedNodes){
+      if (n.nodeType !== 1) continue;
+      if (n.matches?.('img[data-sign]')) _hydrateSignImg(n);
+      n.querySelectorAll?.('img[data-sign]').forEach(_hydrateSignImg);
+    }
+  }).observe(document.body, { childList: true, subtree: true });
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _initSignedMedia);
+else _initSignedMedia();
+
+// Detect if URL is from a private bucket (now: ALL sensitive buckets)
 function _dvoIsPrivate(url) {
-  return url && url.includes('user-feedback-documents');
+  return !!url && _PRIVATE_BUCKETS.some(b => String(url).includes('/' + b + '/'));
 }
 
 // Get file extension from URL
@@ -20115,19 +20165,7 @@ async function dvoOpen(url, title, meta) {
   document.getElementById('dvo-fallback').style.display = 'none';
 
   try {
-    let viewUrl = url;
-
-    if (_dvoIsPrivate(url)) {
-      try {
-        const pathMatch = url.match(/\/object\/(?:sign\/|public\/)?([^?]+)/);
-        if (pathMatch) {
-          const filePath = pathMatch[1].replace(/^[^/]+\//, '');
-          const bucketName = pathMatch[1].split('/')[0];
-          const { data, error } = await window._supabase.storage.from(bucketName).createSignedUrl(filePath, 300);
-          if (!error && data?.signedUrl) { viewUrl = data.signedUrl; }
-        }
-      } catch(e) { console.warn('Signed URL generation failed', e); }
-    }
+    let viewUrl = await signedDocUrl(url); // P3: sign private-bucket files (no-op for public/non-bucket URLs)
 
     const fileType = _dvoType(viewUrl);
 
