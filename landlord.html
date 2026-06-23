@@ -20092,15 +20092,29 @@ function _bucketPath(u){
   if (i <= 0) return null;
   return { bucket: dec.slice(0, i), path: dec.slice(i + 1) };
 }
-// Convert any stored public URL / path into a fresh signed URL (works on public
-// buckets too, so this is safe to ship BEFORE flipping the buckets private).
+// Convert any stored public URL / path into a fresh signed URL via the sign-doc edge
+// function (service-role signs private-bucket files after an ownership check). Cached
+// in-memory so repeated thumbnails don't re-sign. Safe before the flip too (signs work
+// on public buckets), and falls back to the original URL if signing fails.
+const _signCache = new Map(); // "bucket/path" -> { url, exp }
 async function signedDocUrl(urlOrPath, expiry = 600){
   if (!urlOrPath || /^(blob:|data:)/.test(urlOrPath)) return urlOrPath;
   const bp = _bucketPath(urlOrPath);
   if (!bp || !_PRIVATE_BUCKETS.includes(bp.bucket)) return urlOrPath;
+  const key = bp.bucket + '/' + bp.path;
+  const hit = _signCache.get(key);
+  if (hit && hit.exp > Date.now()) return hit.url;
   try {
-    const { data, error } = await _sbClient().storage.from(bp.bucket).createSignedUrl(bp.path, expiry);
-    if (!error && data?.signedUrl) return data.signedUrl;
+    const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/sign-doc', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window._sbToken || '') },
+      body: JSON.stringify({ bucket: bp.bucket, path: bp.path, expiry })
+    });
+    const data = await res.json();
+    if (res.ok && data?.signedUrl){
+      _signCache.set(key, { url: data.signedUrl, exp: Date.now() + (expiry - 30) * 1000 });
+      return data.signedUrl;
+    }
   } catch(e){ console.warn('[signedDocUrl]', e); }
   return urlOrPath;
 }

@@ -372,8 +372,24 @@ async function showEsignSigningFlow(req) {
   if (req.document_html) {
     // P2: sanitize landlord/AI-authored HTML before rendering it to the tenant.
     docContent.innerHTML = (window.DOMPurify ? DOMPurify.sanitize(req.document_html) : '');
-  } else if (req.document_pdf_url && /^https:\/\//i.test(req.document_pdf_url)) {
-    docContent.innerHTML = '<iframe src="' + encodeURI(req.document_pdf_url) + '" style="width:100%;height:65vh;border:none;display:block"></iframe>';
+  } else if (req.document_pdf_url) {
+    // P3: the esign-documents bucket is private — sign via the edge function (the
+    // e-sign token authorizes access to this request's own document only).
+    let pdfUrl = req.document_pdf_url;
+    try {
+      const m = String(pdfUrl).match(/\/object\/(?:sign\/|public\/)?([^?]+)/);
+      const ref = m ? decodeURIComponent(m[1]) : '';
+      const slash = ref.indexOf('/');
+      if (slash > 0) {
+        const r = await fetch(EDGE_URL.replace(/\/ai-proxy$/, '/sign-doc'), {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bucket: ref.slice(0, slash), path: ref.slice(slash + 1), p_token: req.token, expiry: 600 })
+        });
+        const d = await r.json();
+        if (r.ok && d?.signedUrl) pdfUrl = d.signedUrl;
+      }
+    } catch(e){ console.warn('[esign pdf sign]', e); }
+    docContent.innerHTML = '<iframe src="' + encodeURI(pdfUrl) + '" style="width:100%;height:65vh;border:none;display:block"></iframe>';
   }
 
   // Bug 3 fix: defer until after layout paint so canvas.offsetWidth is non-zero

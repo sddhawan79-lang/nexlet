@@ -641,9 +641,9 @@ async function submitJob(){
       const { data: upData, error: upErr } = await sb.storage.from('tenant-documents').upload(path, file, { upsert: true, contentType: file.type || 'image/jpeg' });
       console.log('[photos] upload result — data:', upData, 'error:', upErr);
       if (!upErr) {
-        const { data: urlData } = sb.storage.from('tenant-documents').getPublicUrl(path);
-        console.log('[photos] public URL:', urlData?.publicUrl);
-        if (urlData?.publicUrl) photoUrls.push(urlData.publicUrl);
+        // Store a signable reference ("tenant-documents/<path>"), not a public URL —
+        // the bucket is private, so the landlord side re-signs this when viewing (P3).
+        photoUrls.push('tenant-documents/' + path);
       } else {
         console.error('[photos] upload error:', upErr.message, upErr);
       }
@@ -868,10 +868,18 @@ async function loadCerts(){
 
 async function downloadCert(certId, certType){
   toast('Preparing download…');
-  const { data, error } = await sb.storage.from('certificates').createSignedUrl(`${currentTenant.prop_id}/${certId}`, 60);
-  if(error||!data?.signedUrl){ toast('Could not generate download link — contact your landlord', true); return; }
+  let signedUrl = '';
+  try {
+    const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/sign-doc', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bucket: 'certificates', path: `${currentTenant.prop_id}/${certId}`, p_token: window._portalToken, expiry: 60 })
+    });
+    const data = await res.json();
+    if (res.ok && data?.signedUrl) signedUrl = data.signedUrl;
+  } catch(e){ console.warn('[downloadCert]', e); }
+  if(!signedUrl){ toast('Could not generate download link — contact your landlord', true); return; }
   const a = document.createElement('a');
-  a.href = data.signedUrl;
+  a.href = signedUrl;
   a.download = certType + '.pdf';
   a.target = '_blank';
   a.click();
