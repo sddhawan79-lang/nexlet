@@ -806,7 +806,7 @@ const COMPLIANCE_DOCS = {
         id: 'epc',
         label: 'EPC (Energy Performance)',
         frequency: 'Every 10 years',
-        note: '1. Book a Domestic Energy Assessor (search accredited assessors on GOV.UK). 2. Download your EPC from the EPC register (GOV.UK). 3. Give a copy to your tenant before the tenancy begins. Minimum E rating required — you cannot legally let a property rated F or G.',
+        note: '1. Book a Domestic Energy Assessor (search accredited assessors on GOV.UK). 2. Download your EPC from the EPC register (GOV.UK). 3. Give a copy to your tenant before the tenancy begins. Minimum E rating required now — you cannot legally let a property rated F or G. From 1 October 2030 the minimum rises to EPC C, so plan upgrades for any D/E-rated property.',
         mandatory: true,
         no_expiry: false,
         hmo_only: false,
@@ -1044,7 +1044,7 @@ const COMPLIANCE_DOCS = {
         id: 'movein_epc',
         label: 'EPC — Copy Served',
         frequency: 'Before tenancy begins',
-        note: '1. Get a copy of the EPC from your certificates section or download from the EPC register (GOV.UK). 2. Send to tenant before the tenancy begins. 3. Minimum E rating required — if below E, you cannot legally let the property. Keep proof of delivery.',
+        note: '1. Get a copy of the EPC from your certificates section or download from the EPC register (GOV.UK). 2. Send to tenant before the tenancy begins. 3. Minimum E rating required now — if below E, you cannot legally let the property. From 1 October 2030 the minimum rises to EPC C. Keep proof of delivery.',
         mandatory: true,
         no_expiry: true,
         hmo_only: false,
@@ -1388,7 +1388,7 @@ UK LAW EXPERTISE:
 - Section 13 rent increases: 2 months minimum notice, once per 12 months, tenant can refer to First-tier Tribunal
 - Awaab's Law: damp/mould must be investigated within 14 days, emergency repairs within 24 hours
 - Deposits: must protect in TDS/DPS/MyDeposits within 30 days, serve prescribed information
-- Gas Safety Certificate: annual, serve within 28 days. EICR: every 5 years. EPC: min rating E, valid 10 years
+- Gas Safety Certificate: annual, serve within 28 days. EICR: every 5 years. EPC: min rating E now, rising to EPC C from 1 Oct 2030, valid 10 years
 - Right to Rent: mandatory for ALL tenants — check and copy documents before tenancy starts
 - HMO licensing: mandatory (5+ people, 2+ households), additional/selective varies by council
 - MTD for Income Tax: phased from April 2026 (>£50k), April 2027 (>£30k), April 2028 (>£20k)
@@ -5707,9 +5707,18 @@ function getMandatoryActions(tenant) {
   const hasEPC = propCerts.find(c => (c.type||'').toLowerCase().match(/epc|energy performance/));
   if (!hasEPC) {
     actions.push({ id:'epc', severity:'amber', icon:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M2.5 2.5h5L13 8l-5 5-5.5-5.5z"/><circle cx="5.5" cy="5.5" r="1"/></svg>', label:'EPC (Energy Performance Certificate)',
-      detail:'Required for all tenancies. Minimum E rating. Must be given to tenant.',
+      detail:'Required for all tenancies. Minimum E rating now (rising to EPC C from 1 Oct 2030). Must be given to tenant.',
       deadline: null, deadlineDays: null,
       cta:'Upload cert', action:`moCert()`, group:'Legal Documents' });
+  } else {
+    // EPC exists — flag the upcoming 1 Oct 2030 minimum (EPC C) for D/E-rated lets.
+    const _epcR = (P(pid)?.epc_rating || '').toString().trim().charAt(0).toUpperCase();
+    if (_epcR === 'D' || _epcR === 'E') {
+      actions.push({ id:'epc2030', severity:'amber', icon:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M2.5 2.5h5L13 8l-5 5-5.5-5.5z"/><circle cx="5.5" cy="5.5" r="1"/></svg>', label:'EPC upgrade needed by 2030',
+        detail:`Rated ${_epcR} — legal to let now, but EPC C becomes the minimum on 1 Oct 2030. Plan energy-efficiency works ahead of the deadline.`,
+        deadline:'2030-10-01', deadlineDays: daysUntil('2030-10-01'),
+        cta:'View property', action:`nav('prop-detail','${pid}')`, group:'Legal Documents' });
+    }
   }
 
   // 6. RRA Information Sheet
@@ -6036,7 +6045,7 @@ function pgDashboard(){
 
     <div class="dash-hero">
       <div class="dh-left" style="z-index:1;flex:1;min-width:240px">
-        <div style="font-size:18px;font-weight:700;color:#fff">${(new Date().getHours()<12?'Good morning':new Date().getHours()<18?'Good afternoon':'Good evening')}, ${_profileName()}</div>
+        <div style="font-family:var(--disp);font-size:23px;font-weight:400;color:#fff;letter-spacing:.2px">${(new Date().getHours()<12?'Good morning':new Date().getHours()<18?'Good afternoon':'Good evening')}, ${_profileName()}</div>
         <div style="font-size:12px;color:rgba(255,255,255,0.7);margin-top:3px">${today}</div>
         ${_activeProps.length?`
         <div style="margin-top:15px;max-width:400px">
