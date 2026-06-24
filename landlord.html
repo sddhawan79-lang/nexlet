@@ -10029,20 +10029,38 @@ function pgTenantDetail(tid) {
     </div>`;
 
   // ── UNIFIED DOCUMENTS & COMPLIANCE PANEL ──
-  const _complianceRows = CHECKLIST_ITEMS.map(item => _checklistRowHtml(t, item)).join('');
+  // Declutter: show only items needing attention (amber/red); tuck in-date (green)
+  // ones behind a "✓ N compliant — show all" toggle so the page opens calm.
+  const _compAttention = [], _compDone = [];
+  CHECKLIST_ITEMS.forEach(item => {
+    const _ra = (_checklistRAG(t, item.key) || {}).ra || 'red';
+    (_ra === 'green' ? _compDone : _compAttention).push(_checklistRowHtml(t, item));
+  });
+  const _complianceRows =
+    (_compAttention.length ? _compAttention.join('')
+      : `<div style="padding:9px 0;font-size:12px;color:var(--green-dark);font-weight:600">✓ All compliance items up to date</div>`) +
+    (_compDone.length ? `
+      <div onclick="var b=document.getElementById('comp-done-${tid}');var o=b.style.display!=='none';b.style.display=o?'none':'block';this.querySelector('[data-cl]').textContent=o?'show all':'hide';this.querySelector('[data-ar]').textContent=o?'▾':'▴';"
+           style="display:flex;align-items:center;gap:8px;padding:9px 11px;margin-top:8px;background:var(--green-bg);border:1px dashed rgba(0,168,122,0.35);border-radius:8px;font-size:12px;color:var(--green-dark);cursor:pointer">
+        <span style="font-weight:700">✓ ${_compDone.length} compliant &amp; in date</span>
+        <span data-cl style="color:var(--muted);margin-left:auto">show all</span>
+        <span data-ar style="color:var(--muted)">▾</span>
+      </div>
+      <div id="comp-done-${tid}" style="display:none">${_compDone.join('')}</div>` : '');
 
   // ── KYC document card renderer (must be defined before _kycUploadRows uses it) ──
   const renderDocCard = (doc, isLast) => renderTenantDocCard(doc, isLast, tid, t.name);
 
 
 
-  const _kycUploadRows = KYC_SLOTS.map(s => {
+  const _kycDone = [], _kycTodo = [];
+  KYC_SLOTS.forEach(s => {
     const slotDocs = docs.filter(d => d.slot === s.slot);
     const hasDocs = slotDocs.length > 0;
     const isRTR = s.slot === 'right_to_rent';
     const rtrWizardDone = isRTR && !!(t.rtr_check_date);
     const slotDone = hasDocs || rtrWizardDone;
-    return `
+    const _row = `
       <div style="padding:12px 14px;border:1px solid ${slotDone?'var(--border)':'rgba(229,62,62,0.2)'};border-radius:8px;margin-bottom:8px;background:${slotDone?'var(--white)':'rgba(229,62,62,0.02)'}">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:${slotDone||isRTR?'10px':'0'}">
           <div style="font-size:20px;width:32px;text-align:center;flex-shrink:0">${s.icon}</div>
@@ -10117,7 +10135,20 @@ function pgTenantDetail(tid) {
           }
         })() : ''}
       </div>`;
-  }).join('');
+    (slotDone ? _kycDone : _kycTodo).push(_row);
+  });
+  // Declutter: outstanding docs shown; completed ones collapsed behind a toggle.
+  const _kycUploadRows =
+    (_kycTodo.length ? _kycTodo.join('')
+      : `<div style="padding:9px 2px;font-size:12px;color:var(--green-dark);font-weight:600">✓ All required documents on file</div>`) +
+    (_kycDone.length ? `
+      <div onclick="var b=document.getElementById('kyc-done-${tid}');var o=b.style.display!=='none';b.style.display=o?'none':'block';this.querySelector('[data-cl]').textContent=o?'show':'hide';this.querySelector('[data-ar]').textContent=o?'▾':'▴';"
+           style="display:flex;align-items:center;gap:8px;padding:10px 12px;margin-top:4px;background:var(--green-bg);border:1px dashed rgba(0,168,122,0.35);border-radius:8px;font-size:12px;color:var(--green-dark);cursor:pointer">
+        <span style="font-weight:700">✓ ${_kycDone.length} document${_kycDone.length!==1?'s':''} on file</span>
+        <span data-cl style="color:var(--muted);margin-left:auto">show</span>
+        <span data-ar style="color:var(--muted)">▾</span>
+      </div>
+      <div id="kyc-done-${tid}" style="display:none">${_kycDone.join('')}</div>` : '');
 
   const unifiedDocsCard = `
     <div id="unified-docs-section" class="panel" style="margin-bottom:0;border-left:3px solid var(--navy);background:rgba(11,30,61,0.02)">
