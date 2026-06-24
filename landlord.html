@@ -33,7 +33,9 @@ html,body{height:100%;font-family:var(--font);color:var(--txt);background:var(--
 .sb-logo a{font-family:var(--disp);font-size:17px;color:#fff;text-decoration:none;display:block}
 .sb-logo a span{color:var(--green)}
 .sb-nav{flex:1;padding:10px 0;overflow-y:auto}
-.sb-nav::-webkit-scrollbar{display:none}
+.sb-nav::-webkit-scrollbar{width:6px}
+.sb-nav::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.18);border-radius:3px}
+.sb-nav::-webkit-scrollbar-track{background:transparent}
 .sb-item{display:flex;align-items:center;gap:11px;padding:10px 16px;font-size:13px;font-weight:500;color:rgba(255,255,255,0.5);cursor:pointer;border:none;background:none;font-family:var(--font);width:100%;text-align:left;transition:all .18s;position:relative}
 .sb-item:hover{color:#fff;background:rgba(255,255,255,0.07)}
 .sb-item.active{color:#fff;background:var(--green-bg)}
@@ -1581,11 +1583,13 @@ async function loadData() {
       const tm = j.tenant_maintenance;
       if (!tm || !tm.photo_urls?.length) return;
       const tmTs = new Date(tm.submitted_at).getTime();
-      const match = D.maintenance.find(m => {
+      const _tnd = (tm.description||'').toLowerCase().replace(/\s+/g,' ').trim();
+      const match = _tnd ? D.maintenance.find(m => {
         if (String(m.prop_id) !== String(tm.prop_id)) return false;
+        if ((m.description||m.desc||'').toLowerCase().replace(/\s+/g,' ').trim() !== _tnd) return false;
         const mTs = new Date(m.issue_date || m.date || m.created_at).getTime();
-        return Math.abs(mTs - tmTs) < 48 * 3600 * 1000;
-      });
+        return Math.abs(mTs - tmTs) < 30 * 864e5;
+      }) : null;
       if (match && !match.photo_urls?.length) {
         match.photo_urls = tm.photo_urls;
         match._photos_from_portal = true;
@@ -1598,11 +1602,13 @@ async function loadData() {
     tm.data.forEach(job => {
       if (!job.photo_urls?.length) return;
       const tmTs = new Date(job.submitted_at).getTime();
-      const match = D.maintenance.find(mnt => {
+      const _jnd = (job.description||'').toLowerCase().replace(/\s+/g,' ').trim();
+      const match = _jnd ? D.maintenance.find(mnt => {
         if (String(mnt.prop_id) !== String(job.prop_id)) return false;
+        if ((mnt.description||mnt.desc||'').toLowerCase().replace(/\s+/g,' ').trim() !== _jnd) return false;
         const mTs = new Date(mnt.issue_date || mnt.date || mnt.created_at).getTime();
-        return Math.abs(mTs - tmTs) < 48 * 3600 * 1000;
-      });
+        return Math.abs(mTs - tmTs) < 30 * 864e5;
+      }) : null;
       if (match && !match.photo_urls?.length) {
         match.photo_urls = job.photo_urls;
         match._photos_from_portal = true;
@@ -1961,31 +1967,34 @@ async function initApp() {
 // ── FIRST-LOGIN GUIDED TOUR ──
 const _TOUR_KEY = 'nxl_tour_v1';
 const _TOUR_STEPS = [
-  { sel:'[data-page="dashboard"]',   title:'Dashboard',    body:'Your home base \u2014 portfolio health, urgent alerts, and what needs your attention today.' },
-  { sel:'[data-page="properties"]',  title:'Properties',   body:'Add and manage every property here \u2014 details, compliance and tenants together in one place.' },
-  { sel:'[data-page="tenants"]',     title:'Tenants',      body:'Each tenant\u2019s documents, compliance checklist and portal access. Use the search box to find anyone fast.' },
-  { sel:'[data-page="compliance"]',  title:'Compliance',   body:'Track gas, electrical, EPC and more \u2014 NexLet warns you before anything expires.' },
-  { sel:'[data-page="maintenance"]', title:'Maintenance',  body:'Log repair jobs and track them through. Tenants can report issues straight from their portal.' },
-  { sel:'[data-page="rent-finance"]',title:'Rent & Finance',body:'Record rent, spot arrears early, and keep your records ready for tax time.' },
-  { sel:'[data-page="documents"]',   title:'Documents',    body:'Generate notices, store signed agreements, and find any file with search.' },
-  { sel:'#sb-ai-card',               title:'AI Assistant', body:'Stuck on anything? Ask the assistant about your portfolio or UK lettings law.' },
+  { sel:'[data-page="dashboard"]',  title:'Your home base',           body:'Portfolio health, urgent alerts and what needs your attention today all live on the Dashboard.' },
+  { sel:'[data-page="properties"]', title:'Properties',               body:'Add and manage every property here — details, compliance and tenants together in one place.' },
+  { sel:'[data-page="tenants"]',    title:'Tenants, e-sign & portal', body:'Open any tenant to send their tenancy agreement for e-signature and resend their portal link — it all lives here.' },
+  { sel:'[data-page="compliance"]', title:'Stay compliant',           body:'Gas, electrical, EPC and more — NexLet warns you before anything expires.' },
+  { sel:'[data-page="discover"]',   title:'Find any feature',         body:'Every NexLet feature in one place — inventory reports, templates, the lot. Start here whenever you’re looking for something.' },
 ];
 let _tourIdx = 0;
 
 function maybeStartTour(){
-  try { if (localStorage.getItem(_TOUR_KEY)) return; } catch(e){}
   if (window.innerWidth < 900) return; // skip on narrow screens; show next desktop login
+  let st = {};
+  try { st = JSON.parse(localStorage.getItem(_TOUR_KEY) || '{}'); } catch(e){}
+  if (st.done) return;                 // completed once → never auto-run again
+  if ((st.autoruns || 0) >= 5) return; // backstop: at most 5 auto-runs
+  try { localStorage.setItem(_TOUR_KEY, JSON.stringify({ done:false, autoruns:(st.autoruns||0)+1, ts:Date.now() })); } catch(e){}
   _showTourWelcome();
 }
 
 function _tourCleanup(){ document.querySelectorAll('.nxl-tour-el').forEach(el=>el.remove()); }
 
+// Completion → mark done so it never auto-runs again.
 function _endTour(){
-  try { localStorage.setItem(_TOUR_KEY, JSON.stringify({done:true, ts:Date.now()})); } catch(e){}
+  try { const st = JSON.parse(localStorage.getItem(_TOUR_KEY) || '{}'); st.done = true; st.ts = Date.now(); localStorage.setItem(_TOUR_KEY, JSON.stringify(st)); } catch(e){}
   _tourCleanup();
 }
 
-function _skipTour(){ _endTour(); }
+// Skip ≠ complete: don't set done, so it can still re-offer (up to the 5-login cap).
+function _skipTour(){ _tourCleanup(); }
 
 function _showTourWelcome(){
   _tourCleanup();
@@ -1998,7 +2007,7 @@ function _showTourWelcome(){
     + '<p style="font-size:14px;line-height:1.6;color:#5A6B82;margin:0 0 24px">Let\u2019s take a 30-second tour so you know where everything lives. You can replay it anytime from the <strong>?</strong> button in the corner.</p>'
     + '<div style="display:flex;gap:10px">'
     + '<button onclick="_skipTour()" style="flex:1;padding:11px;border:1px solid var(--border);background:#fff;border-radius:10px;font-size:13px;font-weight:600;color:#5A6B82;cursor:pointer;font-family:inherit">Skip for now</button>'
-    + '<button onclick="_beginTourSteps()" style="flex:1;padding:11px;border:none;background:#0B1E3D;border-radius:10px;font-size:13px;font-weight:700;color:#fff;cursor:pointer;font-family:inherit">Take the tour \u2192</button>'
+    + '<button onclick="_beginTourSteps()" style="flex:1;padding:11px;border:none;background:#0B1E3D;border-radius:10px;font-size:13px;font-weight:700;color:#fff;cursor:pointer;font-family:inherit">Take the tour →</button>'
     + '</div></div>';
   document.body.appendChild(ov);
 }
@@ -2016,8 +2025,16 @@ function _renderTourStep(){
   if (!step){ _endTour(); return; }
   const target = document.querySelector(step.sel);
   if (!target){ _tourIdx++; if (_tourIdx >= _TOUR_STEPS.length){ _endTour(); return; } return _renderTourStep(); }
+  const _nav = document.getElementById('main-nav');
+  if (_nav && _nav.contains(target)) { _nav.scrollTop = Math.max(0, target.offsetTop - 90); }
+  if (!document.getElementById('nxl-tour-kf')) {
+    const kf = document.createElement('style'); kf.id = 'nxl-tour-kf';
+    kf.textContent = '@keyframes nxlTourPulse{0%{transform:scale(.6);opacity:.9}70%{transform:scale(2.6);opacity:0}100%{opacity:0}}';
+    document.head.appendChild(kf);
+  }
   const r = target.getBoundingClientRect();
   const pad = 6;
+  const isLast = _tourIdx === _TOUR_STEPS.length-1;
 
   const catcher = document.createElement('div');
   catcher.className = 'nxl-tour-el';
@@ -2026,28 +2043,41 @@ function _renderTourStep(){
 
   const hl = document.createElement('div');
   hl.className = 'nxl-tour-el';
-  hl.style.cssText = 'position:fixed;left:'+(r.left-pad)+'px;top:'+(r.top-pad)+'px;width:'+(r.width+pad*2)+'px;height:'+(r.height+pad*2)+'px;border-radius:10px;box-shadow:0 0 0 9999px rgba(11,30,61,.55);border:2px solid #00C896;z-index:100000;pointer-events:none;transition:all .2s';
+  hl.style.cssText = 'position:fixed;left:'+(r.left-pad)+'px;top:'+(r.top-pad)+'px;width:'+(r.width+pad*2)+'px;height:'+(r.height+pad*2)+'px;border-radius:10px;box-shadow:0 0 0 9999px rgba(11,30,61,.55);border:2px solid #E8923A;z-index:100000;pointer-events:none;transition:all .25s';
   document.body.appendChild(hl);
 
-  const isLast = _tourIdx === _TOUR_STEPS.length-1;
+  const hot = document.createElement('div');
+  hot.className = 'nxl-tour-el';
+  hot.title = 'Click to continue';
+  hot.style.cssText = 'position:fixed;left:'+(r.left-pad)+'px;top:'+(r.top-pad)+'px;width:'+(r.width+pad*2)+'px;height:'+(r.height+pad*2)+'px;border-radius:10px;cursor:pointer;z-index:100001';
+  hot.onclick = function(){ _tourNav(1); };
+  document.body.appendChild(hot);
+
+  const cur = document.createElement('div');
+  cur.className = 'nxl-tour-el';
+  cur.style.cssText = 'position:fixed;left:'+(r.left+18)+'px;top:'+(r.top+r.height/2)+'px;z-index:100002;pointer-events:none';
+  cur.innerHTML = '<div style="position:relative"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" style="filter:drop-shadow(0 2px 5px rgba(0,0,0,.35))"><path d="M8 11V4.6a1.3 1.3 0 0 1 2.6 0V9.5m0-.5V3.4a1.3 1.3 0 0 1 2.6 0V9m0 0V4.4a1.3 1.3 0 0 1 2.6 0V12.6c0 3.3-2.2 5.7-5.6 5.7-2.1 0-3.5-.9-4.5-2.5l-2.2-3.5a1.3 1.3 0 0 1 2.2-1.4L8 12.5z" fill="#fff" stroke="#0B1E3D" stroke-width="1.1" stroke-linejoin="round" stroke-linecap="round"/></svg><div style="position:absolute;left:13px;top:0;width:13px;height:13px;border-radius:50%;background:rgba(232,146,58,.5);animation:nxlTourPulse 1.4s ease-out infinite"></div></div>';
+  document.body.appendChild(cur);
+
   const tip = document.createElement('div');
   tip.className = 'nxl-tour-el';
-  tip.style.cssText = 'position:fixed;z-index:100001;background:#fff;border-radius:12px;width:280px;padding:18px 18px 14px;box-shadow:0 12px 40px rgba(0,0,0,.28);font-family:var(--font),sans-serif';
-  tip.innerHTML = '<div style="font-size:11px;font-weight:700;color:#00A37A;letter-spacing:.4px;margin-bottom:5px">STEP '+(_tourIdx+1)+' OF '+_TOUR_STEPS.length+'</div>'
+  tip.style.cssText = 'position:fixed;z-index:100003;background:#fff;border-radius:12px;width:280px;padding:18px 18px 14px;box-shadow:0 12px 40px rgba(0,0,0,.28);font-family:var(--font),sans-serif';
+  tip.innerHTML = '<div style="font-size:11px;font-weight:700;color:#B86E20;letter-spacing:.4px;margin-bottom:5px">STEP '+(_tourIdx+1)+' OF '+_TOUR_STEPS.length+'</div>'
     + '<div style="font-size:16px;font-weight:700;color:#0B1E3D;margin-bottom:5px">'+step.title+'</div>'
-    + '<div style="font-size:13px;line-height:1.55;color:#5A6B82;margin-bottom:14px">'+step.body+'</div>'
+    + '<div style="font-size:13px;line-height:1.55;color:#5A6B82;margin-bottom:10px">'+step.body+'</div>'
+    + '<div style="font-size:11px;font-weight:600;color:#B86E20;margin-bottom:12px">👆 Click the highlighted spot to continue</div>'
     + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">'
-    + '<button onclick="_skipTour()" style="background:none;border:none;font-size:12px;color:#9AA8BC;cursor:pointer;font-family:inherit">Skip</button>'
+    + '<button onclick="_skipTour()" style="background:none;border:none;font-size:12px;color:#9AA8BC;cursor:pointer;font-family:inherit">Skip tour</button>'
     + '<div style="display:flex;gap:8px">'
     + (_tourIdx>0 ? '<button onclick="_tourNav(-1)" style="padding:8px 14px;border:1px solid var(--border);background:#fff;border-radius:8px;font-size:12px;font-weight:600;color:#5A6B82;cursor:pointer;font-family:inherit">Back</button>' : '')
-    + '<button onclick="_tourNav(1)" style="padding:8px 16px;border:none;background:#0B1E3D;border-radius:8px;font-size:12px;font-weight:700;color:#fff;cursor:pointer;font-family:inherit">'+(isLast?'Done':'Next \u2192')+'</button>'
+    + '<button onclick="_tourNav(1)" style="padding:8px 16px;border:none;background:#0B1E3D;border-radius:8px;font-size:12px;font-weight:700;color:#fff;cursor:pointer;font-family:inherit">'+(isLast?'Done':'Next →')+'</button>'
     + '</div></div>';
   document.body.appendChild(tip);
 
-  let left = r.right + 14;
+  let left = r.right + 18;
   let top = r.top - 4;
   const tw = 280, th = tip.offsetHeight;
-  if (left + tw > window.innerWidth - 10) left = Math.max(10, r.left - tw - 14);
+  if (left + tw > window.innerWidth - 10) left = Math.max(10, r.left - tw - 18);
   if (top + th > window.innerHeight - 10) top = Math.max(10, window.innerHeight - th - 10);
   tip.style.left = left+'px';
   tip.style.top = top+'px';
@@ -2622,7 +2652,7 @@ async function saveMortgageToDB(pid) {
 
 // ── MODAL HELPERS ──
 function openMo(t,s,b,f){
-  document.getElementById('mo-t').textContent=t;
+  document.getElementById('mo-t').innerHTML=t;
   document.getElementById('mo-s').textContent=s||'';
   document.getElementById('mo-b').innerHTML=b;
   document.getElementById('mo-f').innerHTML=f||'';
@@ -3142,7 +3172,7 @@ async function changePropertyStatus(pid, newStatus) {
 function startTenancy(pid) {
   const p = P(pid); if (!p) return;
   openMo(
-    '✅ Start Tenancy — ' + p.address,
+    '✅ Start Tenancy — ' + esc(p.address),
     'Complete the pre-tenancy checklist, then add your tenant',
     `<div id="cb-ob-${pid}" style="min-height:80px">
        <div style="color:var(--muted);font-size:13px;padding:20px 0;text-align:center">Loading checklist…</div>
@@ -5622,7 +5652,7 @@ function getMandatoryActions(tenant) {
       detail:'Must be completed before tenancy starts. Fine up to £3,000 per tenant.',
       deadline: startDate ? startDate.toISOString().slice(0,10) : null,
       deadlineDays: startDate ? daysUntil(startDate.toISOString().slice(0,10)) : null,
-      cta:'Complete check', action:`moRTRWizard('${tid}')`, group:'Pre-Tenancy' });
+      cta:'Complete check', action:`moShareCodeWizard('${tid}')`, group:'Pre-Tenancy' });
   }
 
   // 2. Written Statement (replaces AST under RRA 2025)
@@ -5849,7 +5879,7 @@ function pgDiscover(){
   const KEY = [
     { ic:I.portal, name:'Tenant portal link', desc:'Give each tenant a private link \u2014 no password \u2014 to view documents, see rent and report repairs themselves.', go:`nav('tenants');toast('Open a tenant to send their portal link')` },
     { ic:I.esign, name:'E-signature', desc:'Send a tenancy agreement and your tenant signs it on their phone \u2014 no printing or scanning.', go:`nav('tenants');toast('Open a tenant to send an agreement for e-signature')` },
-    { ic:I.inventory, feat:'inventory-reports', name:'Inventory reports', desc:'Snap a few photos and AI writes a full room-by-room condition report you can send to the tenant.', go:`nav('properties');toast('Open a property \u2192 Compliance tab to create an inventory report')` },
+    { ic:I.inventory, feat:'inventory-reports', name:'Inventory reports', desc:'Snap a few photos and AI writes a full room-by-room condition report you can send to the tenant.', go:`nav('properties');toast('Open a property → Compliance tab to create an inventory report')` },
   ];
   const GROUPS = [
     { t:'Your properties & tenants', rows:[
@@ -5858,13 +5888,13 @@ function pgDiscover(){
     ]},
     { t:'Stay legal & safe', rows:[
       { bg:'var(--status-green-bg)', col:'var(--status-green)', ic:I.shield, name:'Compliance & certificates', desc:'Gas, electrics and EPC \u2014 with reminders before anything expires.', go:`nav('compliance')` },
-      { bg:'var(--status-green-bg)', col:'var(--status-green)', ic:I.search, name:'Inspections', desc:'Record property visits with a simple pass or fail.', go:`nav('properties');toast('Open a property \u2192 Compliance tab to log an inspection')` },
+      { bg:'var(--status-green-bg)', col:'var(--status-green)', ic:I.search, name:'Inspections', desc:'Record property visits with a simple pass or fail.', go:`nav('properties');toast('Open a property → Compliance tab to log an inspection')` },
       { bg:'var(--blue-bg)', col:'var(--blue)', ic:I.calendar, name:'Calendar', desc:'Every expiry and rent date in one view.', go:`nav('calendar')` },
       { bg:'var(--amber-bg)', col:'var(--amber)', ic:I.wrench, name:'Maintenance & repairs', desc:'Track repair jobs, including damp and mould.', go:`nav('maintenance')` },
     ]},
     { t:'Paperwork & documents', rows:[
       { bg:'var(--green-bg)', col:'var(--green-dark)', ic:I.doc, name:'Legal document templates', desc:'Ready-made notices and letters, including Section 8 and Section 13.', go:`window._docTab='templates';nav('documents')` },
-      { bg:'var(--navy)', col:'#fff', ic:I.scales, name:'Court-ready audit pack', desc:'One PDF with all your evidence for a property, ready for court or a solicitor.', go:`nav('properties');toast('Open a property \u2192 Compliance tab \u2192 Legal Audit Trail')` },
+      { bg:'var(--navy)', col:'#fff', ic:I.scales, name:'Court-ready audit pack', desc:'One PDF with all your evidence for a property, ready for court or a solicitor.', go:`nav('properties');toast('Open a property → Compliance tab → Legal Audit Trail')` },
       { bg:'var(--off)', col:'var(--navy)', ic:I.folder, name:'Document library', desc:'Store and find any property document.', go:`window._docTab='library';nav('documents')` },
     ]},
     { t:'Money & tax', rows:[
@@ -5881,7 +5911,7 @@ function pgDiscover(){
     const locked = k.feat && !planHas(k.feat); const m = locked ? featMeta(k.feat) : null;
     const click = locked ? `upgradePrompt('${m.label}','${m.plan}')` : k.go;
     const pill = locked ? `<span class="dsc-pill" style="background:var(--navy);color:#fff">🔒 ${_planLbl[m.plan]}</span>` : `<span class="dsc-pill">Easy to miss</span>`;
-    return `<div class="dsc-card${locked?' dsc-locked':''}" onclick="${click}">${pill}<div class="dsc-card-ic">${k.ic}</div><div class="dsc-card-name">${k.name}</div><div class="dsc-card-desc">${k.desc}</div><div class="dsc-card-go">${locked?'Upgrade to unlock \u2192':'Open \u2192'}</div></div>`;
+    return `<div class="dsc-card${locked?' dsc-locked':''}" onclick="${click}">${pill}<div class="dsc-card-ic">${k.ic}</div><div class="dsc-card-name">${k.name}</div><div class="dsc-card-desc">${k.desc}</div><div class="dsc-card-go">${locked?'Upgrade to unlock →':'Open →'}</div></div>`;
   }).join('');
   const _dscRow = r=>{
     const locked = r.feat && !planHas(r.feat); const m = locked ? featMeta(r.feat) : null;
@@ -5962,7 +5992,7 @@ function _dashNudge(){
         <div style="font-size:13px;font-weight:600;color:var(--txt)">${n.title}</div>
         <div style="font-size:12px;color:var(--muted);margin-top:2px;line-height:1.5">${n.sub}</div>
       </div>
-      <button class="btn btn-navy btn-sm" style="flex-shrink:0" onclick="${n.action}">${n.btn} \u2192</button>
+      <button class="btn btn-navy btn-sm" style="flex-shrink:0" onclick="${n.action}">${n.btn} →</button>
       <button onclick="dismissDashNudge('${n.key}')" title="Dismiss" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:15px;line-height:1;padding:4px;flex-shrink:0">\u2715</button>
     </div>`;
   }catch(e){ return ''; }
@@ -6002,7 +6032,7 @@ function pgDashboard(){
           <div style="height:7px;background:rgba(255,255,255,0.15);border-radius:100px;margin-top:8px;overflow:hidden">
             <div style="height:100%;width:${_ready}%;background:${_readyCol};border-radius:100px;transition:width .8s ease"></div>
           </div>
-          <div onclick="nav('${_toFix?'compliance':'discover'}')" style="font-size:12.5px;color:rgba(255,255,255,0.82);margin-top:9px;cursor:pointer;display:inline-flex;align-items:center;gap:5px" onmouseenter="this.style.color='#fff'" onmouseleave="this.style.color='rgba(255,255,255,0.82)'">${_toFix?`<span style="font-weight:700;color:#fff">${_toFix}</span>&nbsp;thing${_toFix!==1?'s':''} to fix \u2192`:`Everything's in order \u2014 nice work \u2192`}</div>
+          <div onclick="nav('${_toFix?'compliance':'discover'}')" style="font-size:12.5px;color:rgba(255,255,255,0.82);margin-top:9px;cursor:pointer;display:inline-flex;align-items:center;gap:5px" onmouseenter="this.style.color='#fff'" onmouseleave="this.style.color='rgba(255,255,255,0.82)'">${_toFix?`<span style="font-weight:700;color:#fff">${_toFix}</span>&nbsp;thing${_toFix!==1?'s':''} to fix →`:`Everything's in order \u2014 nice work →`}</div>
         </div>`:`<div style="margin-top:14px;font-size:13px;color:rgba(255,255,255,0.8)">Add your first property to start tracking compliance.</div>`}
       </div>
       <div class="dh-side" style="z-index:1;flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:13px">
@@ -6010,7 +6040,7 @@ function pgDashboard(){
           <div style="text-align:right"><div style="font-size:19px;font-weight:700;color:#fff">${_activeProps.length}</div><div style="font-size:11px;color:rgba(255,255,255,0.7)">propert${_activeProps.length!==1?'ies':'y'}</div></div>
           <div style="text-align:right"><div style="font-size:19px;font-weight:700;color:#fff">${_actCnt}</div><div style="font-size:11px;color:rgba(255,255,255,0.7)">tenant${_actCnt!==1?'s':''}</div></div>
         </div>
-        <button class="btn" style="background:#fff;color:var(--navy);border:none;font-weight:700" onclick="nav('discover')">Explore features \u2192</button>
+        <button class="btn" style="background:#fff;color:var(--navy);border:none;font-weight:700" onclick="nav('discover')">Explore features →</button>
       </div>
     </div>
 
@@ -7671,8 +7701,8 @@ function pdTabContent(pid, tab) {
         const _escAddr = (p ? p.address : '').replace(/'/g, "\\'");
 
         if (st.action === 'insurance') {
-          // Route insurance rows to moInsurance, not moCert
-          rowAction = '<button onclick="event.stopPropagation();moInsurance(\'' + pid + '\')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font);white-space:nowrap">Manage</button>';
+          // Route insurance rows to the certificate/insurance modal
+          rowAction = '<button onclick="event.stopPropagation();moCert(\'' + pid + '\')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font);white-space:nowrap">Manage</button>';
         } else if (st.isNA) {
           rowAction = _naBtn;
         } else if (st.overdue) {
@@ -7901,7 +7931,7 @@ function pdTabContent(pid, tab) {
             const docUrl = doc?.file_name ? 'https://mahtcfukgzbonwibtsxz.supabase.co/storage/v1/object/public/tenant-documents/'+doc.file_name : null;
             const viewBtn = docUrl ? '<button onclick="event.stopPropagation();dvoOpen(\''+docUrl+'\',\''+KYC_LABELS[slot]+'\',\''+t.name.replace(/'/g,"\\'")+'\')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--navy);cursor:pointer;font-family:var(--font);font-weight:600"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M1.5 8S4 4 8 4s6.5 4 6.5 4-2.5 4-6.5 4-6.5-4-6.5-4z"/><circle cx="8" cy="8" r="1.8"/></svg> View</button>' : '';
             const uploadBtn = !done ? (slot==='right_to_rent'
-              ? '<button onclick="event.stopPropagation();moRTRWizard(\''+t.id+'\')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--green-dark);background:var(--green-bg);color:var(--green-dark);cursor:pointer;font-family:var(--font);font-weight:600">Run RTR check</button>'
+              ? '<button onclick="event.stopPropagation();moShareCodeWizard(\''+t.id+'\')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--green-dark);background:var(--green-bg);color:var(--green-dark);cursor:pointer;font-family:var(--font);font-weight:600">Run RTR check</button>'
               : '<button onclick="event.stopPropagation();moTenantDocs(\''+t.id+'\',\''+t.prop_id+'\')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:var(--white);color:var(--muted);cursor:pointer;font-family:var(--font)">+ Upload</button>') : '';
             return '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:'+(done?'var(--green-bg)':'rgba(229,62,62,0.05)')+';border:1px solid '+(done?'var(--green-bg)':'rgba(229,62,62,0.15)')+';border-radius:7px;gap:8px">'
               +'<div style="display:flex;align-items:center;gap:7px;flex:1;min-width:0"><span style="font-size:13px">'+KYC_ICONS[slot]+'</span><span style="font-size:12px;font-weight:500;color:var(--txt)">'+KYC_LABELS[slot]+'</span></div>'
@@ -8835,7 +8865,7 @@ function pgCompliance(){
           btnHtml = '';
         } else if (!depositProtected) {
           statusHtml = '<span style="color:#D97706;font-weight:600">\u26a0 Register deposit first</span>';
-          btnHtml = '<button class="btn btn-sm" onclick="moDepositCertModal(\'' + t.id + '\')" style="font-size:11px;border-color:#D97706;color:#D97706">Register \u2192</button>';
+          btnHtml = '<button class="btn btn-sm" onclick="moDepositCertModal(\'' + t.id + '\')" style="font-size:11px;border-color:#D97706;color:#D97706">Register →</button>';
         } else {
           var dl = daysLeft !== null ? daysLeft : 99;
           statusHtml = isOverdue
@@ -10320,6 +10350,12 @@ function pgTenantDetail(tid) {
         </div>
       </div>
 
+      ${t.status === 'Ended' ? '' : `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">
+        <button class="btn btn-navy" onclick="moEsign('${t.prop_id}','${t.id}')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M2 13s.8-2.6 2.5-4.3l5.2-5.2 2 2-5.2 5.2C4.8 12.4 2 13 2 13z"/><path d="M9.5 3.5l2 2"/></svg> Send agreement (e-sign)</button>
+        <button class="btn" style="border-color:var(--blue);color:var(--blue)" onclick="sendPortalInvite('${t.id}')" title="Email ${esc(t.name)}'s portal link — e.g. if they've lost it"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M2 4h12v8H2z"/><path d="m2 4 6 4.5L14 4"/></svg> Resend portal link</button>
+        <button class="btn" onclick="moTenantDocs('${t.id}','${t.prop_id}')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/><path d="M8 7.5v4M6 9.5h4"/></svg> Add document</button>
+      </div>`}
+
       ${(()=>{ const g8=getGround8Status(t.id); if(!g8||!g8.warning) return ''; const isHit=g8.threshold; return `<div style="background:${isHit?'rgba(229,62,62,0.07)':'rgba(217,119,6,0.06)'};border:1px solid ${isHit?'rgba(229,62,62,0.3)':'rgba(217,119,6,0.3)'};border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><div style="font-size:13px;font-weight:700;color:${isHit?'var(--red)':'var(--amber)'};margin-bottom:4px">${isHit?'🔴 Ground 8 threshold reached':'⚠️ Rent arrears warning'}</div><div style="font-size:12px;color:var(--txt);line-height:1.6">${g8.monthsArrears} month${g8.monthsArrears!==1?'s':''} in arrears · £${g8.totalUnpaid.toLocaleString()} unpaid across ${g8.unpaidCount} payment${g8.unpaidCount!==1?'s':''}${isHit?' · Ground 8 requires 2+ months — you may now serve a Section 8 notice':' · Ground 8 triggers at 2 months'}</div></div><button class="btn btn-sm" style="${isHit?'border-color:var(--red);color:var(--red)':'border-color:var(--amber);color:var(--amber)'}" onclick="moSection8('${t.prop_id}')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M8 2.5v11"/><path d="M4 5h8"/><path d="M4 5 2.2 8.8h3.6z"/><path d="M12 5l-1.8 3.8h3.6z"/><path d="M5.5 13.5h5"/></svg> Section 8 →</button></div>`; })()}
       ${renderMandatoryBanner(t)}
             ${(()=>{
@@ -10705,7 +10741,7 @@ function moTenantDocs(tenantId, propId) {
     </div>`;
   }).join('');
 
-  openMo(`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M11 6.5 6.8 10.7a2 2 0 0 1-2.8-2.8l4.7-4.7a3 3 0 0 1 4.2 4.2l-4.7 4.7"/></svg> Documents — ${t.name}`, `${t.email||'No email'} · ${slotRows.split('id="').length-1} slots`, `
+  openMo(`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M11 6.5 6.8 10.7a2 2 0 0 1-2.8-2.8l4.7-4.7a3 3 0 0 1 4.2 4.2l-4.7 4.7"/></svg> Documents — ${esc(t.name)}`, `${t.email||'No email'} · ${slotRows.split('id="').length-1} slots`, `
     <div style="max-height:72vh;overflow-y:auto;padding:0 2px">${slotRows}</div>
   `, `<button class="btn" onclick="closeMo()">Close</button>`);
 }
@@ -11163,7 +11199,7 @@ async function viewDocInline(url, label) {
   const viewUrl = await signedDocUrl(url); // P3: sign private-bucket files before rendering
 
   if (isImg) {
-    openMo(title, '', `
+    openMo(esc(title), '', `
       <div style="display:flex;justify-content:center;align-items:center;min-height:50vh;background:var(--off);border-radius:8px">
         <img src="${viewUrl}" alt="${title}" style="max-width:100%;max-height:75vh;object-fit:contain;border-radius:6px">
       </div>
@@ -11173,7 +11209,7 @@ async function viewDocInline(url, label) {
     return;
   }
 
-  openMo(title, '', `
+  openMo(esc(title), '', `
     <iframe src="${viewUrl}" style="width:100%;height:75vh;border:none;border-radius:8px;background:var(--off)"></iframe>
   `, `<button class="btn" onclick="closeMo()">Close</button>
     <a href="${viewUrl}" target="_blank" class="btn btn-navy"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M6.4 9.6 9.6 6.4"/><path d="M8 5.2 9 4.2a2.4 2.4 0 0 1 3.4 3.4l-1 1"/><path d="M8 10.8l-1 1a2.4 2.4 0 0 1-3.4-3.4l1-1"/></svg> Open in new tab</a>`);
@@ -11226,7 +11262,7 @@ function viewAllDocs(tid) {
       </div>`;
   }).join('');
 
-  openMo(`All Documents · ${t?.name||'Tenant'}`, `${docs.length} document${docs.length!==1?'s':''} uploaded`, `
+  openMo(`All Documents · ${esc(t?.name||'Tenant')}`, `${docs.length} document${docs.length!==1?'s':''} uploaded`, `
     <div style="max-height:72vh;overflow-y:auto;padding-right:4px">
       ${galleryHtml}
     </div>
@@ -12472,25 +12508,13 @@ function moIssueDetail(id){
   const _allTenants = D.tenants.filter(t=>String(t.prop_id)===String(m.prop_id)&&t.status==='Active');
   const tenant = _allTenants.find(t=>t.is_lead) || _allTenants[0];
   // Find photos from tenant portal — check job_assignments, direct tenant_maintenance table, and merged m.photo_urls
-  const _issueTs = new Date(m.issue_date || m.date || m.created_at).getTime();
-  const _tenantJob = D.jobAssignments && D.jobAssignments.find(j => {
-    if (!j.tenant_maintenance) return false;
-    if (String(j.tenant_maintenance.prop_id) !== String(m.prop_id)) return false;
-    const _jTs = new Date(j.tenant_maintenance.submitted_at).getTime();
-    return Math.abs(_jTs - _issueTs) < 48 * 3600 * 1000;
-  });
-  // Also search D.tenantMaintenance directly — catches submissions with no job_assignment row
-  // Use widened 7-day window to handle delays between tenant submission and landlord creating the job
-  const _tmDirect = D.tenantMaintenance && D.tenantMaintenance.find(tm => {
-    if (String(tm.prop_id) !== String(m.prop_id)) return false;
-    if (!tm.photo_urls?.length) return false;
-    const _jTs = new Date(tm.submitted_at).getTime();
-    return Math.abs(_jTs - _issueTs) < 7 * 24 * 3600 * 1000; // within 7 days
-  });
-  const _tenantPhotos = (_tenantJob?.tenant_maintenance?.photo_urls)
-    || (_tmDirect?.photo_urls)
-    || m.photo_urls
-    || [];
+  // Photos belong to a job only by IDENTICAL description (the portal mirror copies the
+  // tenant's text) — so a manually-logged job with no photo never borrows another job's.
+  const _mnd = (m.description||m.desc||'').toLowerCase().replace(/\s+/g,' ').trim();
+  const _tmMatch = (_mnd && D.tenantMaintenance) ? D.tenantMaintenance.find(tm =>
+    String(tm.prop_id)===String(m.prop_id) && tm.photo_urls && tm.photo_urls.length &&
+    (tm.description||'').toLowerCase().replace(/\s+/g,' ').trim() === _mnd) : null;
+  const _tenantPhotos = (m.photo_urls && m.photo_urls.length) ? m.photo_urls : ((_tmMatch && _tmMatch.photo_urls) || []);
   const commLogs = D.emailLog.filter(e=>e.template_id==='maintenance_notification'&&D.maintenance.find(x=>String(x.id)===String(id))&&String(e.prop_id)===String(m.prop_id));
   const commLogHtml = commLogs.length ? `<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
     <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:8px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M2.5 7.5a2.5 2.5 0 0 1 5 0v5h-5z"/><path d="M7.5 7.5h4A1.5 1.5 0 0 1 13 9v3.5H7.5"/><path d="M10 7.5V4.5h2"/></svg> Communication log</div>
@@ -12500,7 +12524,7 @@ function moIssueDetail(id){
       <span class="badge b-green" style="font-size:9px">✓ Sent</span>
     </div>`).join('')}
   </div>` : '';
-  openMo(m.title||'Maintenance job',`${p.address} · ${esc(m.cat||'—')}`,`
+  openMo(esc(m.title||'Maintenance job'),`${p.address} · ${esc(m.cat||'—')}`,`
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
       ${[['Property',p.address],['Category',m.cat||'—'],['Priority',m.priority||'Low'],['Reported',FMS(m.date||m.issue_date)],['Assigned to',m.assigned_to||'Not assigned'],['Cost',m.cost?'£'+m.cost:'Not set'],['Completed',m.completed_date?FMS(m.completed_date):'—'],['Awaab',m.awaab?'⚠️ Yes':'No']].map(([l,v])=>`<div class="det-f"><label>${l}</label><span>${v}</span></div>`).join('')}
     </div>
@@ -13449,7 +13473,7 @@ function moFinancials(pid){
     <td>£${mo.maint}</td>
     <td style="font-weight:600;color:${mo.profit===null?'var(--muted)':mo.profit>=0?'var(--green-dark)':'var(--red)'}">${mo.profit===null?'—':'£'+Math.round(mo.profit).toLocaleString()}</td>
   </tr>`).join('');
-  openMo(`P&L — ${p.address}`,'Real data · Monthly breakdown',`
+  openMo(`P&L — ${esc(p.address)}`,'Real data · Monthly breakdown',`
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
       <div style="background:var(--green-bg);border:1px solid var(--green-bg);border-radius:10px;padding:16px;text-align:center">
         <div style="font-size:11px;color:var(--green-dark);font-weight:600;margin-bottom:4px">MONTHLY INCOME</div>
@@ -13643,7 +13667,7 @@ function moDay30Kit(pid, tid) {
   </div>`;
 
   openMo(
-    '\U0001f4c6 Day 30 Pack',
+    '📆 Day 30 Pack',
     `${propAddr} · ${tenantName}`,
     `<div style="margin-bottom:14px">
       <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Sending to <strong>${t.email||'\u26a0 No email set'}</strong></div>
@@ -17608,7 +17632,7 @@ function moTenantDetail(tid) {
   const schemeOpts = ['','DPS','TDS','MyDeposits'].map(s =>
     `<option value="${s}"${(t.scheme||'')===s?' selected':''}>${s||'— Not set —'}</option>`).join('');
 
-  openMo(`Edit — ${t.name}`, `Tenant at ${p.address}`,
+  openMo(`Edit — ${esc(t.name)}`, `Tenant at ${p.address}`,
     `<div style="display:flex;flex-direction:column;gap:12px">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <div class="fg"><label>Full name <span style="color:var(--red)">*</span></label>
@@ -20080,7 +20104,7 @@ window._dvoFilename = null;
 // ── P3: SIGNED-URL LAYER ──────────────────────────────────────────────────
 // Sensitive buckets that must be PRIVATE in Supabase. Every read of their files
 // goes through a short-lived signed URL instead of a public URL.
-const _PRIVATE_BUCKETS = ['tenant-documents','property-documents','esign-documents','pretenancy-audits','certificates','user-feedback-documents'];
+const _PRIVATE_BUCKETS = ['tenant-documents','property-documents','esign-documents','pretenancy-audits','certificates','user-feedback-documents','signed-documents'];
 function _sbClient(){ return window._supabase || sb; }
 // Parse { bucket, path } out of a stored public/sign URL or a "bucket/path" string.
 function _bucketPath(u){
