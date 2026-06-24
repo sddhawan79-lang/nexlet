@@ -73,6 +73,11 @@ html,body{height:100%;font-family:var(--font);color:var(--txt);background:var(--
 .topbar{background:var(--white);border-bottom:1px solid var(--border);box-shadow:0 1px 0 rgba(0,0,0,0.04);padding:0 28px;height:56px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;position:sticky;top:0;z-index:50}
 .tb-title{font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--muted)}
 .tb-right{display:flex;align-items:center;gap:8px}
+.tb-search{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 10px;border-radius:8px;border:1px solid var(--border);background:var(--off);color:var(--muted);font-family:var(--font);font-size:12.5px;cursor:pointer;transition:all .15s}
+.tb-search:hover{background:var(--white);border-color:#c5d0dd;color:var(--txt)}
+.tb-search svg{width:14px;height:14px;flex-shrink:0}
+.tb-search kbd{font-family:var(--font);font-size:10px;font-weight:700;color:var(--muted);background:var(--white);border:1px solid var(--border);border-radius:4px;padding:1px 5px;line-height:1.4}
+@media(max-width:760px){.tb-search span{display:none}.tb-search kbd{display:none}}
 .content{padding:24px 28px;flex:1;min-height:0;width:100%;flex-shrink:0}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:7px;font-family:var(--font);font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;border:1px solid var(--border);background:var(--white);color:var(--muted);text-decoration:none;white-space:nowrap}
 .btn:hover{border-color:#c5d0dd;background:var(--off);color:var(--txt)}
@@ -450,12 +455,6 @@ function _hideLoader() {
 
   <nav class="sb-nav" id="main-nav">
 
-    <button class="sb-item" id="sb-search-btn" onclick="openSearch()" title="Search everything (⌘K)">
-      <svg class="sb-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="5"/><path d="M11 11l3.2 3.2"/></svg>
-      <span class="sb-label">Search</span>
-      <span style="margin-left:auto;font-size:9px;font-weight:700;opacity:.45;border:1px solid rgba(255,255,255,.22);border-radius:4px;padding:1px 5px;letter-spacing:.3px">⌘K</span>
-    </button>
-
     <button class="sb-item active" data-page="dashboard">
       <svg class="sb-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="6" height="6" rx="1.5"/><rect x="9" y="1" width="6" height="6" rx="1.5"/><rect x="1" y="9" width="6" height="6" rx="1.5"/><rect x="9" y="9" width="6" height="6" rx="1.5"/></svg>
       <span class="sb-label">Dashboard</span>
@@ -463,7 +462,7 @@ function _hideLoader() {
 
     <button class="sb-item" data-page="discover">
       <svg class="sb-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"/><path d="M10.6 5.4 9.1 9.1 5.4 10.6 6.9 6.9z"/></svg>
-      <span class="sb-label">Discover</span>
+      <span class="sb-label">All features</span>
     </button>
 
     <!-- My Portfolio -->
@@ -2220,6 +2219,7 @@ async function _urlsToAttachments(attachment_urls) {
 
 async function scanAndFill(file, onResult, customPrompt){
   if(!file) return;
+  if(file.size > 18*1024*1024){ toast('That file is too large to scan (max ~18MB). Please upload a smaller file or enter the details manually.', true); onResult({}); return; }
   const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(file);});
   const isImg=file.type.startsWith('image/');
   const defaultPrompt = 'UK property compliance certificate. Extract: certificate type, issue date (YYYY-MM-DD), expiry date (YYYY-MM-DD), engineer or provider name, issuing_authority (the company or organisation that issued the certificate), address, reference number (certificate/report serial number), amount/cost in GBP (number only). Return JSON only, keys: type, issued, expiry, engineer, issuing_authority, address, ref, amount. For each key, if you cannot determine the value with confidence, use null. Do not guess dates or numbers.';
@@ -2233,6 +2233,12 @@ async function scanAndFill(file, onResult, customPrompt){
   try {
     const cleaned=txt.replace(/```json|```/g,'').trim();
     const parsed=JSON.parse(cleaned);
+    // Normalise dates so a malformed/guessed value never reaches the form.
+    const _isoDate = v => { if(!v||v==='null'||v==='unknown') return null; const d=new Date(v); if(isNaN(d.getTime())) return null; const y=d.getFullYear(); if(y<1990||y>2100) return null; return d.toISOString().slice(0,10); };
+    if('issued' in parsed) parsed.issued=_isoDate(parsed.issued);
+    if('expiry' in parsed) parsed.expiry=_isoDate(parsed.expiry);
+    // An expiry earlier than the issue date is almost certainly a misread — drop it.
+    if(parsed.issued && parsed.expiry && parsed.expiry < parsed.issued) parsed.expiry=null;
     // Flag missing/weak values
     const missing=[];
     const keyLabels={type:'Certificate type',issued:'Issue date',expiry:'Expiry date',engineer:'Engineer/Provider',issuing_authority:'Issuing authority',address:'Address',ref:'Reference number',amount:'Amount',scheme:'Deposit scheme',policy_number:'Policy number',premium:'Premium',provider:'Provider'};
@@ -15255,6 +15261,23 @@ function _mobileTableLabels(){
   }catch(e){}
 }
 
+// Injects a small search field into every page's topbar (top-right) — runs after each
+// page render. Replaces the old sidebar search item so the feature list isn't buried.
+function _ensureTopbarSearch(){
+  try{
+    const tb = document.getElementById('main')?.querySelector('.topbar');
+    if(!tb || tb.querySelector('#tb-search-btn')) return;
+    let right = tb.querySelector('.tb-right');
+    if(!right){ right=document.createElement('div'); right.className='tb-right'; tb.appendChild(right); }
+    const b=document.createElement('button');
+    b.id='tb-search-btn'; b.className='tb-search'; b.type='button';
+    b.title='Search everything (\u2318K)';
+    b.onclick=function(){ if(window.openSearch) openSearch(); };
+    b.innerHTML='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg><span>Search</span><kbd>\u2318K</kbd>';
+    right.insertBefore(b, right.firstChild);
+  }catch(e){}
+}
+
 function nav(page, param){
   // ── PLAN GATING (central) ── runs before any state change; blocks EVERY entry point
   // (sidebar, Discover, dashboard buttons, deep links) for features outside the user's plan.
@@ -15307,6 +15330,7 @@ function nav(page, param){
   try {
     main.innerHTML=(PAGES[page]||pgDashboard)(param);
     _mobileTableLabels();
+    _ensureTopbarSearch();
   } catch(err) {
     main.innerHTML='<div style="padding:32px;font-family:sans-serif"><h2 style="color:#E53E3E">Page Error: '+page+'</h2><pre style="background:#fff5f5;padding:16px;border-radius:8px;font-size:12px;overflow:auto;white-space:pre-wrap">'+err.stack+'</pre></div>';
   }
@@ -15333,6 +15357,8 @@ window.addEventListener('popstate', function(e) {
     });
     try {
       main.innerHTML=(PAGES[page]||pgDashboard)(param);
+      _mobileTableLabels();
+      _ensureTopbarSearch();
     } catch(err) {
       main.innerHTML='<div style="padding:32px;font-family:sans-serif"><h2 style="color:#E53E3E">Page Error</h2></div>';
     }
