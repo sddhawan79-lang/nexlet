@@ -709,8 +709,8 @@ Session 8 introduced a 3-checkbox pre-generation consent gate for 4 legal docume
 | 58 | Plan defaulted **open** to `portfolio` — non-payers / cancelled / lapsed users got the top tier free | Billing / Access | **FIXED June 2026** — access now fail-closed: paid plan > active trial > read-only (`expired`). See §9. |
 | 59 | Plan gating bypassable via non-sidebar entry points (Discover, dashboard buttons, hash URLs); `pgFinancials`, MTD tab, `moInventoryReport` reachable un-gated | Access / Revenue | **FIXED June 2026** — central `featureGate()` in `nav()` + action gate on `moInventoryReport` + Discover lock badges. |
 | 60 | Paying customers still flagged `plan:'trial'` could be force-expired after 30 days | Billing | **FIXED June 2026** — an active paid subscription always wins in the access decision. |
-| 61 | **Plan enforcement is client-side only** — Supabase tables / functions are not plan-guarded; a technical user can bypass gating | Security | **Open** — add plan + property-limit checks to RLS / edge functions. |
-| 62 | User data interpolated into `innerHTML` / inline `onclick` without escaping (stored XSS risk) | Security | **Open** — escape user-supplied strings before render. |
+| 61 | **Plan enforcement is client-side only** — Supabase tables / functions are not plan-guarded; a technical user can bypass gating | Security | **PARTIALLY ADDRESSED June 2026 (Sessions 48–49)** — `ai-proxy` + `super-processor` now enforce an `ALLOWED_ORIGINS` check and require a Supabase JWT; AI usage metered server-side. **Still open:** plan + property-limit checks in RLS for the data tables. |
+| 62 | User data interpolated into `innerHTML` / inline `onclick` without escaping (stored XSS risk) | Security | **FIXED June 2026 (Session 48, P2)** — user-supplied strings escaped via `esc()` / `escAttr()` across render sites (tenant names, addresses, modal titles, doc labels). |
 | 63 | AI inventory is photo-heavy (storage + per-report AI cost) yet sold flat under Portfolio | Cost / Pricing | **Planned** — pay-per-report credits available to all tiers; compress photos client-side, keep report PDF as the durable artifact. |
 | 11 | `parseInt()` on UUID `prop_id`/`tenant_id` values — produces NaN | Data integrity | **FIXED Session 7** — replaced with `String()` (22 locations) |
 | 12 | `tenant_documents` table missing from DB — KYC scanning fails silently | Database | **SQL created** — run `session7_tenant_documents.sql` in Supabase SQL Editor |
@@ -5676,3 +5676,98 @@ USING (bucket_id = 'tenant-documents');
 |---|---|
 | `tenant.html` | Removed duplicate `let _selectedPhotoFiles` declaration (line 379) that was crashing entire portal JS |
 | `landlord.html` | Cookie banner inline style fix — removed conflicting `display:flex` that overrode `display:none` (line 20692) |
+
+---
+
+## Session 48 — 20–21 June 2026 — AI Cost Control, Server-Side Gating (P1), XSS Sweep (P2), Private Buckets (P3)
+
+**Theme:** Close the launch-blocking security + cost gaps before scaling to landlord groups. Three priorities (P1–P3) plus AI bill-shock protection.
+
+### AI Usage Metering & Graceful Fallback (cost control)
+- **`AI_MONTHLY_LIMITS`** (`{ trial:15, starter:40, landlord:200, portfolio:800 }`) + `getAILimit()` — fair-use **backstops**, not rations; sized far above real landlord usage so genuine customers never hit them. UI/messaging only — **real enforcement is server-side** in `ai-proxy`.
+- **`aiScanFetch(payload, {feature})`** — shared drop-in wrapper for every document/cert/ID auto-scan. On a **402** (quota/credit exhausted) or transient failure it fires ONE friendly toast and lets the scan **degrade to manual entry** instead of failing silently. Helpers: `isAIQuotaError()`, `aiUnavailable()`.
+- **`aiProxy()` retry path** now treats **HTTP 402** as non-retryable — throws `{code:'ai_quota', overQuota:true}` so callers fall back to manual entry; 429/5xx still use exponential backoff (1s/2s/4s, max 8s).
+- **Migrated all 9 AI scanners** in `landlord.html` (certificate, ID, document, bulk, compliance-checklist scanners) from raw `fetch(ai-proxy)` to `aiScanFetch()`.
+- **AI scanner hardening:** 18MB file-size guard (friendly message, no silent cost); date normalisation (`_isoDate` — only valid ISO dates 1990–2100 reach the form); expiry-earlier-than-issue dropped as a likely misread.
+
+### P1 — Server-Side AI Gating
+- **`ai-proxy` + `super-processor` edge functions:** added an **`ALLOWED_ORIGINS`** check (nexlet.co.uk, www, localhost dev) returning 403 on foreign origins, and require a Supabase **JWT** (client now sends `Authorization: Bearer <token>`, stored as `window._sbToken`). Speed-bump against drive-by abuse + ties usage to a real account.
+- Edge functions also handle the **`send_email`** (Resend) branch and the AI passthrough behind the same origin gate.
+
+### P2 — XSS Sweep
+- Escaped user-supplied strings before `innerHTML` render using existing `esc()` / `escAttr()` helpers: tenant names, property addresses, modal titles (see Session 49 `openMo` change), document labels, search results.
+
+### P3 — Private Buckets + Signed URLs
+- Document buckets flipped to **private**; reads now go through **signed URLs** (`signedDocUrl` / `dvoOpen` private-bucket path) across `landlord.html`, `tenant.html`, `esign.html`. Signed-doc display verified end-to-end (scan, e-sign, portal).
+
+---
+
+## Session 49 — 21–22 June 2026 — Tenant Portal Reframe, File Consolidation, Modal & Button Bug Fixes
+
+### Tenant Portal Reframe (Day-1 framing)
+- Portal card copy reframed around the **magic link being delivered in the Day-1 welcome kit**, with the action focused on **resend** (“Resend link” / “Send link”) for tenants who lost it — rather than implying a separate manual invite step. Status dots: active / link sent · awaiting login / sent with Day-1 kit / not sent.
+
+### File Consolidation (ended fork confusion)
+- **`landlord.html` confirmed as the single canonical deploy file.** Stale forks (`landlord-a6f0f2bb.html`, `landlord-f9b1e43a.html`) **archived** to `uploads/archive/` (not deleted) so no work is lost and the duplicate-file confusion ends.
+
+### Bug Fixes
+- **Broken buttons:** RTR wizard + insurance row called undefined functions (`moRTRWizard`, `moInsurance`) → routed to the real `moShareCodeWizard` / `moCert`. Full handler audit (272 inline handlers vs 2,155 functions) confirmed **no other dead buttons** of this class.
+- **Job photos pulling wrong images:** a manually-logged job with no photo was borrowing a nearby job's tenant photos (matched by property + loose 48h/7-day time window). Now matched by **identical description** (the portal mirror copies the tenant's text) — no-photo jobs show no photos. Applied at all 3 merge/match sites.
+- **Raw HTML in Day-1/Day-30 kit headers:** `openMo()` rendered the modal title with `textContent`, but ~20 modals pass an **SVG icon string** as the title → raw markup shown. Switched title to **`innerHTML`** (icons render) and **escaped** the user-data titles (names/addresses) so this didn't reopen the XSS hole. Fixed the broken `\U0001f4c6` → 📆 in the Day-30 title.
+
+---
+
+## Session 50 — 22–24 June 2026 — Guided Tour, Global Search, Nav IA, Visual Polish, Tenant-Page Declutter
+
+### Retium-style Guided Tour (replaced static highlight boxes)
+- Rebuilt `_renderTourStep` as an **animated hand cursor** that glides to each target (amber pulse), a **spotlight** that dims everything else, a **click-to-advance hotspot** (click the highlighted spot or Next), and a coach card with **STEP n OF 5** + Skip/Back/Next.
+- **5 focused steps:** Dashboard → Properties → **Tenants (e-sign & portal explained)** → Compliance → All features. (E-sign/portal live *inside* a tenant, so the Tenants step explains them rather than auto-navigating mid-tour.)
+- **Auto-run logic = complete-or-5:** `maybeStartTour` auto-starts until the user finishes once (`_TOUR_KEY` `{done, autoruns}`), capped at 5 logins. **Skip ≠ complete** (`_skipTour` doesn't set `done`, so it keeps gently re-offering); always replayable via the sidebar **Tour** link.
+
+### Global ⌘K Search
+- **Header search:** removed the search item from the sidebar; `_ensureTopbarSearch()` injects a compact **top-right search field** (magnifier + “Search” + ⌘K) into every page's topbar after render. ⌘K still toggles it everywhere.
+- **Search modal click/ESC fix:** result rows used inline `onclick`/`onmouseenter` and the “ESC” badge was decorative — clicks/ESC did nothing (only backdrop closed). Switched to **event-delegation listeners** (`addEventListener` on the list box) and made the **ESC badge a real close button**.
+
+### Navigation IA Regrouping (mirrors the compliance journey)
+- **My Portfolio** (Properties · Tenants) → **Staying Compliant** (Compliance · Documents) → **Day-to-Day** (Rent & Finance · Maintenance · Calendar). Sequenced set-up → get-compliant → operate. **“Discover” renamed → “All features.”** “Send feedback” retained in the sidebar footer.
+
+### Visual Polish
+- Styled native dropdowns (consistent chevron), visible focus rings on inputs/buttons (accessibility), fixed low-contrast sidebar text, **serif page titles** (`var(--disp)`) + bigger logo, de-duplicated page titles (topbar kicker vs serif `<h1>`), `--accent` colour aliases, serif dashboard hero greeting.
+
+### Tenant-Page Declutter (“show what needs action — hide what's done”)
+- **KYC & Identity:** shows only **outstanding** doc slots; completed ones collapse behind **“✓ N documents on file — show.”** Partitioned via `_kycTodo` / `_kycDone`.
+- **Compliance:** shows only **amber/red** items; in-date (green) ones collapse behind **“✓ N compliant & in date — show all.”** Partitioned via `_compAttention` / `_compDone`. Section headers carry count badges.
+- **Tenant action bar:** prominent row under the tenant's name — **Send agreement (e-sign) · Resend portal link · Add document** — surfacing previously-buried actions.
+
+---
+
+## Session 51 — 24–25 June 2026 — Compliance Currency, Sidebar Compaction, First-Run Audit, How to Rent Pause
+
+### EPC C-by-2030 Advisory (RRA roadmap)
+- Copy across the 3 EPC checkpoints updated: minimum **E now, rising to EPC C from 1 Oct 2030**. Added a computed **amber dashboard advisory** for **D/E-rated** lets (“EPC upgrade needed by 2030”) so landlords can budget ahead. (Confirmed Section 13 already enforces 2-month notice + the 12-month rule.)
+
+### Sidebar Footer Compaction (features were getting hidden)
+- Footer reduced from 6 stacked blocks to 4: **slimmed AI card**, **one-line founding-price chip** (“🎁 Founding price · Upgrade →”), **ICO registration line removed** from the sidebar (kept in the delete-account legal notice), **“Tour · Send feedback” merged** into one row. Reclaims ~3 lines so the **Day-to-Day** group is no longer pushed off-screen; nav still scrolls on short laptops.
+
+### New-User First-Run
+- **Empty-state audit:** confirmed every main page (Properties, Tenants, Compliance, Maintenance, Inspections, Inventory, Dashboard) has a proper empty state + CTA, plus the existing `new-user-stepper` / `setup-banner` dashboard guidance. No fixes required.
+- **Dashboard hero zero-state** now leads with a prominent white **“+ Add your first property”** button (+ “Takes 2 minutes…” subtitle) instead of plain text.
+
+### How to Rent Guide — PAUSED under RRA 2025
+- **New reversible flag `const H2R_REQUIRED = false;`** (defined just above `CHECKLIST_ITEMS`). Rationale: How to Rent's legal force came from being a precondition for a valid **Section 21** notice; S21 is abolished from 1 May 2026 and new-tenancy prescribed information is being set by secondary legislation, so it's no longer a hard requirement.
+- While `false`: How to Rent **no longer blocks** the Day-1 kit (`sendWelcomeKit` blockers gated), **no longer auto-attaches** to the kit (`attachment_urls` push gated), is **removed from the mandatory checklist** display, and `CHECKLIST_ITEMS.how_to_rent.mandatory` set to `false`. In **Compliance → Tenancy Packs & Templates** it now shows as **“Optional — paused under RRA 2025”**; **RRA 2025 Prescribed Particulars** is the sole mandatory doc there. Still **sendable** from a tenant's page via `sendH2RGuide`. Flip the flag to `true` to fully restore if GOV.UK reinstates it.
+- **Note:** the **RRA 2025 Information Sheet** (leaflet for *existing* tenants, due ~1 June 2026) is a separate, **active** requirement — unchanged.
+
+### Files Modified — Sessions 48–51
+| File | Changes |
+|---|---|
+| `landlord.html` | AI metering + `aiScanFetch` + 9 scanner migrations + scanner hardening; JWT header on AI calls; XSS escaping; `openMo` title → `innerHTML` + escaped titles; job-photo description match; broken-button routing; guided tour rebuild + complete-or-5; header search + modal delegation fix; nav IA regroup; visual polish; tenant-page declutter + action bar; EPC-2030 advisory; sidebar footer compaction; hero zero-state CTA; How to Rent pause (`H2R_REQUIRED`) |
+| `tenant.html`, `esign.html` | Private-bucket signed-URL reads (P3) |
+| `ai-proxy` / `super-processor` (edge) | `ALLOWED_ORIGINS` check + JWT requirement + server-side AI metering |
+| `uploads/archive/` | Stale forks `landlord-a6f0f2bb.html`, `landlord-f9b1e43a.html` archived |
+
+### Open / Next
+- **Stripe live:** verify the webhook that flips a user to paid (`checkout.session.completed` / `subscription.updated` / `deleted`) + failed-payment dunning before opening to landlord groups.
+- **Server-side plan + property-limit checks in RLS** (Known Issue #61 remainder).
+- **Phase 2 roadmap (path to 9/10 vs Goodlord):** tenant referencing (partner/integrate), rent collection rails (Open Banking/GoCardless), team/multi-user roles.
+- Developer to split the monolithic `landlord.html` into `js/` modules (planned, not started).
