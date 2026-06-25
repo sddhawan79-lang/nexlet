@@ -1351,15 +1351,16 @@ const D = {
 };
 const SYSTEM_PROMPT = `You are the NexLet assistant for nexlet.co.uk, a UK landlord compliance SaaS platform. You help UK private landlords with two things: (1) UK landlord/tenancy law, and (2) using the NexLet platform.
 
-PLATFORM FEATURES — tell users exactly where to find things. The sidebar is organised into three collapsible groups: "My Portfolio", "Staying Legal" and "Money & Records" (Dashboard sits above them; AI Assistant at the bottom).
+PLATFORM FEATURES — tell users exactly where to find things. The sidebar is organised into three collapsible groups: "My Portfolio", "Staying Compliant" and "Day-to-Day" (Dashboard and All features sit above them; AI Assistant at the bottom). There is also a Search box (top-right of every page, or press Cmd/Ctrl+K) that jumps to any property, tenant, page or feature by name.
 - Dashboard (sidebar, top): compliance scores, alerts, quick actions
+- All features (sidebar, near top): a directory of everything NexLet can do — point users here when they can't find a feature
 - Properties (sidebar > My Portfolio > Properties): manage properties
 - Tenants (sidebar > My Portfolio > Tenants): add tenants, portal invites, right-to-rent checks
-- Compliance (sidebar > Staying Legal > Compliance): portfolio health score + certificates — gas safety, EICR, EPC with RAG expiry alerts
-- Calendar (sidebar > Staying Legal > Calendar): date-based view of certificate expiries, rent due dates, insurance/licence renewals
-- Maintenance (sidebar > Staying Legal > Maintenance): Kanban board, log jobs, Awaab's Law damp/mould tracking
-- Rent & Finance (sidebar > Money & Records > Rent & Finance): a single page with three tabs — Rent (default: track payments, mark received, receipts), Finance (P&L, insurance, mortgages, profit), and MTD Tax (Making Tax Digital quarterly filings, Section 24 calculator — Portfolio plan)
-- Documents (sidebar > Money & Records > Documents): a single page with three tabs — Templates (default: 20 AI-generated legal documents — Section 8 notices for all RRA 2025 grounds, Section 13 rent increase, Written Statement of Terms, deposit letters, inspection reports, arrears letters, and more), Document Library (upload and store property documents), and Contractors (your contractor book)
+- Compliance (sidebar > Staying Compliant > Compliance): portfolio health score + certificates — gas safety, EICR, EPC with RAG expiry alerts
+- Documents (sidebar > Staying Compliant > Documents): a single page with three tabs — Templates (default: 20 AI-generated legal documents — Section 8 notices for all RRA 2025 grounds, Section 13 rent increase, Written Statement of Terms, deposit letters, inspection reports, arrears letters, and more), Document Library (upload and store property documents), and Contractors (your contractor book)
+- Rent & Finance (sidebar > Day-to-Day > Rent & Finance): a single page with three tabs — Rent (default: track payments, mark received, receipts), Finance (P&L, insurance, mortgages, profit), and MTD Tax (Making Tax Digital quarterly filings, Section 24 calculator — Portfolio plan)
+- Maintenance (sidebar > Day-to-Day > Maintenance): Kanban board, log jobs, Awaab's Law damp/mould tracking
+- Calendar (sidebar > Day-to-Day > Calendar): date-based view of certificate expiries, rent due dates, insurance/licence renewals
 - Inspections (property page > Compliance tab > Inspections panel > "+ Log inspection"): log and track inspection records with pass/advisory/fail ratings
 - Inventory Reports (property page > Compliance tab > Inventory Reports panel > "+ New report"): AI-generated room-by-room condition reports with photo evidence — upload photos, AI writes report, send to tenants with email + PDF
 - Insurance (Compliance page or property > Compliance tab > insurance rows > "Manage"): track buildings, contents and rent guarantee policies with expiry alerts
@@ -5745,9 +5746,10 @@ function getMandatoryActions(tenant) {
       cta:'Send now', action:`moRRASheet()`, group:'Legal Documents' });
   }
 
-  // 7. How to Rent Guide
+  // 7. How to Rent Guide — PAUSED under RRA 2025 (gated by H2R_REQUIRED). Section 21 is
+  // abolished from 1 May 2026, so it's no longer an overdue legal obligation. Still sendable.
   const h2rServed = allLog.some(e => (e.template_id||'').includes('how_to_rent') || (e.subject||'').toLowerCase().includes('how to rent'));
-  if (!h2rServed) {
+  if (H2R_REQUIRED && !h2rServed) {
     actions.push({ id:'h2r', severity:'amber', icon:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M8 4.5C6.5 3 4.5 2.8 2.5 3.5v8C4.5 10.8 6.5 11 8 12.5 9.5 11 11.5 10.8 13.5 11.5v-8C11.5 2.8 9.5 3 8 4.5z"/><path d="M8 4.5v8"/></svg>', label:'How to Rent Guide',
       detail:'Latest GOV.UK edition. Must be served with latest version — resend when updated.',
       deadline: startDate ? startDate.toISOString().slice(0,10) : null,
@@ -5991,7 +5993,7 @@ function pgDiscover(){
 #dsc-root .dsc-row-go{color:#C5D0DD;font-size:22px;flex-shrink:0;transition:color .12s,transform .12s}
 #dsc-root .dsc-row:hover .dsc-row-go{color:var(--navy);transform:translateX(2px)}
 </style>
-  <div class="topbar"><span class="tb-title">Discover</span></div>
+  <div class="topbar"><span class="tb-title">All features</span></div>
   <div class="content"><div id="dsc-root">
     <div class="dsc-ph"><h1>What you can do in NexLet</h1><p>Everything in one place. Tap anything to open it \u2014 or ask the AI Assistant any time.</p></div>
     <div class="dsc-key"><div class="dsc-key-t"><svg viewBox="0 0 16 16" fill="none" stroke="#B86E20" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M8 2.5l1.3 3.2L12.5 7l-3.2 1.3L8 11.5 6.7 8.3 3.5 7l3.2-1.3z"/></svg> Key features</div><div class="dsc-key-sub">Powerful tools landlords often miss \u2014 worth a look.</div><div class="dsc-key-grid">${keyHtml}</div></div>
@@ -6552,7 +6554,7 @@ function getPropCheckItems(mode){
     {id:'ob4b', group:'Pre-Tenancy',       label:'Guarantor agreement signed (if applicable)',  detail:"If taking a guarantor: give them a copy of the draft tenancy first, then have them sign the guarantor agreement beforehand. Both documents must be signed before tenancy starts."},
     {id:'ob5',  group:'Legal Documents',   label:'Written Statement of Terms served',          detail:'Replaces AST from 1 May 2026. Serve BEFORE tenancy is signed. (RRA 2025)'},
     {id:'ob6',  group:'Legal Documents',   label:'RRA 2025 Information Sheet served',          detail:'Mandatory PDF attachment — a link is NOT valid. Fine up to £7,000 if missed.'},
-    {id:'ob7',  group:'Legal Documents',   label:'How to Rent Guide served',                   detail:'Latest edition from GOV.UK. Keep timestamped proof of delivery.'},
+    ...(H2R_REQUIRED ? [{id:'ob7',  group:'Legal Documents',   label:'How to Rent Guide served',                   detail:'Latest edition from GOV.UK. Keep timestamped proof of delivery.'}] : []),
     {id:'ob8',  group:'Legal Documents',   label:'Gas Safety Certificate (CP12) served',       detail:'Must be provided before tenancy begins. Annual renewal required.'},
     {id:'ob9',  group:'Legal Documents',   label:'EICR served',                                detail:'Electrical Installation Condition Report. Valid for 5 years.'},
     {id:'ob10', group:'Legal Documents',   label:'EPC served',                                 detail:'Minimum E rating required. Valid 10 years.'},
