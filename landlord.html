@@ -1748,15 +1748,25 @@ const FEATURE_META = {
   insurance:{label:'Insurance',plan:'landlord'},
   contractors:{label:'Contractor Book',plan:'landlord'},
   mtd:{label:'MTD Tax',plan:'landlord'},
-  'inventory-reports':{label:'AI Inventory Reports',plan:'portfolio'}
+  'inventory-reports':{label:'AI Inventory Reports',plan:'portfolio',addon:true}
 };
 // Page id -> feature it requires (drives the central gate in nav()).
 const PAGE_FEATURE = { 'rent-finance':'rent','financials':'financials','rent':'rent','mtd':'mtd','contractors':'contractors','insurance':'insurance','inventory-reports':'inventory-reports','inventory-report':'inventory-reports' };
 // trial = full access; expired = handled by soft-lock/_expiredGuard, never blocked here.
-function planHas(feature){ const p=getUserPlan(); if(p==='trial'||p==='expired') return true; return (PLAN_FEATURES[p]||STARTER_FEATURES).includes(feature); }
+// AI Inventory Reports is a £5.99/mo add-on (or included free in Portfolio). Entitlement =
+// top tier OR the add-on flag (set by its Stripe webhook). Trial users get it too
+// (full-access trial drives conversion). ⚠ CLIENT-SIDE gate = UX only; the real lock is
+// the server-side entitlement check in the AI edge function (see DEV NOTE / dev spec).
+function hasInventory(){ return isPortfolio() || !!(D.userProfile && D.userProfile.inventory_addon); }
+function planHas(feature){
+  const p=getUserPlan();
+  if(feature==='inventory-reports') return p==='trial' || hasInventory();
+  if(p==='trial'||p==='expired') return true;
+  return (PLAN_FEATURES[p]||STARTER_FEATURES).includes(feature);
+}
 function featMeta(feature){ return FEATURE_META[feature]||{label:feature,plan:'landlord'}; }
 /** Central gate: returns true (and shows the upgrade modal) if the current plan lacks `feature`. */
-function featureGate(feature){ if(!feature||planHas(feature)) return false; const m=featMeta(feature); upgradePrompt(m.label,m.plan); return true; }
+function featureGate(feature){ if(!feature||planHas(feature)) return false; if(feature==='inventory-reports'){ inventoryPaywall(); return true; } const m=featMeta(feature); upgradePrompt(m.label,m.plan); return true; }
 function getPropLimit(){ if(isExpired()) return 0; return PLAN_LIMITS[getUserPlan()]||2; }
 
 // ── AI USAGE ALLOWANCES (per landlord account, per calendar month) ──
@@ -1865,6 +1875,23 @@ function upgradePrompt(feature, plan){
       <div style="background:var(--off);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:12px;color:var(--txt);margin-bottom:14px">Your current plan: <strong style="color:var(--navy)">${planLabels[getUserPlan()]||'Free'}</strong></div>
       <a href="profile.html" class="btn btn-navy" style="display:inline-block;text-decoration:none">Upgrade plan →</a>
     </div>`, `<button class="btn" onclick="closeMo()">Close</button>`);
+}
+
+// Dedicated paywall for the AI Inventory Reports ADD-ON (£5.99/mo, or free on Portfolio).
+// Shown by featureGate('inventory-reports') to any non-entitled user.
+function inventoryPaywall(){
+  openMo('AI Inventory Reports','Professional condition reports — move-in, mid-tenancy & check-out',`
+    <div style="background:linear-gradient(135deg,#0B1E3D,#1a3a6b);border-radius:12px;padding:18px 20px;margin-bottom:16px;color:#fff">
+      <div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">✦ Add-on · save £150–300 per inspection</div>
+      <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:8px"><span style="font-family:Georgia,serif;font-size:30px;font-weight:700">£5.99</span><span style="font-size:13px;color:rgba(255,255,255,0.7)">/month · unlimited reports</span></div>
+      <div style="font-size:12.5px;color:rgba(255,255,255,0.85);line-height:1.6">Snap photos, AI writes a court-ready condition report. At check-out it compares against your move-in baseline and produces a defensible deposit deduction schedule — fair wear vs tenant damage, with the figures an adjudicator would award.</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:9px;font-size:13px;color:var(--txt)">
+      ${['Move-in condition report (baseline)','Mid-tenancy visit logs — add repairs & photos anytime','Check-out comparison → automatic deduction schedule','Send to tenant + PDF for the deposit scheme'].map(x=>`<div style="display:flex;align-items:flex-start;gap:9px"><span style="color:var(--green-dark);font-weight:700;flex-shrink:0">✓</span><span>${x}</span></div>`).join('')}
+    </div>
+    <div style="background:var(--off);border:1px solid var(--border);border-radius:8px;padding:11px 13px;font-size:12px;color:var(--muted);margin-top:14px;text-align:center">Included free on the <strong style="color:var(--navy)">Portfolio</strong> plan.</div>
+  `, `<button class="btn" onclick="closeMo()">Maybe later</button>
+     <a href="profile.html" class="btn btn-navy" style="display:inline-block;text-decoration:none">Add for £5.99/mo →</a>`);
 }
 function applyPlanGating(){ return; } // intentional no-op — gating handled by nav() at lines 7977–7980
 
@@ -6021,7 +6048,7 @@ function _dashNudge(){
       const miss = D.tenants.filter(t=>t.status==='Active' && !t.invite_used && !D.emailLog.some(e=>String(e.tenant_id)===String(t.id) && e.template_id && (e.template_id.includes('portal')||e.template_id.includes('invite'))));
       if(miss.length) cands.push({key:'portal', icon:ICON.portal, title:(miss.length===1?'Give your tenant their portal link':'Give your tenants their portal link'), sub:`${miss.length} active tenant${miss.length!==1?'s have':' has'} no portal invite yet \u2014 a private link to view documents and report repairs, no password needed.`, btn:'Send portal invite', action:(miss.length===1?`sendPortalInvite('${miss[0].id}')`:`nav('tenants')`)});
     }
-    if(live('inventory')){
+    if(live('inventory') && planHas('inventory-reports')){
       const miss = D.properties.filter(p=>(p.status||'active')!=='archived' && D.tenants.some(t=>String(t.prop_id)===String(p.id)&&t.status==='Active') && !(D._invReports||[]).some(r=>String(r.propId)===String(p.id)) && !D.certs.some(c=>String(c.prop_id)===String(p.id)&&c.type&&(c.type.toLowerCase().includes('inventory')||c.type.toLowerCase().includes('schedule of condition'))));
       if(miss.length) cands.push({key:'inventory', icon:ICON.inventory, title:'Create an AI inventory report', sub:`${miss.length} occupied propert${miss.length!==1?'ies have':'y has'} no inventory report \u2014 snap photos and AI writes a move-in condition report to protect your deposit.`, btn:'Create report', action:(miss.length===1?`moInventoryReport('${miss[0].id}')`:`nav('properties')`)});
     }
@@ -7539,7 +7566,7 @@ function pdTabContent(pid, tab) {
           </div>
           <button class="btn btn-sm" style="background:var(--green);color:#0B1E3D;border:none;font-weight:700;flex-shrink:0" onclick="event.stopPropagation();moSection8('${pid}')">Generate →</button>
         </div>
-        ${isPortfolio() ? `
+        ${hasInventory() ? `
         <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:10px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px">
           <div><div style="font-size:10px;font-weight:700;color:#3B6FE8;letter-spacing:.5px;text-transform:uppercase;margin-bottom:4px">✦ AI Powered</div><div style="font-size:13px;font-weight:600;color:#fff">Inventory Report</div><div style="font-size:11px;color:rgba(255,255,255,0.5);margin-top:2px">Move-in · Move-out · Saves £150–300</div></div>
           <button class="btn btn-sm" style="background:var(--blue);color:#fff;border:none;font-weight:700;flex-shrink:0" onclick="event.stopPropagation();moInventoryReport('${pid}')">Generate →</button>
@@ -8076,7 +8103,7 @@ function pdTabContent(pid, tab) {
       </div>
 
       <!-- Inventory Reports -->
-      ${isPortfolio() ? `
+      ${hasInventory() ? `
       <div class="panel">
         <div class="ph2">
           <div><h2><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M2.5 5 8 2.5 13.5 5v6L8 13.5 2.5 11z"/><path d="M2.5 5 8 7.5 13.5 5M8 7.5v6"/></svg> Inventory Reports</h2><p>AI-generated move-in / move-out condition reports</p></div>
@@ -11957,7 +11984,7 @@ function pgInventoryReport(id) {
       </div>
     </div>
     <div class="panel">
-      <div id="inv-full-report" style="padding:18px;font-size:13px;line-height:1.9;white-space:pre-wrap;font-family:Georgia,serif;max-height:60vh;overflow-y:auto">${r.text.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+      <div id="inv-full-report" style="padding:18px;${r.schedule?'':'font-size:13px;line-height:1.9;white-space:pre-wrap;font-family:Georgia,serif;'}max-height:70vh;overflow-y:auto">${r.schedule?_renderDeductionSchedule(r.schedule):r.text.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
     </div>
     ${photoGallery}
   </div>`;
@@ -18103,9 +18130,10 @@ function moInventoryReport(pid){
       <div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">✦ Save £150–300 per inspection</div>
       <div style="font-size:13px;color:rgba(255,255,255,0.85)">Upload photos of each room — AI writes a professional condition report for move-in/move-out, deposit disputes, and legal records.</div>
     </div>
-    <div class="fg"><label>Property <span class="req">*</span></label><select id="inv-prop">${propOpts}</select></div>
+    <div class="fg"><label>Property <span class="req">*</span></label><select id="inv-prop" onchange="_invTypeHint()">${propOpts}</select></div>
     <div class="fg"><label>Report type</label>
-      <select id="inv-type"><option>Move-in condition report</option><option>Move-out condition report</option><option>Mid-tenancy inspection</option><option>General inventory</option></select>
+      <select id="inv-type" onchange="_invTypeHint()"><option>Move-in condition report</option><option>Mid-tenancy inspection</option><option>Move-out condition report</option><option>General inventory</option></select>
+      <div id="inv-type-hint" style="font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.5"></div>
     </div>
     <div class="fg"><label>Upload room photos <span class="req">*</span></label>
       <input type="file" accept="image/*" multiple id="inv-photos" onchange="invPhotosSelected(this)" style="display:block;width:100%;padding:8px;font-family:var(--font);font-size:13px;margin-bottom:10px">
@@ -18132,6 +18160,7 @@ function moInventoryReport(pid){
     </div>
   `,`<button class="btn" onclick="closeMo()">Cancel</button>
     <button class="btn btn-navy" id="inv-gen-btn" onclick="generateInventoryReport()">✦ Generate report</button>`);
+  _invTypeHint();
 }
 
 function invPhotosSelected(input){
@@ -18147,6 +18176,22 @@ function invPhotosSelected(input){
   if(box) box.innerHTML=`<div style="font-size:13px;color:var(--green-dark);font-weight:600;margin-top:6px">✓ ${merged.length} photo${merged.length!==1?'s':''} selected — AI will identify rooms and assess condition</div><div style="font-size:11px;color:var(--muted);margin-top:3px">${merged.map(f=>f.name).slice(0,4).join(', ')}${merged.length>4?' +'+(merged.length-4)+' more':''}</div>`;
 }
 
+function _invTypeHint(){
+  const hintEl=document.getElementById('inv-type-hint'); if(!hintEl) return;
+  const type=document.getElementById('inv-type')?.value||'';
+  const propId=document.getElementById('inv-prop')?.value;
+  if(/move-out|check-?out/i.test(type)){
+    const base=_findBaselineReport(propId);
+    hintEl.innerHTML = base
+      ? `<span style="color:var(--green-dark);font-weight:600">✓ Will compare against your check-in baseline (${base.date||'on file'})</span> → produces a deposit deduction schedule (fair wear vs damage, apportioned).`
+      : `<span style="color:var(--amber)">⚠ No check-in report on file for this property</span> — you'll get a standalone check-out report. For the full comparison + deduction schedule, create a Move-in report first.`;
+  } else if(/mid-tenancy/i.test(type)){
+    hintEl.textContent = 'Logs current condition and any repairs done since move-in — added to this property\u2019s inventory timeline.';
+  } else if(/move-in/i.test(type)){
+    hintEl.textContent = 'Your baseline. Everything at check-out is compared against this, so capture every room.';
+  } else { hintEl.textContent=''; }
+}
+
 async function generateInventoryReport(){
   const btn=document.getElementById('inv-gen-btn');
   const propId=document.getElementById('inv-prop')?.value;
@@ -18156,6 +18201,12 @@ async function generateInventoryReport(){
   const p=P(propId)||{address:'[Property]',city:'',postcode:'',beds:'—',type:'—'};
   const t=D.tenants.find(x=>String(x.prop_id)===String(propId));
   if(!files.length){toast('Please upload at least one photo',true);return;}
+  // CHECK-OUT → run the comparison engine against the move-in baseline (the value path).
+  if(/move-out|check-?out/i.test(type||'')){
+    const baseline=_findBaselineReport(propId);
+    if(baseline){ return generateCheckoutComparison({propId,type,notes,files,p,t,baseline}); }
+    toast('No check-in report on file for this property — generating a standalone check-out report instead.',true);
+  }
   btn.disabled=true;
   btn.innerHTML='<span class="spin"></span>Analysing photos…';
   try{
@@ -18275,6 +18326,148 @@ Be specific and factual. Note exact defects visible in photos. Never invent defe
     btn.disabled=false; btn.innerHTML='✦ Generate report';
     toast('Error generating report — please try again',true);
   }
+}
+
+// Find the move-in baseline report for a property (latest "move-in", else earliest report).
+function _findBaselineReport(propId){
+  const reps=(D._invReports||[]).filter(r=>String(r.propId)===String(propId));
+  if(!reps.length) return null;
+  const moveIns=reps.filter(r=>/move-in|check-?in/i.test(r.type||''));
+  const pool=moveIns.length?moveIns:reps;
+  // earliest = the true baseline
+  return pool.slice().sort((a,b)=>new Date(a.created_at||a.date||0)-new Date(b.created_at||b.date||0))[0];
+}
+
+function _monthsBetween(a,b){ if(!a||!b) return null; const d1=new Date(a),d2=new Date(b); if(isNaN(d1)||isNaN(d2)) return null; return Math.max(0,Math.round((d2-d1)/(30.4375*864e5))); }
+
+// CHECK-OUT COMPARISON ENGINE — compares check-out photos against the move-in baseline and
+// produces an adjudicator-grade deposit deduction schedule (fair wear vs damage vs cleaning,
+// with apportionment by remaining lifespan and no betterment).
+async function generateCheckoutComparison({propId,type,notes,files,p,t,baseline}){
+  const btn=document.getElementById('inv-gen-btn');
+  btn.disabled=true; btn.innerHTML='<span class="spin"></span>Comparing against check-in…';
+  try{
+    const photoPromises=files.slice(0,12).map(file=>new Promise((res,rej)=>{
+      const r=new FileReader();
+      r.onload=()=>res({b64:r.result.split(',')[1],type:file.type,name:file.name});
+      r.onerror=rej; r.readAsDataURL(file);
+    }));
+    const photos=await Promise.all(photoPromises);
+    const tenancyMonths=_monthsBetween(t&&t.start_date, new Date());
+    const deposit=t&&t.deposit?parseFloat(t.deposit)||0:0;
+    const content=[
+      ...photos.map(ph=>({type:'image',source:{type:'base64',media_type:ph.type,data:ph.b64}})),
+      {type:'text',text:`You are a professional UK inventory clerk producing a CHECK-OUT deposit deduction schedule. The attached photos are the CHECK-OUT (move-out) condition. Below is the CHECK-IN (move-in) baseline report for the SAME property — compare against it.
+
+=== CHECK-IN BASELINE REPORT ===
+${(baseline.text||'').slice(0,6000)}
+=== END BASELINE ===
+
+Property: ${p.address}, ${p.city||''} (${p.type||'—'}, ${p.beds||'—'} bed)
+Tenant: ${t?t.name:'Not specified'}
+Tenancy length: ${tenancyMonths!=null?tenancyMonths+' months':'unknown'}
+Deposit held: £${deposit||'unknown'}
+${notes?'Landlord notes: '+notes:''}
+Check-out photo filenames: ${photos.map(x=>x.name).join(', ')}
+
+Apply UK deposit law strictly and in the tenant's favour where uncertain:
+- FAIR WEAR & TEAR is NEVER chargeable (reasonable use over the tenancy length — faded paint, lightly worn carpet, minor scuffs). classification:"fair_wear", charge:0.
+- DAMAGE beyond fair wear IS chargeable (burns, tears, holes, stains, breakages, pet damage). classification:"damage".
+- CLEANLINESS below the check-in standard IS chargeable (cleaning is not wear & tear). classification:"cleaning".
+- NO BETTERMENT / no new-for-old: never charge full replacement for a part-worn item.
+- APPORTIONMENT: for damaged items charge only the proportion of remaining useful life. Use typical lifespans (carpet 8-10y, paint/decor 3-4y, blinds 5y, white goods 8-10y) and the tenancy length above. Show the calculation in "reasoning".
+- Prefer repair cost over replacement where cheaper. Round charges sensibly. Be conservative — only charge what an adjudicator would award.
+
+Return ONLY valid JSON (no markdown, no prose) in EXACTLY this shape:
+{"overall_condition":"Excellent|Good|Fair|Poor","deposit_risk":"Low|Medium|High","summary_note":"one sentence overview","items":[{"room":"e.g. Living room","item":"short label","classification":"fair_wear|damage|cleaning","charge":0,"then":"baseline condition in a few words","now":"check-out condition in a few words","reasoning":"why this classification and how the charge was apportioned (show the math for chargeable items)"}]}
+Include fair_wear items too (charge 0) so the landlord sees what was correctly NOT charged. Do not invent damage not visible in the photos or baseline.`}
+    ];
+    const res=await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy',{
+      method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+(window._sbToken||'')},
+      body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:3500,messages:[{role:'user',content}]})
+    });
+    if(res.status===402){ aiUnavailable({overQuota:true,feature:'Check-out comparison'}); btn.disabled=false; btn.innerHTML='✦ Generate report'; return; }
+    const data=await res.json();
+    let raw=data.content?.[0]?.text||'';
+    let parsed=null;
+    try{ parsed=JSON.parse(raw.replace(/^```json\s*|\s*```$/g,'').trim()); }
+    catch(e){ const m=raw.match(/\{[\s\S]*\}/); if(m){ try{ parsed=JSON.parse(m[0]); }catch(_){} } }
+    if(!parsed||!Array.isArray(parsed.items)){ toast('Could not read the comparison — please try again.',true); btn.disabled=false; btn.innerHTML='✦ Generate report'; return; }
+
+    const items=parsed.items.map(it=>({ room:it.room||'', item:it.item||'Item', classification:(it.classification||'damage'), charge:Math.max(0,parseFloat(it.charge)||0), then:it.then||'', now:it.now||'', reasoning:it.reasoning||'' }));
+    const total=items.reduce((s,it)=>s+(it.classification==='fair_wear'?0:it.charge),0);
+    const reportId='ir_'+Date.now();
+    const ctx={ reportId, propId, address:(p.address||'Property')+(p.city?', '+p.city:''), type, tenant:t?t.name:'Not specified',
+      tenancyMonths, deposit, total, checkinDate:baseline.date||(baseline.created_at?FMS(baseline.created_at):'—'),
+      checkoutDate:new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}),
+      overall:parsed.overall_condition||'—', risk:parsed.deposit_risk||'—', note:parsed.summary_note||'', items,
+      photos:photos.map(ph=>({b64:ph.b64,type:ph.type,name:ph.name})), baselinePhotos:(baseline.photos||[]) };
+
+    D._invReports.push({ id:reportId, propId, address:ctx.address, type:'Check-out comparison',
+      date:ctx.checkoutDate, created_at:new Date().toISOString(),
+      text:_deductionScheduleText(ctx), schedule:ctx, photos:ctx.photos });
+
+    document.getElementById('inv-output').style.display='block';
+    const rep=document.getElementById('inv-report');
+    rep.style.whiteSpace='normal'; rep.style.fontFamily='var(--font)';
+    rep.innerHTML=_renderDeductionSchedule(ctx);
+    const galleryEl=document.getElementById('inv-gallery'); if(galleryEl) galleryEl.innerHTML='';
+
+    btn.disabled=false; btn.innerHTML='✦ Regenerate';
+    document.getElementById('mo-f').innerHTML=`
+      <button class="btn" onclick="closeMo()">Close</button>
+      <button class="btn" onclick="closeMo();nav('inventory-report','${reportId}');return false"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/></svg> View Full Report</button>
+      <button class="btn btn-navy" id="inv-save-btn" onclick="saveInventoryReport('${reportId}')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M3 2.5h8l2 2V13a.5.5 0 0 1-.5.5h-9A.5.5 0 0 1 3 13z"/><path d="M5 2.5v3h5v-3M5.5 13v-3h5v3"/></svg> Save Report</button>`;
+    await logAudit('GENERATE_CHECKOUT','maintenance',propId,`Check-out comparison · deduction £${total}`);
+    toast('✓ Deduction schedule ready — review, then Save.');
+  }catch(e){ _logError('checkout-comparison',e); btn.disabled=false; btn.innerHTML='✦ Generate report'; toast('Error generating comparison — please try again',true); }
+}
+
+// Colour + label for a classification.
+function _clsMeta(c){ return c==='fair_wear'?{label:'Fair wear & tear',color:'#1B7A4B'}:c==='cleaning'?{label:'Cleaning',color:'#D98324'}:{label:'Tenant damage',color:'#C0392B'}; }
+
+// Premium HTML render of the deduction schedule (mirrors the approved mock).
+function _renderDeductionSchedule(c){
+  const ret=Math.max(0,(c.deposit||0)-(c.total||0));
+  const money=n=>'£'+(Math.round(n||0)).toLocaleString();
+  const rows=c.items.map(it=>{ const m=_clsMeta(it.classification); const chg=it.classification==='fair_wear'?'£0':money(it.charge);
+    return `<div style="padding:14px 0;border-bottom:1px solid #EEF1F5">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px">
+        <div style="min-width:0"><div style="font-size:10px;font-weight:700;letter-spacing:.5px;color:var(--muted);text-transform:uppercase">${esc(it.room)}</div>
+          <div style="font-size:14px;font-weight:700;color:var(--navy)">${esc(it.item)}</div></div>
+        <div style="display:flex;align-items:center;gap:10px;flex-shrink:0"><span style="font-size:10.5px;font-weight:700;color:#fff;background:${m.color};padding:3px 10px;border-radius:100px;white-space:nowrap">${m.label}</span>
+          <span style="font-size:16px;font-weight:700;color:${it.classification==='fair_wear'?'#1B7A4B':'#C0392B'};min-width:48px;text-align:right">${chg}</span></div>
+      </div>
+      <div style="display:flex;gap:12px;font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:${it.reasoning?'7px':'0'}">
+        <div style="flex:1"><b style="color:#475569">Check-in:</b> ${esc(it.then)}</div>
+        <div style="flex:1"><b style="color:#475569">Check-out:</b> ${esc(it.now)}</div></div>
+      ${it.reasoning?`<div style="background:${it.classification==='fair_wear'?'#F4FAF6':'#FBF6F2'};border:1px solid ${it.classification==='fair_wear'?'#D9EEE1':'#F0E0D4'};border-radius:7px;padding:8px 11px;font-size:11.5px;color:#5A5246;line-height:1.55">${esc(it.reasoning)}</div>`:''}
+    </div>`;}).join('');
+  return `
+    <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden">
+      <div style="background:#0B1E3D;color:#fff;padding:18px 20px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:#E8923A;text-transform:uppercase;margin-bottom:5px">Check-out · Deposit Deduction Schedule</div>
+        <div style="font-family:Georgia,serif;font-size:20px">${esc(c.address)}</div>
+        <div style="font-size:11.5px;color:rgba(255,255,255,.7);margin-top:4px">Tenant: ${esc(c.tenant)} · Check-in ${esc(c.checkinDate)} → Check-out ${esc(c.checkoutDate)}${c.tenancyMonths!=null?' · '+c.tenancyMonths+' months':''}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);background:#F4F6F9;border-bottom:1px solid var(--border)">
+        <div style="padding:14px 16px;border-right:1px solid var(--border)"><div style="font-size:9.5px;font-weight:700;letter-spacing:.5px;color:#94A3B8;text-transform:uppercase">Deposit held</div><div style="font-size:19px;font-weight:700;color:var(--navy);margin-top:3px">${c.deposit?money(c.deposit):'—'}</div></div>
+        <div style="padding:14px 16px;border-right:1px solid var(--border)"><div style="font-size:9.5px;font-weight:700;letter-spacing:.5px;color:#94A3B8;text-transform:uppercase">Proposed deduction</div><div style="font-size:19px;font-weight:700;color:#C0392B;margin-top:3px">${money(c.total)}</div></div>
+        <div style="padding:14px 16px"><div style="font-size:9.5px;font-weight:700;letter-spacing:.5px;color:#94A3B8;text-transform:uppercase">Return to tenant</div><div style="font-size:19px;font-weight:700;color:#1B7A4B;margin-top:3px">${c.deposit?money(ret):'—'}</div></div>
+      </div>
+      ${c.note?`<div style="padding:11px 20px;font-size:12.5px;color:var(--txt);background:#FAFBFC;border-bottom:1px solid #EEF1F5"><b>Overall:</b> ${esc(c.overall)} · <b>Deposit-dispute risk:</b> ${esc(c.risk)}. ${esc(c.note)}</div>`:''}
+      <div style="padding:4px 20px 14px">${rows}</div>
+      <div style="background:#F9FAFB;border-top:1px solid var(--border);padding:14px 20px;font-size:11px;color:#7A8699;line-height:1.6">Figures apply <b>fair wear &amp; tear</b> (never charged), <b>no betterment</b> (no new-for-old) and <b>apportionment</b> by remaining useful life against a ${c.tenancyMonths!=null?c.tenancyMonths+'-month':'—'} tenancy — the basis a deposit-scheme adjudicator uses. Review every figure before sending; AI assists, you decide.</div>
+    </div>`;
+}
+
+// Plain-text version (for copy / PDF / stored text + tenant email).
+function _deductionScheduleText(c){
+  const ret=Math.max(0,(c.deposit||0)-(c.total||0));
+  let s=`CHECK-OUT — DEPOSIT DEDUCTION SCHEDULE\n${c.address}\nTenant: ${c.tenant}\nCheck-in: ${c.checkinDate}  →  Check-out: ${c.checkoutDate}${c.tenancyMonths!=null?'  ('+c.tenancyMonths+' months)':''}\n\nDeposit held: £${c.deposit||'—'}\nProposed deduction: £${c.total}\nReturn to tenant: £${c.deposit?ret:'—'}\n\nOverall condition: ${c.overall} · Deposit-dispute risk: ${c.risk}\n${c.note||''}\n\n`;
+  c.items.forEach(it=>{ const m=_clsMeta(it.classification); s+=`─── ${it.room} — ${it.item} ───\n${m.label}: ${it.classification==='fair_wear'?'£0':'£'+it.charge}\nCheck-in: ${it.then}\nCheck-out: ${it.now}\n${it.reasoning?'Basis: '+it.reasoning+'\n':''}\n`; });
+  s+=`\nFigures apply fair wear & tear (not chargeable), no betterment, and apportionment by remaining useful life. This is the basis a deposit-scheme adjudicator uses. Review before sending.`;
+  return s;
 }
 
 async function invDownloadPDF(){
