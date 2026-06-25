@@ -945,7 +945,7 @@ const COMPLIANCE_DOCS = {
         label: 'How to Rent Guide',
         frequency: 'Once per tenancy',
         note: '1. Download the current edition from GOV.UK (search "How to Rent guide"). 2. Send the PDF to your tenant by email or hand a printed copy. 3. Keep a timestamped record of delivery — a sent email with the attachment is sufficient proof.',
-        mandatory: true,
+        mandatory: false, // PAUSED under RRA 2025 — gated by H2R_REQUIRED
         no_expiry: true,
         hmo_only: false,
         match: ['how to rent','how to let']
@@ -4580,6 +4580,14 @@ async function _saveTenantSetupToDB() {
 }
 
 // ── COMPLIANCE CHECKLIST ──
+// ── HOW TO RENT GUIDE — PAUSED under RRA 2025 ──
+// Its legal force came from being a precondition for a valid Section 21 notice.
+// Section 21 is abolished from 1 May 2026, and the new-tenancy "prescribed information"
+// is being set by secondary legislation, so How to Rent is no longer a hard requirement.
+// Flip this back to true if GOV.UK reinstates it. While false: it never blocks the Day-1
+// kit, never auto-attaches, and isn't a mandatory checklist item — but stays sendable.
+const H2R_REQUIRED = false;
+
 const CHECKLIST_ITEMS = [
   { key:'agreement',          label:'Written Statement',         icon:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/><path d="M6.2 9.3 8 7.5l1 1-1.8 1.8H6.2z"/></svg>' },
   { key:'deposit_protection', label:'Deposit protected',         icon:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M2 6 8 2.5 14 6"/><path d="M3 6.5v6M6 6.5v6M10 6.5v6M13 6.5v6"/><path d="M2 13.5h12"/></svg>' },
@@ -5108,7 +5116,7 @@ function moWelcomeKit(pid) {
   const blockers = [];
   if (!wsOk)       blockers.push('Written Statement not yet signed by all tenants');
   if (!rraOk)      blockers.push('RRA 2025 doc not uploaded — Compliance → Tenancy Packs & Templates');
-  if (!h2rOk)      blockers.push('How to Rent Guide not uploaded — Compliance → Tenancy Packs & Templates');
+  if (H2R_REQUIRED && !h2rOk) blockers.push('How to Rent Guide not uploaded — Compliance → Tenancy Packs & Templates');
   if (!gasCert)    blockers.push('Gas Safety Certificate missing');
   else if (!gasFileOk) blockers.push('Gas Safety Certificate has no file — re-upload in Compliance tab');
   if (!eicrCert)   blockers.push('EICR missing');
@@ -5138,7 +5146,7 @@ function moWelcomeKit(pid) {
       <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:2px 14px">
         ${ck(wsOk,       'Written Statement (signed by all tenants)')}
         ${ck(rraOk,      'RRA 2025 Prescribed Particulars')}
-        ${ck(h2rOk,      'How to Rent Guide')}
+        ${H2R_REQUIRED ? ck(h2rOk, 'How to Rent Guide') : ''}
         ${ck(gasFileOk,  'Gas Safety Certificate', !gasCert?'Missing':'No file')}
         ${ck(eicrFileOk, 'EICR', !eicrCert?'Missing':'No file')}
         ${ck(epcFileOk,  'EPC', !epcCert?'Missing':'No file')}
@@ -5177,7 +5185,7 @@ async function sendWelcomeKit(pid) {
   // Hard block — re-check everything
   const blockers = [];
   if (!rraUrl)  blockers.push('RRA 2025 doc not uploaded');
-  if (!h2rUrl)  blockers.push('How to Rent Guide not uploaded');
+  if (H2R_REQUIRED && !h2rUrl)  blockers.push('How to Rent Guide not uploaded');
   if (!gasCert?.file_url)  blockers.push('Gas Safety Certificate missing or has no file');
   if (!eicrCert?.file_url) blockers.push('EICR missing or has no file');
   if (!epcCert?.file_url)  blockers.push('EPC missing or has no file');
@@ -5209,7 +5217,7 @@ async function sendWelcomeKit(pid) {
   if (eicrCert?.file_url) { const ext = eicrCert.file_url.split('.').pop().split('?')[0]||'pdf'; attachment_urls.push({ url: eicrCert.file_url, filename: `EICR.${ext}` }); }
   if (epcCert?.file_url)  { const ext = epcCert.file_url.split('.').pop().split('?')[0]||'pdf';  attachment_urls.push({ url: epcCert.file_url,  filename: `EPC.${ext}` }); }
   attachment_urls.push({ url: rraUrl, filename: 'RRA_2025_Prescribed_Particulars.pdf' });
-  attachment_urls.push({ url: h2rUrl, filename: 'How_to_Rent_Guide.pdf' });
+  if (H2R_REQUIRED && h2rUrl) attachment_urls.push({ url: h2rUrl, filename: 'How_to_Rent_Guide.pdf' });
 
   const today = new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' });
   const errors = [];
@@ -6064,7 +6072,12 @@ function pgDashboard(){
             <div style="height:100%;width:${_ready}%;background:${_readyCol};border-radius:100px;transition:width .8s ease"></div>
           </div>
           <div onclick="nav('${_toFix?'compliance':'discover'}')" style="font-size:12.5px;color:rgba(255,255,255,0.82);margin-top:9px;cursor:pointer;display:inline-flex;align-items:center;gap:5px" onmouseenter="this.style.color='#fff'" onmouseleave="this.style.color='rgba(255,255,255,0.82)'">${_toFix?`<span style="font-weight:700;color:#fff">${_toFix}</span>&nbsp;thing${_toFix!==1?'s':''} to fix →`:`Everything's in order \u2014 nice work →`}</div>
-        </div>`:`<div style="margin-top:14px;font-size:13px;color:rgba(255,255,255,0.8)">Add your first property to start tracking compliance.</div>`}
+        </div>`:`<div style="margin-top:16px">
+          <button onclick="moAddProp()" style="display:inline-flex;align-items:center;gap:8px;background:#fff;color:var(--navy);border:none;border-radius:9px;padding:11px 18px;font-family:var(--font);font-size:13.5px;font-weight:700;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,0.12);transition:transform .15s,box-shadow .15s" onmouseenter="this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 16px rgba(0,0,0,0.18)'" onmouseleave="this.style.transform='none';this.style.boxShadow='0 2px 10px rgba(0,0,0,0.12)'">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;flex-shrink:0"><path d="M8 3.5v9M3.5 8h9"/></svg> Add your first property
+          </button>
+          <div style="font-size:12px;color:rgba(255,255,255,0.62);margin-top:8px">Takes 2 minutes \u2014 then NexLet starts tracking compliance for you.</div>
+        </div>`}
       </div>
       <div class="dh-side" style="z-index:1;flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:13px">
         <div style="display:flex;gap:18px">
@@ -8927,15 +8940,19 @@ function pgCompliance(){
             Mandatory documents for every tenancy — upload once, generate per tenant, track compliance automatically.
           </p>
 
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px">Standard documents — upload once, auto-attach to every Day 1 kit</div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px">Mandatory document — uploads once, auto-attaches to every Day 1 kit</div>
           <div style="background:var(--off);border-radius:8px;padding:4px 14px;margin-bottom:16px">
             <div style="display:flex;align-items:center;gap:8px;padding:6px 0">
-              <span style="font-size:10px;font-weight:700;color:#fff;background:${bothOk?'var(--green)':'#D97706'};padding:2px 7px;border-radius:100px;white-space:nowrap">
-                ${bothOk?'Both uploaded':oneOk?'1 of 2':'Not uploaded'}</span>
+              <span style="font-size:10px;font-weight:700;color:#fff;background:${rraUrl?'var(--green)':'#D97706'};padding:2px 7px;border-radius:100px;white-space:nowrap">
+                ${rraUrl?'Uploaded':'Not uploaded'}</span>
               <span style="font-size:12px;color:var(--muted)">Replace whenever GOV.UK publishes a new version</span>
             </div>
             ${mkSlot('RRA 2025 Prescribed Particulars','rra',rraUrl,'https://www.gov.uk/government/publications/renters-rights-act-2025-prescribed-particulars')}
+            <div style="margin-top:6px;padding-top:8px;border-top:1px dashed var(--border)">
+              <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:2px">Optional — paused under RRA 2025</div>
+              <div style="font-size:11px;color:var(--muted);margin-bottom:4px">No longer required for new tenancies (Section 21 abolished). Not auto-attached to the Day 1 kit — you can still send it from a tenant’s page if you wish.</div>
             ${mkSlot('How to Rent Guide','h2r',h2rUrl,'https://www.gov.uk/government/publications/how-to-rent')}
+            </div>
           </div>
 
           <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px">
@@ -21444,7 +21461,7 @@ function declineCookies(){localStorage.setItem('rsa_cookies','essential');docume
       var head = (r.grp!==lastGrp) ? '<div style="padding:'+(i?'12px':'6px')+' 16px 4px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#9AA8BC">'+esc(r.grp)+'</div>' : '';
       lastGrp = r.grp;
       var on = i===SEL;
-      return head + '<div class="nxl-sr" data-i="'+i+'" onclick="__nxlRun('+i+')" onmouseenter="__nxlHover('+i+')" style="display:flex;align-items:center;gap:11px;padding:9px 16px;cursor:pointer;background:'+(on?'#F1F5FB':'transparent')+';border-left:3px solid '+(on?'#0B1E3D':'transparent')+'">'
+      return head + '<div class="nxl-sr" data-i="'+i+'" style="display:flex;align-items:center;gap:11px;padding:9px 16px;cursor:pointer;background:'+(on?'#F1F5FB':'transparent')+';border-left:3px solid '+(on?'#0B1E3D':'transparent')+'">'
         + '<span style="width:26px;height:26px;border-radius:7px;background:#EEF2F8;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="#0B1E3D" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">'+(ICONS[r.ic]||ICONS.page)+'</svg></span>'
         + '<span style="flex:1;min-width:0"><span style="display:block;font-size:13.5px;font-weight:600;color:#1B2A41;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(r.t)+'</span>'
         + (r.h?'<span style="display:block;font-size:11.5px;color:#8595A8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(r.h)+'</span>':'')+'</span>'
@@ -21470,7 +21487,7 @@ function declineCookies(){localStorage.setItem('rsa_cookies','essential');docume
         + '<div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid #EEF1F5">'
         + '<svg viewBox="0 0 16 16" width="17" height="17" fill="none" stroke="#8595A8" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="5"/><path d="M11 11l3.2 3.2"/></svg>'
         + '<input id="nxl-search-input" placeholder="Search tenants, properties, jobs or features…" autocomplete="off" style="flex:1;border:none;outline:none;font-size:15px;color:#1B2A41;font-family:inherit;background:transparent">'
-        + '<span style="font-size:10px;font-weight:700;color:#9AA8BC;border:1px solid #E2E5EA;border-radius:5px;padding:2px 7px">ESC</span>'
+        + '<span id="nxl-esc-btn" style="font-size:10px;font-weight:700;color:#9AA8BC;border:1px solid #E2E5EA;border-radius:5px;padding:2px 7px;cursor:pointer">ESC</span>'
         + '</div>'
         + '<div id="nxl-search-list" style="overflow-y:auto;flex:1"></div>'
         + '<div style="padding:8px 16px;border-top:1px solid #EEF1F5;font-size:11px;color:#9AA8BC;display:flex;gap:14px;align-items:center"><span>\u2191\u2193 navigate</span><span>\u21b5 open</span><span style="margin-left:auto">NexLet search</span></div>'
@@ -21478,6 +21495,15 @@ function declineCookies(){localStorage.setItem('rsa_cookies','essential');docume
       document.body.appendChild(ov);
       var inp = document.getElementById('nxl-search-input');
       inp.addEventListener('input', onInput);
+      // Event delegation (robust against inline-handler issues): wire row click + hover
+      // and the ESC badge here, where addEventListener is known to work.
+      var listBox = document.getElementById('nxl-search-list');
+      if(listBox){
+        listBox.addEventListener('click', function(e){ var row=e.target.closest('.nxl-sr'); if(row){ __nxlRun(parseInt(row.getAttribute('data-i'),10)); } });
+        listBox.addEventListener('mouseover', function(e){ var row=e.target.closest('.nxl-sr'); if(row){ var i=parseInt(row.getAttribute('data-i'),10); if(i!==SEL){ SEL=i; renderList(); } } });
+      }
+      var escBtn = document.getElementById('nxl-esc-btn');
+      if(escBtn){ escBtn.addEventListener('click', function(){ closeSearch(); }); }
     }
     ov.style.display='flex';
     var input = document.getElementById('nxl-search-input');
