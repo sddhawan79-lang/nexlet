@@ -5771,3 +5771,41 @@ USING (bucket_id = 'tenant-documents');
 - **Server-side plan + property-limit checks in RLS** (Known Issue #61 remainder).
 - **Phase 2 roadmap (path to 9/10 vs Goodlord):** tenant referencing (partner/integrate), rent collection rails (Open Banking/GoCardless), team/multi-user roles.
 - Developer to split the monolithic `landlord.html` into `js/` modules (planned, not started).
+
+---
+
+## Session 52 — 25 June 2026 — Consistency Sweep, H2R Pause Completion, Inventory Lifecycle + £5.99 Add-on
+
+### Consistency sweep (find more "renamed in one place, not everywhere" bugs)
+Ran an automated sweep (duplicate fn defs, hardcoded counts, stale references, feature flags, TODO markers). Found + fixed **two real bugs of the same class as the H2R one**:
+- **AI Assistant gave wrong nav directions** — `SYSTEM_PROMPT` still described the OLD sidebar ("Staying Legal", "Money & Records"), so the assistant sent users to groups that no longer exist. Rewrote to the current IA (My Portfolio / Staying Compliant / Day-to-Day) + mention of Search (⌘K) and All features.
+- **"Discover" page title** still said "Discover" while the nav item is "All features" — fixed to match.
+- Non-issues confirmed: duplicate `esc()` (second is scoped inside the search modal — benign); hardcoded "X of Y" all wizard step labels; `NEXLET_DEBUG=true` left ON intentionally (error logging aids early debugging — flip to false later).
+
+### How to Rent pause — completed (two leaks the first pass missed)
+The Session 51 pause (`H2R_REQUIRED=false`) hadn't reached two more enforcement paths, exposed by a screenshot showing "Compliance 100%" + a red "1 overdue legal obligation — How to Rent 21d overdue":
+- **Tenant-page overdue action** (`actions.push({id:'h2r'…})` in the per-tenant compliance builder) — now gated by `H2R_REQUIRED`.
+- **Onboarding "X of 12" obligations** — `ob7` (How to Rent served) made conditional (`...(H2R_REQUIRED ? [ob7] : [])`) so the count denominator drops and a compliant tenant can reach 12/12.
+
+### AI Inventory Reports — full lifecycle + paid add-on (£5.99/mo)
+Turned the one-shot inventory generator into a **lifecycle**: Move-in (baseline) → Mid-tenancy (repairs/visits) → **Check-out (comparison → deposit deduction schedule)**.
+- **Check-out comparison engine** (`generateCheckoutComparison`): finds the move-in baseline (`_findBaselineReport`), sends check-out photos + baseline text + tenancy length (`_monthsBetween` from `start_date`) + deposit to the AI, asks for **strict JSON**, and renders a premium **deposit deduction schedule**. Applies UK deposit law: **fair wear & tear = £0**, **no betterment** (no new-for-old), **apportionment by remaining useful life**, **cleanliness chargeable**. Each item classified `fair_wear|damage|cleaning` with the apportionment math shown. Summary: deposit held → proposed deduction → return to tenant + deposit-risk rating.
+- **Renderers:** `_renderDeductionSchedule` (rich HTML — used in the modal AND the full-page `pgInventoryReport` when `r.schedule` exists) + `_deductionScheduleText` (plain text for copy/PDF/email). `_clsMeta` maps classification → colour/label.
+- **Modal:** report types reordered to lifecycle order; `_invTypeHint()` shows a live hint (✓ will compare against check-in baseline / ⚠ no baseline on file / mid-tenancy logs repairs).
+- **Pricing + gating (£5.99/mo add-on, free on Portfolio):** single entitlement rule `hasInventory() = isPortfolio() || D.userProfile.inventory_addon`; `planHas('inventory-reports')` special-cased so **every existing gate inherits it** (modal `featureGate`, property-panel `${hasInventory()?…}` ×2, dashboard nudge `&& planHas('inventory-reports')`, full page). Non-entitled users get a dedicated **`inventoryPaywall()`** modal (not the generic upgrade prompt). `FEATURE_META['inventory-reports'].addon=true`.
+- **⚠ Server-side lock is still required** (client gate is bypassable). See `uploads/DEV-NOTE-inventory-addon-server-gate.md`: webhook sets `user_profiles.inventory_addon` true/false on the add-on's Stripe price; AI edge function returns **402** for inventory calls when not entitled. The client already degrades a 402 gracefully (`aiUnavailable`).
+
+### Files Modified — Session 52
+| File | Changes |
+|---|---|
+| `landlord.html` | Consistency-sweep fixes (AI prompt nav IA, Discover→All features title); H2R pause completion (overdue action + ob7 gated); inventory lifecycle — `hasInventory`/`planHas`/`featureGate`/`inventoryPaywall`, `generateCheckoutComparison`, `_findBaselineReport`, `_monthsBetween`, `_renderDeductionSchedule`, `_deductionScheduleText`, `_clsMeta`, `_invTypeHint`; full-page schedule render |
+| `uploads/DEV-NOTE-inventory-addon-server-gate.md` | NEW — server-side entitlement spec for the developer |
+| `Inventory Checkout Comparison (mock).dc.html` | NEW — approved design mock of the deduction schedule |
+
+### Open / Next
+- **Stripe live (developer-owned):** user has chosen a human developer for real-money Stripe. Verify the paid-flag webhook (`checkout.session.completed` / `subscription.updated` / `deleted`) + dunning; create the **£5.99 inventory add-on price** and have its webhook set `user_profiles.inventory_addon`.
+- **Inventory server-side gate** — per the DEV-NOTE (pairs with the Stripe job).
+- **Inventory v2 ideas:** per-item paired before/after thumbnails (needs photo-to-room mapping); persist the `schedule` JSON to a DB column (currently rich render is in-session, text is persisted).
+- **Server-side plan + property-limit checks in RLS** (Known Issue #61 remainder).
+- **Phase 2 roadmap (path to 9/10 vs Goodlord):** tenant referencing, rent collection rails, team/multi-user roles.
+- Developer to split the monolithic `landlord.html` into `js/` modules (planned, not started).
