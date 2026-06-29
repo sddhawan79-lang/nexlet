@@ -5809,3 +5809,41 @@ Turned the one-shot inventory generator into a **lifecycle**: Move-in (baseline)
 - **Server-side plan + property-limit checks in RLS** (Known Issue #61 remainder).
 - **Phase 2 roadmap (path to 9/10 vs Goodlord):** tenant referencing, rent collection rails, team/multi-user roles.
 - Developer to split the monolithic `landlord.html` into `js/` modules (planned, not started).
+
+---
+
+## Session 53 — 29–30 June 2026 — NexLet Agency Portal (`agent.html`): new product line for letting agents
+
+**Big picture:** NexLet becomes **two products from one codebase** — (1) the existing landlord/tenant app, and (2) a new **agent portal** for running a letting agency that uses NexLet as its operating system. Built as a **separate file `agent.html`** so `landlord.html` is never touched or enlarged. Currently a fully-functional **front-end demo on `localStorage`** (key `nexlet_agency_v2`); backend is specified but not yet built (see DEV-SPEC).
+
+### Files added this session
+- `agent.html` — the functional agent portal (plain-HTML app, same stack/design as `landlord.html`).
+- `DEV-SPEC-agency-portal.md` — backend spec: `agencies→landlords→properties` model, RLS, **Login/Auth/Security Gateways**, Supabase wiring, per-property `fee_pct`, invoices table.
+- `DEV-NOTE-inventory-addon-server-gate.md` — (Session 52) server-side entitlement for the £5.99 inventory add-on.
+- Design mocks (not production): `NexLet Agency.dc.html`, `Inventory Checkout Comparison (mock).dc.html`, etc.
+
+### Business decisions locked
+- **Two buyers, two price lines:** Landlord plans stay (Starter £4.99 / Landlord £11.99 / Portfolio £23.99 + £5.99 inventory add-on). **Agent tier** launches **£39/mo founding (~15 managed units)**, per-managed-unit model, everything included.
+- **No client money / no CMP:** tenants pay landlords directly. Only **redress scheme** (TPO/PRS) mandatory; CMP stays off until rent collection added. ICO registration captured.
+- **Service & fees:** Full management default 7.5%, Let-only 3 weeks' rent (one-off). **Fee tagged PER PROPERTY** (`property.feePct`) so rates vary (family/friends); falls back to landlord default. Invoices itemise one line per property at its own rate.
+- **Referencing (no FCA licence):** in-house workflow (ID, RTR, employer/prev-landlord refs, **affordability = income ≥ 30× monthly rent**); regulated **credit/Open-Banking** via partner (Vouch/HomeLet/FCC Paragon/Van Mildert, ~£15–25/tenant, billed to landlord). "Request credit check (API)" button = integration seam (states not_requested→requested→in_progress→complete).
+- **Login = auto-route by account role**, NOT a "choose role" screen (agent→agent.html, landlord→landlord.html, tenant→portal).
+
+### `agent.html` features (all functional on local state)
+- **Dashboard** — KPIs (landlords, properties, managed rent, fees/mo summing per-property rates), landlord list, pending-agreement banner.
+- **Onboarding wizard (6 steps):** details (+ NRL flag, PRS reg no, payout date, contact pref) → AML/ID → ownership proof → property (+ per-property fee) → service & **editable fee** → management-agreement e-sign (simulated). RRA-aware.
+- **Landlord CRM profile:** instruction & details, **document vault** (ID/ownership/agreement), properties w/ per-property fee, **communications log** timeline, Edit instruction & fee, £ Invoice shortcut, "View as landlord".
+- **Tenancy progression pipeline:** Instructed→Marketing→Referencing→Contract→Move-in→Managed (click to advance).
+- **Referencing module:** doc checklist, live affordability test, partner credit-check API hook, RAG outcome.
+- **Property detail (compliance tab):** Gas/EICR/EPC RAG engine, add/update certs, **EPC-C-by-2030** warning on D/E, **per-property fee** edit, **tenant setup** + portal link.
+- **Landlord read-only portal preview** (`vLandlordPortal`) — Phase-2 login view.
+- **Invoicing (built-in, free, enterprise):** quarterly-upfront, **sequential numbering** (`INV-NNNN`), **per-property line items** ×3 months, **non-VAT now / VAT-ready** toggle (Settings: `vatRegistered`+`vatNumber`), status flow (Draft→Sent→Paid/overdue), Invoices dashboard (outstanding/paid totals), **printable** (print CSS), CMP-aware footer. Settings: trading name, address, redress, CMP, ICO, referencing partner, VAT, payment terms.
+- **Bug fixed during build:** onboarding crashed on finish — `closeModal()` nulled `OB` before a toast read `OB.name`; captured `nm`/`signed` before close.
+
+### Open / Next (this session's roadmap — backend now a "do it ourselves" full session, code-paste like the edge-function flow)
+- **CRITICAL BUG on landlord file — FIRST.** User's friend refactored `landlord.html` into 3 files (split JS) and flagged a critical issue; awaiting paste. Decide canonical file: current single-file vs 3-file refactor.
+- **Backend build (I write, user pastes/runs in Supabase):** (1) SQL migration — `agencies`/`landlords`/`invoices` + `agency_id`/`fee_pct` + **RLS**; (2) `login.html` + role routing; (3) wire `agent.html` to Supabase (replace localStorage, auth gate, `agency_id` scoping); (4) test RLS w/ 2nd account.
+- **Stripe live** (landlord plans + £5.99 add-on + £39 agent tier) + **inventory add-on server gate** (DEV-NOTE).
+- **Agent finish-offs:** real management-agreement e-sign (currently simulated); Phase-2 landlord read-only login wired; referencing partner API.
+- **NEW — Website→portal enquiry capture:** marketing-site form posts leads into the portal (landlord → pipeline "Enquiry"; tenant → viewing/application request). Front-door CRM.
+- **NEW — Self-guided tenancy progression:** micro-step checklist per let (contract sent → signed back → holding deposit requested/received → deposit + first rent → move-in date → keys), RRA-ordered, with highlighted "next action" coaching a solo agent.
