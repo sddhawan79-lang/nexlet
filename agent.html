@@ -157,10 +157,10 @@ const SEED={
      comms:[{id:'c2',date:'2026-06-18',type:'Email',note:'Sent Terms of Business for e-sign. Awaiting ownership proof.'}]}
   ],
   properties:[
-    {id:'p1',landlordId:'l1',address:'115 Canterbury Road',city:'London',rent:2500,beds:2,
+    {id:'p1',landlordId:'l1',address:'115 Canterbury Road',city:'London',rent:2500,beds:2,feePct:7.5,
      tenant:{name:'K. Dhawan',email:'kd@example.com',start:'2024-01-12'},
      certs:{gas:'2026-12-01',eicr:'2029-03-01',epc:'2032-06-01',epcRating:'C'}},
-    {id:'p2',landlordId:'l2',address:'8 Oakfield Court',city:'Bristol',rent:1900,beds:1,
+    {id:'p2',landlordId:'l2',address:'8 Oakfield Court',city:'Bristol',rent:1900,beds:1,feePct:7.5,
      tenant:null,certs:{gas:'2026-07-09',eicr:'',epc:'2030-05-01',epcRating:'D'}}
   ],
   references:[
@@ -235,16 +235,18 @@ function topActions(){
   return '';
 }
 function feeOf(l){ return l.service==='full' ? (l.feePct!=null?l.feePct:DEF_FEE) : (l.letWeeks!=null?l.letWeeks:DEF_WEEKS); }
+// Management fee is tagged PER PROPERTY (varies per property — e.g. family/friends rate).
+// Falls back to the landlord's default, then the agency default.
+function propFee(p){ const l=L(p.landlordId); return p.feePct!=null?p.feePct : (l.feePct!=null?l.feePct:DEF_FEE); }
+// Total monthly management fee a full-management landlord generates (sum of their properties).
+function landlordMonthlyFee(l){ return S.properties.filter(p=>p.landlordId===l.id).reduce((s,p)=>s+p.rent*propFee(p)/100,0); }
 
 // ── DASHBOARD ──
 function vDashboard(){
   const mgmt=S.landlords.filter(l=>l.service==='full').length;
   const lo=S.landlords.filter(l=>l.service==='letonly').length;
   let fees=0;
-  S.landlords.filter(l=>l.service==='full').forEach(l=>{
-    const rent=S.properties.filter(p=>p.landlordId===l.id).reduce((s,p)=>s+(p.rent||0),0);
-    fees+=rent*(l.feePct!=null?l.feePct:DEF_FEE)/100;
-  });
+  S.properties.forEach(p=>{ if(L(p.landlordId).service==='full') fees+=p.rent*propFee(p)/100; });
   const managedRent=S.properties.filter(p=>L(p.landlordId).service==='full').reduce((s,p)=>s+(p.rent||0),0);
   const pending=S.landlords.filter(l=>!l.agreement).length;
   return `
@@ -266,8 +268,9 @@ function landlordRow(l){
   const props=S.properties.filter(p=>p.landlordId===l.id);
   const rent=props.reduce((s,p)=>s+(p.rent||0),0);
   const sv=SVC[l.service]||SVC.full, st=STATUS[l.status]||STATUS.pending;
-  const feeTxt = l.service==='full' ? gbp(rent*feeOf(l)/100)+'/mo' : (rent?gbp(rent/4.345*feeOf(l)):'—');
-  const feeBasis = l.service==='full' ? feeOf(l)+'%' : feeOf(l)+' wks · one-off';
+  const feeTxt = l.service==='full' ? gbp(landlordMonthlyFee(l))+'/mo' : (rent?gbp(rent/4.345*feeOf(l)):'—');
+  const _rates=[...new Set(props.map(p=>propFee(p)))];
+  const feeBasis = l.service==='full' ? (_rates.length<=1?(_rates[0]!=null?_rates[0]:DEF_FEE)+'%':'mixed rates') : feeOf(l)+' wks · one-off';
   return `<div class="row" onclick="go('landlord','${l.id}')" style="cursor:pointer">
     <div class="av">${initials(l.name)}</div>
     <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:var(--navy)">${esc(l.name)}${l.nrl?' <span class="pill" style="background:var(--purple-bg);color:var(--purple)">Non-resident</span>':''}</div>
@@ -314,7 +317,7 @@ function vLandlordDetail(){
       <div>
         <div class="panel"><div class="panel-hd"><h2>Instruction & details</h2></div><div class="panel-bd">
           <div class="kv"><span class="k">Service level</span><span class="v">${sv.label}</span></div>
-          <div class="kv"><span class="k">Your fee</span><span class="v">${l.service==='full'?feeOf(l)+'% of monthly rent'+(rent?' · '+gbp(rent*feeOf(l)/100)+'/mo':''):feeOf(l)+" weeks' rent (one-off)"+(rent?' · '+gbp(rent/4.345*feeOf(l)):'')}</span></div>
+          <div class="kv"><span class="k">Your fee</span><span class="v">${l.service==='full'?(gbp(landlordMonthlyFee(l))+'/mo total · set per property'):feeOf(l)+" weeks' rent (one-off)"+(rent?' · '+gbp(rent/4.345*feeOf(l)):'')}</span></div>
           <div class="kv"><span class="k">Correspondence</span><span class="v">${esc(l.address||'—')}</span></div>
           <div class="kv"><span class="k">Rent payout date</span><span class="v">${esc(l.payout||'—')}</span></div>
           <div class="kv"><span class="k">PRS Database</span><span class="v">${l.prsReg?'✓ '+esc(l.prsReg):'<span style="color:var(--amber)">⚠ Not verified</span>'}</span></div>
@@ -329,7 +332,7 @@ function vLandlordDetail(){
       </div>
       <div>
         <div class="panel"><div class="panel-hd"><h2>Properties (${props.length})</h2></div>
-          ${props.length?props.map(p=>`<div class="row" style="cursor:pointer" onclick="go('property','${p.id}')"><div class="av">⌂</div><div style="flex:1"><div style="font-size:13.5px;font-weight:600;color:var(--navy)">${esc(p.address)}</div><div class="faint" style="font-size:12px">${esc(p.city||'')} · ${p.beds} bed · ${gbp(p.rent)}/mo · Compliance ${propCompliance(p).pct}%</div></div><span class="pill" style="background:var(--off);color:#475569">Manage →</span></div>`).join(''):`<div class="empty">No properties yet. <a href="#" onclick="addProperty('${l.id}');return false" style="color:var(--blue);font-weight:600">Add one</a></div>`}
+          ${props.length?props.map(p=>`<div class="row" style="cursor:pointer" onclick="go('property','${p.id}')"><div class="av">⌂</div><div style="flex:1"><div style="font-size:13.5px;font-weight:600;color:var(--navy)">${esc(p.address)}</div><div class="faint" style="font-size:12px">${esc(p.city||'')} · ${gbp(p.rent)}/mo · ${l.service==='full'?'fee '+propFee(p)+'% · '+gbp(p.rent*propFee(p)/100)+'/mo':'let-only'} · Compliance ${propCompliance(p).pct}%</div></div><span class="pill" style="background:var(--off);color:#475569">Manage →</span></div>`).join(''):`<div class="empty">No properties yet. <a href="#" onclick="addProperty('${l.id}');return false" style="color:var(--blue);font-weight:600">Add one</a></div>`}
           ${props.length?`<div style="padding:12px 20px"><button class="btn sm" onclick="addProperty('${l.id}')">＋ Add property</button></div>`:''}
         </div>
         <div class="panel"><div class="panel-hd"><h2>Communications</h2><span class="faint" style="font-size:12px">Keep in touch</span></div><div class="panel-bd">
@@ -418,6 +421,7 @@ function vPropertyDetail(){
         ${(c.epcRating==='D'||c.epcRating==='E')?`<div class="note warn" style="margin-top:6px">EPC rated ${c.epcRating} — legal to let now, but EPC C becomes the minimum on 1 Oct 2030. Flag to the landlord to plan works.</div>`:''}
       </div></div>
       <div class="panel"><div class="panel-hd"><h2>Tenancy</h2></div><div class="panel-bd">
+        ${L(p.landlordId).service==='full'?`<div class="kv"><span class="k">Management fee</span><span class="v"><b>${propFee(p)}%</b> of rent · ${gbp(p.rent*propFee(p)/100)}/mo <a href="#" onclick="editPropFee('${p.id}');return false" style="color:var(--blue);font-weight:600;margin-left:6px">edit</a></span></div>`:''}
         ${p.tenant?`<div class="kv"><span class="k">Tenant</span><span class="v">${esc(p.tenant.name)}</span></div>
           <div class="kv"><span class="k">Email</span><span class="v">${esc(p.tenant.email||'—')}</span></div>
           <div class="kv" style="border:none"><span class="k">Start date</span><span class="v">${fmtDate(p.tenant.start)}</span></div>
@@ -426,6 +430,15 @@ function vPropertyDetail(){
       </div></div>
     </div>`;
 }
+function editPropFee(pid){ const p=P(pid);
+  const body=`<div class="note" style="margin-bottom:14px">Set the management fee for <b>${esc(p.address)}</b>. This is per-property — charge a different rate here (e.g. a family/friends discount) without affecting the landlord's other properties. Invoices use each property's own rate.</div>
+    <div class="fg"><label>Management fee (%)</label><div class="feebox"><input id="pf-fee" type="number" step="0.5" value="${propFee(p)}"> <span>% of ${gbp(p.rent)}/mo = <b id="pf-calc">${gbp(p.rent*propFee(p)/100)}/mo</b></span></div></div>`;
+  modal('Property fee — '+esc(p.address), body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="savePropFee('${pid}')">Save fee</button>`);
+  setTimeout(()=>{const i=document.getElementById('pf-fee');if(i)i.oninput=()=>{const c=document.getElementById('pf-calc');if(c)c.textContent=gbp(p.rent*(parseFloat(i.value)||0)/100)+'/mo';};},0);
+}
+function savePropFee(pid){ const p=P(pid); p.feePct=parseFloat(val('pf-fee')); if(isNaN(p.feePct))p.feePct=DEF_FEE;
+  const l=L(p.landlordId); l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:'Fee for '+p.address+' set to '+p.feePct+'%'});
+  save(); closeModal(); render(); toast('✓ Fee updated for this property'); }
 function editCert(pid,key){ const p=P(pid); const c=p.certs||(p.certs={}); const cur=c[key]||'';
   let body=`<div class="fg"><label>${key.toUpperCase()} expiry date</label><input id="ct-date" type="date" value="${cur}"></div>`;
   if(key==='epc') body+=`<div class="fg"><label>EPC rating</label><select id="ct-rating">${['A','B','C','D','E','F','G'].map(x=>`<option ${c.epcRating===x?'selected':''}>${x}</option>`).join('')}</select></div>`;
@@ -502,17 +515,21 @@ function renderInvoice(){
   const rent=props.reduce((s,p)=>s+(p.rent||0),0);
   const llOpts=S.landlords.map(x=>`<option value="${x.id}" ${x.id===IV.landlordId?'selected':''}>${esc(x.name)} — ${(SVC[x.service]||SVC.full).label}</option>`).join('');
   const qd=_quarterDates(IV.quarter);
-  let net=0, lineDesc='';
-  if(l.service==='full'){ net=rent*feeOf(l)/100*3; lineDesc=`Full management fee · ${props.map(p=>esc(p.address)).join(', ')} · ${feeOf(l)}% of ${gbp(rent)}/mo × 3 months (quarterly, in advance)`; }
-  else { net=rent/4.345*feeOf(l); lineDesc=`Let-only fee · ${props.map(p=>esc(p.address)).join(', ')} · ${feeOf(l)} weeks' rent (one-off)`; }
+  let net=0, lineHtml='';
+  if(l.service==='full'){
+    // One line per property, each at its own fee rate, ×3 months (quarterly, upfront).
+    const lines=props.map(p=>({d:`${esc(p.address)} · ${propFee(p)}% of ${gbp(p.rent)}/mo × 3`,n:p.rent*propFee(p)/100*3}));
+    net=lines.reduce((s,x)=>s+x.n,0);
+    lineHtml=lines.map(x=>`<div style="display:flex;justify-content:space-between;gap:10px"><span>${x.d}</span><b>${money2(x.n)}</b></div>`).join('');
+  } else { net=rent/4.345*feeOf(l); lineHtml=`<div style="display:flex;justify-content:space-between"><span>Let-only fee · ${feeOf(l)} weeks' rent (one-off)</span><b>${money2(net)}</b></div>`; }
   const vat=S.agency.vatRegistered;
   const body=`
     <div class="fg"><label>Bill to (landlord)</label><select id="iv-ll" onchange="IV.landlordId=this.value;renderInvoice()">${llOpts}</select></div>
     <div class="fg"><label>Billing period (quarter, upfront)</label><select id="iv-q" onchange="IV.quarter.idx=parseInt(this.value);renderInvoice()">
       ${[0,1,2,3].map(i=>`<option value="${i}" ${IV.quarter.idx===i?'selected':''}>${_quarterDates({idx:i,y:IV.quarter.y}).label}</option>`).join('')}</select></div>
-    <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:14px;font-size:12.5px;line-height:1.6;margin-bottom:6px">
-      <div style="font-weight:600;color:var(--navy);margin-bottom:6px">${esc(lineDesc)}</div>
-      <div style="display:flex;justify-content:space-between"><span class="faint">Net</span><b>${money2(net)}</b></div>
+    <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:14px;font-size:12.5px;line-height:1.7;margin-bottom:6px">
+      ${lineHtml}
+      <div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);margin-top:6px;padding-top:6px"><span class="faint">Net</span><b>${money2(net)}</b></div>
       ${vat?`<div style="display:flex;justify-content:space-between"><span class="faint">VAT @ 20%</span><b>${money2(net*0.2)}</b></div>`:`<div class="faint" style="font-size:11.5px;margin-top:3px">Not VAT registered — no VAT charged.</div>`}
       <div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);margin-top:6px;padding-top:6px"><b>Total due</b><b style="color:var(--navy)">${money2(vat?net*1.2:net)}</b></div>
     </div>
@@ -522,11 +539,15 @@ function renderInvoice(){
 function createInvoice(){
   const l=L(IV.landlordId); const props=S.properties.filter(p=>p.landlordId===IV.landlordId);
   const rent=props.reduce((s,p)=>s+(p.rent||0),0); const qd=_quarterDates(IV.quarter);
-  let net,desc;
-  if(l.service==='full'){ net=Math.round(rent*feeOf(l)/100*3*100)/100; desc=`Full management fee · ${props.map(p=>p.address).join(', ')} · ${feeOf(l)}% of ${gbp(rent)}/mo × 3 months (quarterly, in advance)`; }
-  else { net=Math.round(rent/4.345*feeOf(l)*100)/100; desc=`Let-only fee · ${props.map(p=>p.address).join(', ')} · ${feeOf(l)} weeks' rent (one-off)`; }
+  let lines;
+  if(l.service==='full'){
+    // One invoice line per property at its own fee rate.
+    lines=props.map(p=>({desc:`Management fee · ${p.address} · ${propFee(p)}% of ${gbp(p.rent)}/mo × 3 months (quarterly, in advance)`,net:Math.round(p.rent*propFee(p)/100*3*100)/100}));
+  } else {
+    lines=[{desc:`Let-only fee · ${props.map(p=>p.address).join(', ')} · ${feeOf(l)} weeks' rent (one-off)`,net:Math.round(rent/4.345*feeOf(l)*100)/100}];
+  }
   const inv={id:uid('inv'),no:nextInvoiceNo(),landlordId:IV.landlordId,propertyId:(props[0]||{}).id||'',type:l.service,
-    periodLabel:qd.label,issued:today(),supplyFrom:qd.from,supplyTo:qd.to,lines:[{desc,net}],vat:!!S.agency.vatRegistered,status:'draft'};
+    periodLabel:qd.label,issued:today(),supplyFrom:qd.from,supplyTo:qd.to,lines,vat:!!S.agency.vatRegistered,status:'draft'};
   S.invoices=S.invoices||[]; S.invoices.push(inv); save(); closeModal(); go('invoice',inv.id); toast('✓ '+inv.no+' created');
 }
 function setInvStatus(id,s){ const inv=S.invoices.find(i=>i.id===id); inv.status=s; save(); render(); toast('Invoice marked '+s); }
@@ -697,9 +718,10 @@ function saveComm(id){ const l=L(id); const note=val('cm-note'); if(!note){toast
 function uploadDoc(id,col){ const l=L(id); l.docs=l.docs||{}; const def=col==='id'?'id_document.pdf':col==='ownership'?'proof_of_ownership.pdf':'mgmt_agreement.pdf';
   const body=`<div class="fg"><label>${col==='id'?'Photo ID (AML)':col==='ownership'?'Proof of ownership':'Signed agreement'}</label><input id="ud-name" value="" placeholder="${def}"><div class="hint">In production this opens a file picker + AI scan. Enter a filename to simulate.</div></div>`;
   modal('Upload document', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="(function(){var n=val('ud-name')||'${def}';var L2=S.landlords.find(x=>x.id==='${id}');L2.docs=L2.docs||{};L2.docs['${col}']=n;if('${col}'==='id')L2.aml=true;if('${col}'==='ownership')L2.ownership=true;if('${col}'==='agreement'){L2.agreement=true;L2.status='active';}save();closeModal();render();toast('✓ Document attached');})()">Attach</button>`); }
-function addProperty(id){ const body=`<div class="fg"><label>Address</label><input id="ap-addr" placeholder="e.g. 12 High Street"></div>
-  <div class="grid3" style="gap:10px"><div class="fg"><label>Town/City</label><input id="ap-city"></div><div class="fg"><label>Rent £/mo</label><input id="ap-rent" type="number"></div><div class="fg"><label>Beds</label><input id="ap-beds" type="number" value="2"></div></div>`;
-  modal('Add property', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="(function(){var a=val('ap-addr');if(!a){toast('Enter an address',1);return;}var pid=uid('p');S.properties.push({id:pid,landlordId:'${id}',address:a,city:val('ap-city'),rent:parseInt(val('ap-rent'))||0,beds:parseInt(val('ap-beds'))||1});S.tenancies.push({id:uid('t'),who:a,propertyId:pid,stage:'instructed'});save();closeModal();render();toast('✓ Property added');})()">Add</button>`); }
+function addProperty(id){ const l=L(id); const defFee=(l.feePct!=null?l.feePct:DEF_FEE); const body=`<div class="fg"><label>Address</label><input id="ap-addr" placeholder="e.g. 12 High Street"></div>
+  <div class="grid3" style="gap:10px"><div class="fg"><label>Town/City</label><input id="ap-city"></div><div class="fg"><label>Rent £/mo</label><input id="ap-rent" type="number"></div><div class="fg"><label>Beds</label><input id="ap-beds" type="number" value="2"></div></div>
+  ${l.service==='full'?`<div class="fg"><label>Management fee for this property (%)</label><input id="ap-fee" type="number" step="0.5" value="${defFee}"><div class="hint">Defaults to ${defFee}% — change it to give this property a different rate (e.g. family/friends).</div></div>`:''}`;
+  modal('Add property', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="(function(){var a=val('ap-addr');if(!a){toast('Enter an address',1);return;}var pid=uid('p');var fEl=document.getElementById('ap-fee');S.properties.push({id:pid,landlordId:'${id}',address:a,city:val('ap-city'),rent:parseInt(val('ap-rent'))||0,beds:parseInt(val('ap-beds'))||1,feePct:fEl?parseFloat(fEl.value):undefined});S.tenancies.push({id:uid('t'),who:a,propertyId:pid,stage:'instructed'});save();closeModal();render();toast('✓ Property added');})()">Add</button>`); }
 
 // ── REFERENCE MODAL ──
 let RF=null;
