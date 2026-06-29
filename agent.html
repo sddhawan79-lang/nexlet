@@ -11,19 +11,19 @@
 :root{
   --navy:#0B1E3D; --navy2:#16305a; --orange:#E8923A; --green:#1B7A4B; --green-bg:#EAF6EF;
   --amber:#B86E20; --amber-bg:#FEF2E7; --red:#C0392B; --red-bg:#FBEAE8; --blue:#2A6FDB; --blue-bg:#E9F2FF;
-  --txt:#1A2332; --muted:#64748B; --faint:#94A3B8; --border:#E2E5EA; --off:#F4F6F9; --bg:#EAEEF5;
+  --purple:#7C3AED; --purple-bg:#F3EAFB; --txt:#1A2332; --muted:#64748B; --faint:#94A3B8;
+  --border:#E2E5EA; --off:#F4F6F9; --bg:#EAEEF5;
   --font:'DM Sans',system-ui,sans-serif; --disp:'DM Serif Display',Georgia,serif;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:var(--font);background:var(--bg);color:var(--txt)}
 .app{display:flex;min-height:100vh}
-/* sidebar */
 .sb{width:232px;flex-shrink:0;background:var(--navy);display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
 .sb-logo{padding:20px 18px 14px;border-bottom:1px solid rgba(255,255,255,.08)}
 .sb-logo .nm{font-family:var(--disp);font-size:19px;color:#fff}
 .sb-logo .nm b{color:var(--orange);font-weight:400}
 .sb-badge{display:inline-flex;align-items:center;gap:5px;margin-top:6px;background:rgba(232,146,58,.15);border:1px solid rgba(232,146,58,.35);color:var(--orange);font-size:10px;font-weight:700;letter-spacing:.5px;padding:2px 8px;border-radius:5px}
-.sb-nav{padding:10px 0;flex:1}
+.sb-nav{padding:10px 0;flex:1;overflow-y:auto}
 .nav{display:flex;align-items:center;gap:11px;padding:10px 16px;font-size:13px;color:rgba(255,255,255,.6);cursor:pointer;border-left:3px solid transparent;transition:all .12s;user-select:none}
 .nav:hover{color:#fff;background:rgba(255,255,255,.04)}
 .nav.on{color:#fff;background:rgba(255,255,255,.06);border-left-color:var(--orange)}
@@ -31,50 +31,48 @@ body{font-family:var(--font);background:var(--bg);color:var(--txt)}
 .sb-foot{padding:12px 16px;border-top:1px solid rgba(255,255,255,.08);font-size:12px;color:rgba(255,255,255,.55)}
 .sb-user{display:flex;align-items:center;gap:9px}
 .sb-av{width:30px;height:30px;border-radius:50%;background:var(--orange);color:var(--navy);font-weight:700;display:flex;align-items:center;justify-content:center;font-size:12px}
-/* main */
 .main{flex:1;min-width:0}
 .topbar{background:#fff;border-bottom:1px solid var(--border);padding:0 30px;height:60px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:20}
 .tb-title{font-size:11px;font-weight:700;letter-spacing:.7px;color:var(--faint);text-transform:uppercase}
-.content{padding:26px 30px;max-width:1100px}
+.content{padding:26px 30px;max-width:1120px}
 h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px;font-weight:400}
 .sub{font-size:13px;color:var(--muted);margin-bottom:20px}
-/* buttons */
 .btn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border);background:#fff;color:#475569;border-radius:9px;padding:9px 15px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:all .12s}
 .btn:hover{border-color:#c5d0dd}
 .btn.navy{background:var(--navy);color:#fff;border-color:transparent}
 .btn.navy:hover{background:var(--navy2)}
 .btn.sm{padding:6px 11px;font-size:12px}
 .btn.ghost{background:none;border:none;color:var(--muted)}
-/* cards */
 .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px}
 .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .kpi{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px 18px}
 .kpi .l{font-size:10px;font-weight:700;letter-spacing:.5px;color:var(--faint);text-transform:uppercase}
 .kpi .v{font-size:25px;font-weight:700;color:var(--navy);margin-top:5px;font-family:var(--disp)}
 .kpi .v small{font-size:13px;font-weight:400}
 .kpi .s{font-size:11px;color:var(--faint);margin-top:2px}
 .panel{background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.panel+.panel{margin-top:14px}
 .panel-hd{padding:15px 20px;border-bottom:1px solid #EEF1F5;display:flex;align-items:center;justify-content:space-between}
 .panel-hd h2{font-size:14px;font-weight:700;color:var(--navy)}
+.panel-bd{padding:18px 20px}
 .row{display:flex;align-items:center;gap:14px;padding:15px 20px;border-bottom:1px solid #F1F3F6}
 .row:last-child{border-bottom:none}
 .av{width:40px;height:40px;border-radius:50%;background:var(--bg);color:var(--navy);font-weight:700;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
 .pill{font-size:10.5px;font-weight:700;padding:3px 10px;border-radius:100px;white-space:nowrap;display:inline-block}
 .muted{color:var(--muted)} .faint{color:var(--faint)}
-/* forms */
 .fg{margin-bottom:14px}
 .fg label{display:block;font-size:12px;font-weight:600;color:var(--txt);margin-bottom:5px}
 .fg input,.fg select,.fg textarea{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px;background:#fff;color:var(--txt)}
 .fg input:focus,.fg select:focus,.fg textarea:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(42,111,219,.12)}
 .fg .hint{font-size:11px;color:var(--faint);margin-top:4px}
-/* stepper */
-.steps{display:flex;gap:6px;margin-bottom:22px;flex-wrap:wrap}
-.st{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--faint);padding:6px 12px;border-radius:100px;background:#fff;border:1px solid var(--border)}
+.inline2{display:flex;gap:10px}.inline2>*{flex:1}
+.steps{display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap}
+.st{display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;color:var(--faint);padding:5px 11px;border-radius:100px;background:#fff;border:1px solid var(--border)}
 .st.on{color:#fff;background:var(--navy);border-color:transparent}
 .st.done{color:var(--green);background:var(--green-bg);border-color:transparent}
-.st .n{width:18px;height:18px;border-radius:50%;background:currentColor;color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center}
+.st .n{width:17px;height:17px;border-radius:50%;background:currentColor;color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center}
 .st.on .n{background:#fff;color:var(--navy)} .st.done .n{background:var(--green);color:#fff}
-/* pipeline */
 .pipe{display:flex;gap:12px;overflow-x:auto;padding-bottom:10px}
 .col{flex:0 0 230px;background:#EEF1F6;border-radius:12px;padding:11px}
 .col-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding:0 4px}
@@ -83,9 +81,8 @@ h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px
 .tcard{background:#fff;border:1px solid var(--border);border-radius:9px;padding:11px 12px;margin-bottom:9px}
 .tcard .w{font-size:13px;font-weight:700;color:var(--navy)}
 .tcard .p{font-size:11px;color:var(--faint);margin:2px 0 8px}
-/* modal */
 .ov{position:fixed;inset:0;background:rgba(11,30,61,.45);display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;z-index:100;overflow-y:auto}
-.modal{background:#fff;border-radius:14px;width:100%;max-width:520px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.modal{background:#fff;border-radius:14px;width:100%;max-width:540px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
 .modal-hd{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
 .modal-hd h3{font-size:16px;color:var(--navy)}
 .modal-bd{padding:20px 22px}
@@ -95,19 +92,29 @@ h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px
 .chk.on{border-color:var(--green);background:var(--green-bg)}
 .chk .box{width:20px;height:20px;border-radius:5px;border:1.5px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff}
 .chk.on .box{background:var(--green);border-color:var(--green)}
+.doc{display:flex;align-items:center;gap:11px;padding:11px 13px;border:1px solid var(--border);border-radius:9px;margin-bottom:8px}
+.doc .di{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
 .empty{padding:34px;text-align:center;color:var(--muted);font-size:13px}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:11px 20px;border-radius:10px;font-size:13px;z-index:200;box-shadow:0 8px 30px rgba(0,0,0,.3);opacity:0;transition:opacity .2s,transform .2s}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(-4px)}
 .note{background:var(--blue-bg);border:1px solid rgba(42,111,219,.2);border-radius:10px;padding:13px 15px;font-size:12.5px;color:var(--txt);line-height:1.55}
+.note.warn{background:var(--amber-bg);border-color:rgba(184,110,32,.25)}
+.tl{position:relative;padding-left:22px}
+.tl::before{content:'';position:absolute;left:6px;top:4px;bottom:4px;width:2px;background:var(--border)}
+.tl-item{position:relative;padding:0 0 16px}
+.tl-item::before{content:'';position:absolute;left:-19px;top:3px;width:10px;height:10px;border-radius:50%;background:var(--blue);border:2px solid #fff}
+.back{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);cursor:pointer;margin-bottom:14px}
+.kv{display:flex;gap:8px;font-size:13px;padding:6px 0;border-bottom:1px solid #F4F6F9}
+.kv .k{color:var(--faint);width:150px;flex-shrink:0}
+.kv .v{color:var(--txt);font-weight:500}
+.feebox{display:flex;align-items:center;gap:8px;background:var(--off);border:1px solid var(--border);border-radius:9px;padding:6px 10px}
+.feebox input{width:64px;border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-family:inherit;font-size:14px;font-weight:700;text-align:center;color:var(--navy)}
 </style>
 </head>
 <body>
 <div class="app">
   <aside class="sb">
-    <div class="sb-logo">
-      <div class="nm">Nex<b>Let</b></div>
-      <div class="sb-badge">AGENCY MODE</div>
-    </div>
+    <div class="sb-logo"><div class="nm">Nex<b>Let</b></div><div class="sb-badge">AGENCY MODE</div></div>
     <nav class="sb-nav" id="nav"></nav>
     <div class="sb-foot">
       <div id="scheme-foot" style="margin:0 0 12px;padding:10px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px"></div>
@@ -124,26 +131,38 @@ h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px
 
 <script>
 // ─────────────────────────────────────────────────────────────
-// NexLet Agency Portal — functional front-end (local state).
-// Same architecture as landlord.html; a developer wires this to the
-// shared Supabase backend (landlords table + RLS) for production.
+// NexLet Agency Portal — functional front-end (local state demo).
+// Same architecture/design as landlord.html. A developer wires this
+// to the shared Supabase backend (see DEV-SPEC-agency-portal.md):
+// agencies → landlords → properties hierarchy + RLS.
 // ─────────────────────────────────────────────────────────────
-const LS='nexlet_agency_v1';
-const FEE_MGMT=7.5;        // % of monthly rent — full management
-const LETONLY_WEEKS=3;     // one-off let-only fee = weeks of rent
+const LS='nexlet_agency_v2';
+const DEF_FEE=7.5;        // default full-management % of monthly rent (editable per landlord)
+const DEF_WEEKS=3;        // default let-only fee = weeks of rent (editable per landlord)
+const REF_PARTNERS=['Vouch','FCC Paragon','HomeLet','Van Mildert','Goodlord (Acquire)'];
 
 const SEED={
-  agency:{ name:'Your Lettings', redress:'', redressNo:'', cmp:'Not holding client money', cmpNo:'' },
+  agency:{ name:'Your Lettings', redress:'', redressNo:'', cmp:'Not holding client money', cmpNo:'', refPartner:'', icoNo:'' },
   landlords:[
-    {id:'l1',name:'Saurabh Dhawan',email:'sd@example.com',phone:'07700 900111',address:'London',aml:true,ownership:true,service:'full',agreement:true,status:'active'},
-    {id:'l2',name:'M. Reynolds',email:'mr@example.com',phone:'07700 900222',address:'Bristol',aml:true,ownership:false,service:'letonly',agreement:false,status:'pending'}
+    {id:'l1',name:'Saurabh Dhawan',email:'sd@example.com',phone:'07700 900111',address:'12 Bridge St, London',
+     nrl:false,prsReg:'PRS-100244',payout:'15th',contactPref:'WhatsApp',
+     aml:true,ownership:true,service:'full',feePct:7.5,letWeeks:3,agreement:true,status:'active',
+     docs:{id:'passport_sd.pdf',ownership:'title_115canterbury.pdf',agreement:'mgmt_agreement_sd.pdf'},
+     comms:[{id:'c1',date:'2026-06-02',type:'Call',note:'Agreed full management at 7.5%. Keys collected.'}]},
+    {id:'l2',name:'M. Reynolds',email:'mr@example.com',phone:'07700 900222',address:'Bristol',
+     nrl:false,prsReg:'',payout:'15th',contactPref:'Email',
+     aml:true,ownership:false,service:'letonly',feePct:7.5,letWeeks:3,agreement:false,status:'pending',
+     docs:{id:'licence_mr.jpg',ownership:'',agreement:''},
+     comms:[{id:'c2',date:'2026-06-18',type:'Email',note:'Sent Terms of Business for e-sign. Awaiting ownership proof.'}]}
   ],
   properties:[
     {id:'p1',landlordId:'l1',address:'115 Canterbury Road',city:'London',rent:2500,beds:2},
     {id:'p2',landlordId:'l2',address:'8 Oakfield Court',city:'Bristol',rent:1900,beds:1}
   ],
   references:[
-    {id:'r1',applicant:'J. Okafor',propertyId:'p2',income:48000,docs:{id:true,rtr:true,income:false,employer:false,prevll:false},credit:'',status:'amber',note:'Awaiting latest payslip; employer ref outstanding.'}
+    {id:'r1',applicant:'J. Okafor',propertyId:'p2',income:48000,
+     docs:{id:true,rtr:true,income:false,employer:false,prevll:false},
+     credit:'',creditState:'not_requested',status:'amber',note:'Awaiting latest payslip; employer ref outstanding.'}
   ],
   tenancies:[
     {id:'t1',who:'8 Oakfield Court',propertyId:'p2',stage:'referencing'},
@@ -158,55 +177,57 @@ function uid(p){ return p+Math.random().toString(36).slice(2,8); }
 function P(id){ return S.properties.find(x=>x.id===id)||{}; }
 function L(id){ return S.landlords.find(x=>x.id===id)||{}; }
 function gbp(n){ return '£'+Math.round(n||0).toLocaleString(); }
+function today(){ return new Date().toISOString().slice(0,10); }
 
 const STAGES=[
-  {k:'instructed',t:'Instructed',c:'#64748B'},
-  {k:'marketing',t:'Marketing',c:'#2A6FDB'},
-  {k:'referencing',t:'Referencing',c:'#D98324'},
-  {k:'contract',t:'Contract & e-sign',c:'#7C3AED'},
-  {k:'movein',t:'Move-in',c:'#0E7490'},
-  {k:'managed',t:'Managed',c:'#1B7A4B'}
+  {k:'instructed',t:'Instructed',c:'#64748B'},{k:'marketing',t:'Marketing',c:'#2A6FDB'},
+  {k:'referencing',t:'Referencing',c:'#D98324'},{k:'contract',t:'Contract & e-sign',c:'#7C3AED'},
+  {k:'movein',t:'Move-in',c:'#0E7490'},{k:'managed',t:'Managed',c:'#1B7A4B'}
 ];
 const SVC={full:{label:'Full management',bg:'var(--green-bg)',color:'var(--green)'},letonly:{label:'Let-only',bg:'var(--off)',color:'#475569'}};
 const STATUS={active:{label:'Active',bg:'var(--green-bg)',color:'var(--green)'},pending:{label:'Agreement pending',bg:'var(--amber-bg)',color:'var(--amber)'}};
 const RAG={green:{label:'● Pass',bg:'var(--green-bg)',color:'var(--green)'},amber:{label:'● Caution',bg:'var(--amber-bg)',color:'var(--amber)'},red:{label:'● Fail',bg:'var(--red-bg)',color:'var(--red)'},none:{label:'Not started',bg:'var(--off)',color:'#475569'}};
+const CREDIT={not_requested:{label:'Credit: not requested',bg:'var(--off)',color:'#94A3B8'},requested:{label:'Credit: requested',bg:'var(--blue-bg)',color:'var(--blue)'},in_progress:{label:'Credit: in progress',bg:'var(--amber-bg)',color:'var(--amber)'},complete:{label:'Credit: report attached',bg:'var(--green-bg)',color:'var(--green)'}};
 
 const NAV=[
-  {k:'dashboard',ic:'▦',t:'Agency Dashboard'},
-  {k:'landlords',ic:'⚇',t:'Landlords'},
-  {k:'pipeline',ic:'◫',t:'Tenancy Progression'},
-  {k:'referencing',ic:'◷',t:'Referencing'},
-  {k:'properties',ic:'⌂',t:'Properties'},
-  {k:'settings',ic:'⚙',t:'Agency Settings'}
+  {k:'dashboard',ic:'▦',t:'Agency Dashboard'},{k:'landlords',ic:'⚇',t:'Landlords'},
+  {k:'pipeline',ic:'◫',t:'Tenancy Progression'},{k:'referencing',ic:'◷',t:'Referencing'},
+  {k:'properties',ic:'⌂',t:'Properties'},{k:'settings',ic:'⚙',t:'Agency Settings'}
 ];
-let view='dashboard';
-function go(v){ view=v; render(); }
+let view='dashboard', sel=null;
+function go(v,id){ view=v; if(id!==undefined)sel=id; window.scrollTo(0,0); render(); }
 
 function render(){
-  document.getElementById('nav').innerHTML=NAV.map(n=>`<div class="nav ${n.k===view?'on':''}" onclick="go('${n.k}')"><span class="ic">${n.ic}</span>${n.t}</div>`).join('');
+  document.getElementById('nav').innerHTML=NAV.map(n=>`<div class="nav ${n.k===view||(view==='landlord'&&n.k==='landlords')?'on':''}" onclick="go('${n.k}')"><span class="ic">${n.ic}</span>${n.t}</div>`).join('');
   const sf=document.getElementById('scheme-foot');
   sf.innerHTML = S.agency.redress
-    ? `<div style="font-size:11px;color:rgba(255,255,255,.6)">Redress scheme</div><div style="font-size:11.5px;color:var(--green);font-weight:700;margin-top:2px">✓ ${S.agency.redress}</div>`
+    ? `<div style="font-size:11px;color:rgba(255,255,255,.6)">Redress scheme</div><div style="font-size:11.5px;color:var(--green);font-weight:700;margin-top:2px">✓ ${esc(S.agency.redress)}</div>`
     : `<div style="font-size:11px;color:rgba(255,255,255,.6)">Redress scheme</div><div style="font-size:11.5px;color:#F5B301;font-weight:700;margin-top:2px">⏳ Membership pending</div>`;
-  document.getElementById('tb-title').textContent=(NAV.find(n=>n.k===view)||{}).t||'';
+  document.getElementById('tb-title').textContent=(NAV.find(n=>n.k===view)||{t:'Landlord'}).t||'Landlord';
   document.getElementById('tb-actions').innerHTML=topActions();
   document.getElementById('view').innerHTML=({
-    dashboard:vDashboard, landlords:vLandlords, pipeline:vPipeline, referencing:vReferencing, properties:vProperties, settings:vSettings
+    dashboard:vDashboard, landlords:vLandlords, landlord:vLandlordDetail, pipeline:vPipeline,
+    referencing:vReferencing, properties:vProperties, settings:vSettings
   }[view]||vDashboard)();
 }
 function topActions(){
-  if(view==='landlords') return `<button class="btn navy" onclick="openOnboard()">＋ Onboard a landlord</button>`;
+  if(view==='landlords'||view==='dashboard') return `<button class="btn navy" onclick="openOnboard()">＋ Onboard a landlord</button>`;
   if(view==='referencing') return `<button class="btn navy" onclick="openReference()">＋ New reference</button>`;
-  if(view==='dashboard') return `<button class="btn navy" onclick="openOnboard()">＋ Onboard a landlord</button>`;
   return '';
 }
+function feeOf(l){ return l.service==='full' ? (l.feePct!=null?l.feePct:DEF_FEE) : (l.letWeeks!=null?l.letWeeks:DEF_WEEKS); }
 
 // ── DASHBOARD ──
 function vDashboard(){
   const mgmt=S.landlords.filter(l=>l.service==='full').length;
   const lo=S.landlords.filter(l=>l.service==='letonly').length;
+  let fees=0;
+  S.landlords.filter(l=>l.service==='full').forEach(l=>{
+    const rent=S.properties.filter(p=>p.landlordId===l.id).reduce((s,p)=>s+(p.rent||0),0);
+    fees+=rent*(l.feePct!=null?l.feePct:DEF_FEE)/100;
+  });
   const managedRent=S.properties.filter(p=>L(p.landlordId).service==='full').reduce((s,p)=>s+(p.rent||0),0);
-  const fees=Math.round(managedRent*FEE_MGMT/100);
+  const pending=S.landlords.filter(l=>!l.agreement).length;
   return `
     <h1 class="pg">Good evening, Saurabh</h1>
     <div class="sub">Your managed portfolio at a glance</div>
@@ -214,10 +235,11 @@ function vDashboard(){
       <div class="kpi"><div class="l">Landlords</div><div class="v">${S.landlords.length}</div><div class="s">${mgmt} full mgmt · ${lo} let-only</div></div>
       <div class="kpi"><div class="l">Properties</div><div class="v">${S.properties.length}</div><div class="s">across your landlords</div></div>
       <div class="kpi"><div class="l">Managed rent</div><div class="v">${gbp(managedRent)}<small>/mo</small></div><div class="s">tenant → landlord direct</div></div>
-      <div class="kpi"><div class="l">Your fees /mo</div><div class="v" style="color:var(--green)">${gbp(fees)}</div><div class="s">${FEE_MGMT}% mgmt · ex. let-only</div></div>
+      <div class="kpi"><div class="l">Your fees /mo</div><div class="v" style="color:var(--green)">${gbp(fees)}</div><div class="s">from management %</div></div>
     </div>
+    ${pending?`<div class="note warn" style="margin-bottom:18px">⏳ <b>${pending} landlord${pending>1?'s':''}</b> awaiting a signed management agreement — you can market once it's signed, not before.</div>`:''}
     <div class="panel">
-      <div class="panel-hd"><h2>Your landlords</h2><span class="faint" style="font-size:12px">Click to manage</span></div>
+      <div class="panel-hd"><h2>Your landlords</h2><span class="faint" style="font-size:12px">Click a landlord to open their record</span></div>
       ${S.landlords.map(landlordRow).join('')}
     </div>`;
 }
@@ -225,11 +247,11 @@ function landlordRow(l){
   const props=S.properties.filter(p=>p.landlordId===l.id);
   const rent=props.reduce((s,p)=>s+(p.rent||0),0);
   const sv=SVC[l.service]||SVC.full, st=STATUS[l.status]||STATUS.pending;
-  const feeTxt = l.service==='full' ? gbp(rent*FEE_MGMT/100)+'/mo' : (rent?gbp(rent/4.345*LETONLY_WEEKS):'—');
-  const feeBasis = l.service==='full' ? FEE_MGMT+'%' : LETONLY_WEEKS+' wks · one-off';
-  return `<div class="row" onclick="go('landlords')" style="cursor:pointer">
+  const feeTxt = l.service==='full' ? gbp(rent*feeOf(l)/100)+'/mo' : (rent?gbp(rent/4.345*feeOf(l)):'—');
+  const feeBasis = l.service==='full' ? feeOf(l)+'%' : feeOf(l)+' wks · one-off';
+  return `<div class="row" onclick="go('landlord','${l.id}')" style="cursor:pointer">
     <div class="av">${initials(l.name)}</div>
-    <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:var(--navy)">${esc(l.name)}</div>
+    <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:var(--navy)">${esc(l.name)}${l.nrl?' <span class="pill" style="background:var(--purple-bg);color:var(--purple)">Non-resident</span>':''}</div>
       <div class="faint" style="font-size:12px">${props.length?props.map(p=>esc(p.address)).join(', '):'No properties yet'}${rent?' · '+gbp(rent)+'/mo':''}</div></div>
     <span class="pill" style="background:${sv.bg};color:${sv.color}">${sv.label}</span>
     <div style="width:96px;text-align:right"><div style="font-size:14px;font-weight:700;color:var(--navy)">${feeTxt}</div><div class="faint" style="font-size:10.5px">${feeBasis}</div></div>
@@ -237,26 +259,63 @@ function landlordRow(l){
   </div>`;
 }
 
-// ── LANDLORDS ──
+// ── LANDLORDS LIST ──
 function vLandlords(){
-  return `<h1 class="pg">Landlords</h1><div class="sub">Everyone you manage — onboard new landlords with AML, ownership checks and a signed management agreement.</div>
-    <div class="panel">${S.landlords.length?S.landlords.map(landlordCard).join(''):`<div class="empty">No landlords yet. Click "Onboard a landlord" to start.</div>`}</div>`;
+  return `<h1 class="pg">Landlords</h1><div class="sub">Everyone you manage. Onboard new landlords with AML, ID & ownership proof, instruction terms and a signed management agreement.</div>
+    <div class="panel">${S.landlords.length?S.landlords.map(landlordRow).join(''):`<div class="empty">No landlords yet. Click "Onboard a landlord" to start.</div>`}</div>`;
 }
-function landlordCard(l){
+
+// ── LANDLORD DETAIL (CRM) ──
+function vLandlordDetail(){
+  const l=L(sel); if(!l.id) return vLandlords();
   const props=S.properties.filter(p=>p.landlordId===l.id);
+  const rent=props.reduce((s,p)=>s+(p.rent||0),0);
   const sv=SVC[l.service]||SVC.full, st=STATUS[l.status]||STATUS.pending;
-  const checks=[['AML / ID',l.aml],['Ownership',l.ownership],['Agreement signed',l.agreement]];
-  return `<div class="row" style="align-items:flex-start">
-    <div class="av">${initials(l.name)}</div>
-    <div style="flex:1;min-width:0">
-      <div style="font-size:14px;font-weight:600;color:var(--navy)">${esc(l.name)} <span class="pill" style="background:${sv.bg};color:${sv.color};margin-left:4px">${sv.label}</span></div>
-      <div class="faint" style="font-size:12px;margin:2px 0 8px">${esc(l.email)} · ${esc(l.phone)}</div>
-      <div style="display:flex;gap:7px;flex-wrap:wrap">${checks.map(([t,ok])=>`<span class="pill" style="background:${ok?'var(--green-bg)':'var(--off)'};color:${ok?'var(--green)':'#94A3B8'}">${ok?'✓':'○'} ${t}</span>`).join('')}
-        <span class="pill" style="background:var(--off);color:#475569">${props.length} propert${props.length===1?'y':'ies'}</span></div>
+  const d=l.docs||{};
+  const docRow=(label,name,icon,col)=>`<div class="doc"><div class="di" style="background:${name?'var(--green-bg)':'var(--off)'};color:${name?'var(--green)':'var(--faint)'}">${icon}</div>
+    <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${label}</div><div class="faint" style="font-size:11.5px">${name?esc(name):'Not uploaded'}</div></div>
+    ${name?`<span class="pill" style="background:var(--green-bg);color:var(--green)">✓ On file</span>`:`<button class="btn sm" onclick="uploadDoc('${l.id}','${col}')">Upload</button>`}</div>`;
+  return `
+    <div class="back" onclick="go('landlords')">← All landlords</div>
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px">
+      <div class="av" style="width:52px;height:52px;font-size:18px">${initials(l.name)}</div>
+      <div style="flex:1"><h1 class="pg" style="margin:0">${esc(l.name)}</h1>
+        <div class="faint" style="font-size:13px">${esc(l.email)} · ${esc(l.phone)} · prefers ${esc(l.contactPref||'Email')}</div></div>
+      <span class="pill" style="background:${sv.bg};color:${sv.color}">${sv.label}</span>
+      <span class="pill" style="background:${st.bg};color:${st.color}">${st.label}</span>
     </div>
-    <span class="pill" style="background:${st.bg};color:${st.color}">${st.label}</span>
-    ${!l.agreement?`<button class="btn sm" onclick="signAgreement('${l.id}')">Send agreement</button>`:''}
-  </div>`;
+    <div style="display:flex;gap:8px;margin:14px 0 18px">
+      <button class="btn navy" onclick="openComm('${l.id}')">＋ Log contact</button>
+      ${!l.agreement?`<button class="btn" onclick="signAgreement('${l.id}')">Send / mark agreement signed</button>`:''}
+      <button class="btn" onclick="editInstruction('${l.id}')">Edit instruction & fee</button>
+    </div>
+    <div class="grid2">
+      <div>
+        <div class="panel"><div class="panel-hd"><h2>Instruction & details</h2></div><div class="panel-bd">
+          <div class="kv"><span class="k">Service level</span><span class="v">${sv.label}</span></div>
+          <div class="kv"><span class="k">Your fee</span><span class="v">${l.service==='full'?feeOf(l)+'% of monthly rent'+(rent?' · '+gbp(rent*feeOf(l)/100)+'/mo':''):feeOf(l)+" weeks' rent (one-off)"+(rent?' · '+gbp(rent/4.345*feeOf(l)):'')}</span></div>
+          <div class="kv"><span class="k">Correspondence</span><span class="v">${esc(l.address||'—')}</span></div>
+          <div class="kv"><span class="k">Rent payout date</span><span class="v">${esc(l.payout||'—')}</span></div>
+          <div class="kv"><span class="k">PRS Database</span><span class="v">${l.prsReg?'✓ '+esc(l.prsReg):'<span style="color:var(--amber)">⚠ Not verified</span>'}</span></div>
+          <div class="kv"><span class="k">Non-resident (NRL)</span><span class="v">${l.nrl?'<span style="color:var(--purple)">Yes — NRL scheme applies</span>':'No'}</span></div>
+          <div class="kv" style="border:none"><span class="k">AML / ID</span><span class="v">${l.aml?'✓ Verified':'<span style="color:var(--red)">Outstanding</span>'}</span></div>
+        </div></div>
+        <div class="panel"><div class="panel-hd"><h2>Document vault</h2></div><div class="panel-bd">
+          ${docRow('Photo ID (AML)',d.id,'🪪','id')}
+          ${docRow('Proof of ownership',d.ownership,'📜','ownership')}
+          ${docRow('Signed management agreement',d.agreement,'✍️','agreement')}
+        </div></div>
+      </div>
+      <div>
+        <div class="panel"><div class="panel-hd"><h2>Properties (${props.length})</h2></div>
+          ${props.length?props.map(p=>`<div class="row"><div class="av">⌂</div><div style="flex:1"><div style="font-size:13.5px;font-weight:600;color:var(--navy)">${esc(p.address)}</div><div class="faint" style="font-size:12px">${esc(p.city||'')} · ${p.beds} bed · ${gbp(p.rent)}/mo</div></div></div>`).join(''):`<div class="empty">No properties yet. <a href="#" onclick="addProperty('${l.id}');return false" style="color:var(--blue);font-weight:600">Add one</a></div>`}
+          ${props.length?`<div style="padding:12px 20px"><button class="btn sm" onclick="addProperty('${l.id}')">＋ Add property</button></div>`:''}
+        </div>
+        <div class="panel"><div class="panel-hd"><h2>Communications</h2><span class="faint" style="font-size:12px">Keep in touch</span></div><div class="panel-bd">
+          ${(l.comms&&l.comms.length)?`<div class="tl">${l.comms.slice().reverse().map(c=>`<div class="tl-item"><div style="font-size:12.5px;font-weight:700;color:var(--navy)">${esc(c.type)} <span class="faint" style="font-weight:400">· ${esc(c.date)}</span></div><div style="font-size:12.5px;color:var(--muted);line-height:1.5;margin-top:2px">${esc(c.note)}</div></div>`).join('')}</div>`:`<div class="faint" style="font-size:12.5px">No contact logged yet. Use "Log contact" to record calls, emails and notes.</div>`}
+        </div></div>
+      </div>
+    </div>`;
 }
 
 // ── PIPELINE ──
@@ -267,11 +326,10 @@ function vPipeline(){
       return `<div class="col"><div class="col-hd"><span class="t">${stg.t}</span><span class="c" style="background:${stg.c}">${cards.length}</span></div>
         ${cards.map(t=>tenancyCard(t,stg)).join('')||`<div class="faint" style="font-size:11px;padding:6px 4px">—</div>`}</div>`;
     }).join('')}</div>
-    <div class="note" style="margin-top:18px"><b>Referencing stage</b> connects to your referencing module — open <a href="#" onclick="go('referencing');return false" style="color:var(--blue);font-weight:600">Referencing</a> to collect documents, run affordability, and attach a partner credit report.</div>`;
+    <div class="note" style="margin-top:18px"><b>Renters' Rights Act payment order:</b> before the agreement is signed you may only take a holding deposit (max 1 week) + security deposit (max 5 weeks) — rent is taken only once the tenancy is executed. The Referencing stage feeds the <a href="#" onclick="go('referencing');return false" style="color:var(--blue);font-weight:600">Referencing</a> module.</div>`;
 }
 function tenancyCard(t,stg){
-  const idx=STAGES.findIndex(s=>s.k===t.stage);
-  const next=STAGES[idx+1];
+  const idx=STAGES.findIndex(s=>s.k===t.stage); const next=STAGES[idx+1];
   return `<div class="tcard"><div class="w">${esc(t.who)}</div><div class="p">${esc(P(t.propertyId).address||'')}</div>
     ${next?`<button class="btn sm" onclick="advance('${t.id}')">Advance → ${next.t}</button>`:`<span class="pill" style="background:var(--green-bg);color:var(--green)">● Live</span>`}</div>`;
 }
@@ -279,12 +337,13 @@ function advance(id){ const t=S.tenancies.find(x=>x.id===id); const i=STAGES.fin
 
 // ── REFERENCING ──
 function vReferencing(){
-  return `<h1 class="pg">Tenant Referencing</h1><div class="sub">Collect documents, assess affordability, and record the outcome. Credit/Open-Banking checks attach from your referencing partner.</div>
-    <div class="note" style="margin-bottom:18px"><b>How referencing works here:</b> NexLet runs the full document workflow (employer & previous-landlord references, proof of income, ID, Right-to-Rent) and an affordability assessment — all legal for you to do. The <b>credit search</b> (CCJs, score) comes from a referencing partner (e.g. Vouch, ~£15–25/tenant) — run it in their portal and attach the report here.</div>
+  const partner=S.agency.refPartner;
+  return `<h1 class="pg">Tenant Referencing</h1><div class="sub">Collect documents, assess affordability, and record the outcome. Credit/Open-Banking checks run via your referencing partner.</div>
+    <div class="note" style="margin-bottom:16px"><b>How this works (no FCA licence needed):</b> NexLet runs the full in-house workflow — employer & previous-landlord references, proof of income, ID, Right-to-Rent — plus an affordability test (income ≥ 30× monthly rent). The regulated <b>credit search</b> (CCJs, score) and Open-Banking income come from a referencing partner${partner?` — yours is set to <b>${esc(partner)}</b>`:` (set one in Agency Settings)`}. The "Request credit check" button is the API hook your developer connects; until then you run it in the partner portal and attach the result.</div>
     <div class="panel">${S.references.length?S.references.map(refCard).join(''):`<div class="empty">No references yet. Click "New reference".</div>`}</div>`;
 }
 function refCard(r){
-  const rag=RAG[r.status]||RAG.none;
+  const rag=RAG[r.status]||RAG.none; const cr=CREDIT[r.creditState||'not_requested'];
   const docs=r.docs||{}; const got=Object.values(docs).filter(Boolean).length;
   const rent=P(r.propertyId).rent||0; const need=rent*30; const afford=r.income>=need;
   return `<div class="row" style="align-items:flex-start;cursor:pointer" onclick="openReference('${r.id}')">
@@ -295,7 +354,7 @@ function refCard(r){
       <div style="display:flex;gap:7px;flex-wrap:wrap">
         <span class="pill" style="background:var(--off);color:#475569">${got}/5 docs</span>
         ${r.income?`<span class="pill" style="background:${afford?'var(--green-bg)':'var(--amber-bg)'};color:${afford?'var(--green)':'var(--amber)'}">Affordability ${afford?'OK':'tight'} (${gbp(r.income)}/yr)</span>`:''}
-        <span class="pill" style="background:${r.credit?'var(--green-bg)':'var(--off)'};color:${r.credit?'var(--green)':'#94A3B8'}">${r.credit?'Credit report attached':'No credit report'}</span>
+        <span class="pill" style="background:${cr.bg};color:${cr.color}">${cr.label}</span>
       </div>
     </div>
     <span class="pill" style="background:${rag.bg};color:${rag.color}">${rag.label}</span>
@@ -307,46 +366,53 @@ function vProperties(){
   return `<h1 class="pg">All Properties</h1><div class="sub">Every property across all your landlords.</div>
     <div class="panel">${S.properties.length?S.properties.map(p=>`<div class="row">
       <div class="av">⌂</div><div style="flex:1"><div style="font-size:14px;font-weight:600;color:var(--navy)">${esc(p.address)}</div>
-      <div class="faint" style="font-size:12px">${esc(p.city||'')} · ${p.beds} bed · ${gbp(p.rent)}/mo · ${esc(L(p.landlordId).name||'—')}</div></div>
+      <div class="faint" style="font-size:12px">${esc(p.city||'')} · ${p.beds} bed · ${gbp(p.rent)}/mo · <a href="#" onclick="go('landlord','${p.landlordId}');return false" style="color:var(--blue)">${esc(L(p.landlordId).name||'—')}</a></div></div>
       <span class="pill" style="background:${(SVC[L(p.landlordId).service]||SVC.full).bg};color:${(SVC[L(p.landlordId).service]||SVC.full).color}">${(SVC[L(p.landlordId).service]||SVC.full).label}</span>
-    </div>`).join(''):`<div class="empty">No properties yet — add one when onboarding a landlord.</div>`}</div>`;
+    </div>`).join(''):`<div class="empty">No properties yet — add one from a landlord's record.</div>`}</div>`;
 }
 
 // ── SETTINGS ──
 function vSettings(){
   const a=S.agency;
-  return `<h1 class="pg">Agency Settings</h1><div class="sub">Your legal memberships — these must appear on your paperwork.</div>
-    <div class="panel" style="max-width:560px"><div style="padding:20px">
+  const partnerOpts=['',...REF_PARTNERS].map(p=>`<option ${a.refPartner===p?'selected':''}>${p||'Not selected'}</option>`).join('');
+  return `<h1 class="pg">Agency Settings</h1><div class="sub">Your legal memberships and partners — these appear on your paperwork and power the workflow.</div>
+    <div class="panel" style="max-width:600px"><div class="panel-bd">
       <div class="fg"><label>Trading name</label><input id="set-name" value="${esc(a.name)}"></div>
-      <div class="fg"><label>Redress scheme (required)</label>
-        <select id="set-redress"><option value="">Not yet a member</option><option ${a.redress==='The Property Ombudsman'?'selected':''}>The Property Ombudsman</option><option ${a.redress==='Property Redress Scheme'?'selected':''}>Property Redress Scheme</option></select>
-        <div class="hint">Mandatory for all letting agents. Fine up to £5,000 if not registered.</div></div>
-      <div class="fg"><label>Redress membership no.</label><input id="set-redressno" value="${esc(a.redressNo)}" placeholder="e.g. T01234"></div>
-      <div class="fg"><label>Client Money Protection</label>
-        <select id="set-cmp"><option ${a.cmp==='Not holding client money'?'selected':''}>Not holding client money</option><option ${a.cmp==='Client Money Protect'?'selected':''}>Client Money Protect</option><option ${a.cmp==='Propertymark CMP'?'selected':''}>Propertymark CMP</option></select>
-        <div class="hint">Only required if you collect rent/deposits. You're set to tenant-pays-landlord, so this stays off.</div></div>
+      <div class="inline2"><div class="fg"><label>Redress scheme (required)</label>
+        <select id="set-redress"><option value="">Not yet a member</option><option ${a.redress==='The Property Ombudsman'?'selected':''}>The Property Ombudsman</option><option ${a.redress==='Property Redress Scheme'?'selected':''}>Property Redress Scheme</option></select></div>
+      <div class="fg"><label>Redress membership no.</label><input id="set-redressno" value="${esc(a.redressNo)}" placeholder="e.g. T01234"></div></div>
+      <div class="hint" style="margin:-6px 0 14px;color:var(--faint)">Mandatory for all letting agents — fine up to £5,000 if not registered. Must show on paperwork.</div>
+      <div class="inline2"><div class="fg"><label>Client Money Protection</label>
+        <select id="set-cmp"><option ${a.cmp==='Not holding client money'?'selected':''}>Not holding client money</option><option ${a.cmp==='Client Money Protect'?'selected':''}>Client Money Protect</option><option ${a.cmp==='Propertymark CMP'?'selected':''}>Propertymark CMP</option></select></div>
+      <div class="fg"><label>ICO registration no.</label><input id="set-ico" value="${esc(a.icoNo)}" placeholder="e.g. ZB123456"></div></div>
+      <div class="hint" style="margin:-6px 0 14px;color:var(--faint)">CMP only required if you hold rent/deposits. You're tenant-pays-landlord-direct, so this stays off. ICO registration is required for handling personal data.</div>
+      <div class="fg"><label>Tenant referencing partner</label><select id="set-ref">${partnerOpts}</select>
+        <div class="hint">Powers the credit/Open-Banking checks. ~£15–25 per tenant, usually passed to the landlord. No FCA licence needed on your side — the partner is the regulated party.</div></div>
       <button class="btn navy" onclick="saveSettings()">Save settings</button>
     </div></div>`;
 }
-function saveSettings(){ S.agency.name=val('set-name'); S.agency.redress=val('set-redress'); S.agency.redressNo=val('set-redressno'); S.agency.cmp=val('set-cmp'); save(); render(); toast('✓ Settings saved'); }
+function saveSettings(){ S.agency.name=val('set-name'); S.agency.redress=val('set-redress'); S.agency.redressNo=val('set-redressno'); S.agency.cmp=val('set-cmp'); S.agency.icoNo=val('set-ico'); S.agency.refPartner=val('set-ref'); save(); render(); toast('✓ Settings saved'); }
 
-// ── ONBOARDING WIZARD (modal) ──
+// ── ONBOARDING WIZARD ──
 let OB=null;
-function openOnboard(){ OB={step:1,name:'',email:'',phone:'',address:'',aml:false,ownership:false,service:'full',addr:'',city:'',rent:'',beds:'2',agreement:false}; renderOnboard(); }
-function obSet(k,v){ OB[k]=v; }
+function openOnboard(){ OB={step:1,name:'',email:'',phone:'',address:'',nrl:false,prsReg:'',payout:'1st',contactPref:'Email',idDoc:'',ownDoc:'',aml:false,ownership:false,service:'full',feePct:DEF_FEE,letWeeks:DEF_WEEKS,addr:'',city:'',rent:'',beds:'2',agreement:false}; renderOnboard(); }
 function obNext(){
-  if(OB.step===1){ OB.name=val('ob-name');OB.email=val('ob-email');OB.phone=val('ob-phone');OB.address=val('ob-address'); if(!OB.name){toast('Enter the landlord name',1);return;} }
+  if(OB.step===1){ OB.name=val('ob-name');OB.email=val('ob-email');OB.phone=val('ob-phone');OB.address=val('ob-address');OB.prsReg=val('ob-prs');OB.payout=val('ob-payout');OB.contactPref=val('ob-pref'); if(!OB.name){toast('Enter the landlord name',1);return;} }
   if(OB.step===4){ OB.addr=val('ob-addr');OB.city=val('ob-city');OB.rent=val('ob-rent');OB.beds=val('ob-beds'); }
-  if(OB.step===5){ OB.service=val('ob-service'); }
+  if(OB.step===5){ OB.service=val('ob-service'); OB.feePct=parseFloat(val('ob-fee'))||DEF_FEE; OB.letWeeks=parseFloat(val('ob-weeks'))||DEF_WEEKS; }
   OB.step++; renderOnboard();
 }
-function obBack(){ OB.step--; renderOnboard(); }
+function obBack(){ if(OB.step===1){closeModal();return;} OB.step--; renderOnboard(); }
 function obFinish(){
   const id=uid('l');
-  S.landlords.push({id,name:OB.name,email:OB.email,phone:OB.phone,address:OB.address,aml:OB.aml,ownership:OB.ownership,service:OB.service,agreement:OB.agreement,status:OB.agreement?'active':'pending'});
+  S.landlords.push({id,name:OB.name,email:OB.email,phone:OB.phone,address:OB.address,nrl:OB.nrl,prsReg:OB.prsReg,payout:OB.payout,contactPref:OB.contactPref,
+    aml:OB.aml,ownership:OB.ownership,service:OB.service,feePct:OB.feePct,letWeeks:OB.letWeeks,agreement:OB.agreement,status:OB.agreement?'active':'pending',
+    docs:{id:OB.idDoc||'',ownership:OB.ownDoc||'',agreement:OB.agreement?'mgmt_agreement.pdf':''},
+    comms:[{id:uid('c'),date:today(),type:'Note',note:'Landlord onboarded · '+SVC[OB.service].label+(OB.agreement?' · agreement signed':' · agreement pending')}]});
   if(OB.addr){ const pid=uid('p'); S.properties.push({id:pid,landlordId:id,address:OB.addr,city:OB.city,rent:parseInt(OB.rent)||0,beds:parseInt(OB.beds)||1});
     S.tenancies.push({id:uid('t'),who:OB.addr,propertyId:pid,stage:'instructed'}); }
-  save(); closeModal(); go('landlords'); toast('✓ '+OB.name+' onboarded'+(OB.agreement?' — agreement signed':' — send the agreement to go live'));
+  const nm=OB.name, signed=OB.agreement;
+  save(); closeModal(); go('landlord',id); toast('✓ '+nm+' onboarded'+(signed?' — agreement signed':' — send the agreement to go live'));
 }
 function renderOnboard(){
   const s=OB.step;
@@ -354,79 +420,137 @@ function renderOnboard(){
   const stepper=`<div class="steps">${labels.map((l,i)=>`<div class="st ${s===i+1?'on':s>i+1?'done':''}"><span class="n">${s>i+1?'✓':i+1}</span>${l}</div>`).join('')}</div>`;
   let body='';
   if(s===1) body=`<div class="fg"><label>Full name *</label><input id="ob-name" value="${esc(OB.name)}" placeholder="Landlord's name"></div>
-    <div class="fg"><label>Email</label><input id="ob-email" value="${esc(OB.email)}" placeholder="name@email.com"></div>
-    <div class="fg"><label>Phone</label><input id="ob-phone" value="${esc(OB.phone)}"></div>
-    <div class="fg"><label>Correspondence address</label><input id="ob-address" value="${esc(OB.address)}"></div>`;
-  if(s===2) body=`<div class="note" style="margin-bottom:14px">Anti-money-laundering check — required before you can act. Upload the landlord's passport or driving licence; in production this is AI-scanned and stored.</div>
-    <div class="chk ${OB.aml?'on':''}" onclick="OB.aml=!OB.aml;renderOnboard()"><div class="box">${OB.aml?'✓':''}</div><div><div style="font-weight:600;font-size:13px">ID document received &amp; verified</div><div class="faint" style="font-size:11px">Passport / driving licence on file</div></div></div>`;
-  if(s===3) body=`<div class="note" style="margin-bottom:14px">Confirms the landlord is entitled to let — title deed, mortgage statement or council tax bill.</div>
-    <div class="chk ${OB.ownership?'on':''}" onclick="OB.ownership=!OB.ownership;renderOnboard()"><div class="box">${OB.ownership?'✓':''}</div><div><div style="font-weight:600;font-size:13px">Proof of ownership received</div><div class="faint" style="font-size:11px">Deed / mortgage / council tax</div></div></div>`;
-  if(s===4) body=`<div class="faint" style="font-size:12px;margin-bottom:12px">Add their first property (optional now — you can add more later).</div>
+    <div class="inline2"><div class="fg"><label>Email</label><input id="ob-email" value="${esc(OB.email)}" placeholder="name@email.com"></div>
+    <div class="fg"><label>Phone</label><input id="ob-phone" value="${esc(OB.phone)}"></div></div>
+    <div class="fg"><label>Correspondence address</label><input id="ob-address" value="${esc(OB.address)}"></div>
+    <div class="inline2"><div class="fg"><label>PRS Database reg. no.</label><input id="ob-prs" value="${esc(OB.prsReg)}" placeholder="verify before instruction"></div>
+    <div class="fg"><label>Preferred contact</label><select id="ob-pref"><option ${OB.contactPref==='Email'?'selected':''}>Email</option><option ${OB.contactPref==='Phone'?'selected':''}>Phone</option><option ${OB.contactPref==='WhatsApp'?'selected':''}>WhatsApp</option></select></div></div>
+    <div class="inline2"><div class="fg"><label>Rent payout date</label><select id="ob-payout"><option ${OB.payout==='1st'?'selected':''}>1st</option><option ${OB.payout==='15th'?'selected':''}>15th</option><option ${OB.payout==='Last working day'?'selected':''}>Last working day</option></select></div>
+    <div class="fg"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" style="width:auto" ${OB.nrl?'checked':''} onchange="OB.nrl=this.checked"> Lives abroad (Non-Resident Landlord)</label><div class="hint">If abroad, the NRL scheme applies — tax deducted unless registered.</div></div></div>`;
+  if(s===2) body=`<div class="note" style="margin-bottom:14px">Anti-money-laundering / financial sanctions check — required before you can act. Upload the landlord's passport or driving licence (AI-scanned & stored in production).</div>
+    <div class="fg"><label>ID document</label><div style="display:flex;gap:8px"><input id="ob-iddoc" value="${esc(OB.idDoc)}" placeholder="filename or reference" style="flex:1"><button class="btn" onclick="OB.idDoc=val('ob-iddoc')||'passport.pdf';OB.aml=true;renderOnboard()">Attach</button></div></div>
+    <div class="chk ${OB.aml?'on':''}" onclick="OB.aml=!OB.aml;renderOnboard()"><div class="box">${OB.aml?'✓':''}</div><div><div style="font-weight:600;font-size:13px">ID verified &amp; AML check passed</div><div class="faint" style="font-size:11px">${OB.idDoc?esc(OB.idDoc):'Passport / driving licence on file'}</div></div></div>`;
+  if(s===3) body=`<div class="note" style="margin-bottom:14px">Confirms the landlord is entitled to let — title register, mortgage statement or council tax bill.</div>
+    <div class="fg"><label>Proof of ownership</label><div style="display:flex;gap:8px"><input id="ob-owndoc" value="${esc(OB.ownDoc)}" placeholder="filename or reference" style="flex:1"><button class="btn" onclick="OB.ownDoc=val('ob-owndoc')||'title_register.pdf';OB.ownership=true;renderOnboard()">Attach</button></div></div>
+    <div class="chk ${OB.ownership?'on':''}" onclick="OB.ownership=!OB.ownership;renderOnboard()"><div class="box">${OB.ownership?'✓':''}</div><div><div style="font-weight:600;font-size:13px">Ownership confirmed</div><div class="faint" style="font-size:11px">${OB.ownDoc?esc(OB.ownDoc):'Title / mortgage / council tax'}</div></div></div>`;
+  if(s===4) body=`<div class="faint" style="font-size:12px;margin-bottom:12px">Add their first property (optional now — add more later from their record).</div>
     <div class="fg"><label>Address</label><input id="ob-addr" value="${esc(OB.addr)}" placeholder="e.g. 12 High Street"></div>
     <div class="grid3" style="gap:10px"><div class="fg"><label>Town/City</label><input id="ob-city" value="${esc(OB.city)}"></div>
     <div class="fg"><label>Rent £/mo</label><input id="ob-rent" type="number" value="${esc(OB.rent)}"></div>
     <div class="fg"><label>Beds</label><input id="ob-beds" type="number" value="${esc(OB.beds)}"></div></div>
-    <div class="hint" style="font-size:11px;color:var(--faint)">Compliance docs (gas/EICR/EPC) are uploaded in the property's compliance tab — same engine as the landlord app.</div>`;
-  if(s===5){ const rent=parseInt(OB.rent)||0;
-    body=`<div class="faint" style="font-size:12px;margin-bottom:12px">Pick the service level — this becomes the instruction recorded in the management agreement.</div>
+    <div class="hint" style="color:var(--faint)">Compliance docs (gas/EICR/EPC) upload in the property's compliance tab — same engine as the landlord app.</div>`;
+  if(s===5){ const rent=parseInt(OB.rent)||0; const isF=OB.service==='full';
+    body=`<div class="faint" style="font-size:12px;margin-bottom:12px">Pick the service level and set your fee — this becomes the instruction recorded in the management agreement.</div>
     <div class="fg"><label>Service level</label><select id="ob-service" onchange="OB.service=this.value;renderOnboard()">
-      <option value="full" ${OB.service==='full'?'selected':''}>Full management — ${FEE_MGMT}% of rent</option>
-      <option value="letonly" ${OB.service==='letonly'?'selected':''}>Let-only — ${LETONLY_WEEKS} weeks' rent (one-off)</option></select></div>
-    <div class="note">${OB.service==='full'
-      ? `<b>Full management — ${FEE_MGMT}%/mo.</b> ${rent?'Your fee: <b>'+gbp(rent*FEE_MGMT/100)+'/mo</b>. ':''}Compliance, repairs, inspections, renewals. Tenant pays landlord directly (no client money).`
-      : `<b>Let-only — ${LETONLY_WEEKS} weeks' rent.</b> ${rent?'Your fee: <b>'+gbp(rent/4.345*LETONLY_WEEKS)+'</b> one-off. ':''}Find tenant, paperwork, hand over. No ongoing fee.`}</div>`;
+      <option value="full" ${isF?'selected':''}>Full management</option><option value="letonly" ${!isF?'selected':''}>Let-only (one-off)</option></select></div>
+    <div class="fg"><label>Your fee <span class="faint">(editable)</span></label>
+      <div class="feebox">${isF?`<input id="ob-fee" type="number" step="0.5" value="${OB.feePct}" oninput="_obFee()"> <span>% of monthly rent</span>`:`<input id="ob-weeks" type="number" step="0.5" value="${OB.letWeeks}" oninput="_obFee()"> <span>weeks' rent (one-off)</span>`}</div></div>
+    <div class="note" id="ob-feenote">${isF
+      ? `<b>Full management.</b> ${rent?'Your fee: <b>'+gbp(rent*OB.feePct/100)+'/mo</b>. ':''}Compliance, repairs, inspections, renewals. Tenant pays landlord directly (no client money).`
+      : `<b>Let-only.</b> ${rent?'Your fee: <b>'+gbp(rent/4.345*OB.letWeeks)+'</b> one-off. ':''}Find tenant, paperwork, hand over. No ongoing fee.`}</div>`;
   }
-  if(s===6) body=`<div class="note" style="margin-bottom:14px">The Management Agreement + Terms of Business are auto-filled with the details above and sent for e-signature (same engine your tenants use). Marking signed here simulates the returned signature.</div>
-    <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:14px 16px;font-size:12.5px;line-height:1.7;margin-bottom:14px">
-      <b>${esc(OB.name||'Landlord')}</b> · ${SVC[OB.service].label}<br>${OB.addr?esc(OB.addr)+' · ':''}Redress: ${S.agency.redress||'pending'}<br>Tenant pays landlord directly · no client money held</div>
-    <div class="chk ${OB.agreement?'on':''}" onclick="OB.agreement=!OB.agreement;renderOnboard()"><div class="box">${OB.agreement?'✓':''}</div><div><div style="font-weight:600;font-size:13px">Management agreement signed</div><div class="faint" style="font-size:11px">e-signed &amp; returned</div></div></div>`;
+  if(s===6){ const isF=OB.service==='full';
+    body=`<div class="note" style="margin-bottom:14px">The Management Agreement + Terms of Business are auto-filled with the details below and sent for e-signature (same engine your tenants use). You can market only once it's signed.</div>
+    <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:14px 16px;font-size:12.5px;line-height:1.8;margin-bottom:14px">
+      <b>${esc(OB.name||'Landlord')}</b> · ${SVC[OB.service].label}<br>
+      Fee: <b>${isF?OB.feePct+'% of monthly rent':OB.letWeeks+" weeks' rent (one-off)"}</b><br>
+      ${OB.addr?esc(OB.addr)+'<br>':''}AML: ${OB.aml?'✓':'✗'} · Ownership: ${OB.ownership?'✓':'✗'} · PRS: ${OB.prsReg?esc(OB.prsReg):'pending'}<br>
+      Redress: ${S.agency.redress||'pending'} · Tenant pays landlord directly · no client money held</div>
+    <div class="chk ${OB.agreement?'on':''}" onclick="OB.agreement=!OB.agreement;renderOnboard()"><div class="box">${OB.agreement?'✓':''}</div><div><div style="font-weight:600;font-size:13px">Management agreement signed</div><div class="faint" style="font-size:11px">e-signed &amp; returned (tick to simulate)</div></div></div>`;
+  }
   const ft = s<6
-    ? `${s>1?'<button class="btn" onclick="obBack()">Back</button>':'<button class="btn" onclick="closeModal()">Cancel</button>'}<button class="btn navy" onclick="obNext()">Next →</button>`
+    ? `<button class="btn" onclick="obBack()">${s===1?'Cancel':'Back'}</button><button class="btn navy" onclick="obNext()">Next →</button>`
     : `<button class="btn" onclick="obBack()">Back</button><button class="btn navy" onclick="obFinish()">Finish onboarding</button>`;
   modal('Onboard a landlord', stepper+body, ft);
 }
+function _obFee(){ const isF=OB.service==='full'; if(isF)OB.feePct=parseFloat(val('ob-fee'))||0; else OB.letWeeks=parseFloat(val('ob-weeks'))||0;
+  const rent=parseInt(OB.rent)||0; const el=document.getElementById('ob-feenote');
+  if(el) el.innerHTML=isF?`<b>Full management.</b> ${rent?'Your fee: <b>'+gbp(rent*OB.feePct/100)+'/mo</b>. ':''}Compliance, repairs, inspections, renewals. Tenant pays landlord directly (no client money).`
+    :`<b>Let-only.</b> ${rent?'Your fee: <b>'+gbp(rent/4.345*OB.letWeeks)+'</b> one-off. ':''}Find tenant, paperwork, hand over. No ongoing fee.`; }
 
-// ── REFERENCE (modal) ──
+// ── EDIT INSTRUCTION & FEE (per landlord) ──
+function editInstruction(id){ const l=L(id);
+  const body=`<div class="fg"><label>Service level</label><select id="ei-service" onchange="document.getElementById('ei-fee-wrap').innerHTML=this.value==='full'?'<input id=\\'ei-fee\\' type=number step=0.5 value=${l.feePct!=null?l.feePct:DEF_FEE}> % of monthly rent':'<input id=\\'ei-weeks\\' type=number step=0.5 value=${l.letWeeks!=null?l.letWeeks:DEF_WEEKS}> weeks rent (one-off)'">
+    <option value="full" ${l.service==='full'?'selected':''}>Full management</option><option value="letonly" ${l.service==='letonly'?'selected':''}>Let-only</option></select></div>
+    <div class="fg"><label>Your fee (editable)</label><div class="feebox" id="ei-fee-wrap">${l.service==='full'?`<input id="ei-fee" type="number" step="0.5" value="${l.feePct!=null?l.feePct:DEF_FEE}"> % of monthly rent`:`<input id="ei-weeks" type="number" step="0.5" value="${l.letWeeks!=null?l.letWeeks:DEF_WEEKS}"> weeks' rent (one-off)`}</div></div>`;
+  modal('Edit instruction & fee', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveInstruction('${id}')">Save</button>`);
+}
+function saveInstruction(id){ const l=L(id); l.service=val('ei-service'); if(l.service==='full')l.feePct=parseFloat(val('ei-fee'))||DEF_FEE; else l.letWeeks=parseFloat(val('ei-weeks'))||DEF_WEEKS;
+  l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:'Instruction updated · '+SVC[l.service].label+' · fee '+(l.service==='full'?l.feePct+'%':l.letWeeks+' wks')});
+  save(); closeModal(); render(); toast('✓ Instruction updated'); }
+
+// ── COMMS (keep in touch) ──
+function openComm(id){ const body=`<div class="fg"><label>Type</label><select id="cm-type"><option>Call</option><option>Email</option><option>WhatsApp</option><option>Meeting</option><option>Note</option></select></div>
+  <div class="fg"><label>Note</label><textarea id="cm-note" rows="3" placeholder="What was discussed / actioned"></textarea></div>`;
+  modal('Log contact', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveComm('${id}')">Save</button>`); }
+function saveComm(id){ const l=L(id); const note=val('cm-note'); if(!note){toast('Add a note',1);return;}
+  l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:val('cm-type'),note}); save(); closeModal(); render(); toast('✓ Contact logged'); }
+
+// ── DOC UPLOAD / PROPERTY ADD ──
+function uploadDoc(id,col){ const l=L(id); l.docs=l.docs||{}; const def=col==='id'?'id_document.pdf':col==='ownership'?'proof_of_ownership.pdf':'mgmt_agreement.pdf';
+  const body=`<div class="fg"><label>${col==='id'?'Photo ID (AML)':col==='ownership'?'Proof of ownership':'Signed agreement'}</label><input id="ud-name" value="" placeholder="${def}"><div class="hint">In production this opens a file picker + AI scan. Enter a filename to simulate.</div></div>`;
+  modal('Upload document', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="(function(){var n=val('ud-name')||'${def}';var L2=S.landlords.find(x=>x.id==='${id}');L2.docs=L2.docs||{};L2.docs['${col}']=n;if('${col}'==='id')L2.aml=true;if('${col}'==='ownership')L2.ownership=true;if('${col}'==='agreement'){L2.agreement=true;L2.status='active';}save();closeModal();render();toast('✓ Document attached');})()">Attach</button>`); }
+function addProperty(id){ const body=`<div class="fg"><label>Address</label><input id="ap-addr" placeholder="e.g. 12 High Street"></div>
+  <div class="grid3" style="gap:10px"><div class="fg"><label>Town/City</label><input id="ap-city"></div><div class="fg"><label>Rent £/mo</label><input id="ap-rent" type="number"></div><div class="fg"><label>Beds</label><input id="ap-beds" type="number" value="2"></div></div>`;
+  modal('Add property', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="(function(){var a=val('ap-addr');if(!a){toast('Enter an address',1);return;}var pid=uid('p');S.properties.push({id:pid,landlordId:'${id}',address:a,city:val('ap-city'),rent:parseInt(val('ap-rent'))||0,beds:parseInt(val('ap-beds'))||1});S.tenancies.push({id:uid('t'),who:a,propertyId:pid,stage:'instructed'});save();closeModal();render();toast('✓ Property added');})()">Add</button>`); }
+
+// ── REFERENCE MODAL ──
 let RF=null;
 function openReference(id){
   const ex=id?S.references.find(r=>r.id===id):null;
-  RF= ex?JSON.parse(JSON.stringify(ex)):{id:uid('r'),applicant:'',propertyId:(S.properties[0]||{}).id||'',income:'',docs:{id:false,rtr:false,income:false,employer:false,prevll:false},credit:'',status:'none',note:''};
+  RF= ex?JSON.parse(JSON.stringify(ex)):{id:uid('r'),applicant:'',propertyId:(S.properties[0]||{}).id||'',income:'',docs:{id:false,rtr:false,income:false,employer:false,prevll:false},credit:'',creditState:'not_requested',status:'none',note:''};
   renderReference();
 }
 const DOCS=[['id','Photo ID verified'],['rtr','Right-to-Rent share code'],['income','Proof of income (payslips/bank)'],['employer','Employer reference'],['prevll','Previous landlord reference']];
 function renderReference(){
   const rent=P(RF.propertyId).rent||0; const need=rent*30; const afford=RF.income&&parseInt(RF.income)>=need;
   const propOpts=S.properties.map(p=>`<option value="${p.id}" ${p.id===RF.propertyId?'selected':''}>${esc(p.address)} — ${gbp(p.rent)}/mo</option>`).join('');
+  const cr=CREDIT[RF.creditState||'not_requested'];
   const body=`
     <div class="fg"><label>Applicant name</label><input id="rf-app" value="${esc(RF.applicant)}" placeholder="Tenant applicant"></div>
-    <div class="fg"><label>Property</label><select id="rf-prop" onchange="RF.propertyId=this.value;RF.applicant=val('rf-app');RF.income=val('rf-income');renderReference()">${propOpts}</select></div>
-    <div class="fg"><label>Applicant annual income (£)</label><input id="rf-income" type="number" value="${esc(RF.income)}" oninput="RF.income=this.value;_affLive()" placeholder="e.g. 42000">
-      <div class="hint" id="rf-aff">${rent?`Affordability test: income must be ≥ ${gbp(need)}/yr (30× monthly rent). `+(RF.income?(afford?'<b style="color:var(--green)">✓ Passes</b>':'<b style="color:var(--amber)">Below threshold</b>'):''):''}</div></div>
-    <label style="display:block;font-size:12px;font-weight:600;margin-bottom:7px">Documents &amp; references collected</label>
+    <div class="fg"><label>Property</label><select id="rf-prop" onchange="RF.applicant=val('rf-app');RF.income=val('rf-income');RF.propertyId=this.value;renderReference()">${propOpts}</select></div>
+    <div class="fg"><label>Applicant annual income (£)</label><input id="rf-income" type="number" value="${esc(RF.income)}" oninput="_affLive()" placeholder="e.g. 42000">
+      <div class="hint" id="rf-aff">${rent?`Affordability: income must be ≥ ${gbp(need)}/yr (30× rent). `+(RF.income?(afford?'<b style="color:var(--green)">✓ Passes</b>':'<b style="color:var(--amber)">Below threshold</b>'):''):''}</div></div>
+    <label style="display:block;font-size:12px;font-weight:600;margin-bottom:7px">In-house checks (no licence needed)</label>
     ${DOCS.map(([k,t])=>`<div class="chk ${RF.docs[k]?'on':''}" onclick="RF.docs['${k}']=!RF.docs['${k}'];renderReference()"><div class="box">${RF.docs[k]?'✓':''}</div><div style="font-size:13px">${t}</div></div>`).join('')}
-    <div class="fg" style="margin-top:14px"><label>Partner credit report</label><input id="rf-credit" value="${esc(RF.credit)}" oninput="RF.credit=this.value" placeholder="Reference no. / 'attached' once run with partner">
-      <div class="hint">Run the credit/CCJ check in your referencing partner's portal, then record it here.</div></div>
-    <div class="fg"><label>Outcome</label><select id="rf-status" onchange="RF.status=this.value"><option value="none" ${RF.status==='none'?'selected':''}>Not decided</option><option value="green" ${RF.status==='green'?'selected':''}>● Pass — proceed</option><option value="amber" ${RF.status==='amber'?'selected':''}>● Caution — guarantor / conditions</option><option value="red" ${RF.status==='red'?'selected':''}>● Fail — decline</option></select></div>
+    <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-top:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+        <div><div style="font-size:13px;font-weight:700;color:var(--navy)">Credit check ${S.agency.refPartner?'· '+esc(S.agency.refPartner):''}</div>
+          <div class="faint" style="font-size:11.5px">Regulated CCJ/score + Open Banking via partner</div></div>
+        <span class="pill" style="background:${cr.bg};color:${cr.color}">${cr.label}</span></div>
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+        ${RF.creditState==='not_requested'?`<button class="btn sm" onclick="_credit('requested')">Request credit check (API)</button>`:''}
+        ${RF.creditState==='requested'?`<button class="btn sm" onclick="_credit('in_progress')">Mark in progress</button>`:''}
+        ${(RF.creditState==='in_progress'||RF.creditState==='requested')?`<button class="btn sm navy" onclick="_credit('complete')">Attach result</button>`:''}
+        ${RF.creditState==='complete'?`<span class="faint" style="font-size:12px;align-self:center">✓ ${esc(RF.credit||'Report attached')}</span>`:''}
+      </div>
+      <div class="hint" style="margin-top:8px">"Request credit check" is the API hook your developer wires to ${S.agency.refPartner||'your partner'}. Until then, run it in their portal and click "Attach result".</div>
+    </div>
+    <div class="fg" style="margin-top:14px"><label>Overall outcome</label><select id="rf-status"><option value="none" ${RF.status==='none'?'selected':''}>Not decided</option><option value="green" ${RF.status==='green'?'selected':''}>● Pass — proceed</option><option value="amber" ${RF.status==='amber'?'selected':''}>● Caution — guarantor / conditions</option><option value="red" ${RF.status==='red'?'selected':''}>● Fail — decline</option></select></div>
     <div class="fg"><label>Notes</label><textarea id="rf-note" rows="2">${esc(RF.note)}</textarea></div>`;
   modal('Tenant reference', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveReference()">Save reference</button>`);
 }
-function _affLive(){ const rent=P(RF.propertyId).rent||0; const need=rent*30; const inc=parseInt(val('rf-income'))||0; const el=document.getElementById('rf-aff'); if(el&&rent) el.innerHTML=`Affordability test: income must be ≥ ${gbp(need)}/yr (30× monthly rent). `+(inc?(inc>=need?'<b style="color:var(--green)">✓ Passes</b>':'<b style="color:var(--amber)">Below threshold</b>'):''); }
+function _affLive(){ const rent=P(RF.propertyId).rent||0; const need=rent*30; const inc=parseInt(val('rf-income'))||0; const el=document.getElementById('rf-aff'); if(el&&rent) el.innerHTML=`Affordability: income must be ≥ ${gbp(need)}/yr (30× rent). `+(inc?(inc>=need?'<b style="color:var(--green)">✓ Passes</b>':'<b style="color:var(--amber)">Below threshold</b>'):''); }
+function _credit(stateTo){ RF.applicant=val('rf-app'); RF.income=parseInt(val('rf-income'))||0; RF.note=val('rf-note'); RF.status=val('rf-status');
+  if(stateTo==='complete'){ RF.credit='credit_report_'+RF.id+'.pdf'; }
+  RF.creditState=stateTo; renderReference(); toast(stateTo==='requested'?'Credit check requested via partner':stateTo==='complete'?'✓ Credit report attached':'Marked in progress'); }
 function saveReference(){
-  RF.applicant=val('rf-app'); RF.income=parseInt(val('rf-income'))||0; RF.note=val('rf-note'); RF.status=val('rf-status'); RF.credit=val('rf-credit');
+  RF.applicant=val('rf-app'); RF.income=parseInt(val('rf-income'))||0; RF.note=val('rf-note'); RF.status=val('rf-status');
   if(!RF.applicant){toast('Enter applicant name',1);return;}
   const i=S.references.findIndex(r=>r.id===RF.id);
   if(i>=0) S.references[i]=RF; else S.references.push(RF);
   save(); closeModal(); go('referencing'); toast('✓ Reference saved');
 }
 
-function signAgreement(id){ const l=L(id); l.agreement=true; l.status='active'; save(); render(); toast('✓ Agreement marked signed — '+l.name+' is live'); }
+function signAgreement(id){ const l=L(id); l.agreement=true; l.status='active'; l.docs=l.docs||{}; l.docs.agreement=l.docs.agreement||'mgmt_agreement.pdf';
+  l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:'Management agreement signed — now live.'}); save(); render(); toast('✓ Agreement signed — '+l.name+' is live'); }
 
 // ── helpers ──
 function initials(n){ return (n||'?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase(); }
 function esc(v){ return v==null?'':String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function val(id){ const e=document.getElementById(id); return e?e.value.trim():''; }
 function modal(title,body,ft){ document.getElementById('modal-root').innerHTML=`<div class="ov" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="modal-hd"><h3>${title}</h3><button class="x" onclick="closeModal()">×</button></div><div class="modal-bd">${body}</div><div class="modal-ft">${ft}</div></div></div>`; }
-function closeModal(){ document.getElementById('modal-root').innerHTML=''; OB=null; }
+function closeModal(){ document.getElementById('modal-root').innerHTML=''; OB=null; RF=null; }
 let _tt; function toast(m,bad){ const t=document.getElementById('toast'); t.textContent=m; t.style.background=bad?'var(--red)':'var(--navy)'; t.classList.add('show'); clearTimeout(_tt); _tt=setTimeout(()=>t.classList.remove('show'),2600); }
 
 render();
