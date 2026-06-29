@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NexLet — Agency Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#0B1E3D; --navy2:#16305a; --orange:#E8923A; --green:#1B7A4B; --green-bg:#EAF6EF;
+  --amber:#B86E20; --amber-bg:#FEF2E7; --red:#C0392B; --red-bg:#FBEAE8; --blue:#2A6FDB; --blue-bg:#E9F2FF;
+  --txt:#1A2332; --muted:#64748B; --faint:#94A3B8; --border:#E2E5EA; --off:#F4F6F9; --bg:#EAEEF5;
+  --font:'DM Sans',system-ui,sans-serif; --disp:'DM Serif Display',Georgia,serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);background:var(--bg);color:var(--txt)}
+.app{display:flex;min-height:100vh}
+/* sidebar */
+.sb{width:232px;flex-shrink:0;background:var(--navy);display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+.sb-logo{padding:20px 18px 14px;border-bottom:1px solid rgba(255,255,255,.08)}
+.sb-logo .nm{font-family:var(--disp);font-size:19px;color:#fff}
+.sb-logo .nm b{color:var(--orange);font-weight:400}
+.sb-badge{display:inline-flex;align-items:center;gap:5px;margin-top:6px;background:rgba(232,146,58,.15);border:1px solid rgba(232,146,58,.35);color:var(--orange);font-size:10px;font-weight:700;letter-spacing:.5px;padding:2px 8px;border-radius:5px}
+.sb-nav{padding:10px 0;flex:1}
+.nav{display:flex;align-items:center;gap:11px;padding:10px 16px;font-size:13px;color:rgba(255,255,255,.6);cursor:pointer;border-left:3px solid transparent;transition:all .12s;user-select:none}
+.nav:hover{color:#fff;background:rgba(255,255,255,.04)}
+.nav.on{color:#fff;background:rgba(255,255,255,.06);border-left-color:var(--orange)}
+.nav .ic{width:17px;text-align:center;flex-shrink:0}
+.sb-foot{padding:12px 16px;border-top:1px solid rgba(255,255,255,.08);font-size:12px;color:rgba(255,255,255,.55)}
+.sb-user{display:flex;align-items:center;gap:9px}
+.sb-av{width:30px;height:30px;border-radius:50%;background:var(--orange);color:var(--navy);font-weight:700;display:flex;align-items:center;justify-content:center;font-size:12px}
+/* main */
+.main{flex:1;min-width:0}
+.topbar{background:#fff;border-bottom:1px solid var(--border);padding:0 30px;height:60px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:20}
+.tb-title{font-size:11px;font-weight:700;letter-spacing:.7px;color:var(--faint);text-transform:uppercase}
+.content{padding:26px 30px;max-width:1100px}
+h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px;font-weight:400}
+.sub{font-size:13px;color:var(--muted);margin-bottom:20px}
+/* buttons */
+.btn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border);background:#fff;color:#475569;border-radius:9px;padding:9px 15px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:all .12s}
+.btn:hover{border-color:#c5d0dd}
+.btn.navy{background:var(--navy);color:#fff;border-color:transparent}
+.btn.navy:hover{background:var(--navy2)}
+.btn.sm{padding:6px 11px;font-size:12px}
+.btn.ghost{background:none;border:none;color:var(--muted)}
+/* cards */
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.kpi{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px 18px}
+.kpi .l{font-size:10px;font-weight:700;letter-spacing:.5px;color:var(--faint);text-transform:uppercase}
+.kpi .v{font-size:25px;font-weight:700;color:var(--navy);margin-top:5px;font-family:var(--disp)}
+.kpi .v small{font-size:13px;font-weight:400}
+.kpi .s{font-size:11px;color:var(--faint);margin-top:2px}
+.panel{background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.panel-hd{padding:15px 20px;border-bottom:1px solid #EEF1F5;display:flex;align-items:center;justify-content:space-between}
+.panel-hd h2{font-size:14px;font-weight:700;color:var(--navy)}
+.row{display:flex;align-items:center;gap:14px;padding:15px 20px;border-bottom:1px solid #F1F3F6}
+.row:last-child{border-bottom:none}
+.av{width:40px;height:40px;border-radius:50%;background:var(--bg);color:var(--navy);font-weight:700;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.pill{font-size:10.5px;font-weight:700;padding:3px 10px;border-radius:100px;white-space:nowrap;display:inline-block}
+.muted{color:var(--muted)} .faint{color:var(--faint)}
+/* forms */
+.fg{margin-bottom:14px}
+.fg label{display:block;font-size:12px;font-weight:600;color:var(--txt);margin-bottom:5px}
+.fg input,.fg select,.fg textarea{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px;background:#fff;color:var(--txt)}
+.fg input:focus,.fg select:focus,.fg textarea:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(42,111,219,.12)}
+.fg .hint{font-size:11px;color:var(--faint);margin-top:4px}
+/* stepper */
+.steps{display:flex;gap:6px;margin-bottom:22px;flex-wrap:wrap}
+.st{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--faint);padding:6px 12px;border-radius:100px;background:#fff;border:1px solid var(--border)}
+.st.on{color:#fff;background:var(--navy);border-color:transparent}
+.st.done{color:var(--green);background:var(--green-bg);border-color:transparent}
+.st .n{width:18px;height:18px;border-radius:50%;background:currentColor;color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center}
+.st.on .n{background:#fff;color:var(--navy)} .st.done .n{background:var(--green);color:#fff}
+/* pipeline */
+.pipe{display:flex;gap:12px;overflow-x:auto;padding-bottom:10px}
+.col{flex:0 0 230px;background:#EEF1F6;border-radius:12px;padding:11px}
+.col-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding:0 4px}
+.col-hd .t{font-size:12px;font-weight:700;color:var(--navy)}
+.col-hd .c{font-size:11px;font-weight:700;color:#fff;min-width:18px;height:18px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 5px}
+.tcard{background:#fff;border:1px solid var(--border);border-radius:9px;padding:11px 12px;margin-bottom:9px}
+.tcard .w{font-size:13px;font-weight:700;color:var(--navy)}
+.tcard .p{font-size:11px;color:var(--faint);margin:2px 0 8px}
+/* modal */
+.ov{position:fixed;inset:0;background:rgba(11,30,61,.45);display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;z-index:100;overflow-y:auto}
+.modal{background:#fff;border-radius:14px;width:100%;max-width:520px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.modal-hd{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.modal-hd h3{font-size:16px;color:var(--navy)}
+.modal-bd{padding:20px 22px}
+.modal-ft{padding:14px 22px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:9px}
+.x{background:none;border:none;font-size:20px;color:var(--faint);cursor:pointer;line-height:1}
+.chk{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;margin-bottom:8px;cursor:pointer}
+.chk.on{border-color:var(--green);background:var(--green-bg)}
+.chk .box{width:20px;height:20px;border-radius:5px;border:1.5px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff}
+.chk.on .box{background:var(--green);border-color:var(--green)}
+.empty{padding:34px;text-align:center;color:var(--muted);font-size:13px}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:11px 20px;border-radius:10px;font-size:13px;z-index:200;box-shadow:0 8px 30px rgba(0,0,0,.3);opacity:0;transition:opacity .2s,transform .2s}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(-4px)}
+.note{background:var(--blue-bg);border:1px solid rgba(42,111,219,.2);border-radius:10px;padding:13px 15px;font-size:12.5px;color:var(--txt);line-height:1.55}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sb">
+    <div class="sb-logo">
+      <div class="nm">Nex<b>Let</b></div>
+      <div class="sb-badge">AGENCY MODE</div>
+    </div>
+    <nav class="sb-nav" id="nav"></nav>
+    <div class="sb-foot">
+      <div id="scheme-foot" style="margin:0 0 12px;padding:10px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px"></div>
+      <div class="sb-user"><div class="sb-av">SD</div><div>Saurabh — Agent</div></div>
+    </div>
+  </aside>
+  <main class="main">
+    <div class="topbar"><span class="tb-title" id="tb-title">Dashboard</span><div id="tb-actions"></div></div>
+    <div class="content" id="view"></div>
+  </main>
+</div>
+<div id="modal-root"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ─────────────────────────────────────────────────────────────
+// NexLet Agency Portal — functional front-end (local state).
+// Same architecture as landlord.html; a developer wires this to the
+// shared Supabase backend (landlords table + RLS) for production.
+// ─────────────────────────────────────────────────────────────
+const LS='nexlet_agency_v1';
+const FEE_MGMT=7.5;        // % of monthly rent — full management
+const LETONLY_WEEKS=3;     // one-off let-only fee = weeks of rent
+
+const SEED={
+  agency:{ name:'Your Lettings', redress:'', redressNo:'', cmp:'Not holding client money', cmpNo:'' },
+  landlords:[
+    {id:'l1',name:'Saurabh Dhawan',email:'sd@example.com',phone:'07700 900111',address:'London',aml:true,ownership:true,service:'full',agreement:true,status:'active'},
+    {id:'l2',name:'M. Reynolds',email:'mr@example.com',phone:'07700 900222',address:'Bristol',aml:true,ownership:false,service:'letonly',agreement:false,status:'pending'}
+  ],
+  properties:[
+    {id:'p1',landlordId:'l1',address:'115 Canterbury Road',city:'London',rent:2500,beds:2},
+    {id:'p2',landlordId:'l2',address:'8 Oakfield Court',city:'Bristol',rent:1900,beds:1}
+  ],
+  references:[
+    {id:'r1',applicant:'J. Okafor',propertyId:'p2',income:48000,docs:{id:true,rtr:true,income:false,employer:false,prevll:false},credit:'',status:'amber',note:'Awaiting latest payslip; employer ref outstanding.'}
+  ],
+  tenancies:[
+    {id:'t1',who:'8 Oakfield Court',propertyId:'p2',stage:'referencing'},
+    {id:'t2',who:'K. Dhawan',propertyId:'p1',stage:'managed'}
+  ]
+};
+
+let S=load();
+function load(){ try{const j=JSON.parse(localStorage.getItem(LS));if(j&&j.landlords)return j;}catch(e){} return JSON.parse(JSON.stringify(SEED)); }
+function save(){ try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){} }
+function uid(p){ return p+Math.random().toString(36).slice(2,8); }
+function P(id){ return S.properties.find(x=>x.id===id)||{}; }
+function L(id){ return S.landlords.find(x=>x.id===id)||{}; }
+function gbp(n){ return '£'+Math.round(n||0).toLocaleString(); }
+
+const STAGES=[
+  {k:'instructed',t:'Instructed',c:'#64748B'},
+  {k:'marketing',t:'Marketing',c:'#2A6FDB'},
+  {k:'referencing',t:'Referencing',c:'#D98324'},
+  {k:'contract',t:'Contract & e-sign',c:'#7C3AED'},
+  {k:'movein',t:'Move-in',c:'#0E7490'},
+  {k:'managed',t:'Managed',c:'#1B7A4B'}
+];
+const SVC={full:{label:'Full management',bg:'var(--green-bg)',color:'var(--green)'},letonly:{label:'Let-only',bg:'var(--off)',color:'#475569'}};
+const STATUS={active:{label:'Active',bg:'var(--green-bg)',color:'var(--green)'},pending:{label:'Agreement pending',bg:'var(--amber-bg)',color:'var(--amber)'}};
+const RAG={green:{label:'● Pass',bg:'var(--green-bg)',color:'var(--green)'},amber:{label:'● Caution',bg:'var(--amber-bg)',color:'var(--amber)'},red:{label:'● Fail',bg:'var(--red-bg)',color:'var(--red)'},none:{label:'Not started',bg:'var(--off)',color:'#475569'}};
+
+const NAV=[
+  {k:'dashboard',ic:'▦',t:'Agency Dashboard'},
+  {k:'landlords',ic:'⚇',t:'Landlords'},
+  {k:'pipeline',ic:'◫',t:'Tenancy Progression'},
+  {k:'referencing',ic:'◷',t:'Referencing'},
+  {k:'properties',ic:'⌂',t:'Properties'},
+  {k:'settings',ic:'⚙',t:'Agency Settings'}
+];
+let view='dashboard';
+function go(v){ view=v; render(); }
+
+function render(){
+  document.getElementById('nav').innerHTML=NAV.map(n=>`<div class="nav ${n.k===view?'on':''}" onclick="go('${n.k}')"><span class="ic">${n.ic}</span>${n.t}</div>`).join('');
+  const sf=document.getElementById('scheme-foot');
+  sf.innerHTML = S.agency.redress
+    ? `<div style="font-size:11px;color:rgba(255,255,255,.6)">Redress scheme</div><div style="font-size:11.5px;color:var(--green);font-weight:700;margin-top:2px">✓ ${S.agency.redress}</div>`
+    : `<div style="font-size:11px;color:rgba(255,255,255,.6)">Redress scheme</div><div style="font-size:11.5px;color:#F5B301;font-weight:700;margin-top:2px">⏳ Membership pending</div>`;
+  document.getElementById('tb-title').textContent=(NAV.find(n=>n.k===view)||{}).t||'';
+  document.getElementById('tb-actions').innerHTML=topActions();
+  document.getElementById('view').innerHTML=({
+    dashboard:vDashboard, landlords:vLandlords, pipeline:vPipeline, referencing:vReferencing, properties:vProperties, settings:vSettings
+  }[view]||vDashboard)();
+}
+function topActions(){
+  if(view==='landlords') return `<button class="btn navy" onclick="openOnboard()">＋ Onboard a landlord</button>`;
+  if(view==='referencing') return `<button class="btn navy" onclick="openReference()">＋ New reference</button>`;
+  if(view==='dashboard') return `<button class="btn navy" onclick="openOnboard()">＋ Onboard a landlord</button>`;
+  return '';
+}
+
+// ── DASHBOARD ──
+function vDashboard(){
+  const mgmt=S.landlords.filter(l=>l.service==='full').length;
+  const lo=S.landlords.filter(l=>l.service==='letonly').length;
+  const managedRent=S.properties.filter(p=>L(p.landlordId).service==='full').reduce((s,p)=>s+(p.rent||0),0);
+  const fees=Math.round(managedRent*FEE_MGMT/100);
+  return `
+    <h1 class="pg">Good evening, Saurabh</h1>
+    <div class="sub">Your managed portfolio at a glance</div>
+    <div class="grid4">
+      <div class="kpi"><div class="l">Landlords</div><div class="v">${S.landlords.length}</div><div class="s">${mgmt} full mgmt · ${lo} let-only</div></div>
+      <div class="kpi"><div class="l">Properties</div><div class="v">${S.properties.length}</div><div class="s">across your landlords</div></div>
+      <div class="kpi"><div class="l">Managed rent</div><div class="v">${gbp(managedRent)}<small>/mo</small></div><div class="s">tenant → landlord direct</div></div>
+      <div class="kpi"><div class="l">Your fees /mo</div><div class="v" style="color:var(--green)">${gbp(fees)}</div><div class="s">${FEE_MGMT}% mgmt · ex. let-only</div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-hd"><h2>Your landlords</h2><span class="faint" style="font-size:12px">Click to manage</span></div>
+      ${S.landlords.map(landlordRow).join('')}
+    </div>`;
+}
+function landlordRow(l){
+  const props=S.properties.filter(p=>p.landlordId===l.id);
+  const rent=props.reduce((s,p)=>s+(p.rent||0),0);
+  const sv=SVC[l.service]||SVC.full, st=STATUS[l.status]||STATUS.pending;
+  const feeTxt = l.service==='full' ? gbp(rent*FEE_MGMT/100)+'/mo' : (rent?gbp(rent/4.345*LETONLY_WEEKS):'—');
+  const feeBasis = l.service==='full' ? FEE_MGMT+'%' : LETONLY_WEEKS+' wks · one-off';
+  return `<div class="row" onclick="go('landlords')" style="cursor:pointer">
+    <div class="av">${initials(l.name)}</div>
+    <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:var(--navy)">${esc(l.name)}</div>
+      <div class="faint" style="font-size:12px">${props.length?props.map(p=>esc(p.address)).join(', '):'No properties yet'}${rent?' · '+gbp(rent)+'/mo':''}</div></div>
+    <span class="pill" style="background:${sv.bg};color:${sv.color}">${sv.label}</span>
+    <div style="width:96px;text-align:right"><div style="font-size:14px;font-weight:700;color:var(--navy)">${feeTxt}</div><div class="faint" style="font-size:10.5px">${feeBasis}</div></div>
+    <span class="pill" style="background:${st.bg};color:${st.color}">${st.label}</span>
+  </div>`;
+}
+
+// ── LANDLORDS ──
+function vLandlords(){
+  return `<h1 class="pg">Landlords</h1><div class="sub">Everyone you manage — onboard new landlords with AML, ownership checks and a signed management agreement.</div>
+    <div class="panel">${S.landlords.length?S.landlords.map(landlordCard).join(''):`<div class="empty">No landlords yet. Click "Onboard a landlord" to start.</div>`}</div>`;
+}
+function landlordCard(l){
+  const props=S.properties.filter(p=>p.landlordId===l.id);
+  const sv=SVC[l.service]||SVC.full, st=STATUS[l.status]||STATUS.pending;
+  const checks=[['AML / ID',l.aml],['Ownership',l.ownership],['Agreement signed',l.agreement]];
+  return `<div class="row" style="align-items:flex-start">
+    <div class="av">${initials(l.name)}</div>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:14px;font-weight:600;color:var(--navy)">${esc(l.name)} <span class="pill" style="background:${sv.bg};color:${sv.color};margin-left:4px">${sv.label}</span></div>
+      <div class="faint" style="font-size:12px;margin:2px 0 8px">${esc(l.email)} · ${esc(l.phone)}</div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap">${checks.map(([t,ok])=>`<span class="pill" style="background:${ok?'var(--green-bg)':'var(--off)'};color:${ok?'var(--green)':'#94A3B8'}">${ok?'✓':'○'} ${t}</span>`).join('')}
+        <span class="pill" style="background:var(--off);color:#475569">${props.length} propert${props.length===1?'y':'ies'}</span></div>
+    </div>
+    <span class="pill" style="background:${st.bg};color:${st.color}">${st.label}</span>
+    ${!l.agreement?`<button class="btn sm" onclick="signAgreement('${l.id}')">Send agreement</button>`:''}
+  </div>`;
+}
+
+// ── PIPELINE ──
+function vPipeline(){
+  return `<h1 class="pg">Tenancy Progression</h1><div class="sub">Track every let from instruction to managed — click a card to advance it.</div>
+    <div class="pipe">${STAGES.map(stg=>{
+      const cards=S.tenancies.filter(t=>t.stage===stg.k);
+      return `<div class="col"><div class="col-hd"><span class="t">${stg.t}</span><span class="c" style="background:${stg.c}">${cards.length}</span></div>
+        ${cards.map(t=>tenancyCard(t,stg)).join('')||`<div class="faint" style="font-size:11px;padding:6px 4px">—</div>`}</div>`;
+    }).join('')}</div>
+    <div class="note" style="margin-top:18px"><b>Referencing stage</b> connects to your referencing module — open <a href="#" onclick="go('referencing');return false" style="color:var(--blue);font-weight:600">Referencing</a> to collect documents, run affordability, and attach a partner credit report.</div>`;
+}
+function tenancyCard(t,stg){
+  const idx=STAGES.findIndex(s=>s.k===t.stage);
+  const next=STAGES[idx+1];
+  return `<div class="tcard"><div class="w">${esc(t.who)}</div><div class="p">${esc(P(t.propertyId).address||'')}</div>
+    ${next?`<button class="btn sm" onclick="advance('${t.id}')">Advance → ${next.t}</button>`:`<span class="pill" style="background:var(--green-bg);color:var(--green)">● Live</span>`}</div>`;
+}
+function advance(id){ const t=S.tenancies.find(x=>x.id===id); const i=STAGES.findIndex(s=>s.k===t.stage); if(STAGES[i+1]){t.stage=STAGES[i+1].k;save();render();toast('Moved to '+STAGES[i+1].t);} }
+
+// ── REFERENCING ──
+function vReferencing(){
+  return `<h1 class="pg">Tenant Referencing</h1><div class="sub">Collect documents, assess affordability, and record the outcome. Credit/Open-Banking checks attach from your referencing partner.</div>
+    <div class="note" style="margin-bottom:18px"><b>How referencing works here:</b> NexLet runs the full document workflow (employer & previous-landlord references, proof of income, ID, Right-to-Rent) and an affordability assessment — all legal for you to do. The <b>credit search</b> (CCJs, score) comes from a referencing partner (e.g. Vouch, ~£15–25/tenant) — run it in their portal and attach the report here.</div>
+    <div class="panel">${S.references.length?S.references.map(refCard).join(''):`<div class="empty">No references yet. Click "New reference".</div>`}</div>`;
+}
+function refCard(r){
+  const rag=RAG[r.status]||RAG.none;
+  const docs=r.docs||{}; const got=Object.values(docs).filter(Boolean).length;
+  const rent=P(r.propertyId).rent||0; const need=rent*30; const afford=r.income>=need;
+  return `<div class="row" style="align-items:flex-start;cursor:pointer" onclick="openReference('${r.id}')">
+    <div class="av">${initials(r.applicant)}</div>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:14px;font-weight:600;color:var(--navy)">${esc(r.applicant)}</div>
+      <div class="faint" style="font-size:12px;margin:2px 0 8px">${esc(P(r.propertyId).address||'—')} · ${gbp(rent)}/mo</div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap">
+        <span class="pill" style="background:var(--off);color:#475569">${got}/5 docs</span>
+        ${r.income?`<span class="pill" style="background:${afford?'var(--green-bg)':'var(--amber-bg)'};color:${afford?'var(--green)':'var(--amber)'}">Affordability ${afford?'OK':'tight'} (${gbp(r.income)}/yr)</span>`:''}
+        <span class="pill" style="background:${r.credit?'var(--green-bg)':'var(--off)'};color:${r.credit?'var(--green)':'#94A3B8'}">${r.credit?'Credit report attached':'No credit report'}</span>
+      </div>
+    </div>
+    <span class="pill" style="background:${rag.bg};color:${rag.color}">${rag.label}</span>
+  </div>`;
+}
+
+// ── PROPERTIES ──
+function vProperties(){
+  return `<h1 class="pg">All Properties</h1><div class="sub">Every property across all your landlords.</div>
+    <div class="panel">${S.properties.length?S.properties.map(p=>`<div class="row">
+      <div class="av">⌂</div><div style="flex:1"><div style="font-size:14px;font-weight:600;color:var(--navy)">${esc(p.address)}</div>
+      <div class="faint" style="font-size:12px">${esc(p.city||'')} · ${p.beds} bed · ${gbp(p.rent)}/mo · ${esc(L(p.landlordId).name||'—')}</div></div>
+      <span class="pill" style="background:${(SVC[L(p.landlordId).service]||SVC.full).bg};color:${(SVC[L(p.landlordId).service]||SVC.full).color}">${(SVC[L(p.landlordId).service]||SVC.full).label}</span>
+    </div>`).join(''):`<div class="empty">No properties yet — add one when onboarding a landlord.</div>`}</div>`;
+}
+
+// ── SETTINGS ──
+function vSettings(){
+  const a=S.agency;
+  return `<h1 class="pg">Agency Settings</h1><div class="sub">Your legal memberships — these must appear on your paperwork.</div>
+    <div class="panel" style="max-width:560px"><div style="padding:20px">
+      <div class="fg"><label>Trading name</label><input id="set-name" value="${esc(a.name)}"></div>
+      <div class="fg"><label>Redress scheme (required)</label>
+        <select id="set-redress"><option value="">Not yet a member</option><option ${a.redress==='The Property Ombudsman'?'selected':''}>The Property Ombudsman</option><option ${a.redress==='Property Redress Scheme'?'selected':''}>Property Redress Scheme</option></select>
+        <div class="hint">Mandatory for all letting agents. Fine up to £5,000 if not registered.</div></div>
+      <div class="fg"><label>Redress membership no.</label><input id="set-redressno" value="${esc(a.redressNo)}" placeholder="e.g. T01234"></div>
+      <div class="fg"><label>Client Money Protection</label>
+        <select id="set-cmp"><option ${a.cmp==='Not holding client money'?'selected':''}>Not holding client money</option><option ${a.cmp==='Client Money Protect'?'selected':''}>Client Money Protect</option><option ${a.cmp==='Propertymark CMP'?'selected':''}>Propertymark CMP</option></select>
+        <div class="hint">Only required if you collect rent/deposits. You're set to tenant-pays-landlord, so this stays off.</div></div>
+      <button class="btn navy" onclick="saveSettings()">Save settings</button>
+    </div></div>`;
+}
+function saveSettings(){ S.agency.name=val('set-name'); S.agency.redress=val('set-redress'); S.agency.redressNo=val('set-redressno'); S.agency.cmp=val('set-cmp'); save(); render(); toast('✓ Settings saved'); }
+
+// ── ONBOARDING WIZARD (modal) ──
+let OB=null;
+function openOnboard(){ OB={step:1,name:'',email:'',phone:'',address:'',aml:false,ownership:false,service:'full',addr:'',city:'',rent:'',beds:'2',agreement:false}; renderOnboard(); }
+function obSet(k,v){ OB[k]=v; }
+function obNext(){
+  if(OB.step===1){ OB.name=val('ob-name');OB.email=val('ob-email');OB.phone=val('ob-phone');OB.address=val('ob-address'); if(!OB.name){toast('Enter the landlord name',1);return;} }
+  if(OB.step===4){ OB.addr=val('ob-addr');OB.city=val('ob-city');OB.rent=val('ob-rent');OB.beds=val('ob-beds'); }
+  if(OB.step===5){ OB.service=val('ob-service'); }
+  OB.step++; renderOnboard();
+}
+function obBack(){ OB.step--; renderOnboard(); }
+function obFinish(){
+  const id=uid('l');
+  S.landlords.push({id,name:OB.name,email:OB.email,phone:OB.phone,address:OB.address,aml:OB.aml,ownership:OB.ownership,service:OB.service,agreement:OB.agreement,status:OB.agreement?'active':'pending'});
+  if(OB.addr){ const pid=uid('p'); S.properties.push({id:pid,landlordId:id,address:OB.addr,city:OB.city,rent:parseInt(OB.rent)||0,beds:parseInt(OB.beds)||1});
+    S.tenancies.push({id:uid('t'),who:OB.addr,propertyId:pid,stage:'instructed'}); }
+  save(); closeModal(); go('landlords'); toast('✓ '+OB.name+' onboarded'+(OB.agreement?' — agreement signed':' — send the agreement to go live'));
+}
+function renderOnboard(){
+  const s=OB.step;
+  const labels=['Details','AML / ID','Ownership','Property','Service & fee','Agreement'];
+  const stepper=`<div class="steps">${labels.map((l,i)=>`<div class="st ${s===i+1?'on':s>i+1?'done':''}"><span class="n">${s>i+1?'✓':i+1}</span>${l}</div>`).join('')}</div>`;
+  let body='';
+  if(s===1) body=`<div class="fg"><label>Full name *</label><input id="ob-name" value="${esc(OB.name)}" placeholder="Landlord's name"></div>
+    <div class="fg"><label>Email</label><input id="ob-email" value="${esc(OB.email)}" placeholder="name@email.com"></div>
+    <div class="fg"><label>Phone</label><input id="ob-phone" value="${esc(OB.phone)}"></div>
+    <div class="fg"><label>Correspondence address</label><input id="ob-address" value="${esc(OB.address)}"></div>`;
+  if(s===2) body=`<div class="note" style="margin-bottom:14px">Anti-money-laundering check — required before you can act. Upload the landlord's passport or driving licence; in production this is AI-scanned and stored.</div>
+    <div class="chk ${OB.aml?'on':''}" onclick="OB.aml=!OB.aml;renderOnboard()"><div class="box">${OB.aml?'✓':''}</div><div><div style="font-weight:600;font-size:13px">ID document received &amp; verified</div><div class="faint" style="font-size:11px">Passport / driving licence on file</div></div></div>`;
+  if(s===3) body=`<div class="note" style="margin-bottom:14px">Confirms the landlord is entitled to let — title deed, mortgage statement or council tax bill.</div>
+    <div class="chk ${OB.ownership?'on':''}" onclick="OB.ownership=!OB.ownership;renderOnboard()"><div class="box">${OB.ownership?'✓':''}</div><div><div style="font-weight:600;font-size:13px">Proof of ownership received</div><div class="faint" style="font-size:11px">Deed / mortgage / council tax</div></div></div>`;
+  if(s===4) body=`<div class="faint" style="font-size:12px;margin-bottom:12px">Add their first property (optional now — you can add more later).</div>
+    <div class="fg"><label>Address</label><input id="ob-addr" value="${esc(OB.addr)}" placeholder="e.g. 12 High Street"></div>
+    <div class="grid3" style="gap:10px"><div class="fg"><label>Town/City</label><input id="ob-city" value="${esc(OB.city)}"></div>
+    <div class="fg"><label>Rent £/mo</label><input id="ob-rent" type="number" value="${esc(OB.rent)}"></div>
+    <div class="fg"><label>Beds</label><input id="ob-beds" type="number" value="${esc(OB.beds)}"></div></div>
+    <div class="hint" style="font-size:11px;color:var(--faint)">Compliance docs (gas/EICR/EPC) are uploaded in the property's compliance tab — same engine as the landlord app.</div>`;
+  if(s===5){ const rent=parseInt(OB.rent)||0;
+    body=`<div class="faint" style="font-size:12px;margin-bottom:12px">Pick the service level — this becomes the instruction recorded in the management agreement.</div>
+    <div class="fg"><label>Service level</label><select id="ob-service" onchange="OB.service=this.value;renderOnboard()">
+      <option value="full" ${OB.service==='full'?'selected':''}>Full management — ${FEE_MGMT}% of rent</option>
+      <option value="letonly" ${OB.service==='letonly'?'selected':''}>Let-only — ${LETONLY_WEEKS} weeks' rent (one-off)</option></select></div>
+    <div class="note">${OB.service==='full'
+      ? `<b>Full management — ${FEE_MGMT}%/mo.</b> ${rent?'Your fee: <b>'+gbp(rent*FEE_MGMT/100)+'/mo</b>. ':''}Compliance, repairs, inspections, renewals. Tenant pays landlord directly (no client money).`
+      : `<b>Let-only — ${LETONLY_WEEKS} weeks' rent.</b> ${rent?'Your fee: <b>'+gbp(rent/4.345*LETONLY_WEEKS)+'</b> one-off. ':''}Find tenant, paperwork, hand over. No ongoing fee.`}</div>`;
+  }
+  if(s===6) body=`<div class="note" style="margin-bottom:14px">The Management Agreement + Terms of Business are auto-filled with the details above and sent for e-signature (same engine your tenants use). Marking signed here simulates the returned signature.</div>
+    <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:14px 16px;font-size:12.5px;line-height:1.7;margin-bottom:14px">
+      <b>${esc(OB.name||'Landlord')}</b> · ${SVC[OB.service].label}<br>${OB.addr?esc(OB.addr)+' · ':''}Redress: ${S.agency.redress||'pending'}<br>Tenant pays landlord directly · no client money held</div>
+    <div class="chk ${OB.agreement?'on':''}" onclick="OB.agreement=!OB.agreement;renderOnboard()"><div class="box">${OB.agreement?'✓':''}</div><div><div style="font-weight:600;font-size:13px">Management agreement signed</div><div class="faint" style="font-size:11px">e-signed &amp; returned</div></div></div>`;
+  const ft = s<6
+    ? `${s>1?'<button class="btn" onclick="obBack()">Back</button>':'<button class="btn" onclick="closeModal()">Cancel</button>'}<button class="btn navy" onclick="obNext()">Next →</button>`
+    : `<button class="btn" onclick="obBack()">Back</button><button class="btn navy" onclick="obFinish()">Finish onboarding</button>`;
+  modal('Onboard a landlord', stepper+body, ft);
+}
+
+// ── REFERENCE (modal) ──
+let RF=null;
+function openReference(id){
+  const ex=id?S.references.find(r=>r.id===id):null;
+  RF= ex?JSON.parse(JSON.stringify(ex)):{id:uid('r'),applicant:'',propertyId:(S.properties[0]||{}).id||'',income:'',docs:{id:false,rtr:false,income:false,employer:false,prevll:false},credit:'',status:'none',note:''};
+  renderReference();
+}
+const DOCS=[['id','Photo ID verified'],['rtr','Right-to-Rent share code'],['income','Proof of income (payslips/bank)'],['employer','Employer reference'],['prevll','Previous landlord reference']];
+function renderReference(){
+  const rent=P(RF.propertyId).rent||0; const need=rent*30; const afford=RF.income&&parseInt(RF.income)>=need;
+  const propOpts=S.properties.map(p=>`<option value="${p.id}" ${p.id===RF.propertyId?'selected':''}>${esc(p.address)} — ${gbp(p.rent)}/mo</option>`).join('');
+  const body=`
+    <div class="fg"><label>Applicant name</label><input id="rf-app" value="${esc(RF.applicant)}" placeholder="Tenant applicant"></div>
+    <div class="fg"><label>Property</label><select id="rf-prop" onchange="RF.propertyId=this.value;RF.applicant=val('rf-app');RF.income=val('rf-income');renderReference()">${propOpts}</select></div>
+    <div class="fg"><label>Applicant annual income (£)</label><input id="rf-income" type="number" value="${esc(RF.income)}" oninput="RF.income=this.value;_affLive()" placeholder="e.g. 42000">
+      <div class="hint" id="rf-aff">${rent?`Affordability test: income must be ≥ ${gbp(need)}/yr (30× monthly rent). `+(RF.income?(afford?'<b style="color:var(--green)">✓ Passes</b>':'<b style="color:var(--amber)">Below threshold</b>'):''):''}</div></div>
+    <label style="display:block;font-size:12px;font-weight:600;margin-bottom:7px">Documents &amp; references collected</label>
+    ${DOCS.map(([k,t])=>`<div class="chk ${RF.docs[k]?'on':''}" onclick="RF.docs['${k}']=!RF.docs['${k}'];renderReference()"><div class="box">${RF.docs[k]?'✓':''}</div><div style="font-size:13px">${t}</div></div>`).join('')}
+    <div class="fg" style="margin-top:14px"><label>Partner credit report</label><input id="rf-credit" value="${esc(RF.credit)}" oninput="RF.credit=this.value" placeholder="Reference no. / 'attached' once run with partner">
+      <div class="hint">Run the credit/CCJ check in your referencing partner's portal, then record it here.</div></div>
+    <div class="fg"><label>Outcome</label><select id="rf-status" onchange="RF.status=this.value"><option value="none" ${RF.status==='none'?'selected':''}>Not decided</option><option value="green" ${RF.status==='green'?'selected':''}>● Pass — proceed</option><option value="amber" ${RF.status==='amber'?'selected':''}>● Caution — guarantor / conditions</option><option value="red" ${RF.status==='red'?'selected':''}>● Fail — decline</option></select></div>
+    <div class="fg"><label>Notes</label><textarea id="rf-note" rows="2">${esc(RF.note)}</textarea></div>`;
+  modal('Tenant reference', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveReference()">Save reference</button>`);
+}
+function _affLive(){ const rent=P(RF.propertyId).rent||0; const need=rent*30; const inc=parseInt(val('rf-income'))||0; const el=document.getElementById('rf-aff'); if(el&&rent) el.innerHTML=`Affordability test: income must be ≥ ${gbp(need)}/yr (30× monthly rent). `+(inc?(inc>=need?'<b style="color:var(--green)">✓ Passes</b>':'<b style="color:var(--amber)">Below threshold</b>'):''); }
+function saveReference(){
+  RF.applicant=val('rf-app'); RF.income=parseInt(val('rf-income'))||0; RF.note=val('rf-note'); RF.status=val('rf-status'); RF.credit=val('rf-credit');
+  if(!RF.applicant){toast('Enter applicant name',1);return;}
+  const i=S.references.findIndex(r=>r.id===RF.id);
+  if(i>=0) S.references[i]=RF; else S.references.push(RF);
+  save(); closeModal(); go('referencing'); toast('✓ Reference saved');
+}
+
+function signAgreement(id){ const l=L(id); l.agreement=true; l.status='active'; save(); render(); toast('✓ Agreement marked signed — '+l.name+' is live'); }
+
+// ── helpers ──
+function initials(n){ return (n||'?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase(); }
+function esc(v){ return v==null?'':String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function val(id){ const e=document.getElementById(id); return e?e.value.trim():''; }
+function modal(title,body,ft){ document.getElementById('modal-root').innerHTML=`<div class="ov" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="modal-hd"><h3>${title}</h3><button class="x" onclick="closeModal()">×</button></div><div class="modal-bd">${body}</div><div class="modal-ft">${ft}</div></div></div>`; }
+function closeModal(){ document.getElementById('modal-root').innerHTML=''; OB=null; }
+let _tt; function toast(m,bad){ const t=document.getElementById('toast'); t.textContent=m; t.style.background=bad?'var(--red)':'var(--navy)'; t.classList.add('show'); clearTimeout(_tt); _tt=setTimeout(()=>t.classList.remove('show'),2600); }
+
+render();
+</script>
+</body>
+</html>
