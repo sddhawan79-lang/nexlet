@@ -14,7 +14,7 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --navy:#0B1E3D;--navy-mid:#132847;
+  --navy:#0B1E3D;--navy-mid:#132847;--teal:#0E9E8E;--teal-deep:#0A7E73;
   --green:#00C896;--green-dark:#009970;--green-bg:rgba(0,200,150,0.1);
   --blue:#3B6FE8;--blue-bg:rgba(59,111,232,0.09);
   --red:#E53E3E;--red-bg:rgba(229,62,62,0.09);
@@ -27,7 +27,7 @@
 html,body{min-height:100%;font-family:var(--font);color:var(--txt);background:var(--off);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
 
 /* ── AUTH SCREENS ── */
-.auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:linear-gradient(135deg,var(--navy) 0%,#1a3a6b 100%)}
+.auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:linear-gradient(135deg,#12A693 0%,#0A7E73 100%)}
 .auth-card{background:var(--white);border-radius:16px;padding:36px 32px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,0.2)}
 .auth-logo{font-family:var(--disp);font-size:20px;color:var(--navy);margin-bottom:8px}
 .auth-logo span{color:var(--green)}
@@ -51,7 +51,7 @@ html,body{min-height:100%;font-family:var(--font);color:var(--txt);background:va
 .auth-footer a{color:var(--blue);text-decoration:none}
 
 /* ── LOADING ── */
-.loading-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--navy)}
+.loading-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#12A693 0%,#0A7E73 100%)}
 .loading-inner{text-align:center}
 .loading-logo{font-family:var(--disp);font-size:24px;color:#fff;margin-bottom:20px}
 .loading-logo span{color:var(--green)}
@@ -62,9 +62,9 @@ html,body{min-height:100%;font-family:var(--font);color:var(--txt);background:va
 
 /* ── PORTAL LAYOUT ── */
 .portal-wrap{min-height:100vh;background:var(--off)}
-.portal-header{background:var(--navy);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.portal-header{background:linear-gradient(135deg,#12A693 0%,#0A7E73 100%);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
 .portal-logo{font-family:var(--disp);font-size:16px;color:#fff}
-.portal-logo span{color:var(--green)}
+.portal-logo span{color:#FFD66B}
 .portal-user{display:flex;align-items:center;gap:12px}
 .portal-name{font-size:12px;color:rgba(255,255,255,0.6)}
 .btn-logout{font-size:11px;color:rgba(255,255,255,0.4);background:none;border:none;cursor:pointer;font-family:var(--font);padding:4px 8px;border-radius:6px;transition:all .15s}
@@ -72,7 +72,7 @@ html,body{min-height:100%;font-family:var(--font);color:var(--txt);background:va
 .portal-body{max-width:700px;margin:0 auto;padding:28px 20px}
 
 /* ── PROPERTY BANNER ── */
-.prop-banner{background:linear-gradient(135deg,var(--navy) 0%,#1a3a6b 100%);border-radius:12px;padding:20px 24px;margin-bottom:24px;display:flex;align-items:center;gap:16px}
+.prop-banner{background:linear-gradient(135deg,#12A693 0%,#0A7E73 100%);border-radius:12px;padding:20px 24px;margin-bottom:24px;display:flex;align-items:center;gap:16px}
 .prop-icon{width:42px;height:42px;border-radius:10px;background:rgba(0,200,150,0.15);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
 .prop-info{flex:1}
 .prop-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,0.4);margin-bottom:3px}
@@ -82,7 +82,7 @@ html,body{min-height:100%;font-family:var(--font);color:var(--txt);background:va
 /* ── TABS ── */
 .tabs{display:flex;gap:4px;background:var(--white);border:1px solid var(--border);border-radius:10px;padding:4px;margin-bottom:20px}
 .tab{flex:1;padding:8px;text-align:center;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;border-radius:7px;transition:all .15s;border:none;background:none;font-family:var(--font)}
-.tab.active{background:var(--navy);color:#fff}
+.tab.active{background:#0E9E8E;color:#fff}
 .tab-content{display:none}
 .tab-content.active{display:block}
 
@@ -162,7 +162,7 @@ html,body{min-height:100%;font-family:var(--font);color:var(--txt);background:va
 .toast.err{background:var(--red)}
 
 /* ── ERROR SCREEN ── */
-.error-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--navy);padding:20px}
+.error-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#12A693 0%,#0A7E73 100%);padding:20px}
 .error-card{background:var(--white);border-radius:16px;padding:36px 32px;max-width:400px;width:100%;text-align:center}
 .error-icon{font-size:40px;margin-bottom:16px}
 .error-title{font-size:18px;font-weight:600;color:var(--txt);margin-bottom:8px}
@@ -229,7 +229,7 @@ html,body{min-height:100%;font-family:var(--font);color:var(--txt);background:va
   <div class="portal-wrap">
     <!-- Header -->
     <div class="portal-header">
-      <div class="portal-logo">Nex<span>Let</span></div>
+      <div class="portal-logo">Nex<span>Let</span> <span style="font-size:9px;font-weight:700;letter-spacing:.6px;background:rgba(255,255,255,.2);color:#fff;padding:2px 8px;border-radius:5px;margin-left:7px;vertical-align:2px">TENANT PORTAL</span></div>
       <div class="portal-user">
         <span class="portal-name" id="portal-tenant-name"></span>
         <button class="btn-logout" onclick="logout()">Log out</button>
@@ -243,7 +243,7 @@ html,body{min-height:100%;font-family:var(--font);color:var(--txt);background:va
       <div class="prop-banner">
         <div class="prop-icon">🏠</div>
         <div class="prop-info">
-          <div class="prop-label">Your property</div>
+          <div class="prop-label">Your home</div>
           <div class="prop-address" id="portal-address">Loading…</div>
           <div class="prop-meta" id="portal-meta"></div>
         </div>
@@ -773,7 +773,7 @@ async function emailLandlord(job, priority, category, description){
 
     const html = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:28px 24px;color:#1A2B45">
       <div style="border-bottom:2px solid #0B1E3D;padding-bottom:12px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between">
-        <span style="font-size:17px;font-weight:700;color:#0B1E3D">Rent<span style="color:#00C896">Safe AI</span></span>
+        <span style="font-size:17px;font-weight:700;color:#0B1E3D">Nex<span style="color:#00C896">Let</span></span>
         <span style="font-size:11px;color:#7A8FA6">Maintenance Alert</span>
       </div>
       ${urgentBanner}
@@ -885,6 +885,25 @@ async function downloadCert(certId, certType){
   a.click();
 }
 
+// P3: sign a stored signed-agreement URL/ref through sign-doc, then open it.
+async function portalDownloadSigned(ev, urlOrPath){
+  if (ev) ev.preventDefault();
+  toast('Preparing download…');
+  const m = String(urlOrPath).match(/\/object\/(?:sign\/|public\/)?([^?]+)/);
+  const ref = m ? decodeURIComponent(m[1]) : String(urlOrPath).replace(/^\/+/, '');
+  const slash = ref.indexOf('/');
+  if (slash <= 0){ toast('Could not open document', true); return; }
+  try {
+    const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/sign-doc', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bucket: ref.slice(0, slash), path: ref.slice(slash + 1), p_token: window._portalToken, expiry: 600 })
+    });
+    const data = await res.json();
+    if (res.ok && data?.signedUrl){ window.open(data.signedUrl, '_blank'); return; }
+  } catch(e){ console.warn('[portalDownloadSigned]', e); }
+  toast('Could not open document — contact your landlord', true);
+}
+
 // ── LOGOUT ──
 async function logout(){
   localStorage.removeItem('nxl_tenant_token');
@@ -926,7 +945,7 @@ async function loadDocuments() {
           <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
             <span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:100px;background:${sc.bg};color:${sc.col}">${sc.label}</span>
             ${effStatus==='pending' ? `<a href="esign.html?esign=${d.token}" class="btn" style="font-size:12px;padding:6px 12px;border-color:var(--blue);color:var(--blue)">Sign Now →</a>` : ''}
-            ${effStatus==='signed' && d.signed_pdf_url ? `<a href="${d.signed_pdf_url}" target="_blank" class="btn" style="font-size:12px;padding:6px 12px;border-color:var(--green-dark);color:var(--green-dark)">⬇ Download</a>` : ''}
+            ${effStatus==='signed' && d.signed_pdf_url ? `<a href="#" onclick="portalDownloadSigned(event,'${esc(d.signed_pdf_url).replace(/'/g,'')}')" class="btn" style="font-size:12px;padding:6px 12px;border-color:var(--green-dark);color:var(--green-dark)">⬇ Download</a>` : ''}
           </div>
         </div>`;
       }).join('')}

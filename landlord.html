@@ -2886,6 +2886,28 @@ function _profileNudgeBanner(){
   </div>`;
 }
 
+// Build the "documents attached" table rows from the ACTUAL attachment list, so the email
+// never claims a document is attached when it isn't (accuracy + transparency — #61).
+function _day1DocRows(list, ctx){
+  ctx = ctx || {};
+  const fmt = d => d ? ' \u00b7 Expires ' + new Date(d).toLocaleDateString('en-GB') : '';
+  const td1 = 'padding:10px 14px;border-bottom:1px solid #eee;font-size:13px';
+  const td2 = 'padding:10px 14px;border-bottom:1px solid #eee;font-size:13px;color:#00A87A;font-weight:600';
+  const rows = (list || []).map(a => {
+    const fn = a.filename || ''; let label, status = '\u2713 Attached';
+    if (/RRA_2025/i.test(fn)) label = 'RRA 2025 Prescribed Particulars';
+    else if (/How_to_Rent/i.test(fn)) label = 'How to Rent Guide';
+    else if (/Gas_Safety/i.test(fn)) { label = 'Gas Safety Certificate'; status += fmt(ctx.gasCert && ctx.gasCert.expiry); }
+    else if (/^EICR/i.test(fn)) { label = 'EICR (Electrical)'; status += fmt(ctx.eicrCert && ctx.eicrCert.expiry); }
+    else if (/^EPC/i.test(fn)) { label = 'EPC'; status += fmt(ctx.epcCert && ctx.epcCert.expiry); }
+    else label = fn.replace(/\.[a-z0-9]+$/i, '').replace(/_/g, ' ');
+    return `<tr><td style="${td1}">${label}</td><td style="${td2}">${status}</td></tr>`;
+  });
+  const t = ctx.tenant;
+  if (t && t.scheme) rows.push(`<tr><td style="${td1}">Deposit protection</td><td style="${td2}">\u2713 Protected \u00b7 ${t.scheme} \u00b7 Ref: ${t.scheme_ref||'\u2014'} \u00b7 \u00a3${(t.deposit||0).toLocaleString()}</td></tr>`);
+  return rows.join('') || `<tr><td colspan="2" style="${td1};color:#7A8FA6">No documents attached</td></tr>`;
+}
+
 // ── BULK IMPORT: properties (+ optional tenants) from CSV / pasted spreadsheet ──
 let _importRows = [];
 const _IMPORT_HEADERS = ['address','city','postcode','type','beds','bathrooms','rent','council_tax_band','tenant_name','tenant_email','tenant_phone','tenant_rent','deposit','scheme','tenancy_start'];
@@ -5429,12 +5451,7 @@ async function sendWelcomeKit(pid) {
               <th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:#7A8FA6;text-transform:uppercase">Status</th>
             </tr></thead>
             <tbody>
-              <tr><td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><rect x="3.5" y="3" width="9" height="11" rx="1.5"/><path d="M6 3V2h4v1"/><path d="M6 7h4M6 9.5h4M6 12h2.5"/></svg> RRA 2025 Prescribed Particulars</td><td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px;color:#00A87A;font-weight:600">✓ Attached</td></tr>
-              <tr><td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M8 4.5C6.5 3 4.5 2.8 2.5 3.5v8C4.5 10.8 6.5 11 8 12.5 9.5 11 11.5 10.8 13.5 11.5v-8C11.5 2.8 9.5 3 8 4.5z"/><path d="M8 4.5v8"/></svg> How to Rent Guide</td><td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px;color:#00A87A;font-weight:600">✓ Attached</td></tr>
-              <tr><td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M8 2.5s3.5 2.5 3.5 6a3.5 3.5 0 0 1-7 0c0-1.3.7-2.3 1.3-3 .2 1 .9 1.5 1.4 1.5C8 6.5 6.5 5 8 2.5z"/></svg> Gas Safety Certificate</td><td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px;color:#00A87A;font-weight:600">✓ Attached${gasCert?.expiry?' · Expires '+new Date(gasCert.expiry).toLocaleDateString('en-GB'):''}</td></tr>
-              <tr><td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M9 2 4 9h3l-1 5 5-7H8z"/></svg> EICR</td><td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px;color:#00A87A;font-weight:600">✓ Attached${eicrCert?.expiry?' · Expires '+new Date(eicrCert.expiry).toLocaleDateString('en-GB'):''}</td></tr>
-              <tr><td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M2.5 2.5h5L13 8l-5 5-5.5-5.5z"/><circle cx="5.5" cy="5.5" r="1"/></svg> EPC</td><td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px;color:#00A87A;font-weight:600">✓ Attached${epcCert?.expiry?' · Expires '+new Date(epcCert.expiry).toLocaleDateString('en-GB'):''}</td></tr>
-              ${tenant.scheme ? `<tr><td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg> Deposit protection</td><td style="padding:10px 14px;border-bottom:1px solid #eee;font-size:13px;color:#00A87A;font-weight:600">✓ Protected · ${tenant.scheme} · Ref: ${tenant.scheme_ref||'—'} · £${(tenant.deposit||0).toLocaleString()}</td></tr>` : ''}
+              ${_day1DocRows(attachment_urls,{gasCert,eicrCert,epcCert,tenant})}
             </tbody>
           </table>
 
