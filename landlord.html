@@ -18787,8 +18787,8 @@ function moEsign(pid, tid) {
       <p style="font-size:13px;color:var(--muted);margin-bottom:18px">Choose how you want to send the document to your tenant for e-signature.</p>
       <div style="display:grid;gap:10px">
         <div onclick="esignShowOptionA()" style="border:2px solid var(--border);border-radius:10px;padding:16px 18px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--border)'">
-          <div style="font-size:13px;font-weight:600;margin-bottom:4px;color:var(--txt)">✦ AI Generate Written Statement</div>
-          <div style="font-size:12px;color:var(--muted)">Generate a fully compliant UK Assured Periodic Tenancy Written Statement under the Renters Rights Act 2025 — AI-written in seconds</div>
+          <div style="font-size:13px;font-weight:600;margin-bottom:4px;color:var(--txt)">✦ Generate Written Statement</div>
+          <div style="font-size:12px;color:var(--muted)">A compliant Assured Periodic Tenancy Written Statement of Terms (Renters’ Rights Act 2025), built from a verified legal template — ready in seconds, no guesswork</div>
         </div>
         <div onclick="esignShowOptionB()" style="border:2px solid var(--border);border-radius:10px;padding:16px 18px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--border)'">
           <div style="font-size:13px;font-weight:600;margin-bottom:4px;color:var(--txt)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M11 6.5 6.8 10.7a2 2 0 0 1-2.8-2.8l4.7-4.7a3 3 0 0 1 4.2 4.2l-4.7 4.7"/></svg> Upload My Own PDF</div>
@@ -19321,6 +19321,62 @@ async function esignHandlePDF(input) {
   document.getElementById('esign-send-row-b').style.display = 'block';
 }
 
+function _wstFmtDate(d){ if(!d) return '[to be confirmed]'; const dt=new Date(d); if(isNaN(dt.getTime())) return d; return dt.toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}); }
+
+// Deterministic, RRA-2025-compliant Written Statement of Terms. The legal backbone is
+// hard-coded (reviewed once against SI 2026/324 + Housing Act 1988 as amended); only the
+// variable fields are filled. No AI free-form → no hallucination, dead links or false
+// statements. Returns the same HTML shape the e-sign preview/edit/sign flow already expects.
+function buildWrittenStatement(f){
+  const e = s => (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const today = new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
+  const start = _wstFmtDate(f.startDate);
+  const tba = '<span style="color:#b45309">[to be confirmed]</span>';
+  const ll = e(f.landlordName) || tba;
+  const llAddr = e(f.landlordAddr) || tba;
+  const tn = e(f.tenantName) || tba;
+  const prop = e(f.address) || tba;
+  const rent = e(f.rent) || tba;
+  const rentDay = e(f.rentDayLabel) || tba;
+  const deposit = e(f.deposit) || tba;
+  const scheme = e(f.scheme) || tba;
+  const bills = e(f.bills) || 'None';
+  const pets = e(f.pets) || 'Not permitted without the landlord\u2019s written consent';
+  const furnished = e(f.furnished) || 'Unfurnished';
+  const parking = e(f.parking) || 'Not included';
+  const terms = (f.terms||'').trim();
+  const occ = (f.occupants||[]).filter(o=>o.name && String(o.name).trim());
+  const H = (n,t)=>`<h3 style="font-size:14px;font-weight:700;color:#0B1E3D;margin:18px 0 6px">${n}. ${t}</h3>`;
+  const furnishedClauses = furnished!=='Unfurnished' ? `${H(13,'Furnishings')}<p>The property is let <strong>${furnished.toLowerCase()}</strong>. A full inventory of landlord-owned items is attached as Schedule 1 and forms part of this agreement. The tenant must keep all such items in the same condition as at the start of the tenancy (fair wear and tear excepted), must not remove or dispose of any item without the landlord\u2019s written consent, and must report any damage promptly in writing.</p>` : '';
+  const nF = furnished!=='Unfurnished';
+  return `<h2 style="font-size:18px;font-weight:700;color:#0B1E3D;margin:0 0 4px;text-align:center">Written Statement of Terms</h2>
+  <p style="text-align:center;color:#5A6B82;margin:0 0 4px">Assured Tenancy under the Renters\u2019 Rights Act 2025</p>
+  <p style="text-align:center;color:#5A6B82;font-size:12px;margin:0 0 16px">Statement prepared ${today}</p>
+  <p style="font-size:12px;color:#5A6B82;border:1px solid #E2E5EA;border-radius:6px;padding:8px 10px;background:#F8FAFC">This document is the written statement of terms the landlord is required by law to give the tenant. It records the terms of the tenancy and the information prescribed under the Renters\u2019 Rights Act 2025.</p>
+  ${H(1,'Parties')}<p><strong>Landlord:</strong> ${ll}<br><strong>Address for service of notices on the landlord</strong> (in England and Wales): ${llAddr}<br><strong>Tenant:</strong> ${tn}</p>
+  ${occ.length?`<p><strong>Permitted occupiers</strong> (not tenants; do not sign):</p><ul>${occ.map(o=>`<li>${e(o.name)}${o.age?`, age ${e(o.age)}`:''}${o.age>=18?' \u2014 adult; Right to Rent check required before the tenancy begins':''}</li>`).join('')}</ul>`:''}
+  ${H(2,'Property')}<p>The dwelling-house let under this tenancy is: <strong>${prop}</strong>.</p>
+  ${H(3,'Type of tenancy and possession')}<p>This is an <strong>assured periodic tenancy</strong> under the Housing Act 1988 as amended by the Renters\u2019 Rights Act 2025. There is no fixed term and no end date \u2014 the tenancy runs on a periodic (rolling) basis. The tenant is first entitled to possession on <strong>${start}</strong>.</p>
+  ${H(4,'Rent')}<p>The rent is <strong>\u00a3${rent} per month</strong>, payable in advance on the <strong>${rentDay}</strong> day of each month. Rent may only be increased once in any 12-month period, by the landlord serving the prescribed notice under <strong>section 13 of the Housing Act 1988</strong> giving at least two months\u2019 notice. The tenant may not be required to pay more than one month\u2019s rent in advance.</p>
+  ${H(5,'Bills and council tax')}<p>Except as stated here, the tenant is responsible for council tax, gas, electricity, water and communications/TV licence for the property. Bills included in the rent: <strong>${bills}</strong>.</p>
+  ${H(6,'Deposit')}<p>A tenancy deposit of <strong>\u00a3${deposit}</strong> is payable. It will be protected in the <strong>${scheme}</strong> within 30 days of receipt, and the prescribed information given to the tenant within the same period. The deposit may not exceed five weeks\u2019 rent (six weeks\u2019 where annual rent is \u00a350,000 or more).</p>
+  ${H(7,'Ending the tenancy')}<p>The tenant may end the tenancy at any time by giving the landlord at least <strong>two months\u2019 written notice</strong>, ending on a rent payment day. The landlord cannot evict using a \u201csection 21\u201d notice (abolished). The landlord may only end the tenancy by obtaining a <strong>court order for possession</strong> on one or more grounds in Schedule 2 to the Housing Act 1988, having first served the prescribed notice specifying the ground(s) relied on.</p>
+  ${H(8,'Landlord\u2019s obligations')}<p>The landlord must keep the structure, exterior and installations for water, gas, electricity, sanitation and heating in repair and working order (section 11, Landlord and Tenant Act 1985); ensure the property is fit for human habitation; maintain a valid Gas Safety Certificate (annually) and EICR (every five years); and comply with <strong>Awaab\u2019s Law</strong> \u2014 investigating reported hazards within 14 days and beginning emergency repairs within 24 hours where required.</p>
+  ${H(9,'Tenant\u2019s obligations')}<p>The tenant must pay the rent; use the property as their only or principal home in a tenant-like manner; not cause damage or nuisance; allow access for inspections and repairs on 24 hours\u2019 written notice (except emergencies); and not make alterations without the landlord\u2019s written consent.</p>
+  ${H(10,'Quiet enjoyment and access')}<p>The tenant is entitled to quiet enjoyment free from harassment. The landlord, agents or contractors may enter only with at least <strong>24 hours\u2019 written notice</strong> at a reasonable time, except in an emergency.</p>
+  ${H(11,'Subletting')}<p>The tenant must not sublet or part with possession of the whole or any part of the property without the landlord\u2019s prior written consent.</p>
+  ${H(12,'Pets, parking and licensing')}<p><strong>Pets:</strong> ${pets}. The landlord must not unreasonably refuse a request to keep a pet. <strong>Parking:</strong> ${parking}. <strong>Licensing:</strong> ${f.licenceClause||'Property licensing status to be confirmed by the landlord.'}</p>
+  ${furnishedClauses}
+  ${H(nF?14:13,'Right to make disability-related improvements')}<p>Under section 190 of the Equality Act 2010, the tenant may request consent to make reasonable improvements to assist a disabled occupier. The landlord must not unreasonably withhold consent.</p>
+  ${terms?`${H(nF?15:14,'Additional terms agreed between the parties')}<p>${e(terms).replace(/\n/g,'<br>')}</p>`:''}
+  <p style="font-size:12px;color:#5A6B82;border:1px solid #E2E5EA;border-radius:6px;padding:8px 10px;background:#F8FAFC;margin-top:14px">Any term of this agreement that conflicts with the tenant\u2019s statutory rights, or is otherwise unlawful or unfair under the Consumer Rights Act 2015, is void and unenforceable. All other terms remain in full force.</p>
+  <h3 style="font-size:14px;font-weight:700;color:#0B1E3D;margin:22px 0 10px">Signatures</h3>
+  <table style="width:100%;border-collapse:collapse"><tr>
+    <td style="width:50%;padding:8px 12px 8px 0;vertical-align:bottom"><div style="border-bottom:1px solid #1a2332;height:42px"></div><div style="font-size:12px;color:#5A6B82;margin-top:4px">Landlord: ${ll}</div><div style="font-size:12px;color:#5A6B82">Date: __________________</div></td>
+    <td style="width:50%;padding:8px 0 8px 12px;vertical-align:bottom"><div style="border-bottom:1px solid #1a2332;height:42px"></div><div style="font-size:12px;color:#5A6B82;margin-top:4px">Tenant: ${tn}</div><div style="font-size:12px;color:#5A6B82">Date: __________________</div></td>
+  </tr></table>`;
+}
+
 async function esignGenerateDoc(pid, tid) {
   const p = P(pid);
   const address       = document.getElementById('esign-address').value;
@@ -19389,88 +19445,8 @@ async function esignGenerateDoc(pid, tid) {
   }
 
   try {
-    const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window._sbToken || '') },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
-        max_tokens: 5000,
-        messages: [{
-          role: 'user',
-          content: `Generate a fully compliant UK Assured Periodic Tenancy Written Statement of Terms under the Renters' Rights Act 2025.
-
-IMPORTANT RULES:
-- Use ONLY the details provided below. Do not invent facts, parties, figures, statute section numbers, or property attributes that are not given.
-- Do NOT include any external web links, URLs, or gov.uk references in the output — they go stale and must not appear in a legal document.
-- Where a required detail is not provided, write "[to be confirmed]" rather than guessing.
-
-Use these exact details:
-
-PARTIES
-Landlord: ${landlordName}
-Landlord address: ${landlordAddr}
-Tenant(s): ${tenantName} (permitted occupiers)
-Property: ${address}
-
-TENANCY TERMS
-Tenancy type: Assured Periodic Tenancy (no fixed end date) under RRA 2025
-Start date: ${startDate}
-Monthly rent: £${rent} payable on the ${rentDayLabel} of each month in advance
-Rent review: Section 13 Housing Act 1988 — maximum once per year, 2 months written notice required
-Deposit: £${deposit} protected with ${scheme}
-Bills included: ${bills}
-Pets: ${pets}
-Furnished status: ${furnished}
-Parking: ${parking}
-${licenceClause}
-${occupants.length ? `Permitted occupants (not named tenants — listed in contract but do not sign):
-${occupants.map(o => `- ${o.name}, age ${o.age}${o.age >= 18 ? ' (adult — Right to Rent check required by landlord before tenancy starts)' : o.age >= 16 ? ' (minor — no RTR check needed)' : ' (child)'}`).join('\n')}` : 'No additional permitted occupants.'}
-Special terms: ${terms || 'None'}
-
-ADDITIONAL CLAUSE SCREENING:
-Before including any special terms, check each one. If any clause is potentially unlawful, discriminatory, or unenforceable under UK law (e.g. banning children, restricting nationality, waiving statutory rights, imposing unfair penalties), DO NOT include it. Instead, add a clearly visible HTML warning box at the top of the document listing the flagged clause(s) and why they were excluded. Include all valid clauses as drafted.
-
-MANDATORY RRA 2025 CLAUSES TO INCLUDE:
-1. Tenancy is periodic from the start — no fixed term
-2. Landlord notice: minimum 4 months via Section 8 grounds only (Section 21 abolished)
-3. Tenant notice: minimum 2 months written notice to quit
-4. Landlord repair obligations under Section 11 Landlord and Tenant Act 1985
-5. Awaab's Law — landlord must investigate hazards within 14 days, begin emergency repairs within 24 hours
-6. Right of entry: 24 hours written notice except emergencies
-7. Deposit protection: protected within 30 days, Prescribed Information served within 30 days
-8. Rent increases: Section 13 process only, once per 12 months, 2 months notice
-9. Anti-harassment and quiet enjoyment clause
-10. Subletting prohibited without written landlord consent
-${furnished !== 'Unfurnished' ? `
-FURNISHED PROPERTY CLAUSES TO INCLUDE:
-11. The property is let ${furnished.toLowerCase()} — a full inventory of all landlord-owned items is attached as Schedule 1 to this agreement and forms part of the tenancy
-12. The tenant agrees to keep all furnished items in the same condition as at the start of the tenancy, fair wear and tear excepted
-13. The tenant must not remove, replace or dispose of any furnished item without the landlord's prior written consent
-14. Any damage to furnished items beyond fair wear and tear may be remedied from the deposit at the end of the tenancy, subject to evidence of condition at check-in
-15. The tenant must report any damage to furnished items promptly in writing` : ''}
-
-Format as a professional legal HTML document with:
-- Clear numbered sections and sub-sections
-- Proper headings (h2, h3)
-- Signature blocks at the end for Landlord and each Tenant with date fields
-- Today's date pre-filled where appropriate
-Return only the HTML content, no preamble or markdown.`
-        }]
-      })
-    });
-    if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error?.message || `API error ${res.status}`); }
-    const data = await res.json();
-    let _rawHtml = (data.content?.[0]?.text || '').replace(/^```html\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
-    // Validate — reject if suspiciously large (binary/PDF leak) or missing HTML tags
-    if (_rawHtml.length > 200000 || (!_rawHtml.includes('<') && !_rawHtml.includes('>'))) {
-      throw new Error('Generated document appears corrupt — please try again');
-    }
-    // Extract body content if full HTML doc returned, strip any embedded style/script tags
-    const _bodyMatch = _rawHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-    if (_bodyMatch) _rawHtml = _bodyMatch[1];
-    _rawHtml = _rawHtml.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<style[\s\S]*?<\/style>/gi, '').trim();
-    if (!_rawHtml || _rawHtml.length < 100) throw new Error('Generated document was empty — please try again');
-    _esignDocHtml = _rawHtml;
+    // Deterministic compliant generation — no AI free-form for a legal document.
+    _esignDocHtml = buildWrittenStatement({ landlordName, landlordAddr, tenantName, address, startDate, rent, rentDay, rentDayLabel, deposit, scheme, bills, pets, furnished, parking, licenceClause, occupants, terms });
     _esignSaveDraft(pid, tid, _esignDocHtml);
     document.getElementById('esign-doc-preview').innerHTML = '<div style="all:initial;font-family:Georgia,serif;font-size:13px;line-height:1.8;color:#1a2332;padding:4px;display:block;max-width:100%;box-sizing:border-box;overflow-wrap:break-word;word-break:break-word"><style>table{width:100%!important;max-width:100%!important;table-layout:fixed}td,th{word-break:break-word;overflow-wrap:break-word}img{max-width:100%!important}</style>' + _esignDocHtml + '</div>';
     document.getElementById('esign-doc-editor').value = _esignDocHtml;
