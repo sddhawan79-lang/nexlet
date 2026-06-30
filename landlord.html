@@ -2874,6 +2874,18 @@ function moCert(pid, docType){
   );
 }
 
+// Profile-completeness nudge: landlord name + service address auto-fill every tenancy
+// agreement and legal notice, so prompt the user to complete their profile once.
+function _profileNudgeBanner(){
+  const hasAddr = !!(D.userProfile && (D.userProfile.landlord_address||'').trim());
+  const nm = (typeof _profileName==='function' ? (_profileName()||'') : '');
+  const hasName = nm.trim() && !/^(landlord|your name|loading|—|-)$/i.test(nm.trim());
+  if (hasAddr && hasName) return '';
+  return `<div style="background:#FEF2E7;border:1px solid rgba(217,119,6,.3);border-radius:8px;padding:11px 14px;font-size:12.5px;color:#92500D;margin-bottom:16px;line-height:1.55">
+    <strong>💡 Tip: complete your landlord profile first.</strong> Your name and address for service are pulled in automatically to every tenancy agreement, Section 8/13 notice and legal document — so you only enter them once and they’re always consistent. <a href="profile.html" style="color:#b45309;font-weight:600;text-decoration:underline">Set up your profile →</a>
+  </div>`;
+}
+
 // ── MODAL: ADD PROPERTY (5-step guided flow) ──
 function moAddProp(){
   if (_expiredGuard('Add property')) return;
@@ -2908,6 +2920,7 @@ function moAddProp(){
 
     <!-- STEP 1: Address -->
     <div class="step-box active" id="step1">
+      ${_profileNudgeBanner()}
       <div style="font-size:15px;font-weight:600;margin-bottom:2px">Where is the property?</div>
       <div class="step-title">Full address — this appears on all notices and documents</div>
       <div class="fg"><label>Street address <span class="req">*</span></label><input type="text" id="p-addr" placeholder="e.g. 14 Maple Street"></div>
@@ -19402,12 +19415,15 @@ async function esignGenerateDoc(pid, tid) {
   }
   const terms         = document.getElementById('esign-terms').value;
 
-  // Validation — all mandatory fields
+  // Validation — all statutory Written Statement of Terms fields are mandatory (RRA 2025).
   const missing = [];
+  if (!tenantName || !tenantName.trim()) missing.push('Tenant name');
+  if (!address || !address.trim())       missing.push('Property address');
   if (!landlordName)  missing.push('Landlord full name');
-  if (!landlordAddr)  missing.push('Landlord address');
+  if (!landlordAddr)  missing.push('Landlord address (for service of notices)');
   if (!startDate)     missing.push('Tenancy start date');
   if (!rent)          missing.push('Monthly rent');
+  if (!rentDay)       missing.push('Rent due day');
   if (!deposit)       missing.push('Deposit amount');
   if (!scheme)        missing.push('Deposit scheme');
   if (!bills || bills === 'None' && !document.getElementById('esign-bills').value.trim()) {
