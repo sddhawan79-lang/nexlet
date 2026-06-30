@@ -9436,7 +9436,7 @@ async function checkAllReminders() {
         <td style="padding:10px 12px;border-bottom:1px solid #eee;font-size:13px;font-weight:600">${p.address}${p.city?', '+p.city:''}</td>
         <td style="padding:10px 12px;border-bottom:1px solid #eee;font-size:14px;font-weight:700;color:${col}">${rag.score}/100</td>
         <td style="padding:10px 12px;border-bottom:1px solid #eee;font-size:12px;color:${col};font-weight:600">${rag.label}</td>
-        <td style="padding:10px 12px;border-bottom:1px solid #eee;font-size:12px;color:#7A8FA6">${expCount>0?`<span style="color:#E53E3E;font-weight:600">${expCount} expired</span>`:dueCount>0?`<span style="color:#D97706">${dueCount} due soon</span>`:'<span style="color:#00A87A">All clear</span>'}</td>
+        <td style="padding:10px 12px;border-bottom:1px solid #eee;font-size:12px;color:#7A8FA6">${pCerts.length===0?'<span style="color:#E53E3E;font-weight:600">None tracked</span>':expCount>0?`<span style="color:#E53E3E;font-weight:600">${expCount} expired</span>`:dueCount>0?`<span style="color:#D97706">${dueCount} due soon</span>`:'<span style="color:#00A87A">All clear</span>'}</td>
         <td style="padding:10px 12px;border-bottom:1px solid #eee;font-size:12px;color:#7A8FA6">${tenant?tenant.name:'Vacant'}</td>
       </tr>`;
     }).join('');
@@ -18681,8 +18681,8 @@ async function sendPortalInvite(tenantId) {
       <span style="font-size:17px;font-weight:700;color:#0B1E3D">NexLet</span>
     </div>
     <h2 style="font-size:16px;font-weight:600;margin-bottom:8px">You've been invited to your tenant portal</h2>
-    <p style="font-size:13px;color:#7A8FA6;margin-bottom:20px">Hi ${t.name}, your landlord has invited you to manage maintenance requests for <strong>${propAddr}</strong> through NexLet.</p>
-    <p style="font-size:13px;margin-bottom:20px">Click the button below to access your portal. You can use this link any time to log maintenance issues and track progress.</p>
+    <p style="font-size:13px;color:#7A8FA6;margin-bottom:20px">Hi ${t.name}, your landlord has set up your tenant portal for <strong>${propAddr}</strong> on NexLet — your home for tenancy details, documents and maintenance.</p>
+    <p style="font-size:13px;margin-bottom:20px">Click the button below to access your portal. Use this link any time to view your tenancy, find documents, report maintenance and stay in touch with your landlord.</p>
     <div style="text-align:center;margin:28px 0">
       <a href="${inviteLink}" style="background:#0B1E3D;color:#fff;padding:13px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;display:inline-block">Access your tenant portal →</a>
     </div>
@@ -19373,7 +19373,20 @@ async function esignGenerateDoc(pid, tid) {
   }
 
   const rentDayLabel = rentDay + (['','st','nd','rd'][rentDay] || 'th');
-  const licenceClause = licenceNo ? `Property Licence: ${licenceNo}` : 'No HMO or selective licence applies to this property.';
+  // Licence clause must reflect the property's ACTUAL licence type — never assert
+  // "no licence applies" just because a number wasn't typed (that's a false legal statement).
+  const _licType = (p.licence_type || '').trim();
+  const _licNone = _licType === '' || _licType === 'None' || _licType === 'None required';
+  let licenceClause;
+  if (licenceNo) {
+    licenceClause = `Property Licence${(!_licNone) ? ' (' + _licType + ')' : ''}: ${licenceNo}`;
+  } else if (!_licNone) {
+    licenceClause = `${_licType} required for this property — licence reference to be confirmed by the landlord.`;
+  } else if (_licType === 'None' || _licType === 'None required') {
+    licenceClause = 'No HMO or selective licence applies to this property.';
+  } else {
+    licenceClause = 'Property licensing status to be confirmed by the landlord.';
+  }
 
   try {
     const res = await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy', {
@@ -19384,7 +19397,14 @@ async function esignGenerateDoc(pid, tid) {
         max_tokens: 5000,
         messages: [{
           role: 'user',
-          content: `Generate a fully compliant UK Assured Periodic Tenancy Written Statement of Terms under the Renters' Rights Act 2025. Use these exact details:
+          content: `Generate a fully compliant UK Assured Periodic Tenancy Written Statement of Terms under the Renters' Rights Act 2025.
+
+IMPORTANT RULES:
+- Use ONLY the details provided below. Do not invent facts, parties, figures, statute section numbers, or property attributes that are not given.
+- Do NOT include any external web links, URLs, or gov.uk references in the output — they go stale and must not appear in a legal document.
+- Where a required detail is not provided, write "[to be confirmed]" rather than guessing.
+
+Use these exact details:
 
 PARTIES
 Landlord: ${landlordName}
