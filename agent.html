@@ -138,47 +138,18 @@ h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px
 // to the shared Supabase backend (see DEV-SPEC-agency-portal.md):
 // agencies → landlords → properties hierarchy + RLS.
 // ─────────────────────────────────────────────────────────────
-const LS='nexlet_agency_v2';
+const LS='nexlet_agency_v3';
 const DEF_FEE=7.5;        // default full-management % of monthly rent (editable per landlord)
 const DEF_WEEKS=3;        // default let-only fee = weeks of rent (editable per landlord)
 const REF_PARTNERS=['Vouch','FCC Paragon','HomeLet','Van Mildert','Goodlord (Acquire)'];
 
 const SEED={
-  agency:{ name:'Your Lettings', address:'', redress:'', redressNo:'', cmp:'Not holding client money', cmpNo:'', refPartner:'', icoNo:'', vatRegistered:false, vatNumber:'', invoiceSeq:3, paymentTerms:14 },
-  landlords:[
-    {id:'l1',name:'Saurabh Dhawan',email:'sd@example.com',phone:'07700 900111',address:'12 Bridge St, London',
-     nrl:false,prsReg:'PRS-100244',payout:'15th',contactPref:'WhatsApp',
-     aml:true,ownership:true,service:'full',feePct:7.5,letWeeks:3,agreement:true,status:'active',
-     docs:{id:'passport_sd.pdf',ownership:'title_115canterbury.pdf',agreement:'mgmt_agreement_sd.pdf'},
-     comms:[{id:'c1',date:'2026-06-02',type:'Call',note:'Agreed full management at 7.5%. Keys collected.'}]},
-    {id:'l2',name:'M. Reynolds',email:'mr@example.com',phone:'07700 900222',address:'Bristol',
-     nrl:false,prsReg:'',payout:'15th',contactPref:'Email',
-     aml:true,ownership:false,service:'letonly',feePct:7.5,letWeeks:3,agreement:false,status:'pending',
-     docs:{id:'licence_mr.jpg',ownership:'',agreement:''},
-     comms:[{id:'c2',date:'2026-06-18',type:'Email',note:'Sent Terms of Business for e-sign. Awaiting ownership proof.'}]}
-  ],
-  properties:[
-    {id:'p1',landlordId:'l1',address:'115 Canterbury Road',city:'London',rent:2500,beds:2,feePct:7.5,
-     tenant:{name:'K. Dhawan',email:'kd@example.com',start:'2024-01-12'},
-     certs:{gas:'2026-12-01',eicr:'2029-03-01',epc:'2032-06-01',epcRating:'C'}},
-    {id:'p2',landlordId:'l2',address:'8 Oakfield Court',city:'Bristol',rent:1900,beds:1,feePct:7.5,
-     tenant:null,certs:{gas:'2026-07-09',eicr:'',epc:'2030-05-01',epcRating:'D'}}
-  ],
-  references:[
-    {id:'r1',applicant:'J. Okafor',propertyId:'p2',income:48000,
-     docs:{id:true,rtr:true,income:false,employer:false,prevll:false},
-     credit:'',creditState:'not_requested',status:'amber',note:'Awaiting latest payslip; employer ref outstanding.'}
-  ],
-  tenancies:[
-    {id:'t1',who:'8 Oakfield Court',propertyId:'p2',stage:'referencing'},
-    {id:'t2',who:'K. Dhawan',propertyId:'p1',stage:'managed'}
-  ],
-  invoices:[
-    {id:'inv1',no:'INV-0002',landlordId:'l1',propertyId:'p1',type:'management',
-     periodLabel:'Q3 2026 (Jul–Sep)',issued:'2026-07-01',supplyFrom:'2026-07-01',supplyTo:'2026-09-30',
-     lines:[{desc:'Full management fee · 115 Canterbury Road · 7.5% of £2,500/mo × 3 months',net:562.50}],
-     vat:false,status:'paid'}
-  ]
+  agency:{ name:'', address:'', redress:'', redressNo:'', cmp:'Not holding client money', cmpNo:'', refPartner:'', icoNo:'', vatRegistered:false, vatNumber:'', invoiceSeq:0, paymentTerms:14 },
+  landlords:[],
+  properties:[],
+  references:[],
+  tenancies:[],
+  invoices:[]
 };
 
 let S=load();
