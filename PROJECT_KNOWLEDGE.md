@@ -5847,3 +5847,49 @@ Turned the one-shot inventory generator into a **lifecycle**: Move-in (baseline)
 - **Agent finish-offs:** real management-agreement e-sign (currently simulated); Phase-2 landlord read-only login wired; referencing partner API.
 - **NEW — Website→portal enquiry capture:** marketing-site form posts leads into the portal (landlord → pipeline "Enquiry"; tenant → viewing/application request). Front-door CRM.
 - **NEW — Self-guided tenancy progression:** micro-step checklist per let (contract sent → signed back → holding deposit requested/received → deposit + first rent → move-in date → keys), RRA-ordered, with highlighted "next action" coaching a solo agent.
+
+---
+
+## Session 54 — 30 June–1 July 2026 — Tester Feedback Fixes, APT Deterministic Rebuild, Bulk Import, Tenant Portal Redesign, Agent Backend LIVE (#34–35)
+
+### Landlord tester-feedback bug fixes (all in landlord.html)
+- **False "All clear" with 0 certs** → weekly digest per-property Certs column now shows **"None tracked" (red)** when a property has zero certificates (was falling through to green "All clear").
+- **False licence statement** → tenancy doc no longer hard-codes "No HMO or selective licence applies"; uses the property's actual `licence_type` (only says none applies when explicitly None; else "…licence required — reference to be confirmed").
+- **Dead gov.uk link** → was the AI *inventing* it (not in code). Tenancy prompt hardened: forbids external links/URLs and forbids inventing facts (writes "[to be confirmed]").
+- **Tenant invite email** reframed from "manage maintenance requests" → proper tenant portal (info, documents, maintenance, comms).
+
+### APT / Tenancy generator — deterministic rebuild (#62)
+- Replaced AI free-form generation with **`buildWrittenStatement(f)`** — a hard-coded, RRA-2025-compliant Written Statement of Terms (verified once vs SI 2026/324 + Housing Act 1988 as amended); only variable fields filled. No AI → no hallucination/dead-links/false statements. Instant + free. Lives in the same e-sign preview/edit/sign flow (Tenant → Send for e-signature). Helpers: `_wstFmtDate`.
+- **Mandatory-field enforcement**: validation now blocks generation unless tenant name, property address, landlord name, landlord service address, start date, rent, rent due day, deposit amount, deposit scheme are all present.
+- Option-card copy updated ("Generate Written Statement", verified-template wording — no longer "AI-written").
+- **Profile-setup nudge** (`_profileNudgeBanner`) in Add Property step 1: prompts completing landlord profile since name/service-address auto-fill every document.
+
+### Bulk import (#64) — landlord.html
+- CSV **template download** + **file upload** + **paste-from-spreadsheet** → **validated preview** (Ready / Already exists / Needs fixing) → guarded batch insert. One row per property + optional tenant columns. Dedupe on address+postcode; plan-limit check; each insert try/caught so one bad row never aborts. "⤓ Import" button added beside all 5 "+ Add property" entry points. Functions: `moImportProps`, `_parseCSV`, `_importParseAndPreview`, `_renderImportPreview`, `_runImport`, `_downloadImportTemplate`.
+
+### Tenant portal redesign (#63) — tenant.html
+- Distinct **teal identity** (teal gradient header/banner/auth/loading/error instead of navy), **"TENANT PORTAL" badge** in header, gold logo accent, "Your home" wording — so it's unmistakably not the landlord app. Fixed stale **"RentSafe AI" → "NexLet"** branding in email/doc template.
+
+### Day-1 email accuracy (#61) — landlord.html
+- `_day1DocRows(attachment_urls, ctx)` builds the "documents attached" table from the **actual** attachment list (was hard-coding "✓ Attached" on every doc). Shows cert expiry + deposit-protection status.
+- Weekly LANDLORD compliance digest list format request logged as **#65** (server-side edge-function edit: Properties / Open maintenance / Certs expiring 60d / Unpaid rent / Status).
+
+### AGENT PORTAL BACKEND — #34 & #35 DONE & LIVE IN SUPABASE
+- **#34 SQL migration run** (idempotent, additive). New tables + RLS:
+  - `agencies`(id, owner_user_id **unique** → auth.users, name, address, redress_scheme, redress_no, cmp_scheme, cmp_no, ico_no, ref_partner, vat_registered, vat_number, invoice_seq, payment_terms)
+  - `landlords`(id, agency_id → agencies, name, email, phone, address, nrl, prs_reg, payout, contact_pref, aml, ownership, service, fee_pct, let_weeks, agreement, status, docs jsonb, comms jsonb, user_id)
+  - `agency_invoices`(id, agency_id, no, landlord_id, property_id, type, period_label, issued, supply_from, supply_to, lines jsonb, vat, status)
+  - `properties` += `agency_id`, `fee_pct`
+  - **RLS**: agencies → owner_user_id=auth.uid(); landlords/agency_invoices → agency_id in (owned agencies); properties → additive `properties_agency_access` policy (existing user_id policy still applies to self-serve landlords).
+- **#35 agent routing DONE**: `initApp()` in landlord.html now checks `agencies` for the logged-in user; **agency owner → redirects to agent.html** (append `?portal=landlord` to stay on landlord app). Agency row created for **sddhawan79@gmail.com** → "Your Lettings". "↩ Switch to landlord portal" link added to agent.html sidebar.
+- **agent.html demo data cleared**: SEED emptied + localStorage key bumped **nexlet_agency_v2 → v3** → blank clean start for real data.
+
+### Decisions / notes
+- **Pre-login portal chooser (#68)** AGREED (Goodlord-style: Landlord / Agent / Tenant on `login.html`, with agent auto-detect as safety net) — build next session (read login.html first).
+- **Contracts stay deterministic (no AI)** — management agreement (#40) still SIMULATED in onboarding; to build as a deterministic template like the tenancy WST. Agent portal needs AI only optionally (doc scanning); core features need none.
+- Cloudflare speed fix parked (#59); friend's 3-file refactor still on HOLD (#60).
+
+### Open / Next
+- **#36** wire agent.html to Supabase (replace localStorage v3 with the new tables; auth gate; agency_id scoping) — then **#37** test cross-agency RLS with a 2nd account.
+- **#68** pre-login chooser · **#40** management agreement template · **Stripe #38–39** · **#65** landlord digest list (edge fn) · **#59** Cloudflare.
+- FASTEST CASH (#66): agent.html invoicing works on local state NOW — user can invoice their 2 properties + print PDF before #36 lands.
