@@ -1530,6 +1530,7 @@ async function logAudit(action, tableName, recordId, details) {
 
 // ── AUTH ──
 async function logout() {
+  try{localStorage.removeItem('nxl_role');}catch(e){}
   await sb.auth.signOut();
   window.location.href = 'login.html';
 }
@@ -1914,6 +1915,14 @@ function checkComplianceReminders() {
 
 // ── INIT ──
 async function initApp() {
+  // Fast role hint: agents redirect to the agent portal INSTANTLY (before any query),
+  // so they never see a flash of the landlord dashboard. The async check below is the
+  // source of truth and keeps the hint fresh. ?portal=landlord lets an agent stay here.
+  try {
+    if (localStorage.getItem('nxl_role') === 'agent' && !/[?&]portal=landlord/.test(location.search)) {
+      window.location.replace('agent.html'); return;
+    }
+  } catch(_e0) {}
   const { data: { session } } = await sb.auth.getSession();
   if (!session) { window.location.href = 'login.html'; return; }
 
@@ -1923,6 +1932,7 @@ async function initApp() {
   try {
     const { data: _agency } = await sb.from('agencies').select('id').eq('owner_user_id', currentUser.id).maybeSingle();
     const _viewingAsLandlord = /[?&]portal=landlord/.test(location.search);
+    if (_agency) { try{localStorage.setItem('nxl_role','agent');}catch(_h){} } else { try{localStorage.removeItem('nxl_role');}catch(_h){} }
     if (_agency && !_viewingAsLandlord) { window.location.replace('agent.html'); return; }
     if (_agency && _viewingAsLandlord) { const _sw = document.getElementById('switch-to-agency'); if (_sw) _sw.style.display = 'flex'; }
     // Managed-landlord routing (#36 Phase 2): a landlord invited by an agency gets a

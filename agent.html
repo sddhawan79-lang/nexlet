@@ -207,8 +207,9 @@ async function boot(){
   const { data:{ session } }=await sb.auth.getSession();
   if(!session){ location.href='login.html'; return; }            // no session → login
   const { data:agency }=await sb.from('agencies').select('*').eq('owner_user_id',session.user.id).maybeSingle();
-  if(!agency){ location.href='landlord.html'; return; }          // not an agent → landlord app
+  if(!agency){ try{localStorage.removeItem('nxl_role');}catch(e){} location.href='landlord.html?managed=0'; return; }  // not an agent → landlord app (clear stale hint)
   LIVE=true; window._agencyId=agency.id;
+  try{localStorage.setItem('nxl_role','agent');}catch(e){}       // fast-path hint so future logins skip the query
   window._sessionToken=session.access_token; window._agentEmail=session.user.email; window._agentName=agency.name||'';
   try{ await loadData(agency); }catch(e){ console.error(e); toast('⚠ Could not load agency data',1); }
   reconcileAgreements();
