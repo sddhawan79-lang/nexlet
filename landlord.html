@@ -1917,6 +1917,14 @@ async function initApp() {
   if (!session) { window.location.href = 'login.html'; return; }
 
   currentUser = session.user;
+  // ── Agent role routing (#35): agents land on the agent portal, not the landlord app.
+  // Append ?portal=landlord to deliberately view the landlord portfolio as an agent.
+  try {
+    if (!/[?&]portal=landlord/.test(location.search)) {
+      const { data: _agency } = await sb.from('agencies').select('id').eq('owner_user_id', currentUser.id).maybeSingle();
+      if (_agency) { window.location.replace('agent.html'); return; }
+    }
+  } catch(_e) {}
   const email = currentUser.email || '';
   document.getElementById('sb-username').textContent = email.split('@')[0];
   document.getElementById('th-av').textContent = email.slice(0,2).toUpperCase();
