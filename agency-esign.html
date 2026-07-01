@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign Your Agreement — NexLet</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%230B1E3D'/><path d='M8 22V13l8-6 8 6v9' stroke='%2300C896' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/><path d='M13 22v-5h6v5' stroke='%2300C896' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --font:'DM Sans', system-ui, sans-serif;
+  --disp:'DM Serif Display', Georgia, serif;
+  --navy:#0B1E3D;--navy-mid:#132847;
+  --green:#00C896;--green-dark:#009970;
+  --white:#fff;--off:#F6F8FB;
+  --border:#E4EAF1;--txt:#1A2B45;--muted:#7A8FA6;
+  --red:#E53E3E;--amber:#D97706;--blue:#3B6FE8;
+  --radius:10px;
+}
+body{font-family:var(--font);color:var(--txt);background:var(--off);min-height:100vh;-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:var(--disp)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font);font-size:13px;font-weight:600;padding:10px 20px;border-radius:8px;cursor:pointer;transition:all .15s;border:1.5px solid var(--border);background:var(--white);color:var(--txt);text-decoration:none}
+.btn:hover{opacity:.85}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-navy{background:var(--navy);color:var(--white);border-color:var(--navy)}
+.btn-green{background:var(--green-dark);color:var(--white);border-color:var(--green-dark)}
+.portal-wrap{max-width:860px;margin:0 auto;padding:0 16px 40px}
+.portal-header{display:flex;align-items:center;justify-content:space-between;padding:18px 24px;background:var(--white);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50;margin-bottom:20px}
+.portal-logo{font-family:var(--disp);font-size:20px;font-weight:700;color:var(--navy);letter-spacing:-.3px}
+.portal-logo span{color:var(--green)}
+.portal-user{font-size:13px;font-weight:600;color:var(--txt)}
+.portal-body{padding:0 8px}
+.panel{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.panel-head{padding:16px 20px;border-bottom:1px solid var(--border)}
+.panel-head h2{font-size:15px;font-weight:600;color:var(--txt);margin-bottom:2px;font-family:var(--disp)}
+.panel-head p{font-size:12px;color:var(--muted);font-family:var(--font)}
+.panel-body{padding:20px}
+.esign-consent-overlay{position:fixed;inset:0;z-index:1000;background:rgba(11,30,61,0.96);display:flex;align-items:center;justify-content:center;padding:20px}
+.esign-consent-card{background:var(--white);border-radius:16px;padding:36px 32px;max-width:480px;width:100%;text-align:center}
+.doc-frame{max-height:60vh;overflow-y:auto;border-top:1px solid var(--border);font-size:13.5px;line-height:1.8;color:var(--txt);padding:20px 24px}
+.doc-frame h1,.doc-frame h2,.doc-frame h3{font-family:Georgia,serif;margin:16px 0 8px}
+.doc-frame p{margin-bottom:10px}
+.doc-frame ol,.doc-frame ul{padding-left:20px;margin-bottom:10px}
+.doc-frame li{margin-bottom:4px}
+.sig-canvas-wrap{border:1.5px solid var(--border);border-radius:8px;overflow:hidden;background:var(--white);touch-action:none;position:relative}
+#sig-canvas{display:block;width:100%;height:150px;cursor:crosshair;touch-action:none}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--navy);color:var(--white);font-size:13px;padding:12px 24px;border-radius:100px;z-index:9999;opacity:0;pointer-events:none;transition:opacity .3s}
+.toast.show{opacity:1}
+.toast.err{background:var(--red)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:var(--white);border-radius:50%;animation:spin .6s linear infinite}
+.success-card{text-align:center;padding:40px 20px}
+.success-anim{font-size:48px;margin-bottom:16px}
+.success-title{font-size:18px;font-weight:600;color:var(--txt);margin-bottom:8px;font-family:var(--disp)}
+.success-sub{font-size:13px;color:var(--muted);line-height:1.6;max-width:460px;margin:0 auto}
+.field-label{font-size:12px;font-weight:600;color:var(--txt);margin-bottom:6px;display:block}
+.field-input{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:14px;color:var(--txt)}
+.meta-row{display:flex;flex-wrap:wrap;gap:8px 24px;font-size:12px;color:var(--muted);margin-top:6px}
+.meta-row b{color:var(--txt);font-weight:600}
+.badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:4px 10px;border-radius:100px}
+.badge-green{background:rgba(0,200,150,.12);color:var(--green-dark)}
+@media(max-width:480px){
+  .esign-consent-card{padding:24px 18px}
+  .portal-header{padding:14px 16px}
+  .portal-logo{font-size:17px}
+  .panel-body{padding:14px}
+  .doc-frame{padding:14px 16px}
+}
+</style>
+</head>
+<body>
+
+<div id="toast" class="toast"></div>
+
+<!-- Consent overlay -->
+<div class="esign-consent-overlay" id="consent">
+  <div class="esign-consent-card">
+    <div style="font-size:40px;margin-bottom:16px">⚖️</div>
+    <h2 style="font-size:18px;font-weight:600;color:var(--txt);margin-bottom:12px;font-family:var(--disp)">Electronic Document Consent</h2>
+    <p style="font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:28px">By continuing, you confirm you consent to receiving and signing this agreement electronically. Electronic signatures are legally binding under the <strong style="color:var(--txt)">Electronic Communications Act 2000</strong>.</p>
+    <button class="btn btn-green" style="width:100%;padding:12px;font-size:14px" onclick="acceptConsent()">I Agree — Continue</button>
+  </div>
+</div>
+
+<!-- Signing body -->
+<div id="body" style="display:none">
+  <div class="portal-wrap">
+    <div class="portal-header">
+      <div class="portal-logo">Nex<span>Let</span></div>
+      <div class="portal-user" id="landlord-display"></div>
+    </div>
+    <div class="portal-body">
+
+      <!-- Status screen (loading / already signed / error) -->
+      <div id="status-screen" style="display:none">
+        <div class="panel"><div class="panel-body"><div id="status-inner" class="success-card"></div></div></div>
+      </div>
+
+      <!-- Sign screen -->
+      <div id="sign-screen" style="display:none">
+        <div class="panel" style="margin-bottom:16px">
+          <div class="panel-head" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+            <div>
+              <h2 id="doc-title">Letting &amp; Management Agreement</h2>
+              <p id="doc-sub">Please review the full agreement below before signing.</p>
+            </div>
+            <span class="badge badge-green" id="agent-signed-badge" style="display:none"></span>
+          </div>
+          <div class="doc-frame" id="doc-frame"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><h2>Your signature</h2><p>Sign in the box using your mouse or finger.</p></div>
+          <div class="panel-body">
+            <label class="field-label" for="signer-name">Full name (as signatory)</label>
+            <input type="text" id="signer-name" class="field-input" style="margin-bottom:16px" placeholder="e.g. Jane Smith" autocomplete="name">
+            <div class="sig-canvas-wrap"><canvas id="sig-canvas"></canvas></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:12px;flex-wrap:wrap">
+              <button class="btn" onclick="clearSig()" style="padding:8px 14px">Clear</button>
+              <div style="display:flex;gap:10px">
+                <button class="btn" onclick="declineAgreement()" style="padding:10px 16px;color:var(--red);border-color:var(--border)">Decline</button>
+                <button class="btn btn-green" id="submit-btn" onclick="submitSig()" style="padding:11px 22px">Adopt &amp; sign agreement</button>
+              </div>
+            </div>
+            <p style="font-size:11px;color:var(--muted);line-height:1.6;margin-top:14px">By clicking “Adopt &amp; sign”, you agree that this electronic signature is the legal equivalent of your handwritten signature and that a timestamped, countersigned copy will be issued to you and your managing agent.</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Supabase + SignaturePad -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
+<script>
+// ── Standalone e-sign for the Letting & Management Agreement ────────────────
+// Talks ONLY to agency_agreement_load / _sign / _decline (token-gated RPCs).
+// No email here — the agent portal sends the confirmation + final PDF.
+const SUPABASE_URL      = 'https://mahtcfukgzbonwibtsxz.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1haHRjZnVrZ3pib253aWJ0c3h6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MjQ2MDAsImV4cCI6MjA5MTIwMDYwMH0.-wC55rGp1WFKfjKR3EhuXqAPDiWJ4w_e2LBXjHr_y5Y';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let pad = null, agreement = null;
+const TOKEN = new URLSearchParams(location.search).get('t');
+const $ = id => document.getElementById(id);
+
+function toast(msg, err){ const t=$('toast'); t.textContent=msg; t.className='toast show'+(err?' err':''); setTimeout(()=>t.className='toast',3000); }
+function fmtDate(d){ return new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}); }
+function esc(s){ const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+
+function acceptConsent(){ $('consent').style.display='none'; $('body').style.display='block'; init(); }
+
+function showStatus(icon, title, sub){
+  $('sign-screen').style.display='none';
+  $('status-screen').style.display='block';
+  $('status-inner').innerHTML =
+    '<div class="success-anim">'+icon+'</div>'+
+    '<div class="success-title">'+esc(title)+'</div>'+
+    '<div class="success-sub">'+sub+'</div>';
+}
+
+async function init(){
+  if(!TOKEN){ showStatus('⚠️','Invalid link','This signing link is missing its reference. Please use the link from your email.'); return; }
+  $('sign-screen').style.display='block';
+  $('doc-frame').innerHTML = '<p style="color:var(--muted)">Loading your agreement…</p>';
+  const { data, error } = await sb.rpc('agency_agreement_load', { p_token: TOKEN });
+  const row = Array.isArray(data) ? data[0] : data;
+  if(error || !row){ showStatus('⚠️','Agreement not found','This link may have expired or already been completed. Please contact your managing agent.'); return; }
+  agreement = row;
+
+  if(row.status === 'signed'){ showStatus('✅','Already signed','You have already signed this agreement. A countersigned copy was emailed to you. You can close this page.'); return; }
+  if(row.status === 'declined'){ showStatus('🚫','Agreement declined','This agreement was declined. Please contact your managing agent if this was a mistake.'); return; }
+  if(row.status === 'void'){ showStatus('🚫','No longer active','This agreement has been withdrawn by your managing agent.'); return; }
+
+  // Render the document + agent-signed badge
+  $('doc-title').textContent = row.service === 'letonly' ? 'Tenant-Find Agreement' : 'Letting & Management Agreement';
+  $('doc-frame').innerHTML = row.document_html || '<p>(Agreement text unavailable.)</p>';
+  if(row.agent_signed_at){
+    const b = $('agent-signed-badge');
+    b.style.display = 'inline-flex';
+    b.textContent = '✔ Signed by agent ' + fmtDate(row.agent_signed_at);
+  }
+  if(row.landlord_name){ $('signer-name').value = row.landlord_name; $('landlord-display').textContent = row.landlord_name; }
+
+  // Signature pad
+  const canvas = $('sig-canvas');
+  requestAnimationFrame(()=>{
+    const ratio = Math.max(window.devicePixelRatio || 1, 1);
+    canvas.width = canvas.offsetWidth * ratio;
+    canvas.height = canvas.offsetHeight * ratio;
+    canvas.getContext('2d').scale(ratio, ratio);
+    pad = new SignaturePad(canvas, { penColor:'#0B1E3D', minWidth:0.7, maxWidth:2.2 });
+  });
+}
+
+function clearSig(){ if(pad) pad.clear(); }
+
+async function submitSig(){
+  const name = $('signer-name').value.trim();
+  if(!name){ toast('Please type your full name', true); return; }
+  if(!pad || pad.isEmpty()){ toast('Please draw your signature', true); return; }
+  const btn = $('submit-btn'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Signing…';
+  const sigPng = pad.toDataURL('image/png');
+  try{
+    const { data, error } = await sb.rpc('agency_agreement_sign', { p_token: TOKEN, p_sig_png: sigPng, p_name: name });
+    if(error) throw error;
+    if(data && data !== 'signed'){ showStatus('ℹ️','Already completed','This agreement was already '+esc(data)+'.'); return; }
+    showStatus('✅','Agreement signed',
+      'Thank you, <b>'+esc(name)+'</b>. You signed on <b>'+fmtDate(new Date())+'</b>.<br><br>'+
+      'Your managing agent has been notified and a timestamped, countersigned PDF copy will be emailed to you shortly. You can close this page.');
+  }catch(e){
+    console.error(e); btn.disabled=false; btn.textContent='Adopt & sign agreement';
+    toast('Could not save signature — please try again', true);
+  }
+}
+
+async function declineAgreement(){
+  const reason = prompt('Optionally, tell your agent why you’re declining (this is sent to them):') || '';
+  try{
+    await sb.rpc('agency_agreement_decline', { p_token: TOKEN, p_reason: reason });
+    showStatus('🚫','Agreement declined','Your managing agent has been notified. If this was a mistake, please contact them to re-issue the agreement.');
+  }catch(e){ console.error(e); toast('Could not record — please try again', true); }
+}
+
+// If consent was somehow bypassed, still guard init behind the button.
+</script>
+</body>
+</html>
