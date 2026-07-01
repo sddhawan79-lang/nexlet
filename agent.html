@@ -358,6 +358,7 @@ function vLandlordDetail(){
     <div style="display:flex;gap:8px;margin:14px 0 18px">
       <button class="btn navy" onclick="openComm('${l.id}')">＋ Log contact</button>
       <button class="btn" onclick="go('llportal','${l.id}')">👁 View as landlord</button>
+      <button class="btn" onclick="inviteToPortal('${l.id}')">📧 Invite to portal</button>
       ${(()=>{ const a=agreementFor(l.id);
         if(l.agreement) return `<button class="btn" onclick="viewSignedAgreement('${l.id}')">✔ View signed agreement</button>`;
         if(a&&a.status==='sent') return `<button class="btn" onclick="openAgreement('${l.id}')" style="border-color:var(--amber);color:var(--amber)">⏳ Awaiting landlord signature · resend</button>`;
@@ -1035,6 +1036,29 @@ function viewSignedAgreement(id){
 // Branding: Beacon Residentials Ltd (falls back if agency settings blank).
 // ═══════════════════════════════════════════════════════════════════════════
 function agencyBrand(){ const a=S.agency; return { name:a.name||'Beacon Residentials Ltd', ico:a.icoNo||'ZC164221', address:a.address||'', redress:a.redress||'', redressNo:a.redressNo||'', email:window._agentEmail||'documents@nexlet.co.uk', agent:window._agentName||a.name||'Beacon Residentials Ltd' }; }
+
+// Invite a managed landlord to their read-only portal (landlord-portal.html).
+async function inviteToPortal(id){
+  const l=L(id); if(!l.id) return;
+  if(!l.email){ toast('Add the landlord\'s email first (Edit details)',1); return; }
+  const link=new URL('landlord-portal.html', location.href).href;
+  const login=new URL('login.html', location.href).href;
+  await agencyEmail(l.email, 'Your portfolio portal — '+agencyBrand().name, portalInviteHtml(l,link,login));
+  l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:'Read-only portal invite sent to '+l.email});
+  pushLandlord(l); render(); toast('✓ Portal invite sent to '+l.name);
+}
+function portalInviteHtml(l,link,login){ const b=agencyBrand();
+  return `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#1A2B45">
+    <div style="background:#0B1E3D;padding:20px 24px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:20px;font-weight:700">${esc(b.name)}</span>${b.ico?`<div style="font-size:10px;color:#7F9CC0;margin-top:2px">ICO Reg. ${esc(b.ico)}</div>`:''}</div>
+    <div style="border:1px solid #E4EAF1;border-top:none;border-radius:0 0 10px 10px;padding:26px 24px">
+      <p>Dear ${esc(l.name)},</p>
+      <p>${esc(b.name)} has given you access to your own <b>online portfolio portal</b> — a secure, read-only view of your properties, compliance certificates, rent and management agreement.</p>
+      <p style="text-align:center;margin:24px 0"><a href="${login}" style="background:#009970;color:#fff;text-decoration:none;font-weight:600;padding:13px 30px;border-radius:8px;display:inline-block">Sign in to your portal</a></p>
+      <p style="font-size:12.5px;color:#7A8FA6">Please sign in (or create your account) using <b>${esc(l.email)}</b> — the email we hold for you — so we can link you to your portfolio automatically. Once signed in you'll be taken straight to your dashboard.</p>
+      <p style="font-size:11px;color:#7A8FA6">Direct link: <a href="${link}" style="color:#009970">${esc(link)}</a></p>
+      <div style="margin-top:18px;padding-top:12px;border-top:1px solid #E4EAF1;font-size:10.5px;color:#7A8FA6">${esc(b.name)}${b.ico?' · ICO Reg. '+esc(b.ico):''} · secured by NexLet</div>
+    </div></div>`;
+}
 function letterWrap(subject, inner){ const b=agencyBrand(); const foot=[b.name, b.ico?'ICO Reg. '+b.ico:'', b.redress?b.redress+(b.redressNo?' ('+b.redressNo+')':''):''].filter(Boolean).join(' · ');
   return `<div style="font-family:Georgia,'Times New Roman',serif;max-width:640px;margin:0 auto;color:#1A2B45">
     <div style="background:#0B1E3D;padding:18px 26px;border-radius:8px 8px 0 0;display:flex;align-items:center;justify-content:space-between">

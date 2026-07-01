@@ -1925,6 +1925,15 @@ async function initApp() {
     const _viewingAsLandlord = /[?&]portal=landlord/.test(location.search);
     if (_agency && !_viewingAsLandlord) { window.location.replace('agent.html'); return; }
     if (_agency && _viewingAsLandlord) { const _sw = document.getElementById('switch-to-agency'); if (_sw) _sw.style.display = 'flex'; }
+    // Managed-landlord routing (#36 Phase 2): a landlord invited by an agency gets a
+    // read-only portal. claim_managed_landlord() links + returns their id (or 'none' for
+    // self-serve landlords, who are unaffected). ?managed=0 opts out.
+    if (!_agency && !/[?&]managed=0/.test(location.search)) {
+      try {
+        const { data: _ml } = await sb.rpc('claim_managed_landlord');
+        if (_ml && _ml !== 'none' && _ml !== 'no_user') { window.location.replace('landlord-portal.html'); return; }
+      } catch(_e2) {}
+    }
   } catch(_e) {}
   const email = currentUser.email || '';
   document.getElementById('sb-username').textContent = email.split('@')[0];
