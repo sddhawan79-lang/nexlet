@@ -504,9 +504,39 @@ function savePropFee(pid){ const p=P(pid); p.feePct=parseFloat(val('pf-fee')); i
   const l=L(p.landlordId); l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:'Fee for '+p.address+' set to '+p.feePct+'%'});
   save(); pushProperty(p); pushLandlord(l); closeModal(); render(); toast('✓ Fee updated for this property'); }
 function editCert(pid,key){ const p=P(pid); const c=p.certs||(p.certs={}); const cur=c[key]||'';
-  let body=`<div class="fg"><label>${key.toUpperCase()} expiry date</label><input id="ct-date" type="date" value="${cur}"></div>`;
+  const label={gas:'Gas Safety (CP12)',eicr:'EICR (Electrical)',epc:'EPC'}[key]||key.toUpperCase();
+  let body=`<div class="note" style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <label class="btn navy sm" style="cursor:pointer;margin:0">✦ Scan ${label} with AI<input type="file" accept="application/pdf,image/*" style="display:none" onchange="aiScanCert('${pid}','${key}',this)"></label>
+      <span id="ct-scan-status" class="faint" style="font-size:11.5px">Upload the certificate — AI reads the expiry date.</span></div>
+    <div class="fg"><label>${label} expiry / valid-until date</label><input id="ct-date" type="date" value="${cur}"></div>`;
   if(key==='epc') body+=`<div class="fg"><label>EPC rating</label><select id="ct-rating">${['A','B','C','D','E','F','G'].map(x=>`<option ${c.epcRating===x?'selected':''}>${x}</option>`).join('')}</select></div>`;
-  modal('Update '+key.toUpperCase(),body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveCert('${pid}','${key}')">Save</button>`); }
+  modal('Update '+label,body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveCert('${pid}','${key}')">Save</button>`); }
+// Phase B — AI compliance cert scan. Reuses the shared ai-proxy (agent JWT).
+function _fileB64(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(',')[1]); r.onerror=rej; r.readAsDataURL(file); }); }
+async function aiScanCert(pid,key,input){
+  const file=input.files&&input.files[0]; if(!file) return;
+  const st=document.getElementById('ct-scan-status');
+  if(!window._sessionToken){ if(st)st.textContent='AI scan needs a live login — enter the date manually.'; return; }
+  if(st) st.innerHTML='<span style="color:var(--blue)">✦ Reading the certificate…</span>';
+  try{
+    const b64=await _fileB64(file); const isImg=(file.type||'').startsWith('image/');
+    const kind={gas:'Gas Safety Record (CP12)',eicr:'Electrical Installation Condition Report (EICR)',epc:'Energy Performance Certificate (EPC)'}[key]||'certificate';
+    const validity={gas:'1 year',eicr:'5 years',epc:'10 years'}[key]||'the standard period';
+    const prompt=`This is a UK ${kind}. Return ONLY JSON, no prose: {"expiry":"YYYY-MM-DD"${key==='epc'?',"rating":"A|B|C|D|E|F|G"':''}}. "expiry" = the certificate's valid-until / next-inspection-due / expiry date. If only an inspection/issue date is shown, add ${validity} to it. If unreadable, use null.`;
+    const content=isImg
+      ? [{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:prompt}]
+      : [{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},{type:'text',text:prompt}];
+    const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:200,messages:[{role:'user',content}]})});
+    if(res.status===402){ if(st)st.textContent='AI allowance reached — enter the date manually.'; return; }
+    const data=await res.json(); const txt=((data.content&&data.content[0]&&data.content[0].text)||'{}').replace(/```json|```/g,'').trim();
+    const parsed=JSON.parse(txt);
+    if(parsed && parsed.expiry){ const el=document.getElementById('ct-date'); if(el) el.value=parsed.expiry;
+      if(key==='epc'&&parsed.rating){ const r=document.getElementById('ct-rating'); if(r) r.value=parsed.rating; }
+      if(st) st.innerHTML='<span style="color:var(--green)">✓ Read '+esc(parsed.expiry)+(key==='epc'&&parsed.rating?' · rating '+esc(parsed.rating):'')+' — review & Save</span>';
+      toast('✦ Certificate read — check the date & Save');
+    } else { if(st)st.textContent='Could not read a date — please enter it manually.'; }
+  }catch(e){ console.error(e); if(st)st.textContent='Could not read the file — enter the date manually.'; }
+}
 function saveCert(pid,key){ const p=P(pid); p.certs=p.certs||{}; p.certs[key]=val('ct-date'); if(key==='epc')p.certs.epcRating=val('ct-rating'); save(); pushProperty(p); closeModal(); render(); toast('✓ '+key.toUpperCase()+' updated'); }
 function setTenant(pid){ const p=P(pid); const t=p.tenant||{}; const body=`<div class="fg"><label>Tenant name</label><input id="tn-name" value="${esc(t.name||'')}"></div>
   <div class="fg"><label>Email</label><input id="tn-email" value="${esc(t.email||'')}"></div>
