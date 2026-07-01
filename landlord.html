@@ -536,6 +536,7 @@ function _hideLoader() {
       <span id="trial-indicator" style="display:none;font-size:10px;font-weight:600;padding:2px 8px;border-radius:100px;margin:4px 0"></span>
       <button class="sb-logout" onclick="logout()">Out</button>
     </div>
+    <a id="switch-to-agency" href="agent.html" style="display:none;align-items:center;gap:6px;margin-top:9px;font-size:11px;color:rgba(255,255,255,0.55);text-decoration:none" title="Back to your agency portal">↩ Switch to agency portal</a>
   </div>
   <div id="sb-trial-chip" style="display:none"></div>
   <div style="display:flex;align-items:center;justify-content:center;gap:9px;padding:7px 10px 12px;font-size:11px;color:rgba(255,255,255,0.42)">
@@ -1920,10 +1921,10 @@ async function initApp() {
   // ── Agent role routing (#35): agents land on the agent portal, not the landlord app.
   // Append ?portal=landlord to deliberately view the landlord portfolio as an agent.
   try {
-    if (!/[?&]portal=landlord/.test(location.search)) {
-      const { data: _agency } = await sb.from('agencies').select('id').eq('owner_user_id', currentUser.id).maybeSingle();
-      if (_agency) { window.location.replace('agent.html'); return; }
-    }
+    const { data: _agency } = await sb.from('agencies').select('id').eq('owner_user_id', currentUser.id).maybeSingle();
+    const _viewingAsLandlord = /[?&]portal=landlord/.test(location.search);
+    if (_agency && !_viewingAsLandlord) { window.location.replace('agent.html'); return; }
+    if (_agency && _viewingAsLandlord) { const _sw = document.getElementById('switch-to-agency'); if (_sw) _sw.style.display = 'flex'; }
   } catch(_e) {}
   const email = currentUser.email || '';
   document.getElementById('sb-username').textContent = email.split('@')[0];
