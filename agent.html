@@ -131,6 +131,8 @@ h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px
 <div id="modal-root"></div>
 <div class="toast" id="toast"></div>
 
+<!-- Supabase (same project as landlord.html / tenant.html) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
 <script>
 // ─────────────────────────────────────────────────────────────
 // NexLet Agency Portal — functional front-end (local state demo).
@@ -143,6 +145,68 @@ const DEF_FEE=7.5;        // default full-management % of monthly rent (editable
 const DEF_WEEKS=3;        // default let-only fee = weeks of rent (editable per landlord)
 const REF_PARTNERS=['Vouch','FCC Paragon','HomeLet','Van Mildert','Goodlord (Acquire)'];
 
+// ─────────────────────────────────────────────────────────────
+// SUPABASE DATA LAYER  (Session 36 — wires this portal to the shared backend)
+// Same project as landlord.html / tenant.html. Security model: DEV-SPEC-agency-portal.md.
+//  • LIVE mode  → real Supabase, scoped to window._agencyId, protected by RLS.
+//  • DEMO mode  → local-state only (open with ?demo=1). Touches no real data.
+// ─────────────────────────────────────────────────────────────
+const SUPABASE_URL = 'https://mahtcfukgzbonwibtsxz.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1haHRjZnVrZ3pib253aWJ0c3h6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MjQ2MDAsImV4cCI6MjA5MTIwMDYwMH0.-wC55rGp1WFKfjKR3EhuXqAPDiWJ4w_e2LBXjHr_y5Y';
+let sb=null; try{ const { createClient }=window.supabase; sb=createClient(SUPABASE_URL,SUPABASE_ANON_KEY); }catch(e){ console.warn('Supabase client unavailable — demo only',e); }
+let LIVE=false;                 // set true only after the auth gateway passes
+window._agencyId=null;          // every LIVE query is scoped to this agency
+
+// ── row ⇄ in-memory-object mappers (snake_case DB ⇄ camelCase S) ──
+const rowToAgency=r=>({name:r.name||'',address:r.address||'',redress:r.redress_scheme||'',redressNo:r.redress_no||'',cmp:r.cmp_scheme||'Not holding client money',cmpNo:r.cmp_no||'',refPartner:r.ref_partner||'',icoNo:r.ico_no||'',vatRegistered:!!r.vat_registered,vatNumber:r.vat_number||'',invoiceSeq:r.invoice_seq||0,paymentTerms:r.payment_terms||14});
+const agencyToRow=a=>({name:a.name,address:a.address,redress_scheme:a.redress,redress_no:a.redressNo,cmp_scheme:a.cmp,cmp_no:a.cmpNo,ref_partner:a.refPartner,ico_no:a.icoNo,vat_registered:!!a.vatRegistered,vat_number:a.vatNumber,invoice_seq:a.invoiceSeq||0,payment_terms:a.paymentTerms||14,updated_at:new Date().toISOString()});
+const rowToLandlord=r=>({id:r.id,name:r.name||'',email:r.email||'',phone:r.phone||'',address:r.address||'',nrl:!!r.nrl,prsReg:r.prs_reg||'',payout:r.payout||'',contactPref:r.contact_pref||'Email',aml:!!r.aml_verified,ownership:!!r.ownership_verified,service:r.service||'full',feePct:r.fee_pct,letWeeks:r.let_weeks,agreement:!!r.agreement_signed,status:r.status||'pending',docs:r.docs||{},comms:r.comms||[]});
+const landlordToRow=l=>({id:l.id,agency_id:window._agencyId,name:l.name,email:l.email,phone:l.phone,address:l.address,nrl:!!l.nrl,prs_reg:l.prsReg,payout:l.payout,contact_pref:l.contactPref,aml_verified:!!l.aml,ownership_verified:!!l.ownership,service:l.service,fee_pct:l.feePct,let_weeks:l.letWeeks,agreement_signed:!!l.agreement,status:l.status,docs:l.docs||{},comms:l.comms||[],updated_at:new Date().toISOString()});
+const rowToProp=r=>({id:r.id,landlordId:r.landlord_id,address:r.address||'',city:r.city||'',rent:r.rent||0,beds:r.beds||1,feePct:r.fee_pct,certs:r.certs||{},tenant:r.tenant||undefined});
+const propToRow=p=>({id:p.id,agency_id:window._agencyId,landlord_id:p.landlordId,address:p.address,city:p.city,rent:p.rent||0,beds:p.beds||1,fee_pct:p.feePct,certs:p.certs||{},tenant:p.tenant||null});
+const rowToRef=r=>({id:r.id,applicant:r.applicant||'',propertyId:r.property_id||'',income:r.income||'',docs:r.docs||{id:false,rtr:false,income:false,employer:false,prevll:false},credit:r.credit_ref||'',creditState:r.credit_state||'not_requested',status:r.status||'none',note:r.note||''});
+const refToRow=r=>({id:r.id,agency_id:window._agencyId,applicant:r.applicant,property_id:r.propertyId,income:parseInt(r.income)||0,docs:r.docs||{},credit_ref:r.credit||'',credit_state:r.creditState||'not_requested',status:r.status||'none',note:r.note||'',updated_at:new Date().toISOString()});
+const rowToTen=r=>({id:r.id,who:r.who||'',propertyId:r.property_id||'',stage:r.stage||'instructed'});
+const tenToRow=t=>({id:t.id,agency_id:window._agencyId,who:t.who,property_id:t.propertyId,stage:t.stage,updated_at:new Date().toISOString()});
+const rowToInv=r=>({id:r.id,no:r.no||'',landlordId:r.landlord_id||'',propertyId:r.property_id||'',type:r.type||'full',periodLabel:r.period_label||'',issued:r.issued||'',supplyFrom:r.supply_from||'',supplyTo:r.supply_to||'',lines:r.lines||[],vat:!!r.vat,status:r.status||'draft'});
+const invToRow=i=>({id:i.id,agency_id:window._agencyId,no:i.no,landlord_id:i.landlordId,property_id:i.propertyId,type:i.type,period_label:i.periodLabel,issued:i.issued||null,supply_from:i.supplyFrom||null,supply_to:i.supplyTo||null,lines:i.lines||[],vat:!!i.vat,status:i.status});
+
+// ── targeted writes (§4). No-ops in DEMO mode; toast on error in LIVE. ──
+async function _w(promise){ if(!LIVE)return; try{ const {error}=await promise; if(error){console.error(error);toast('⚠ Save failed — retry',1);} }catch(e){ console.error(e); toast('⚠ Save failed — retry',1); } }
+const pushLandlord =l  =>_w(sb.from('landlords').upsert(landlordToRow(l)));
+const pushProperty =p  =>_w(sb.from('properties').upsert(propToRow(p)));
+const pushTenancy  =t  =>_w(sb.from('tenancies').upsert(tenToRow(t)));
+const pushReference=r  =>_w(sb.from('agency_references').upsert(refToRow(r)));
+const pushInvoice  =i  =>_w(sb.from('invoices').upsert(invToRow(i)));
+const pushAgency   =() =>_w(sb.from('agencies').update(agencyToRow(S.agency)).eq('id',window._agencyId));
+
+// ── hydrate S from Supabase (LIVE) ──
+async function loadData(agency){
+  S.agency=rowToAgency(agency);
+  const q=t=>sb.from(t).select('*').eq('agency_id',window._agencyId);
+  const [ll,pr,rf,tn,iv]=await Promise.all([q('landlords'),q('properties'),q('agency_references'),q('tenancies'),q('invoices')]);
+  S.landlords =(ll.data||[]).map(rowToLandlord);
+  S.properties=(pr.data||[]).map(rowToProp);
+  S.references=(rf.data||[]).map(rowToRef);
+  S.tenancies =(tn.data||[]).map(rowToTen);
+  S.invoices  =(iv.data||[]).map(rowToInv);
+}
+
+// ── auth gateway (§2a-B) + boot ──
+async function boot(){
+  const demo=new URLSearchParams(location.search).has('demo');
+  if(demo || !sb){ LIVE=false; render(); return; }              // explicit demo, or lib missing
+  document.getElementById('view').innerHTML='<div class="empty">Loading your agency…</div>';
+  const { data:{ session } }=await sb.auth.getSession();
+  if(!session){ location.href='login.html'; return; }            // no session → login
+  const { data:agency }=await sb.from('agencies').select('*').eq('owner_user_id',session.user.id).maybeSingle();
+  if(!agency){ location.href='landlord.html'; return; }          // not an agent → landlord app
+  LIVE=true; window._agencyId=agency.id;
+  try{ await loadData(agency); }catch(e){ console.error(e); toast('⚠ Could not load agency data',1); }
+  render();
+}
+
+
 const SEED={
   agency:{ name:'', address:'', redress:'', redressNo:'', cmp:'Not holding client money', cmpNo:'', refPartner:'', icoNo:'', vatRegistered:false, vatNumber:'', invoiceSeq:0, paymentTerms:14 },
   landlords:[],
@@ -154,7 +218,7 @@ const SEED={
 
 let S=load();
 function load(){ try{const j=JSON.parse(localStorage.getItem(LS));if(j&&j.landlords)return j;}catch(e){} return JSON.parse(JSON.stringify(SEED)); }
-function save(){ try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){} }
+function save(){ if(LIVE)return; try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){} }  // LIVE persists via targeted push* writes
 function uid(p){ return p+Math.random().toString(36).slice(2,8); }
 function P(id){ return S.properties.find(x=>x.id===id)||{}; }
 function L(id){ return S.landlords.find(x=>x.id===id)||{}; }
@@ -329,7 +393,7 @@ function tenancyCard(t,stg){
   return `<div class="tcard"><div class="w">${esc(t.who)}</div><div class="p">${esc(P(t.propertyId).address||'')}</div>
     ${next?`<button class="btn sm" onclick="advance('${t.id}')">Advance → ${next.t}</button>`:`<span class="pill" style="background:var(--green-bg);color:var(--green)">● Live</span>`}</div>`;
 }
-function advance(id){ const t=S.tenancies.find(x=>x.id===id); const i=STAGES.findIndex(s=>s.k===t.stage); if(STAGES[i+1]){t.stage=STAGES[i+1].k;save();render();toast('Moved to '+STAGES[i+1].t);} }
+function advance(id){ const t=S.tenancies.find(x=>x.id===id); const i=STAGES.findIndex(s=>s.k===t.stage); if(STAGES[i+1]){t.stage=STAGES[i+1].k;save();pushTenancy(t);render();toast('Moved to '+STAGES[i+1].t);} }
 
 // ── REFERENCING ──
 function vReferencing(){
@@ -410,20 +474,20 @@ function editPropFee(pid){ const p=P(pid);
 }
 function savePropFee(pid){ const p=P(pid); p.feePct=parseFloat(val('pf-fee')); if(isNaN(p.feePct))p.feePct=DEF_FEE;
   const l=L(p.landlordId); l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:'Fee for '+p.address+' set to '+p.feePct+'%'});
-  save(); closeModal(); render(); toast('✓ Fee updated for this property'); }
+  save(); pushProperty(p); pushLandlord(l); closeModal(); render(); toast('✓ Fee updated for this property'); }
 function editCert(pid,key){ const p=P(pid); const c=p.certs||(p.certs={}); const cur=c[key]||'';
   let body=`<div class="fg"><label>${key.toUpperCase()} expiry date</label><input id="ct-date" type="date" value="${cur}"></div>`;
   if(key==='epc') body+=`<div class="fg"><label>EPC rating</label><select id="ct-rating">${['A','B','C','D','E','F','G'].map(x=>`<option ${c.epcRating===x?'selected':''}>${x}</option>`).join('')}</select></div>`;
   modal('Update '+key.toUpperCase(),body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveCert('${pid}','${key}')">Save</button>`); }
-function saveCert(pid,key){ const p=P(pid); p.certs=p.certs||{}; p.certs[key]=val('ct-date'); if(key==='epc')p.certs.epcRating=val('ct-rating'); save(); closeModal(); render(); toast('✓ '+key.toUpperCase()+' updated'); }
+function saveCert(pid,key){ const p=P(pid); p.certs=p.certs||{}; p.certs[key]=val('ct-date'); if(key==='epc')p.certs.epcRating=val('ct-rating'); save(); pushProperty(p); closeModal(); render(); toast('✓ '+key.toUpperCase()+' updated'); }
 function setTenant(pid){ const p=P(pid); const t=p.tenant||{}; const body=`<div class="fg"><label>Tenant name</label><input id="tn-name" value="${esc(t.name||'')}"></div>
   <div class="fg"><label>Email</label><input id="tn-email" value="${esc(t.email||'')}"></div>
   <div class="fg"><label>Tenancy start</label><input id="tn-start" type="date" value="${t.start||''}"></div>
   <div class="hint">Saving issues the tenant portal link (same as landlord.html) and moves the let to Managed.</div>`;
   modal('Set up tenant',body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveTenant('${pid}')">Save &amp; issue portal</button>`); }
 function saveTenant(pid){ const p=P(pid); const nm=val('tn-name'); if(!nm){toast('Enter tenant name',1);return;} p.tenant={name:nm,email:val('tn-email'),start:val('tn-start')};
-  const tn=S.tenancies.find(t=>t.propertyId===pid); if(tn)tn.stage='managed'; else S.tenancies.push({id:uid('t'),who:p.address,propertyId:pid,stage:'managed'});
-  save(); closeModal(); render(); toast('✓ Tenant set up · portal link issued'); }
+  let tn=S.tenancies.find(t=>t.propertyId===pid); if(tn)tn.stage='managed'; else { tn={id:uid('t'),who:p.address,propertyId:pid,stage:'managed'}; S.tenancies.push(tn); }
+  save(); pushProperty(p); pushTenancy(tn); closeModal(); render(); toast('✓ Tenant set up · portal link issued'); }
 
 // ── LANDLORD READ-ONLY PORTAL (Phase 2 preview) ──
 function vLandlordPortal(){
@@ -520,9 +584,9 @@ function createInvoice(){
   }
   const inv={id:uid('inv'),no:nextInvoiceNo(),landlordId:IV.landlordId,propertyId:(props[0]||{}).id||'',type:l.service,
     periodLabel:qd.label,issued:today(),supplyFrom:qd.from,supplyTo:qd.to,lines,vat:!!S.agency.vatRegistered,status:'draft'};
-  S.invoices=S.invoices||[]; S.invoices.push(inv); save(); closeModal(); go('invoice',inv.id); toast('✓ '+inv.no+' created');
+  S.invoices=S.invoices||[]; S.invoices.push(inv); save(); pushInvoice(inv); pushAgency(); closeModal(); go('invoice',inv.id); toast('✓ '+inv.no+' created');
 }
-function setInvStatus(id,s){ const inv=S.invoices.find(i=>i.id===id); inv.status=s; save(); render(); toast('Invoice marked '+s); }
+function setInvStatus(id,s){ const inv=S.invoices.find(i=>i.id===id); inv.status=s; save(); pushInvoice(inv); render(); toast('Invoice marked '+s); }
 
 function vInvoiceDetail(){
   const inv=(S.invoices||[]).find(i=>i.id===sel); if(!inv) return vInvoices();
@@ -591,7 +655,7 @@ function vSettings(){
       <button class="btn navy" onclick="saveSettings()">Save settings</button>
     </div></div>`;
 }
-function saveSettings(){ S.agency.name=val('set-name'); S.agency.address=val('set-address'); S.agency.redress=val('set-redress'); S.agency.redressNo=val('set-redressno'); S.agency.cmp=val('set-cmp'); S.agency.icoNo=val('set-ico'); S.agency.refPartner=val('set-ref'); S.agency.vatRegistered=val('set-vat')==='yes'; S.agency.vatNumber=val('set-vatno'); S.agency.paymentTerms=parseInt(val('set-terms'))||14; save(); render(); toast('✓ Settings saved'); }
+function saveSettings(){ S.agency.name=val('set-name'); S.agency.address=val('set-address'); S.agency.redress=val('set-redress'); S.agency.redressNo=val('set-redressno'); S.agency.cmp=val('set-cmp'); S.agency.icoNo=val('set-ico'); S.agency.refPartner=val('set-ref'); S.agency.vatRegistered=val('set-vat')==='yes'; S.agency.vatNumber=val('set-vatno'); S.agency.paymentTerms=parseInt(val('set-terms'))||14; save(); pushAgency(); render(); toast('✓ Settings saved'); }
 
 // ── ONBOARDING WIZARD ──
 let OB=null;
@@ -605,12 +669,13 @@ function obNext(){
 function obBack(){ if(OB.step===1){closeModal();return;} OB.step--; renderOnboard(); }
 function obFinish(){
   const id=uid('l');
-  S.landlords.push({id,name:OB.name,email:OB.email,phone:OB.phone,address:OB.address,nrl:OB.nrl,prsReg:OB.prsReg,payout:OB.payout,contactPref:OB.contactPref,
+  const ll={id,name:OB.name,email:OB.email,phone:OB.phone,address:OB.address,nrl:OB.nrl,prsReg:OB.prsReg,payout:OB.payout,contactPref:OB.contactPref,
     aml:OB.aml,ownership:OB.ownership,service:OB.service,feePct:OB.feePct,letWeeks:OB.letWeeks,agreement:OB.agreement,status:OB.agreement?'active':'pending',
     docs:{id:OB.idDoc||'',ownership:OB.ownDoc||'',agreement:OB.agreement?'mgmt_agreement.pdf':''},
-    comms:[{id:uid('c'),date:today(),type:'Note',note:'Landlord onboarded · '+SVC[OB.service].label+(OB.agreement?' · agreement signed':' · agreement pending')}]});
-  if(OB.addr){ const pid=uid('p'); S.properties.push({id:pid,landlordId:id,address:OB.addr,city:OB.city,rent:parseInt(OB.rent)||0,beds:parseInt(OB.beds)||1});
-    S.tenancies.push({id:uid('t'),who:OB.addr,propertyId:pid,stage:'instructed'}); }
+    comms:[{id:uid('c'),date:today(),type:'Note',note:'Landlord onboarded · '+SVC[OB.service].label+(OB.agreement?' · agreement signed':' · agreement pending')}]};
+  S.landlords.push(ll); pushLandlord(ll);
+  if(OB.addr){ const pid=uid('p'); const pp={id:pid,landlordId:id,address:OB.addr,city:OB.city,rent:parseInt(OB.rent)||0,beds:parseInt(OB.beds)||1}; S.properties.push(pp); pushProperty(pp);
+    const tn={id:uid('t'),who:OB.addr,propertyId:pid,stage:'instructed'}; S.tenancies.push(tn); pushTenancy(tn); }
   const nm=OB.name, signed=OB.agreement;
   save(); closeModal(); go('landlord',id); toast('✓ '+nm+' onboarded'+(signed?' — agreement signed':' — send the agreement to go live'));
 }
@@ -677,23 +742,28 @@ function editInstruction(id){ const l=L(id);
 }
 function saveInstruction(id){ const l=L(id); l.service=val('ei-service'); if(l.service==='full')l.feePct=parseFloat(val('ei-fee'))||DEF_FEE; else l.letWeeks=parseFloat(val('ei-weeks'))||DEF_WEEKS;
   l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:'Instruction updated · '+SVC[l.service].label+' · fee '+(l.service==='full'?l.feePct+'%':l.letWeeks+' wks')});
-  save(); closeModal(); render(); toast('✓ Instruction updated'); }
+  save(); pushLandlord(l); closeModal(); render(); toast('✓ Instruction updated'); }
 
 // ── COMMS (keep in touch) ──
 function openComm(id){ const body=`<div class="fg"><label>Type</label><select id="cm-type"><option>Call</option><option>Email</option><option>WhatsApp</option><option>Meeting</option><option>Note</option></select></div>
   <div class="fg"><label>Note</label><textarea id="cm-note" rows="3" placeholder="What was discussed / actioned"></textarea></div>`;
   modal('Log contact', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveComm('${id}')">Save</button>`); }
 function saveComm(id){ const l=L(id); const note=val('cm-note'); if(!note){toast('Add a note',1);return;}
-  l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:val('cm-type'),note}); save(); closeModal(); render(); toast('✓ Contact logged'); }
+  l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:val('cm-type'),note}); save(); pushLandlord(l); closeModal(); render(); toast('✓ Contact logged'); }
 
 // ── DOC UPLOAD / PROPERTY ADD ──
 function uploadDoc(id,col){ const l=L(id); l.docs=l.docs||{}; const def=col==='id'?'id_document.pdf':col==='ownership'?'proof_of_ownership.pdf':'mgmt_agreement.pdf';
   const body=`<div class="fg"><label>${col==='id'?'Photo ID (AML)':col==='ownership'?'Proof of ownership':'Signed agreement'}</label><input id="ud-name" value="" placeholder="${def}"><div class="hint">In production this opens a file picker + AI scan. Enter a filename to simulate.</div></div>`;
-  modal('Upload document', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="(function(){var n=val('ud-name')||'${def}';var L2=S.landlords.find(x=>x.id==='${id}');L2.docs=L2.docs||{};L2.docs['${col}']=n;if('${col}'==='id')L2.aml=true;if('${col}'==='ownership')L2.ownership=true;if('${col}'==='agreement'){L2.agreement=true;L2.status='active';}save();closeModal();render();toast('✓ Document attached');})()">Attach</button>`); }
+  modal('Upload document', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveUploadDoc('${id}','${col}','${def}')">Attach</button>`); }
+function saveUploadDoc(id,col,def){ var n=val('ud-name')||def; var l=S.landlords.find(x=>x.id===id); l.docs=l.docs||{}; l.docs[col]=n; if(col==='id')l.aml=true; if(col==='ownership')l.ownership=true; if(col==='agreement'){l.agreement=true;l.status='active';} save(); pushLandlord(l); closeModal(); render(); toast('✓ Document attached'); }
 function addProperty(id){ const l=L(id); const defFee=(l.feePct!=null?l.feePct:DEF_FEE); const body=`<div class="fg"><label>Address</label><input id="ap-addr" placeholder="e.g. 12 High Street"></div>
   <div class="grid3" style="gap:10px"><div class="fg"><label>Town/City</label><input id="ap-city"></div><div class="fg"><label>Rent £/mo</label><input id="ap-rent" type="number"></div><div class="fg"><label>Beds</label><input id="ap-beds" type="number" value="2"></div></div>
   ${l.service==='full'?`<div class="fg"><label>Management fee for this property (%)</label><input id="ap-fee" type="number" step="0.5" value="${defFee}"><div class="hint">Defaults to ${defFee}% — change it to give this property a different rate (e.g. family/friends).</div></div>`:''}`;
-  modal('Add property', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="(function(){var a=val('ap-addr');if(!a){toast('Enter an address',1);return;}var pid=uid('p');var fEl=document.getElementById('ap-fee');S.properties.push({id:pid,landlordId:'${id}',address:a,city:val('ap-city'),rent:parseInt(val('ap-rent'))||0,beds:parseInt(val('ap-beds'))||1,feePct:fEl?parseFloat(fEl.value):undefined});S.tenancies.push({id:uid('t'),who:a,propertyId:pid,stage:'instructed'});save();closeModal();render();toast('✓ Property added');})()">Add</button>`); }
+  modal('Add property', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveAddProperty('${id}')">Add</button>`); }
+function saveAddProperty(id){ var a=val('ap-addr'); if(!a){toast('Enter an address',1);return;} var pid=uid('p'); var fEl=document.getElementById('ap-fee');
+  var pp={id:pid,landlordId:id,address:a,city:val('ap-city'),rent:parseInt(val('ap-rent'))||0,beds:parseInt(val('ap-beds'))||1,feePct:fEl?parseFloat(fEl.value):undefined};
+  var tn={id:uid('t'),who:a,propertyId:pid,stage:'instructed'};
+  S.properties.push(pp); S.tenancies.push(tn); save(); pushProperty(pp); pushTenancy(tn); closeModal(); render(); toast('✓ Property added'); }
 
 // ── REFERENCE MODAL ──
 let RF=null;
@@ -740,11 +810,11 @@ function saveReference(){
   if(!RF.applicant){toast('Enter applicant name',1);return;}
   const i=S.references.findIndex(r=>r.id===RF.id);
   if(i>=0) S.references[i]=RF; else S.references.push(RF);
-  save(); closeModal(); go('referencing'); toast('✓ Reference saved');
+  save(); pushReference(RF); closeModal(); go('referencing'); toast('✓ Reference saved');
 }
 
 function signAgreement(id){ const l=L(id); l.agreement=true; l.status='active'; l.docs=l.docs||{}; l.docs.agreement=l.docs.agreement||'mgmt_agreement.pdf';
-  l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:'Management agreement signed — now live.'}); save(); render(); toast('✓ Agreement signed — '+l.name+' is live'); }
+  l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:'Management agreement signed — now live.'}); save(); pushLandlord(l); render(); toast('✓ Agreement signed — '+l.name+' is live'); }
 
 // ── helpers ──
 function initials(n){ return (n||'?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase(); }
@@ -754,7 +824,7 @@ function modal(title,body,ft){ document.getElementById('modal-root').innerHTML=`
 function closeModal(){ document.getElementById('modal-root').innerHTML=''; OB=null; RF=null; }
 let _tt; function toast(m,bad){ const t=document.getElementById('toast'); t.textContent=m; t.style.background=bad?'var(--red)':'var(--navy)'; t.classList.add('show'); clearTimeout(_tt); _tt=setTimeout(()=>t.classList.remove('show'),2600); }
 
-render();
+boot();
 </script>
 </body>
 </html>

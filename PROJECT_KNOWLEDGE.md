@@ -709,8 +709,8 @@ Session 8 introduced a 3-checkbox pre-generation consent gate for 4 legal docume
 | 58 | Plan defaulted **open** to `portfolio` — non-payers / cancelled / lapsed users got the top tier free | Billing / Access | **FIXED June 2026** — access now fail-closed: paid plan > active trial > read-only (`expired`). See §9. |
 | 59 | Plan gating bypassable via non-sidebar entry points (Discover, dashboard buttons, hash URLs); `pgFinancials`, MTD tab, `moInventoryReport` reachable un-gated | Access / Revenue | **FIXED June 2026** — central `featureGate()` in `nav()` + action gate on `moInventoryReport` + Discover lock badges. |
 | 60 | Paying customers still flagged `plan:'trial'` could be force-expired after 30 days | Billing | **FIXED June 2026** — an active paid subscription always wins in the access decision. |
-| 61 | **Plan enforcement is client-side only** — Supabase tables / functions are not plan-guarded; a technical user can bypass gating | Security | **PARTIALLY ADDRESSED June 2026 (Sessions 48–49)** — `ai-proxy` + `super-processor` now enforce an `ALLOWED_ORIGINS` check and require a Supabase JWT; AI usage metered server-side. **Still open:** plan + property-limit checks in RLS for the data tables. |
-| 62 | User data interpolated into `innerHTML` / inline `onclick` without escaping (stored XSS risk) | Security | **FIXED June 2026 (Session 48, P2)** — user-supplied strings escaped via `esc()` / `escAttr()` across render sites (tenant names, addresses, modal titles, doc labels). |
+| 61 | **Plan enforcement is client-side only** — Supabase tables / functions are not plan-guarded; a technical user can bypass gating | Security | **Open** — add plan + property-limit checks to RLS / edge functions. |
+| 62 | User data interpolated into `innerHTML` / inline `onclick` without escaping (stored XSS risk) | Security | **Open** — escape user-supplied strings before render. |
 | 63 | AI inventory is photo-heavy (storage + per-report AI cost) yet sold flat under Portfolio | Cost / Pricing | **Planned** — pay-per-report credits available to all tiers; compress photos client-side, keep report PDF as the durable artifact. |
 | 11 | `parseInt()` on UUID `prop_id`/`tenant_id` values — produces NaN | Data integrity | **FIXED Session 7** — replaced with `String()` (22 locations) |
 | 12 | `tenant_documents` table missing from DB — KYC scanning fails silently | Database | **SQL created** — run `session7_tenant_documents.sql` in Supabase SQL Editor |
@@ -5677,219 +5677,134 @@ USING (bucket_id = 'tenant-documents');
 | `tenant.html` | Removed duplicate `let _selectedPhotoFiles` declaration (line 379) that was crashing entire portal JS |
 | `landlord.html` | Cookie banner inline style fix — removed conflicting `display:flex` that overrode `display:none` (line 20692) |
 
----
-
-## Session 48 — 20–21 June 2026 — AI Cost Control, Server-Side Gating (P1), XSS Sweep (P2), Private Buckets (P3)
-
-**Theme:** Close the launch-blocking security + cost gaps before scaling to landlord groups. Three priorities (P1–P3) plus AI bill-shock protection.
-
-### AI Usage Metering & Graceful Fallback (cost control)
-- **`AI_MONTHLY_LIMITS`** (`{ trial:15, starter:40, landlord:200, portfolio:800 }`) + `getAILimit()` — fair-use **backstops**, not rations; sized far above real landlord usage so genuine customers never hit them. UI/messaging only — **real enforcement is server-side** in `ai-proxy`.
-- **`aiScanFetch(payload, {feature})`** — shared drop-in wrapper for every document/cert/ID auto-scan. On a **402** (quota/credit exhausted) or transient failure it fires ONE friendly toast and lets the scan **degrade to manual entry** instead of failing silently. Helpers: `isAIQuotaError()`, `aiUnavailable()`.
-- **`aiProxy()` retry path** now treats **HTTP 402** as non-retryable — throws `{code:'ai_quota', overQuota:true}` so callers fall back to manual entry; 429/5xx still use exponential backoff (1s/2s/4s, max 8s).
-- **Migrated all 9 AI scanners** in `landlord.html` (certificate, ID, document, bulk, compliance-checklist scanners) from raw `fetch(ai-proxy)` to `aiScanFetch()`.
-- **AI scanner hardening:** 18MB file-size guard (friendly message, no silent cost); date normalisation (`_isoDate` — only valid ISO dates 1990–2100 reach the form); expiry-earlier-than-issue dropped as a likely misread.
-
-### P1 — Server-Side AI Gating
-- **`ai-proxy` + `super-processor` edge functions:** added an **`ALLOWED_ORIGINS`** check (nexlet.co.uk, www, localhost dev) returning 403 on foreign origins, and require a Supabase **JWT** (client now sends `Authorization: Bearer <token>`, stored as `window._sbToken`). Speed-bump against drive-by abuse + ties usage to a real account.
-- Edge functions also handle the **`send_email`** (Resend) branch and the AI passthrough behind the same origin gate.
-
-### P2 — XSS Sweep
-- Escaped user-supplied strings before `innerHTML` render using existing `esc()` / `escAttr()` helpers: tenant names, property addresses, modal titles (see Session 49 `openMo` change), document labels, search results.
-
-### P3 — Private Buckets + Signed URLs
-- Document buckets flipped to **private**; reads now go through **signed URLs** (`signedDocUrl` / `dvoOpen` private-bucket path) across `landlord.html`, `tenant.html`, `esign.html`. Signed-doc display verified end-to-end (scan, e-sign, portal).
 
 ---
 
-## Session 49 — 21–22 June 2026 — Tenant Portal Reframe, File Consolidation, Modal & Button Bug Fixes
+# AI COST CONTROL — How AI usage is metered & protected (Session 48)
 
-### Tenant Portal Reframe (Day-1 framing)
-- Portal card copy reframed around the **magic link being delivered in the Day-1 welcome kit**, with the action focused on **resend** (“Resend link” / “Send link”) for tenants who lost it — rather than implying a separate manual invite step. Status dots: active / link sent · awaiting login / sent with Day-1 kit / not sent.
+## The problem
+Every AI feature (document/ID/cert auto-scan, Right-to-Rent extraction, tenant-doc scan,
+Section 8 drafting, bulk scan) calls Claude (`claude-sonnet-4-5`) via the `ai-proxy`
+edge function. Subscription customers AND their tenants (via the portal) can trigger
+these, so AI spend scales with usage. Risk = bugs, abuse, and bill-shock draining the
+shared Anthropic credit pool.
 
-### File Consolidation (ended fork confusion)
-- **`landlord.html` confirmed as the single canonical deploy file.** Stale forks (`landlord-a6f0f2bb.html`, `landlord-f9b1e43a.html`) **archived** to `uploads/archive/` (not deleted) so no work is lost and the duplicate-file confusion ends.
+## What does NOT break when Claude credit/allowance runs out
+- **Email** — welcome kit, portal invite/resend, rent receipts, reminders. These hit
+  `ai-proxy` with `type:'send_email'` and route to **Resend, not Claude**. Zero AI
+  credit still sends email.
+- **Tenant portal core** — report maintenance, view certificates, updates. All DB-backed.
+- **Login, navigation, manual data entry.** AI scan is only an autofill shortcut — every
+  field can be typed by hand.
 
-### Bug Fixes
-- **Broken buttons:** RTR wizard + insurance row called undefined functions (`moRTRWizard`, `moInsurance`) → routed to the real `moShareCodeWizard` / `moCert`. Full handler audit (272 inline handlers vs 2,155 functions) confirmed **no other dead buttons** of this class.
-- **Job photos pulling wrong images:** a manually-logged job with no photo was borrowing a nearby job's tenant photos (matched by property + loose 48h/7-day time window). Now matched by **identical description** (the portal mirror copies the tenant's text) — no-photo jobs show no photos. Applied at all 3 merge/match sites.
-- **Raw HTML in Day-1/Day-30 kit headers:** `openMo()` rendered the modal title with `textContent`, but ~20 modals pass an **SVG icon string** as the title → raw markup shown. Switched title to **`innerHTML`** (icons render) and **escaped** the user-data titles (names/addresses) so this didn't reopen the XSS hole. Fixed the broken `\U0001f4c6` → 📆 in the Day-30 title.
+Only the AI *autofill/drafting* convenience degrades.
 
----
+## The policy (decided)
+Meter AI onto the EXISTING Stripe tiers as a **monthly fair-use allowance per landlord
+account** — a backstop, not a ration. Sized far above real usage so genuine customers
+never hit it; it only trips on bugs/abuse. Keeps heavy AI use inside paid tiers so usage
+= revenue, not loss.
 
-## Session 50 — 22–24 June 2026 — Guided Tour, Global Search, Nav IA, Visual Polish, Tenant-Page Declutter
-
-### Retium-style Guided Tour (replaced static highlight boxes)
-- Rebuilt `_renderTourStep` as an **animated hand cursor** that glides to each target (amber pulse), a **spotlight** that dims everything else, a **click-to-advance hotspot** (click the highlighted spot or Next), and a coach card with **STEP n OF 5** + Skip/Back/Next.
-- **5 focused steps:** Dashboard → Properties → **Tenants (e-sign & portal explained)** → Compliance → All features. (E-sign/portal live *inside* a tenant, so the Tenants step explains them rather than auto-navigating mid-tour.)
-- **Auto-run logic = complete-or-5:** `maybeStartTour` auto-starts until the user finishes once (`_TOUR_KEY` `{done, autoruns}`), capped at 5 logins. **Skip ≠ complete** (`_skipTour` doesn't set `done`, so it keeps gently re-offering); always replayable via the sidebar **Tour** link.
-
-### Global ⌘K Search
-- **Header search:** removed the search item from the sidebar; `_ensureTopbarSearch()` injects a compact **top-right search field** (magnifier + “Search” + ⌘K) into every page's topbar after render. ⌘K still toggles it everywhere.
-- **Search modal click/ESC fix:** result rows used inline `onclick`/`onmouseenter` and the “ESC” badge was decorative — clicks/ESC did nothing (only backdrop closed). Switched to **event-delegation listeners** (`addEventListener` on the list box) and made the **ESC badge a real close button**.
-
-### Navigation IA Regrouping (mirrors the compliance journey)
-- **My Portfolio** (Properties · Tenants) → **Staying Compliant** (Compliance · Documents) → **Day-to-Day** (Rent & Finance · Maintenance · Calendar). Sequenced set-up → get-compliant → operate. **“Discover” renamed → “All features.”** “Send feedback” retained in the sidebar footer.
-
-### Visual Polish
-- Styled native dropdowns (consistent chevron), visible focus rings on inputs/buttons (accessibility), fixed low-contrast sidebar text, **serif page titles** (`var(--disp)`) + bigger logo, de-duplicated page titles (topbar kicker vs serif `<h1>`), `--accent` colour aliases, serif dashboard hero greeting.
-
-### Tenant-Page Declutter (“show what needs action — hide what's done”)
-- **KYC & Identity:** shows only **outstanding** doc slots; completed ones collapse behind **“✓ N documents on file — show.”** Partitioned via `_kycTodo` / `_kycDone`.
-- **Compliance:** shows only **amber/red** items; in-date (green) ones collapse behind **“✓ N compliant & in date — show all.”** Partitioned via `_compAttention` / `_compDone`. Section headers carry count badges.
-- **Tenant action bar:** prominent row under the tenant's name — **Send agreement (e-sign) · Resend portal link · Add document** — surfacing previously-buried actions.
-
----
-
-## Session 51 — 24–25 June 2026 — Compliance Currency, Sidebar Compaction, First-Run Audit, How to Rent Pause
-
-### EPC C-by-2030 Advisory (RRA roadmap)
-- Copy across the 3 EPC checkpoints updated: minimum **E now, rising to EPC C from 1 Oct 2030**. Added a computed **amber dashboard advisory** for **D/E-rated** lets (“EPC upgrade needed by 2030”) so landlords can budget ahead. (Confirmed Section 13 already enforces 2-month notice + the 12-month rule.)
-
-### Sidebar Footer Compaction (features were getting hidden)
-- Footer reduced from 6 stacked blocks to 4: **slimmed AI card**, **one-line founding-price chip** (“🎁 Founding price · Upgrade →”), **ICO registration line removed** from the sidebar (kept in the delete-account legal notice), **“Tour · Send feedback” merged** into one row. Reclaims ~3 lines so the **Day-to-Day** group is no longer pushed off-screen; nav still scrolls on short laptops.
-
-### New-User First-Run
-- **Empty-state audit:** confirmed every main page (Properties, Tenants, Compliance, Maintenance, Inspections, Inventory, Dashboard) has a proper empty state + CTA, plus the existing `new-user-stepper` / `setup-banner` dashboard guidance. No fixes required.
-- **Dashboard hero zero-state** now leads with a prominent white **“+ Add your first property”** button (+ “Takes 2 minutes…” subtitle) instead of plain text.
-
-### How to Rent Guide — PAUSED under RRA 2025
-- **New reversible flag `const H2R_REQUIRED = false;`** (defined just above `CHECKLIST_ITEMS`). Rationale: How to Rent's legal force came from being a precondition for a valid **Section 21** notice; S21 is abolished from 1 May 2026 and new-tenancy prescribed information is being set by secondary legislation, so it's no longer a hard requirement.
-- While `false`: How to Rent **no longer blocks** the Day-1 kit (`sendWelcomeKit` blockers gated), **no longer auto-attaches** to the kit (`attachment_urls` push gated), is **removed from the mandatory checklist** display, and `CHECKLIST_ITEMS.how_to_rent.mandatory` set to `false`. In **Compliance → Tenancy Packs & Templates** it now shows as **“Optional — paused under RRA 2025”**; **RRA 2025 Prescribed Particulars** is the sole mandatory doc there. Still **sendable** from a tenant's page via `sendH2RGuide`. Flip the flag to `true` to fully restore if GOV.UK reinstates it.
-- **Note:** the **RRA 2025 Information Sheet** (leaflet for *existing* tenants, due ~1 June 2026) is a separate, **active** requirement — unchanged.
-
-### Files Modified — Sessions 48–51
-| File | Changes |
+| Plan | Monthly AI actions |
 |---|---|
-| `landlord.html` | AI metering + `aiScanFetch` + 9 scanner migrations + scanner hardening; JWT header on AI calls; XSS escaping; `openMo` title → `innerHTML` + escaped titles; job-photo description match; broken-button routing; guided tour rebuild + complete-or-5; header search + modal delegation fix; nav IA regroup; visual polish; tenant-page declutter + action bar; EPC-2030 advisory; sidebar footer compaction; hero zero-state CTA; How to Rent pause (`H2R_REQUIRED`) |
-| `tenant.html`, `esign.html` | Private-bucket signed-URL reads (P3) |
-| `ai-proxy` / `super-processor` (edge) | `ALLOWED_ORIGINS` check + JWT requirement + server-side AI metering |
-| `uploads/archive/` | Stale forks `landlord-a6f0f2bb.html`, `landlord-f9b1e43a.html` archived |
+| trial | 15 |
+| starter (£4.99) | 40 |
+| landlord | 200 |
+| portfolio | 800 |
+| expired | 0 |
 
-### Open / Next
-- **Stripe live:** verify the webhook that flips a user to paid (`checkout.session.completed` / `subscription.updated` / `deleted`) + failed-payment dunning before opening to landlord groups.
-- **Server-side plan + property-limit checks in RLS** (Known Issue #61 remainder).
-- **Phase 2 roadmap (path to 9/10 vs Goodlord):** tenant referencing (partner/integrate), rent collection rails (Open Banking/GoCardless), team/multi-user roles.
-- Developer to split the monolithic `landlord.html` into `js/` modules (planned, not started).
+(Normal landlord uses a handful of cert/ID scans per property per year — nowhere near these.)
 
----
+## Where it's enforced
+- **REAL enforcement = server-side** in the `ai-proxy` edge function. See
+  `supabase/functions/ai-proxy-gate.ts` (reference implementation in repo root as
+  `ai-proxy-gate.ts`). It: (1) requires a valid session JWT — no anonymous AI calls;
+  (2) routes email separately (no AI consumed); (3) checks a per-account monthly counter
+  (`ai_usage` table) by plan; (4) enforces a GLOBAL daily ceiling (`ai_usage_global`)
+  as a runaway/abuse breaker; (5) returns **HTTP 402 `{error:'ai_quota'|'ai_credit'}`**
+  when capped.
+- **Client = UI hints + graceful fallback only** (bypassable, never the boundary):
+  - `AI_MONTHLY_LIMITS` / `getAILimit()` mirror the server numbers for messaging.
+  - `aiProxy()` treats 402 as non-retryable and throws `err.overQuota = true`.
+  - `isAIQuotaError()` + `aiUnavailable({overQuota})` show a clear "allowance reached —
+    enter details manually / upgrade" message instead of a scary failure, and NEVER block
+    the underlying manual form.
 
-## Session 52 — 25 June 2026 — Consistency Sweep, H2R Pause Completion, Inventory Lifecycle + £5.99 Add-on
-
-### Consistency sweep (find more "renamed in one place, not everywhere" bugs)
-Ran an automated sweep (duplicate fn defs, hardcoded counts, stale references, feature flags, TODO markers). Found + fixed **two real bugs of the same class as the H2R one**:
-- **AI Assistant gave wrong nav directions** — `SYSTEM_PROMPT` still described the OLD sidebar ("Staying Legal", "Money & Records"), so the assistant sent users to groups that no longer exist. Rewrote to the current IA (My Portfolio / Staying Compliant / Day-to-Day) + mention of Search (⌘K) and All features.
-- **"Discover" page title** still said "Discover" while the nav item is "All features" — fixed to match.
-- Non-issues confirmed: duplicate `esc()` (second is scoped inside the search modal — benign); hardcoded "X of Y" all wizard step labels; `NEXLET_DEBUG=true` left ON intentionally (error logging aids early debugging — flip to false later).
-
-### How to Rent pause — completed (two leaks the first pass missed)
-The Session 51 pause (`H2R_REQUIRED=false`) hadn't reached two more enforcement paths, exposed by a screenshot showing "Compliance 100%" + a red "1 overdue legal obligation — How to Rent 21d overdue":
-- **Tenant-page overdue action** (`actions.push({id:'h2r'…})` in the per-tenant compliance builder) — now gated by `H2R_REQUIRED`.
-- **Onboarding "X of 12" obligations** — `ob7` (How to Rent served) made conditional (`...(H2R_REQUIRED ? [ob7] : [])`) so the count denominator drops and a compliant tenant can reach 12/12.
-
-### AI Inventory Reports — full lifecycle + paid add-on (£5.99/mo)
-Turned the one-shot inventory generator into a **lifecycle**: Move-in (baseline) → Mid-tenancy (repairs/visits) → **Check-out (comparison → deposit deduction schedule)**.
-- **Check-out comparison engine** (`generateCheckoutComparison`): finds the move-in baseline (`_findBaselineReport`), sends check-out photos + baseline text + tenancy length (`_monthsBetween` from `start_date`) + deposit to the AI, asks for **strict JSON**, and renders a premium **deposit deduction schedule**. Applies UK deposit law: **fair wear & tear = £0**, **no betterment** (no new-for-old), **apportionment by remaining useful life**, **cleanliness chargeable**. Each item classified `fair_wear|damage|cleaning` with the apportionment math shown. Summary: deposit held → proposed deduction → return to tenant + deposit-risk rating.
-- **Renderers:** `_renderDeductionSchedule` (rich HTML — used in the modal AND the full-page `pgInventoryReport` when `r.schedule` exists) + `_deductionScheduleText` (plain text for copy/PDF/email). `_clsMeta` maps classification → colour/label.
-- **Modal:** report types reordered to lifecycle order; `_invTypeHint()` shows a live hint (✓ will compare against check-in baseline / ⚠ no baseline on file / mid-tenancy logs repairs).
-- **Pricing + gating (£5.99/mo add-on, free on Portfolio):** single entitlement rule `hasInventory() = isPortfolio() || D.userProfile.inventory_addon`; `planHas('inventory-reports')` special-cased so **every existing gate inherits it** (modal `featureGate`, property-panel `${hasInventory()?…}` ×2, dashboard nudge `&& planHas('inventory-reports')`, full page). Non-entitled users get a dedicated **`inventoryPaywall()`** modal (not the generic upgrade prompt). `FEATURE_META['inventory-reports'].addon=true`.
-- **⚠ Server-side lock is still required** (client gate is bypassable). See `uploads/DEV-NOTE-inventory-addon-server-gate.md`: webhook sets `user_profiles.inventory_addon` true/false on the add-on's Stripe price; AI edge function returns **402** for inventory calls when not entitled. The client already degrades a 402 gracefully (`aiUnavailable`).
-
-### Files Modified — Session 52
-| File | Changes |
-|---|---|
-| `landlord.html` | Consistency-sweep fixes (AI prompt nav IA, Discover→All features title); H2R pause completion (overdue action + ob7 gated); inventory lifecycle — `hasInventory`/`planHas`/`featureGate`/`inventoryPaywall`, `generateCheckoutComparison`, `_findBaselineReport`, `_monthsBetween`, `_renderDeductionSchedule`, `_deductionScheduleText`, `_clsMeta`, `_invTypeHint`; full-page schedule render |
-| `uploads/DEV-NOTE-inventory-addon-server-gate.md` | NEW — server-side entitlement spec for the developer |
-| `Inventory Checkout Comparison (mock).dc.html` | NEW — approved design mock of the deduction schedule |
-
-### Open / Next
-- **Stripe live (developer-owned):** user has chosen a human developer for real-money Stripe. Verify the paid-flag webhook (`checkout.session.completed` / `subscription.updated` / `deleted`) + dunning; create the **£5.99 inventory add-on price** and have its webhook set `user_profiles.inventory_addon`.
-- **Inventory server-side gate** — per the DEV-NOTE (pairs with the Stripe job).
-- **Inventory v2 ideas:** per-item paired before/after thumbnails (needs photo-to-room mapping); persist the `schedule` JSON to a DB column (currently rich render is in-session, text is persisted).
-- **Server-side plan + property-limit checks in RLS** (Known Issue #61 remainder).
-- **Phase 2 roadmap (path to 9/10 vs Goodlord):** tenant referencing, rent collection rails, team/multi-user roles.
-- Developer to split the monolithic `landlord.html` into `js/` modules (planned, not started).
+## Setup checklist (to go live)
+1. Run the SQL at the bottom of `ai-proxy-gate.ts` (`ai_usage`, `ai_usage_global`,
+   `increment_ai_usage` RPC).
+2. Deploy `ai-proxy-gate.ts` as the `ai-proxy` function (replaces the current proxy).
+3. Set secrets: `ANTHROPIC_API_KEY`, `RESEND_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
+4. Add an Anthropic billing alert (e.g. 80% of monthly budget) as the human backstop.
+5. Optional: wire `_usage.remaining` from responses into a "X AI scans left this month"
+   chip on the dashboard.
 
 ---
 
-## Session 53 — 29–30 June 2026 — NexLet Agency Portal (`agent.html`): new product line for letting agents
+# Session 36 — Wire `agent.html` (Agency Portal) to Supabase
 
-**Big picture:** NexLet becomes **two products from one codebase** — (1) the existing landlord/tenant app, and (2) a new **agent portal** for running a letting agency that uses NexLet as its operating system. Built as a **separate file `agent.html`** so `landlord.html` is never touched or enlarged. Currently a fully-functional **front-end demo on `localStorage`** (key `nexlet_agency_v2`); backend is specified but not yet built (see DEV-SPEC).
+Turned the Agency Portal from a `localStorage` demo into a live, RLS-secured app on the
+existing Supabase project (`mahtcfukgzbonwibtsxz`). Follows `DEV-SPEC-agency-portal.md`
+(build-order steps 1–2). Introduces the **Agency → Landlords → Properties** hierarchy.
 
-### Files added this session
-- `agent.html` — the functional agent portal (plain-HTML app, same stack/design as `landlord.html`).
-- `DEV-SPEC-agency-portal.md` — backend spec: `agencies→landlords→properties` model, RLS, **Login/Auth/Security Gateways**, Supabase wiring, per-property `fee_pct`, invoices table.
-- `DEV-NOTE-inventory-addon-server-gate.md` — (Session 52) server-side entitlement for the £5.99 inventory add-on.
-- Design mocks (not production): `NexLet Agency.dc.html`, `Inventory Checkout Comparison (mock).dc.html`, etc.
+## New file
+- **`agency_portal.sql`** — one migration. Additive/idempotent (`IF NOT EXISTS`), safe to
+  re-run. Creates `agencies`, `landlords`, `agency_references`, `tenancies`, `invoices`;
+  `ALTER`s the existing `properties` table to add `agency_id`, `landlord_id`, `fee_pct`,
+  `certs jsonb`, `tenant jsonb` (self-serve landlords with `agency_id` NULL are unaffected);
+  enables RLS + policies scoping every agency table to `owner_user_id = auth.uid()`, extends
+  `properties` with an agency-manage policy (OR'd with the existing owner policy) and a
+  Phase-2 landlord read-only policy.
+  - **Naming note:** the spec's `references` table is created as **`agency_references`**
+    (`references` is a reserved word in PostgreSQL). agent.html queries this name.
+  - **IDs:** `landlords`/`properties`/`agency_references`/`tenancies`/`invoices` use TEXT
+    PKs so agent.html's client-generated ids (`uid('l')` → `"l4f2a9"`) round-trip and keep
+    all cross-references intact. `agencies.id` is a DB-assigned uuid.
+  - **To make a user an agent:** `insert into agencies (owner_user_id, name) values ('<uuid>','Name');`
 
-### Business decisions locked
-- **Two buyers, two price lines:** Landlord plans stay (Starter £4.99 / Landlord £11.99 / Portfolio £23.99 + £5.99 inventory add-on). **Agent tier** launches **£39/mo founding (~15 managed units)**, per-managed-unit model, everything included.
-- **No client money / no CMP:** tenants pay landlords directly. Only **redress scheme** (TPO/PRS) mandatory; CMP stays off until rent collection added. ICO registration captured.
-- **Service & fees:** Full management default 7.5%, Let-only 3 weeks' rent (one-off). **Fee tagged PER PROPERTY** (`property.feePct`) so rates vary (family/friends); falls back to landlord default. Invoices itemise one line per property at its own rate.
-- **Referencing (no FCA licence):** in-house workflow (ID, RTR, employer/prev-landlord refs, **affordability = income ≥ 30× monthly rent**); regulated **credit/Open-Banking** via partner (Vouch/HomeLet/FCC Paragon/Van Mildert, ~£15–25/tenant, billed to landlord). "Request credit check (API)" button = integration seam (states not_requested→requested→in_progress→complete).
-- **Login = auto-route by account role**, NOT a "choose role" screen (agent→agent.html, landlord→landlord.html, tenant→portal).
+## `agent.html` changes
+- Loads `@supabase/supabase-js@2.39.3` (same CDN/version as landlord.html); creates `sb`
+  client with the shared URL + anon key.
+- **Auth gateway** (`boot()`, §2a-B): no session → `login.html`; session but no `agencies`
+  row for the user → `landlord.html`; agent → sets `window._agencyId`, hydrates, renders.
+  Redirects are UX; **RLS is the real boundary** (every query is `agency_id`-scoped server-side).
+- **`loadData()`** hydrates the in-memory `S` object from `agencies` (single) +
+  `landlords`/`properties`/`agency_references`/`tenancies`/`invoices` scoped by `agency_id`.
+  snake_case ⇄ camelCase mappers (`rowTo*` / `*ToRow`) centralise the shape translation.
+- **Targeted writes** (§4) at each mutation seam via `push*` upsert helpers (no-ops in DEMO,
+  toast-on-error in LIVE): onboarding (`obFinish` → landlord + property + tenancy),
+  `saveReference`, `advance` (tenancy stage), `saveSettings` + invoice-seq (`pushAgency`),
+  `signAgreement`, `saveInstruction`, `saveComm`, `savePropFee`, `saveCert`, `saveTenant`,
+  `createInvoice`, `setInvStatus`, `saveAddProperty`, `saveUploadDoc`. (The two inline-IIFE
+  onclicks — add-property, upload-doc — were refactored into named handlers so they persist.)
+- **DEMO mode preserved:** open `agent.html?demo=1` (or if the Supabase lib fails to load)
+  for the original local-state demo. `save()` only writes localStorage in DEMO; LIVE persists
+  solely through the targeted `push*` writes.
 
-### `agent.html` features (all functional on local state)
-- **Dashboard** — KPIs (landlords, properties, managed rent, fees/mo summing per-property rates), landlord list, pending-agreement banner.
-- **Onboarding wizard (6 steps):** details (+ NRL flag, PRS reg no, payout date, contact pref) → AML/ID → ownership proof → property (+ per-property fee) → service & **editable fee** → management-agreement e-sign (simulated). RRA-aware.
-- **Landlord CRM profile:** instruction & details, **document vault** (ID/ownership/agreement), properties w/ per-property fee, **communications log** timeline, Edit instruction & fee, £ Invoice shortcut, "View as landlord".
-- **Tenancy progression pipeline:** Instructed→Marketing→Referencing→Contract→Move-in→Managed (click to advance).
-- **Referencing module:** doc checklist, live affordability test, partner credit-check API hook, RAG outcome.
-- **Property detail (compliance tab):** Gas/EICR/EPC RAG engine, add/update certs, **EPC-C-by-2030** warning on D/E, **per-property fee** edit, **tenant setup** + portal link.
-- **Landlord read-only portal preview** (`vLandlordPortal`) — Phase-2 login view.
-- **Invoicing (built-in, free, enterprise):** quarterly-upfront, **sequential numbering** (`INV-NNNN`), **per-property line items** ×3 months, **non-VAT now / VAT-ready** toggle (Settings: `vatRegistered`+`vatNumber`), status flow (Draft→Sent→Paid/overdue), Invoices dashboard (outstanding/paid totals), **printable** (print CSS), CMP-aware footer. Settings: trading name, address, redress, CMP, ICO, referencing partner, VAT, payment terms.
-- **Bug fixed during build:** onboarding crashed on finish — `closeModal()` nulled `OB` before a toast read `OB.name`; captured `nm`/`signed` before close.
+## Remaining (later build-order steps)
+- **Companion: `login.html` role routing** (§2a-A) — after `signInWithPassword`, look up
+  `agencies` then `landlords.user_id` and redirect (agent → agent.html, managed landlord →
+  landlord.html?managed=1, else self-serve). agent.html's own gateway already protects it
+  regardless, so this is convenience, not security.
+- Step 3: management-agreement e-sign via the existing engine (currently a checkbox tick).
+- Step 4: Phase-2 managed-landlord read-only portal (policy already in the SQL).
+- Step 5: referencing-partner credit-check API (the `credit_ref` / `credit_state` seam).
+- Property `certs`/`tenant` are stored as jsonb on `properties` for the agent portal's
+  simplified view; a later step can migrate these onto the shared `certificates`/`tenants`
+  tables to unify with the landlord app's compliance engine.
 
-### Open / Next (this session's roadmap — backend now a "do it ourselves" full session, code-paste like the edge-function flow)
-- **CRITICAL BUG on landlord file — FIRST.** User's friend refactored `landlord.html` into 3 files (split JS) and flagged a critical issue; awaiting paste. Decide canonical file: current single-file vs 3-file refactor.
-- **Backend build (I write, user pastes/runs in Supabase):** (1) SQL migration — `agencies`/`landlords`/`invoices` + `agency_id`/`fee_pct` + **RLS**; (2) `login.html` + role routing; (3) wire `agent.html` to Supabase (replace localStorage, auth gate, `agency_id` scoping); (4) test RLS w/ 2nd account.
-- **Stripe live** (landlord plans + £5.99 add-on + £39 agent tier) + **inventory add-on server gate** (DEV-NOTE).
-- **Agent finish-offs:** real management-agreement e-sign (currently simulated); Phase-2 landlord read-only login wired; referencing partner API.
-- **NEW — Website→portal enquiry capture:** marketing-site form posts leads into the portal (landlord → pipeline "Enquiry"; tenant → viewing/application request). Front-door CRM.
-- **NEW — Self-guided tenancy progression:** micro-step checklist per let (contract sent → signed back → holding deposit requested/received → deposit + first rent → move-in date → keys), RRA-ordered, with highlighted "next action" coaching a solo agent.
+## Known Issues / carry-over (unchanged)
+| # | Issue | Status |
+|---|---|---|
+| A | `login.html` role routing not yet wired | Session 36 follow-up (see above) |
+| B | Management agreement is a simulated tick, not real e-sign | Build-order step 3 |
+| C | Agent portal certs/tenant on `properties` jsonb, not shared cert/tenant tables | Deliberate v1 |
 
----
-
-## Session 54 — 30 June–1 July 2026 — Tester Feedback Fixes, APT Deterministic Rebuild, Bulk Import, Tenant Portal Redesign, Agent Backend LIVE (#34–35)
-
-### Landlord tester-feedback bug fixes (all in landlord.html)
-- **False "All clear" with 0 certs** → weekly digest per-property Certs column now shows **"None tracked" (red)** when a property has zero certificates (was falling through to green "All clear").
-- **False licence statement** → tenancy doc no longer hard-codes "No HMO or selective licence applies"; uses the property's actual `licence_type` (only says none applies when explicitly None; else "…licence required — reference to be confirmed").
-- **Dead gov.uk link** → was the AI *inventing* it (not in code). Tenancy prompt hardened: forbids external links/URLs and forbids inventing facts (writes "[to be confirmed]").
-- **Tenant invite email** reframed from "manage maintenance requests" → proper tenant portal (info, documents, maintenance, comms).
-
-### APT / Tenancy generator — deterministic rebuild (#62)
-- Replaced AI free-form generation with **`buildWrittenStatement(f)`** — a hard-coded, RRA-2025-compliant Written Statement of Terms (verified once vs SI 2026/324 + Housing Act 1988 as amended); only variable fields filled. No AI → no hallucination/dead-links/false statements. Instant + free. Lives in the same e-sign preview/edit/sign flow (Tenant → Send for e-signature). Helpers: `_wstFmtDate`.
-- **Mandatory-field enforcement**: validation now blocks generation unless tenant name, property address, landlord name, landlord service address, start date, rent, rent due day, deposit amount, deposit scheme are all present.
-- Option-card copy updated ("Generate Written Statement", verified-template wording — no longer "AI-written").
-- **Profile-setup nudge** (`_profileNudgeBanner`) in Add Property step 1: prompts completing landlord profile since name/service-address auto-fill every document.
-
-### Bulk import (#64) — landlord.html
-- CSV **template download** + **file upload** + **paste-from-spreadsheet** → **validated preview** (Ready / Already exists / Needs fixing) → guarded batch insert. One row per property + optional tenant columns. Dedupe on address+postcode; plan-limit check; each insert try/caught so one bad row never aborts. "⤓ Import" button added beside all 5 "+ Add property" entry points. Functions: `moImportProps`, `_parseCSV`, `_importParseAndPreview`, `_renderImportPreview`, `_runImport`, `_downloadImportTemplate`.
-
-### Tenant portal redesign (#63) — tenant.html
-- Distinct **teal identity** (teal gradient header/banner/auth/loading/error instead of navy), **"TENANT PORTAL" badge** in header, gold logo accent, "Your home" wording — so it's unmistakably not the landlord app. Fixed stale **"RentSafe AI" → "NexLet"** branding in email/doc template.
-
-### Day-1 email accuracy (#61) — landlord.html
-- `_day1DocRows(attachment_urls, ctx)` builds the "documents attached" table from the **actual** attachment list (was hard-coding "✓ Attached" on every doc). Shows cert expiry + deposit-protection status.
-- Weekly LANDLORD compliance digest list format request logged as **#65** (server-side edge-function edit: Properties / Open maintenance / Certs expiring 60d / Unpaid rent / Status).
-
-### AGENT PORTAL BACKEND — #34 & #35 DONE & LIVE IN SUPABASE
-- **#34 SQL migration run** (idempotent, additive). New tables + RLS:
-  - `agencies`(id, owner_user_id **unique** → auth.users, name, address, redress_scheme, redress_no, cmp_scheme, cmp_no, ico_no, ref_partner, vat_registered, vat_number, invoice_seq, payment_terms)
-  - `landlords`(id, agency_id → agencies, name, email, phone, address, nrl, prs_reg, payout, contact_pref, aml, ownership, service, fee_pct, let_weeks, agreement, status, docs jsonb, comms jsonb, user_id)
-  - `agency_invoices`(id, agency_id, no, landlord_id, property_id, type, period_label, issued, supply_from, supply_to, lines jsonb, vat, status)
-  - `properties` += `agency_id`, `fee_pct`
-  - **RLS**: agencies → owner_user_id=auth.uid(); landlords/agency_invoices → agency_id in (owned agencies); properties → additive `properties_agency_access` policy (existing user_id policy still applies to self-serve landlords).
-- **#35 agent routing DONE**: `initApp()` in landlord.html now checks `agencies` for the logged-in user; **agency owner → redirects to agent.html** (append `?portal=landlord` to stay on landlord app). Agency row created for **sddhawan79@gmail.com** → "Your Lettings". "↩ Switch to landlord portal" link added to agent.html sidebar.
-- **agent.html demo data cleared**: SEED emptied + localStorage key bumped **nexlet_agency_v2 → v3** → blank clean start for real data.
-
-### Decisions / notes
-- **Pre-login portal chooser (#68)** AGREED (Goodlord-style: Landlord / Agent / Tenant on `login.html`, with agent auto-detect as safety net) — build next session (read login.html first).
-- **Contracts stay deterministic (no AI)** — management agreement (#40) still SIMULATED in onboarding; to build as a deterministic template like the tenancy WST. Agent portal needs AI only optionally (doc scanning); core features need none.
-- Cloudflare speed fix parked (#59); friend's 3-file refactor still on HOLD (#60).
-
-### Open / Next
-- **#36** wire agent.html to Supabase (replace localStorage v3 with the new tables; auth gate; agency_id scoping) — then **#37** test cross-agency RLS with a 2nd account.
-- **#68** pre-login chooser · **#40** management agreement template · **Stripe #38–39** · **#65** landlord digest list (edge fn) · **#59** Cloudflare.
-- FASTEST CASH (#66): agent.html invoicing works on local state NOW — user can invoice their 2 properties + print PDF before #36 lands.
+## Scan sites — MIGRATED (Session 48)
+All document/cert/ID auto-scanners now go through the shared `aiScanFetch()` helper,
+which fires ONE friendly toast on 402 (allowance) or transient failure and falls back to
+manual entry. Migrated: `scanAndFill` (certs), ID + Right-to-Rent scanners, `scanTenantDoc`,
+`moTenantDocs` re-scan, licence / EPC / deposit scanners, and the `scanSetupCert`
+(`type:'ai'`) helper. Landlord-initiated *generation* features (legal doc drafting, AI
+chat, inventory reports) still use direct `fetch` + `aiProxy()` — they already surface
+402 via the wrapper and aren't autofill scans, so they were intentionally left as-is.
