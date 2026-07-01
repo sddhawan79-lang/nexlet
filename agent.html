@@ -202,7 +202,7 @@ async function loadData(agency){
 // ── auth gateway (§2a-B) + boot ──
 async function boot(){
   const demo=new URLSearchParams(location.search).has('demo');
-  if(demo || !sb){ LIVE=false; render(); return; }              // explicit demo, or lib missing
+  if(demo || !sb){ LIVE=false; restoreView(); render(); return; }              // explicit demo, or lib missing
   document.getElementById('view').innerHTML='<div class="empty">Loading your agency…</div>';
   const { data:{ session } }=await sb.auth.getSession();
   if(!session){ location.href='login.html'; return; }            // no session → login
@@ -214,6 +214,7 @@ async function boot(){
   try{ await loadData(agency); }catch(e){ console.error(e); toast('⚠ Could not load agency data',1); }
   reconcileAgreements();
   setInterval(pollAgreements, 20000);   // pick up landlord counter-signatures live
+  restoreView();
   render();
 }
 
@@ -255,7 +256,9 @@ const NAV=[
   {k:'templates',ic:'✉',t:'Letters & Templates'},{k:'settings',ic:'⚙',t:'Agency Settings'}
 ];
 let view='dashboard', sel=null, llView=false;
-function go(v,id){ view=v; if(id!==undefined)sel=id; window.scrollTo(0,0); render(); }
+function go(v,id){ view=v; if(id!==undefined)sel=id; try{ history.replaceState(null,'','#'+v+(id!==undefined&&id!==null?('/'+id):'')); }catch(e){} window.scrollTo(0,0); render(); }
+// Restore the open page after a refresh (reads the URL hash written by go()).
+function restoreView(){ const h=(location.hash||'').replace(/^#/,''); if(!h)return; const parts=h.split('/'); if(parts[0]){ view=parts[0]; if(parts[1]!==undefined) sel=parts[1]; } }
 
 // ── COMPLIANCE RAG (same logic family as the landlord app) ──
 function daysUntil(d){ if(!d) return null; return Math.round((new Date(d)-new Date())/864e5); }
@@ -562,53 +565,95 @@ function invRow(inv){ const l=L(inv.landlordId); const t=invTotal(inv);
 }
 
 let IV=null;
+// ── Flexible billing engine: management (monthly/quarterly/annual), tenant-find
+//    (one-off), maintenance disbursement, and rent-collection remittance. ──
+function _iso(d){ return d.toISOString().slice(0,10); }
+const FREQ_LABEL={monthly:'Monthly',quarterly:'Quarterly (in advance)',annual:'Annual'};
+function _periodIdxs(freq){ return freq==='monthly'?[0,1,2,3,4,5,6,7,8,9,10,11]:freq==='annual'?[0]:[0,1,2,3]; }
+function _period(freq,y,idx){
+  if(freq==='monthly'){ const from=new Date(y,idx,1),to=new Date(y,idx+1,0); return {label:from.toLocaleDateString('en-GB',{month:'long',year:'numeric'}),from:_iso(from),to:_iso(to),months:1}; }
+  if(freq==='annual'){ return {label:'Year '+y,from:y+'-01-01',to:y+'-12-31',months:12}; }
+  const qm=[['Q1','Jan–Mar',0],['Q2','Apr–Jun',3],['Q3','Jul–Sep',6],['Q4','Oct–Dec',9]]; const [lab,span,m]=qm[idx]; const from=new Date(y,m,1),to=new Date(y,m+3,0); return {label:lab+' '+y+' ('+span+')',from:_iso(from),to:_iso(to),months:3};
+}
+function _defaultIdx(freq){ const m=new Date().getMonth(); return freq==='monthly'?m:freq==='annual'?0:Math.floor(m/3); }
 function openInvoice(){
   const mgmt=S.landlords.filter(l=>l.service==='full'&&S.properties.some(p=>p.landlordId===l.id));
   const first=mgmt[0]||S.landlords[0]||{};
-  IV={landlordId:first.id||'',type:'management',quarter:_curQuarter(),status:'draft'};
+  openInvoiceFor(first.id||'');
+}
+function openInvoiceFor(id){
+  const l=L(id)||{};
+  const docType = l.service==='letonly' ? 'tenantfind' : 'management';
+  IV={landlordId:id,docType,freq:'quarterly',y:new Date().getFullYear(),idx:_defaultIdx('quarterly'),items:[{desc:'',amount:''}],otherDeduct:'',otherDesc:'',status:'draft'};
   renderInvoice();
 }
-function openInvoiceFor(id){ IV={landlordId:id,type:'management',quarter:_curQuarter(),status:'draft'}; renderInvoice(); }
-function _curQuarter(){ const m=new Date().getMonth(); const q=Math.floor(m/3); const y=new Date().getFullYear(); const labels=[['Q1','Jan–Mar',0,2],['Q2','Apr–Jun',3,5],['Q3','Jul–Sep',6,8],['Q4','Oct–Dec',9,11]]; return {idx:q,y}; }
-function _quarterDates(q){ const labels=[['Q1','Jan–Mar',0],['Q2','Apr–Jun',3],['Q3','Jul–Sep',6],['Q4','Oct–Dec',9]]; const [lab,span,m]=labels[q.idx]; const from=new Date(q.y,m,1); const to=new Date(q.y,m+3,0); return {label:`${lab} ${q.y} (${span})`,from:from.toISOString().slice(0,10),to:to.toISOString().slice(0,10)}; }
-function renderInvoice(){
-  const l=L(IV.landlordId); const props=S.properties.filter(p=>p.landlordId===IV.landlordId);
+// Build the current document from IV → {lines, title, totalLabel, period, kind, vat}
+function _invBuild(){
+  const l=L(IV.landlordId)||{}; const props=S.properties.filter(p=>p.landlordId===IV.landlordId);
   const rent=props.reduce((s,p)=>s+(p.rent||0),0);
+  if(IV.docType==='tenantfind'){
+    const net=Math.round(rent/4.345*feeOf(l)*100)/100;
+    return {lines:[{desc:`Tenant-find fee · ${props.map(p=>p.address).join(', ')||'—'} · ${feeOf(l)} weeks' rent (one-off)`,net}],title:'INVOICE',totalLabel:'Total due',period:{label:'One-off',from:today(),to:today()},kind:'invoice',vat:!!S.agency.vatRegistered};
+  }
+  if(IV.docType==='maintenance'){
+    const lines=(IV.items||[]).filter(x=>x.desc||x.amount).map(x=>({desc:'Works / disbursement · '+(x.desc||'—'),net:Math.round((+x.amount||0)*100)/100}));
+    return {lines:lines.length?lines:[{desc:'Works / disbursement',net:0}],title:'INVOICE',totalLabel:'Total due',period:{label:'On completion',from:today(),to:today()},kind:'invoice',vat:!!S.agency.vatRegistered};
+  }
+  if(IV.docType==='remittance'){
+    const pd=_period(IV.freq||'monthly',IV.y,IV.idx);
+    const rentCollected=Math.round(rent*pd.months*100)/100;
+    const feeNet=props.reduce((s,p)=>s+p.rent*propFee(p)/100,0)*pd.months;
+    const fee=Math.round(feeNet*(S.agency.vatRegistered?1.2:1)*100)/100;
+    const other=Math.round((+IV.otherDeduct||0)*100)/100;
+    const lines=[{desc:`Rent collected · ${pd.label}`,net:rentCollected},{desc:`Less: management fee${S.agency.vatRegistered?' (incl. VAT)':''}`,net:-fee}];
+    if(other) lines.push({desc:'Less: other deductions'+(IV.otherDesc?' · '+IV.otherDesc:''),net:-other});
+    return {lines,title:'REMITTANCE STATEMENT',totalLabel:'Net paid to landlord',period:pd,kind:'remittance',vat:false};
+  }
+  // management (recurring)
+  const pd=_period(IV.freq||'quarterly',IV.y,IV.idx);
+  const lines=props.map(p=>({desc:`Management fee · ${p.address} · ${propFee(p)}% of ${gbp(p.rent)}/mo × ${pd.months} month${pd.months>1?'s':''}${IV.freq==='quarterly'?' (in advance)':''}`,net:Math.round(p.rent*propFee(p)/100*pd.months*100)/100}));
+  return {lines:lines.length?lines:[{desc:'Management fee',net:0}],title:'INVOICE',totalLabel:'Total due',period:pd,kind:'invoice',vat:!!S.agency.vatRegistered};
+}
+function renderInvoice(){
+  const l=L(IV.landlordId)||{};
   const llOpts=S.landlords.map(x=>`<option value="${x.id}" ${x.id===IV.landlordId?'selected':''}>${esc(x.name)} — ${(SVC[x.service]||SVC.full).label}</option>`).join('');
-  const qd=_quarterDates(IV.quarter);
-  let net=0, lineHtml='';
-  if(l.service==='full'){
-    // One line per property, each at its own fee rate, ×3 months (quarterly, upfront).
-    const lines=props.map(p=>({d:`${esc(p.address)} · ${propFee(p)}% of ${gbp(p.rent)}/mo × 3`,n:p.rent*propFee(p)/100*3}));
-    net=lines.reduce((s,x)=>s+x.n,0);
-    lineHtml=lines.map(x=>`<div style="display:flex;justify-content:space-between;gap:10px"><span>${x.d}</span><b>${money2(x.n)}</b></div>`).join('');
-  } else { net=rent/4.345*feeOf(l); lineHtml=`<div style="display:flex;justify-content:space-between"><span>Let-only fee · ${feeOf(l)} weeks' rent (one-off)</span><b>${money2(net)}</b></div>`; }
-  const vat=S.agency.vatRegistered;
+  const DOCS=[['management','Management fee'],['remittance','Rent remittance (collect & pay out)'],['tenantfind','Tenant-find (one-off)'],['maintenance','Maintenance / disbursement']];
+  const b=_invBuild();
+  const net=b.lines.reduce((s,x)=>s+x.net,0);
+  const showPeriod = IV.docType==='management'||IV.docType==='remittance';
+  const periodBlock = showPeriod ? `
+    <div class="grid2" style="gap:10px">
+      <div class="fg"><label>Frequency</label><select onchange="IV.freq=this.value;IV.idx=_defaultIdx(this.value);renderInvoice()">${['monthly','quarterly','annual'].map(f=>`<option value="${f}" ${IV.freq===f?'selected':''}>${FREQ_LABEL[f]}</option>`).join('')}</select></div>
+      <div class="fg"><label>Period</label><select onchange="IV.idx=parseInt(this.value);renderInvoice()">${_periodIdxs(IV.freq).map(i=>`<option value="${i}" ${IV.idx===i?'selected':''}>${_period(IV.freq,IV.y,i).label}</option>`).join('')}</select></div>
+    </div>` : '';
+  const maintBlock = IV.docType==='maintenance' ? `
+    <div class="fg"><label>Work items (billed to the landlord)</label>
+      ${(IV.items||[]).map((it,i)=>`<div style="display:flex;gap:8px;margin-bottom:6px"><input placeholder="e.g. Boiler repair — contractor invoice" value="${esc(it.desc)}" oninput="IV.items[${i}].desc=this.value" style="flex:1"><input type="number" placeholder="£" value="${esc(it.amount)}" onchange="IV.items[${i}].amount=this.value;renderInvoice()" style="width:110px"></div>`).join('')}
+      <button class="btn sm" onclick="IV.items.push({desc:'',amount:''});renderInvoice()">＋ Add item</button></div>` : '';
+  const remitBlock = IV.docType==='remittance' ? `
+    <div class="grid2" style="gap:10px"><div class="fg"><label>Other deduction (£, optional)</label><input type="number" value="${esc(IV.otherDeduct)}" onchange="IV.otherDeduct=this.value;renderInvoice()"></div>
+    <div class="fg"><label>Deduction note</label><input value="${esc(IV.otherDesc)}" oninput="IV.otherDesc=this.value" placeholder="e.g. gas cert"></div></div>` : '';
+  const vat=b.vat;
   const body=`
-    <div class="fg"><label>Bill to (landlord)</label><select id="iv-ll" onchange="IV.landlordId=this.value;renderInvoice()">${llOpts}</select></div>
-    <div class="fg"><label>Billing period (quarter, upfront)</label><select id="iv-q" onchange="IV.quarter.idx=parseInt(this.value);renderInvoice()">
-      ${[0,1,2,3].map(i=>`<option value="${i}" ${IV.quarter.idx===i?'selected':''}>${_quarterDates({idx:i,y:IV.quarter.y}).label}</option>`).join('')}</select></div>
-    <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:14px;font-size:12.5px;line-height:1.7;margin-bottom:6px">
-      ${lineHtml}
-      <div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);margin-top:6px;padding-top:6px"><span class="faint">Net</span><b>${money2(net)}</b></div>
-      ${vat?`<div style="display:flex;justify-content:space-between"><span class="faint">VAT @ 20%</span><b>${money2(net*0.2)}</b></div>`:`<div class="faint" style="font-size:11.5px;margin-top:3px">Not VAT registered — no VAT charged.</div>`}
-      <div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);margin-top:6px;padding-top:6px"><b>Total due</b><b style="color:var(--navy)">${money2(vat?net*1.2:net)}</b></div>
+    <div class="grid2" style="gap:10px">
+      <div class="fg"><label>${b.kind==='remittance'?'Landlord (pay out to)':'Bill to (landlord)'}</label><select onchange="IV.landlordId=this.value;renderInvoice()">${llOpts}</select></div>
+      <div class="fg"><label>Document type</label><select onchange="IV.docType=this.value;renderInvoice()">${DOCS.map(([v,t])=>`<option value="${v}" ${IV.docType===v?'selected':''}>${t}</option>`).join('')}</select></div>
     </div>
-    <div class="hint">Invoice number auto-assigns on create (sequential). You can mark it Sent / Paid after.</div>`;
-  modal('Create invoice', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="createInvoice()">Create invoice</button>`);
+    ${periodBlock}${maintBlock}${remitBlock}
+    <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:14px;font-size:12.5px;line-height:1.7;margin:6px 0">
+      ${b.lines.map(x=>`<div style="display:flex;justify-content:space-between;gap:10px"><span>${esc(x.desc)}</span><b style="white-space:nowrap;${x.net<0?'color:var(--red)':''}">${money2(x.net)}</b></div>`).join('')}
+      <div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);margin-top:6px;padding-top:6px"><span class="faint">${vat?'Net':(b.kind==='remittance'?'Subtotal':'Net')}</span><b>${money2(net)}</b></div>
+      ${vat?`<div style="display:flex;justify-content:space-between"><span class="faint">VAT @ 20%</span><b>${money2(net*0.2)}</b></div>`:(b.kind==='remittance'?'':`<div class="faint" style="font-size:11.5px;margin-top:3px">Not VAT registered — no VAT charged.</div>`)}
+      <div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);margin-top:6px;padding-top:6px"><b>${b.totalLabel}</b><b style="color:var(--navy)">${money2(vat?net*1.2:net)}</b></div>
+    </div>
+    <div class="hint">${b.kind==='remittance'?'A remittance statement records rent collected on the landlord\'s behalf, less your fee, paid to them. Needs a CMP scheme + client account when live.':'Number auto-assigns on create. Mark it Sent / Paid after.'}</div>`;
+  modal(b.kind==='remittance'?'Create remittance statement':'Create invoice', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="createInvoice()">${b.kind==='remittance'?'Create statement':'Create invoice'}</button>`);
 }
 function createInvoice(){
-  const l=L(IV.landlordId); const props=S.properties.filter(p=>p.landlordId===IV.landlordId);
-  const rent=props.reduce((s,p)=>s+(p.rent||0),0); const qd=_quarterDates(IV.quarter);
-  let lines;
-  if(l.service==='full'){
-    // One invoice line per property at its own fee rate.
-    lines=props.map(p=>({desc:`Management fee · ${p.address} · ${propFee(p)}% of ${gbp(p.rent)}/mo × 3 months (quarterly, in advance)`,net:Math.round(p.rent*propFee(p)/100*3*100)/100}));
-  } else {
-    lines=[{desc:`Let-only fee · ${props.map(p=>p.address).join(', ')} · ${feeOf(l)} weeks' rent (one-off)`,net:Math.round(rent/4.345*feeOf(l)*100)/100}];
-  }
-  const inv={id:uid('inv'),no:nextInvoiceNo(),landlordId:IV.landlordId,propertyId:(props[0]||{}).id||'',type:l.service,
-    periodLabel:qd.label,issued:today(),supplyFrom:qd.from,supplyTo:qd.to,lines,vat:!!S.agency.vatRegistered,status:'draft'};
+  const b=_invBuild(); const props=S.properties.filter(p=>p.landlordId===IV.landlordId);
+  const inv={id:uid('inv'),no:nextInvoiceNo(),landlordId:IV.landlordId,propertyId:(props[0]||{}).id||'',type:IV.docType,
+    periodLabel:b.period.label,issued:today(),supplyFrom:b.period.from,supplyTo:b.period.to,
+    lines:b.lines.map(x=>({desc:x.desc,net:x.net})),vat:!!b.vat,status:'draft'};
   S.invoices=S.invoices||[]; S.invoices.push(inv); save(); pushInvoice(inv); pushAgency(); closeModal(); go('invoice',inv.id); toast('✓ '+inv.no+' created');
 }
 function setInvStatus(id,s){ const inv=S.invoices.find(i=>i.id===id); inv.status=s; save(); pushInvoice(inv); render(); toast('Invoice marked '+s); }
@@ -629,7 +674,7 @@ function vInvoiceDetail(){
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:26px">
           <div><div style="font-family:var(--disp);font-size:22px;color:var(--navy)">${esc(a.name||'Your Lettings')}</div>
             <div class="faint" style="font-size:12px;line-height:1.6;margin-top:4px;white-space:pre-line">${esc(a.address||'')}${a.redressNo?'\nRedress: '+esc(a.redress||'')+' · '+esc(a.redressNo):''}${a.icoNo?'\nICO: '+esc(a.icoNo):''}${a.vatRegistered&&a.vatNumber?'\nVAT No: '+esc(a.vatNumber):''}</div></div>
-          <div style="text-align:right"><div style="font-family:var(--disp);font-size:24px;color:var(--navy)">INVOICE</div>
+          <div style="text-align:right"><div style="font-family:var(--disp);font-size:24px;color:var(--navy)">${inv.type==='remittance'?'REMITTANCE':'INVOICE'}</div>
             <div class="faint" style="font-size:12.5px;margin-top:4px">${esc(inv.no)}</div>
             ${invStatusPill(inv.status)}</div>
         </div>
@@ -647,10 +692,10 @@ function vInvoiceDetail(){
         <div style="display:flex;justify-content:flex-end"><div style="width:220px">
           <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px"><span class="faint">Subtotal</span><span>${money2(t.net)}</span></div>
           ${inv.vat?`<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px"><span class="faint">VAT @ 20%</span><span>${money2(t.vat)}</span></div>`:''}
-          <div style="display:flex;justify-content:space-between;padding:9px 0;border-top:2px solid var(--navy);margin-top:4px;font-size:15px;font-weight:700;color:var(--navy)"><span>Total due</span><span>${money2(t.gross)}</span></div>
+          <div style="display:flex;justify-content:space-between;padding:9px 0;border-top:2px solid var(--navy);margin-top:4px;font-size:15px;font-weight:700;color:var(--navy)"><span>${inv.type==='remittance'?'Net paid to landlord':'Total due'}</span><span>${money2(t.gross)}</span></div>
         </div></div>
-        ${!inv.vat?`<div class="faint" style="font-size:11px;margin-top:16px">Not VAT registered — no VAT is charged on this invoice.</div>`:''}
-        <div class="faint" style="font-size:11px;margin-top:6px;line-height:1.6">Payment terms: ${a.paymentTerms||14} days. Management fees are invoiced quarterly in advance. This invoice does not constitute holding of client money — tenants pay landlords directly.</div>
+        ${!inv.vat&&inv.type!=='remittance'?`<div class="faint" style="font-size:11px;margin-top:16px">Not VAT registered — no VAT is charged on this invoice.</div>`:''}
+        <div class="faint" style="font-size:11px;margin-top:6px;line-height:1.6">${inv.type==='remittance'?'This statement records rent collected on your behalf, less our fees, remitted to your nominated account. Held under our Client Money Protection scheme.':(inv.type==='maintenance'?'Disbursement for works carried out on your behalf. Payment terms: '+(a.paymentTerms||14)+' days.':(inv.type==='tenantfind'?'One-off tenant-find fee. Payment terms: '+(a.paymentTerms||14)+' days.':'Payment terms: '+(a.paymentTerms||14)+' days. Management fees are invoiced in advance. Tenants pay landlords directly (no client money held) unless a remittance statement applies.'))}</div>
       </div>
     </div>`;
 }
