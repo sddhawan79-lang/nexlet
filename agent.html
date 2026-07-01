@@ -115,7 +115,7 @@ h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px
 <body>
 <div class="app">
   <aside class="sb">
-    <div class="sb-logo"><div class="nm">Nex<b>Let</b></div><div class="sb-badge">AGENCY MODE</div></div>
+    <div class="sb-logo"><div class="nm" style="font-size:20px;line-height:1.15">Beacon <b style="color:var(--green);font-weight:400">Residentials</b></div><div style="font-size:10.5px;color:rgba(255,255,255,.45);margin-top:3px">Powered by Nex<span style="color:var(--orange)">Let</span></div><div class="sb-badge">AGENCY MODE</div></div>
     <nav class="sb-nav" id="nav"></nav>
     <div class="sb-foot">
       <div id="scheme-foot" style="margin:0 0 12px;padding:10px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px"></div>
@@ -195,6 +195,8 @@ async function loadData(agency){
   S.invoices  =(iv.data||[]).map(rowToInv);
   const ag=await sb.from('agency_agreements').select('*').eq('agency_id',window._agencyId);
   S.agreements=ag.data||[];
+  const lt=await sb.from('agency_letters').select('*').eq('agency_id',window._agencyId).order('created_at',{ascending:false});
+  S.letters=lt.data||[];
 }
 
 // ── auth gateway (§2a-B) + boot ──
@@ -222,7 +224,8 @@ const SEED={
   references:[],
   tenancies:[],
   invoices:[],
-  agreements:[]
+  agreements:[],
+  letters:[]
 };
 
 let S=load();
@@ -247,7 +250,8 @@ const CREDIT={not_requested:{label:'Credit: not requested',bg:'var(--off)',color
 const NAV=[
   {k:'dashboard',ic:'▦',t:'Agency Dashboard'},{k:'landlords',ic:'⚇',t:'Landlords'},
   {k:'pipeline',ic:'◫',t:'Tenancy Progression'},{k:'referencing',ic:'◷',t:'Referencing'},
-  {k:'properties',ic:'⌂',t:'Properties'},{k:'invoices',ic:'£',t:'Invoices'},{k:'settings',ic:'⚙',t:'Agency Settings'}
+  {k:'properties',ic:'⌂',t:'Properties'},{k:'invoices',ic:'£',t:'Invoices'},
+  {k:'templates',ic:'✉',t:'Letters & Templates'},{k:'settings',ic:'⚙',t:'Agency Settings'}
 ];
 let view='dashboard', sel=null, llView=false;
 function go(v,id){ view=v; if(id!==undefined)sel=id; window.scrollTo(0,0); render(); }
@@ -270,7 +274,7 @@ function render(){
   document.getElementById('view').innerHTML=({
     dashboard:vDashboard, landlords:vLandlords, landlord:vLandlordDetail, pipeline:vPipeline,
     referencing:vReferencing, properties:vProperties, property:vPropertyDetail, llportal:vLandlordPortal,
-    invoices:vInvoices, invoice:vInvoiceDetail, settings:vSettings
+    invoices:vInvoices, invoice:vInvoiceDetail, settings:vSettings, templates:vTemplates
   }[view]||vDashboard)();
 }
 function topActions(){
@@ -955,13 +959,15 @@ async function sendAgreement(id){
 
 function agreementEmailHtml(l,agentName,link,service){
   const nm=service==='letonly'?'Tenant-Find Agreement':'Letting & Management Agreement';
+  const b=agencyBrand();
   return `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#1A2B45">
-    <div style="background:#0B1E3D;padding:20px 24px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:20px;font-weight:700">Nex<span style="color:#00C896">Let</span></span></div>
+    <div style="background:#0B1E3D;padding:20px 24px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:20px;font-weight:700">${esc(b.name)}</span>${b.ico?`<div style="font-size:10px;color:#7F9CC0;margin-top:2px">ICO Reg. ${esc(b.ico)}</div>`:''}</div>
     <div style="border:1px solid #E4EAF1;border-top:none;border-radius:0 0 10px 10px;padding:26px 24px">
       <p>Dear ${esc(l.name)},</p>
-      <p>${esc(agentName)} at <b>${esc(S.agency.name||'your managing agent')}</b> has prepared your <b>${nm}</b> and signed it. It's ready for you to review and counter-sign.</p>
+      <p>${esc(agentName)} at <b>${esc(b.name)}</b> has prepared your <b>${nm}</b> and signed it. It's ready for you to review and counter-sign.</p>
       <p style="text-align:center;margin:26px 0"><a href="${link}" style="background:#009970;color:#fff;text-decoration:none;font-weight:600;padding:13px 30px;border-radius:8px;display:inline-block">Review &amp; sign your agreement</a></p>
       <p style="font-size:12px;color:#7A8FA6">This is a secure, personal link. Electronic signatures are legally binding under the Electronic Communications Act 2000. Once signed, you'll receive a timestamped copy by email.</p>
+      <div style="margin-top:18px;padding-top:12px;border-top:1px solid #E4EAF1;font-size:10.5px;color:#7A8FA6">${esc(b.name)}${b.ico?' · ICO Reg. '+esc(b.ico):''} · secured by NexLet e-signature</div>
     </div></div>`;
 }
 
@@ -980,7 +986,7 @@ async function reconcileAgreements(){
         l.agreement=true; l.status='active'; l.docs=l.docs||{};
         l.docs.agreement=l.docs.agreement||('Signed '+(a.service==='letonly'?'Tenant-Find':'Management')+' Agreement');
         l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:'Agreement counter-signed by landlord — now live.'});
-        pushLandlord(l); changed=true; emailSignedAgreement(a,l);
+        pushLandlord(l); changed=true; emailSignedAgreement(a,l); sendWelcomeLetter(l);
       }
     }
   }
@@ -995,7 +1001,7 @@ function signedCertHtml(a){
   const fmt=d=>d?new Date(d).toLocaleString('en-GB',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
   return `<div style="border:1px solid #E4EAF1;border-radius:10px;padding:20px 22px">
     <div style="font-size:15px;font-weight:700;color:#0B1E3D;margin-bottom:4px">✔ Fully signed agreement</div>
-    <div style="font-size:12px;color:#7A8FA6;margin-bottom:16px">${a.service==='letonly'?'Tenant-Find Agreement':'Letting &amp; Management Agreement'} · NexLet e-signature record</div>
+    <div style="font-size:12px;color:#7A8FA6;margin-bottom:16px">${a.service==='letonly'?'Tenant-Find Agreement':'Letting &amp; Management Agreement'} · ${esc(agencyBrand().name)} e-signature record</div>
     <table style="width:100%;font-size:12.5px;border-collapse:collapse">
       <tr><td style="padding:6px 0;color:#7A8FA6">Agent</td><td style="padding:6px 0;font-weight:600">${esc(a.agent_name||'')}</td></tr>
       <tr><td style="padding:6px 0;color:#7A8FA6">Agent signed</td><td style="padding:6px 0">${fmt(a.agent_signed_at)}</td></tr>
@@ -1011,7 +1017,7 @@ function signedCertHtml(a){
 }
 function emailSignedAgreement(a,l){
   const full=`<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#1A2B45">${signedCertHtml(a)}<hr style="border:none;border-top:1px solid #E4EAF1;margin:24px 0"><div style="font-size:12.5px;line-height:1.7">${a.document_html}</div></div>`;
-  if(l.email) agencyEmail(l.email,'Your signed agreement — '+(S.agency.name||'NexLet'),full);
+  if(l.email) agencyEmail(l.email,'Your signed agreement — '+agencyBrand().name,full);
   if(a.agent_email) agencyEmail(a.agent_email,'Signed: '+(l.name||'landlord')+' — agreement complete',full);
 }
 function viewSignedAgreement(id){
@@ -1022,6 +1028,191 @@ function viewSignedAgreement(id){
 }
 
 // ── helpers ──
+// ═══════════════════════════════════════════════════════════════════════════
+// LETTERS & TEMPLATES (Phase 3) — agency comms through one timestamped pipeline.
+// Deterministic legal wording; optional AI polish on the warm/non-legal ones.
+// Every send → email (agencyEmail) + audit row in agency_letters + comms log.
+// Branding: Beacon Residentials Ltd (falls back if agency settings blank).
+// ═══════════════════════════════════════════════════════════════════════════
+function agencyBrand(){ const a=S.agency; return { name:a.name||'Beacon Residentials Ltd', ico:a.icoNo||'ZC164221', address:a.address||'', redress:a.redress||'', redressNo:a.redressNo||'', email:window._agentEmail||'documents@nexlet.co.uk', agent:window._agentName||a.name||'Beacon Residentials Ltd' }; }
+function letterWrap(subject, inner){ const b=agencyBrand(); const foot=[b.name, b.ico?'ICO Reg. '+b.ico:'', b.redress?b.redress+(b.redressNo?' ('+b.redressNo+')':''):''].filter(Boolean).join(' · ');
+  return `<div style="font-family:Georgia,'Times New Roman',serif;max-width:640px;margin:0 auto;color:#1A2B45">
+    <div style="background:#0B1E3D;padding:18px 26px;border-radius:8px 8px 0 0;display:flex;align-items:center;justify-content:space-between">
+      <div style="font-family:Arial,sans-serif;font-size:19px;font-weight:700;color:#fff;letter-spacing:.3px">${esc(b.name)}</div>
+      <div style="font-family:Arial,sans-serif;font-size:10px;color:#7F9CC0;text-align:right">${b.address?esc(b.address):''}</div>
+    </div>
+    <div style="border:1px solid #E4EAF1;border-top:3px solid #00C896;border-radius:0 0 8px 8px;padding:30px 30px 24px">
+      <div style="font-size:15px;line-height:1.75">${inner}</div>
+      <div style="margin-top:26px;padding-top:14px;border-top:1px solid #E4EAF1;font-family:Arial,sans-serif;font-size:10.5px;color:#7A8FA6;line-height:1.6">${esc(foot)}<br>Issued by ${esc(b.name)} · secured by NexLet on ${new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}. This letter is a record held within the NexLet platform.</div>
+    </div></div>`; }
+function _money(n){ return '£'+(Math.round((+n||0)*100)/100).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function _dstr(d){ return d?new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}):'—'; }
+function _plus(days){ const d=new Date(); d.setDate(d.getDate()+days); return d.toISOString().slice(0,10); }
+function _thisMonth(){ return new Date().toLocaleDateString('en-GB',{month:'long',year:'numeric'}); }
+
+// Template catalog — each build(l,p,brand,f) → {subject, bodyHtml}. f = extra field values.
+const TEMPLATES=[
+  {key:'welcome',group:'Onboarding',title:'Landlord welcome letter',icon:'👋',ai:true,needProp:false,auto:true,
+    fields:[],
+    build:(l,p,b)=>({subject:`Welcome to ${b.name}`,body:`<p>Dear ${esc(l.name)},</p>
+      <p>Welcome to ${esc(b.name)} — thank you for instructing us to manage your property. We're delighted to be looking after your ${l.service==='letonly'?'letting':'property management'} and will act with care, transparency and full compliance at every step.</p>
+      <p>Here's what happens next: we complete your compliance checks, prepare marketing (or begin management), and keep you updated throughout. Your dedicated point of contact is ${esc(b.agent)}, reachable at ${esc(b.email)}.</p>
+      <p>You can expect clear monthly statements, prompt handling of maintenance, and proactive reminders before any certificate expires. We hold ${b.redress?('membership of '+esc(b.redress)):'approved redress-scheme membership'} for your protection.</p>
+      <p>If you have any questions at all, simply reply to this email. We look forward to a long and successful working relationship.</p>
+      <p>Kind regards,<br>${esc(b.agent)}<br>${esc(b.name)}</p>`})},
+  {key:'rent_statement',group:'Statements & requests',title:'Monthly rent statement / remittance',icon:'💷',ai:false,needProp:true,
+    fields:[{k:'month',label:'Statement period',type:'text',def:()=>_thisMonth()},{k:'received',label:'Rent received (£)',type:'number',def:p=>p&&p.rent||0},{k:'deductions',label:'Deductions / fees (£)',type:'number',def:()=>''},{k:'note',label:'Note (optional)',type:'text',def:()=>''}],
+    build:(l,p,b,f)=>{const rec=+f.received||0, fee=f.deductions!==''&&f.deductions!=null?+f.deductions:(p?rec*propFee(p)/100:0), net=rec-fee; return {subject:`Rent statement — ${f.month} — ${p?p.address:''}`,body:`<p>Dear ${esc(l.name)},</p>
+      <p>Please find your rent statement for <b>${esc(f.month)}</b> in respect of <b>${p?esc(p.address):'your property'}</b>.</p>
+      <table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:14px;margin:14px 0">
+        <tr><td style="padding:8px 0;border-bottom:1px solid #E4EAF1">Rent received</td><td style="padding:8px 0;border-bottom:1px solid #E4EAF1;text-align:right">${_money(rec)}</td></tr>
+        <tr><td style="padding:8px 0;border-bottom:1px solid #E4EAF1">Management fee &amp; deductions</td><td style="padding:8px 0;border-bottom:1px solid #E4EAF1;text-align:right">− ${_money(fee)}</td></tr>
+        <tr><td style="padding:10px 0;font-weight:700">Net remitted to you</td><td style="padding:10px 0;text-align:right;font-weight:700;color:#009970">${_money(net)}</td></tr></table>
+      ${f.note?`<p>${esc(f.note)}</p>`:''}
+      <p>The net amount will be paid to your nominated account. Please retain this statement for your records.</p>
+      <p>Kind regards,<br>${esc(b.name)}</p>`}}},
+  {key:'maintenance_auth',group:'Statements & requests',title:'Maintenance authorisation request',icon:'🔧',ai:false,needProp:true,
+    fields:[{k:'item',label:'Work required',type:'text',def:()=>''},{k:'estimate',label:'Estimated cost (£)',type:'number',def:()=>''},{k:'contractor',label:'Proposed contractor',type:'text',def:()=>''}],
+    build:(l,p,b,f)=>({subject:`Authorisation needed — ${f.item||'maintenance'} — ${p?p.address:''}`,body:`<p>Dear ${esc(l.name)},</p>
+      <p>We've identified maintenance required at <b>${p?esc(p.address):'your property'}</b> and need your authorisation to proceed.</p>
+      <p><b>Work required:</b> ${esc(f.item||'—')}<br><b>Estimated cost:</b> ${f.estimate?_money(f.estimate):'to be confirmed'}${f.contractor?`<br><b>Proposed contractor:</b> ${esc(f.contractor)}`:''}</p>
+      <p>Under your management agreement, works above your pre-authorised limit require your approval. Please reply to confirm you're happy for us to instruct this work, or let us know if you'd like to discuss.</p>
+      <p>Where the issue affects the tenant's safety or the property's condition, prompt authorisation helps us meet our repairing obligations and avoid escalation.</p>
+      <p>Kind regards,<br>${esc(b.name)}</p>`})},
+  {key:'compliance_reminder',group:'Statements & requests',title:'Compliance renewal reminder',icon:'📋',ai:false,needProp:true,
+    fields:[{k:'cert',label:'Certificate',type:'select',opts:['Gas Safety (CP12)','EICR (Electrical)','EPC','Smoke/CO alarms'],def:()=>'Gas Safety (CP12)'},{k:'expiry',label:'Expiry / due date',type:'date',def:p=>p&&p.certs&&(p.certs.gas)||''}],
+    build:(l,p,b,f)=>({subject:`Action needed: ${f.cert} renewal — ${p?p.address:''}`,body:`<p>Dear ${esc(l.name)},</p>
+      <p>This is a reminder that the <b>${esc(f.cert)}</b> certificate for <b>${p?esc(p.address):'your property'}</b> ${f.expiry?`is due to expire on <b>${_dstr(f.expiry)}</b>`:'is due for renewal'}.</p>
+      <p>Keeping this certificate valid is a legal requirement for a let property. With your authorisation we'll arrange the inspection and renewal on your behalf and add the certificate to your compliance record.</p>
+      <p>Please reply to confirm you'd like us to proceed, or advise if you'll arrange it directly so we can update our records.</p>
+      <p>Kind regards,<br>${esc(b.name)}</p>`})},
+  {key:'arrears_notice',group:'Notices',title:'Rent arrears notice to landlord',icon:'⚠️',ai:false,needProp:true,
+    fields:[{k:'amount',label:'Amount in arrears (£)',type:'number',def:()=>''},{k:'periods',label:'Period(s) missed',type:'text',def:()=>''},{k:'since',label:'Arrears since',type:'date',def:()=>''}],
+    build:(l,p,b,f)=>({subject:`Rent arrears update — ${p?p.address:''}`,body:`<p>Dear ${esc(l.name)},</p>
+      <p>We're writing to update you on a rent arrears situation at <b>${p?esc(p.address):'your property'}</b>.</p>
+      <p><b>Amount outstanding:</b> ${f.amount?_money(f.amount):'—'}${f.periods?`<br><b>Period(s) missed:</b> ${esc(f.periods)}`:''}${f.since?`<br><b>Arrears since:</b> ${_dstr(f.since)}`:''}</p>
+      <p>We have contacted the tenant and are following our arrears procedure. Our aim is always to recover the arrears and sustain the tenancy where possible. We'll keep you informed of progress and will advise you before any formal notice is served.</p>
+      <p>If you'd like to discuss options, please reply and we'll arrange a call.</p>
+      <p>Kind regards,<br>${esc(b.name)}</p>`})},
+  {key:'renewal_offer',group:'Notices',title:'Tenancy renewal offer',icon:'🔄',ai:true,needProp:true,
+    fields:[{k:'term',label:'Proposed term',type:'text',def:()=>'12 months'},{k:'rent',label:'Proposed rent (£/mo)',type:'number',def:p=>p&&p.rent||0},{k:'start',label:'Renewal start date',type:'date',def:()=>''}],
+    build:(l,p,b,f)=>({subject:`Tenancy renewal — ${p?p.address:''}`,body:`<p>Dear ${esc(l.name)},</p>
+      <p>The current tenancy at <b>${p?esc(p.address):'your property'}</b> is approaching its review point, and we'd like your instructions on renewal.</p>
+      <p><b>Proposed terms:</b> ${esc(f.term||'12 months')} at ${f.rent?_money(f.rent)+' per month':'the current rent'}${f.start?`, starting ${_dstr(f.start)}`:''}.</p>
+      <p>The tenant has been a reliable occupant and renewing avoids void periods and re-letting costs. If you're happy to proceed on these terms, reply to confirm and we'll prepare the paperwork. If you'd prefer a different rent or term — or to end the tenancy — let us know and we'll advise on the correct process.</p>
+      <p>Kind regards,<br>${esc(b.name)}</p>`})},
+  {key:'checkout_notice',group:'Notices',title:'End-of-tenancy / check-out notice',icon:'📦',ai:false,needProp:true,
+    fields:[{k:'endDate',label:'Tenancy end date',type:'date',def:()=>''},{k:'reason',label:'Reason (optional)',type:'text',def:()=>''}],
+    build:(l,p,b,f)=>({subject:`End of tenancy & check-out — ${p?p.address:''}`,body:`<p>Dear ${esc(l.name)},</p>
+      <p>We're writing to confirm that the tenancy at <b>${p?esc(p.address):'your property'}</b> is ending${f.endDate?` on <b>${_dstr(f.endDate)}</b>`:''}.${f.reason?` Reason: ${esc(f.reason)}.`:''}</p>
+      <p>We'll carry out a check-out inspection against the original inventory, agree any deposit deductions in line with the tenancy deposit scheme rules, and return the property to you (or prepare it for re-letting, per your instructions).</p>
+      <p>Please let us know whether you'd like us to re-market the property or hand it back. We'll send the check-out report and deposit summary once complete.</p>
+      <p>Kind regards,<br>${esc(b.name)}</p>`})},
+  {key:'termination',group:'Notices',title:'Agreement termination notice',icon:'🚪',ai:false,needProp:false,
+    fields:[{k:'effective',label:'Termination effective date',type:'date',def:()=>_plus(30)},{k:'reason',label:'Reason (optional)',type:'text',def:()=>''}],
+    build:(l,p,b,f)=>({subject:`Management agreement — termination notice`,body:`<p>Dear ${esc(l.name)},</p>
+      <p>This letter confirms the termination of the management agreement between yourself and ${esc(b.name)}, with effect from <b>${_dstr(f.effective)}</b>, in line with the notice terms of that agreement.${f.reason?` Reason: ${esc(f.reason)}.`:''}</p>
+      <p>Before the effective date we will: reconcile and remit any rent held, provide a final statement, hand over all compliance certificates and tenancy documentation, and confirm the handover of tenant contact and deposit details.</p>
+      <p>It has been a pleasure acting on your behalf. If there's anything we can do to assist with the transition, please let us know.</p>
+      <p>Kind regards,<br>${esc(b.name)}</p>`})}
+];
+function tplByKey(k){ return TEMPLATES.find(t=>t.key===k); }
+
+// ── Letters & Templates view ──
+let TPL=null; // {key, lid, pid, f:{}}
+function vTemplates(){
+  const groups=[...new Set(TEMPLATES.map(t=>t.group))];
+  const cards=groups.map(g=>`<div style="margin-bottom:8px"><div class="faint" style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin:6px 2px 10px">${g}</div>
+    <div class="grid3" style="gap:12px">${TEMPLATES.filter(t=>t.group===g).map(t=>`
+      <div class="panel" style="padding:16px;cursor:pointer" onclick="openTemplate('${t.key}')">
+        <div style="font-size:22px;margin-bottom:8px">${t.icon}</div>
+        <div style="font-weight:600;font-size:13.5px;color:var(--navy);line-height:1.3">${t.title}</div>
+        <div class="faint" style="font-size:11px;margin-top:6px">${t.ai?'<span style="color:var(--green)">✦ AI polish</span> · ':''}${t.auto?'Auto on sign · ':''}Timestamped &amp; logged</div>
+      </div>`).join('')}</div></div>`).join('');
+  const sent=(S.letters||[]).slice(0,12);
+  const hist=sent.length?`<div class="panel"><div class="panel-hd"><h2>Recently sent</h2></div><div class="panel-bd" style="padding:0">
+    ${sent.map(x=>{const l=L(x.landlord_id)||{}; return `<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line)">
+      <div style="font-size:16px">✉</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${esc(x.subject||x.type)}</div>
+      <div class="faint" style="font-size:11px">${esc(l.name||x.landlord_id||'')} · ${new Date(x.created_at).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div></div>
+      <span class="pill" style="background:var(--green-bg);color:var(--green)">Sent</span></div>`;}).join('')}
+  </div></div>`:'';
+  return `<h1 class="pg">Letters &amp; Templates</h1><div class="sub">Branded ${esc(agencyBrand().name)} comms — auto-filled from your data, timestamped and logged. Legal wording is fixed; warm letters can be AI-polished before sending.</div>
+    ${cards}${hist?'<div style="margin-top:8px">'+hist+'</div>':''}`;
+}
+
+function openTemplate(key){
+  const t=tplByKey(key); if(!t) return;
+  if(!S.landlords.length){ toast('Onboard a landlord first',1); return; }
+  const lid=(TPL&&TPL.lid)||S.landlords[0].id;
+  TPL={key,lid,pid:'',f:{}};
+  _tplSeedFields();
+  _tplModal();
+}
+function _tplLandlord(){ return L(TPL.lid)||{}; }
+function _tplProps(){ return S.properties.filter(p=>p.landlordId===TPL.lid); }
+function _tplProp(){ return TPL.pid?P(TPL.pid):(_tplProps()[0]||null); }
+function _tplSeedFields(){ const t=tplByKey(TPL.key); const p=_tplProp(); TPL.f={}; (t.fields||[]).forEach(fd=>{ TPL.f[fd.k]= typeof fd.def==='function'?fd.def(p):(fd.def||''); }); if(t.needProp&&!TPL.pid){ const p0=_tplProps()[0]; if(p0)TPL.pid=p0.id; } }
+function _tplBuild(){ const t=tplByKey(TPL.key); return t.build(_tplLandlord(),_tplProp(),agencyBrand(),TPL.f); }
+function _tplModal(){
+  const t=tplByKey(TPL.key); const props=_tplProps();
+  const llSel=`<select id="tpl-ll" onchange="TPL.lid=this.value;TPL.pid='';_tplSeedFields();_tplModal()">${S.landlords.map(l=>`<option value="${l.id}" ${l.id===TPL.lid?'selected':''}>${esc(l.name)}</option>`).join('')}</select>`;
+  const propSel=t.needProp?`<div class="fg"><label>Property</label><select id="tpl-prop" onchange="TPL.pid=this.value;_tplModal()">${props.length?props.map(p=>`<option value="${p.id}" ${p.id===(TPL.pid||(props[0]&&props[0].id))?'selected':''}>${esc(p.address)}</option>`).join(''):'<option>No property on file</option>'}</select></div>`:'';
+  const fields=(t.fields||[]).map(fd=>{ const v=TPL.f[fd.k]??''; if(fd.type==='select'){ return `<div class="fg"><label>${fd.label}</label><select onchange="TPL.f['${fd.k}']=this.value;_tplPreview()">${fd.opts.map(o=>`<option ${o===v?'selected':''}>${o}</option>`).join('')}</select></div>`; } return `<div class="fg"><label>${fd.label}</label><input type="${fd.type==='number'?'number':fd.type==='date'?'date':'text'}" value="${esc(v)}" oninput="TPL.f['${fd.k}']=this.value;_tplPreview()"></div>`; }).join('');
+  const built=_tplBuild();
+  const body=`<div class="fg"><label>Landlord (recipient)</label>${llSel}</div>${propSel}
+    ${fields?`<div class="grid2" style="gap:10px">${fields}</div>`:''}
+    <div class="fg"><label>Preview — sent to ${esc(_tplLandlord().email||'landlord (no email on file)')}</label>
+      <div id="tpl-prev" style="max-height:300px;overflow-y:auto;border:1px solid #E4EAF1;border-radius:8px;background:#F6F8FB;padding:6px">${letterWrap(built.subject,built.body)}</div></div>
+    ${t.ai?`<div style="margin-bottom:6px"><button class="btn" id="tpl-ai" onclick="tplPolish()">✦ Polish tone with AI</button> <span class="faint" style="font-size:11px">Rewrites wording warmer/clearer — you review before sending.</span></div>`:''}`;
+  const foot=`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn" onclick="tplCopy()">Copy text</button><button class="btn navy" onclick="tplSend()">Send via NexLet</button>`;
+  modal(t.title, body, foot);
+}
+let _tplAiBody=null;
+function _tplPreview(){ _tplAiBody=null; const built=_tplBuild(); const el=document.getElementById('tpl-prev'); if(el) el.innerHTML=letterWrap(built.subject,built.body); }
+async function tplPolish(){
+  const t=tplByKey(TPL.key); const built=_tplBuild(); const btn=document.getElementById('tpl-ai');
+  if(!window._sessionToken){ toast('AI polish needs a live session',1); return; }
+  if(btn){ btn.disabled=true; btn.innerHTML='✦ Polishing…'; }
+  const plain=built.body.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+  const prompt=`You are a senior UK letting agent at ${agencyBrand().name}. Rewrite the letter below to be warmer, clearer and professional, keeping ALL facts, names, figures and dates identical. Keep it concise. Return ONLY the letter body as simple HTML <p> paragraphs (no markdown, no subject line, no signature change).\n\nLETTER:\n${plain}`;
+  try{
+    const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:900,messages:[{role:'user',content:prompt}]})});
+    if(res.status===402){ toast('AI allowance reached — sending as-is is fine',1); if(btn){btn.disabled=false;btn.innerHTML='✦ Polish tone with AI';} return; }
+    const data=await res.json(); let txt=(data.content&&data.content[0]&&data.content[0].text)||'';
+    txt=txt.replace(/```html|```/g,'').trim();
+    if(txt){ _tplAiBody=txt; const el=document.getElementById('tpl-prev'); if(el) el.innerHTML=letterWrap(built.subject,txt); toast('✦ Polished — review & send'); }
+    else toast('AI returned nothing — using original',1);
+  }catch(e){ console.error(e); toast('AI polish failed — using original',1); }
+  if(btn){ btn.disabled=false; btn.innerHTML='✦ Re-polish'; }
+}
+function _tplFinalBody(){ const built=_tplBuild(); return { subject:built.subject, body:_tplAiBody||built.body }; }
+function tplCopy(){ const f=_tplFinalBody(); const tmp=document.createElement('textarea'); tmp.value=f.body.replace(/<[^>]+>/g,'\n').replace(/\n{2,}/g,'\n\n').trim(); document.body.appendChild(tmp); tmp.select(); try{document.execCommand('copy');toast('Copied');}catch(e){} tmp.remove(); }
+async function tplSend(){
+  const l=_tplLandlord(); if(!l.email){ toast('No email on file for '+l.name+' — add one first',1); return; }
+  const t=tplByKey(TPL.key); const p=_tplProp(); const f=_tplFinalBody();
+  const html=letterWrap(f.subject,f.body);
+  if(LIVE){ const row={id:uid('lt'),agency_id:window._agencyId,landlord_id:l.id,property_id:p?p.id:null,type:t.key,subject:f.subject,body_html:html,status:'sent'};
+    const { error }=await sb.from('agency_letters').insert(row); if(error){ console.error(error); }
+    S.letters=S.letters||[]; S.letters.unshift({...row,created_at:new Date().toISOString()});
+    await agencyEmail(l.email, f.subject, html);
+  } else { toast('Connect to send live — logged locally',0); S.letters=S.letters||[]; S.letters.unshift({id:uid('lt'),landlord_id:l.id,type:t.key,subject:f.subject,created_at:new Date().toISOString(),status:'sent'}); }
+  l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Letter',note:t.title+' sent · '+f.subject}); pushLandlord(l);
+  closeModal(); render(); toast('✓ '+t.title+' sent to '+l.name);
+}
+
+// Auto welcome letter when a landlord's agreement completes (deterministic, no modal).
+async function sendWelcomeLetter(l){
+  if(!l||!l.email) return;
+  const t=tplByKey('welcome'); const built=t.build(l,null,agencyBrand(),{});
+  const html=letterWrap(built.subject,built.body);
+  if(LIVE){ const row={id:uid('lt'),agency_id:window._agencyId,landlord_id:l.id,property_id:null,type:'welcome',subject:built.subject,body_html:html,status:'sent'};
+    try{ await sb.from('agency_letters').insert(row); }catch(e){}
+    S.letters=S.letters||[]; S.letters.unshift({...row,created_at:new Date().toISOString()});
+    agencyEmail(l.email, built.subject, html);
+  }
+  l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Letter',note:'Welcome letter sent automatically on agreement completion'}); pushLandlord(l);
+}
+
 function initials(n){ return (n||'?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase(); }
 function esc(v){ return v==null?'':String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function val(id){ const e=document.getElementById(id); return e?e.value.trim():''; }
