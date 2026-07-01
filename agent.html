@@ -173,7 +173,7 @@ const invToRow=i=>({id:i.id,agency_id:window._agencyId,no:i.no,landlord_id:i.lan
 
 // ── targeted writes (§4). No-ops in DEMO mode; toast on error in LIVE. ──
 async function _w(promise){ if(!LIVE)return; try{ const {error}=await promise; if(error){console.error(error);toast('⚠ Save failed — retry',1);} }catch(e){ console.error(e); toast('⚠ Save failed — retry',1); } }
-const pushLandlord =l  =>_w(sb.from('landlords').upsert(landlordToRow(l)));
+const pushLandlord =l  =>_w(sb.from('agency_landlords').upsert(landlordToRow(l)));
 const pushProperty =p  =>_w(sb.from('properties').upsert(propToRow(p)));
 const pushTenancy  =t  =>_w(sb.from('tenancies').upsert(tenToRow(t)));
 const pushReference=r  =>_w(sb.from('agency_references').upsert(refToRow(r)));
@@ -184,7 +184,7 @@ const pushAgency   =() =>_w(sb.from('agencies').update(agencyToRow(S.agency)).eq
 async function loadData(agency){
   S.agency=rowToAgency(agency);
   const q=t=>sb.from(t).select('*').eq('agency_id',window._agencyId);
-  const [ll,pr,rf,tn,iv]=await Promise.all([q('landlords'),q('properties'),q('agency_references'),q('tenancies'),q('invoices')]);
+  const [ll,pr,rf,tn,iv]=await Promise.all([sb.from('agency_landlords').select('*').eq('agency_id',window._agencyId),q('properties'),q('agency_references'),q('tenancies'),q('invoices')]);
   S.landlords =(ll.data||[]).map(rowToLandlord);
   S.properties=(pr.data||[]).map(rowToProp);
   S.references=(rf.data||[]).map(rowToRef);
