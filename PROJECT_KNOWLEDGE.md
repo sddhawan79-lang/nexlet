@@ -5797,8 +5797,222 @@ existing Supabase project (`mahtcfukgzbonwibtsxz`). Follows `DEV-SPEC-agency-por
 | # | Issue | Status |
 |---|---|---|
 | A | `login.html` role routing not yet wired | Session 36 follow-up (see above) |
-| B | Management agreement is a simulated tick, not real e-sign | Build-order step 3 |
+| B | Management agreement is a simulated tick, not real e-sign | ✅ DONE Session 36b — full e-sign (agency-esign.html) |
 | C | Agent portal certs/tenant on `properties` jsonb, not shared cert/tenant tables | Deliberate v1 |
+
+# Session 36b — Letting & Management Agreement e-signature (agent↔landlord)
+
+Replaced the simulated "agreement signed" tick with a real, timestamped, two-party
+e-signature — built as a **fully separate system** from the tenancy e-sign (deliberate,
+at user request: no shared files, no shared table, no risk of the two mixing).
+
+## Signing model
+Agent signs first (in `agent.html`) → landlord counter-signs at `agency-esign.html?t=<token>`
+→ `agent.html` polls, marks the landlord live, and emails both a timestamped signed copy.
+All email is sent from the **authenticated agent side** (ai-proxy authorises the agent's JWT);
+the anonymous landlord page needs no email + no ai-proxy access.
+
+## New files
+- **`agency_esign.sql`** — its OWN table `agency_agreements` (never touches `esign_requests`).
+  Own token-gated `SECURITY DEFINER` RPCs: `agency_agreement_load` / `_sign` / `_decline`
+  (granted to `anon`), so the landlord signs by unguessable token without any RLS grant.
+  RLS restricts agents to their own agency's rows. The row (both signature PNGs + UTC
+  timestamps) is the immutable audit record; the signed PDF is regenerable from it.
+- **`agency-esign.html`** — dedicated landlord counter-sign page (own file, NexLet look).
+  Consent gate → renders `document_html` + agent-signed badge → SignaturePad → `_sign` RPC.
+  Handles already-signed / declined / void / bad-token states. No email here.
+
+## `agent.html` additions
+- Loaded SignaturePad (+ jsPDF, DOMPurify) libs.
+- `buildManagementAgreement(l, service)` — deterministic UK agreement HTML, service-aware:
+  **Full management** vs **Tenant-Find (let-only)**; pulls agency name/address/redress/CMP/ICO
+  + per-property fees; clauses for duties, fees, client-money & redress, landlord compliance
+  obligations (Gas/EICR/EPC/alarms), term & termination, UK GDPR, governing law.
+- `openAgreement()` modal — service selector, live preview, landlord email, agent name +
+  SignaturePad; buttons: **Sign & send**, **Mark signed offline**, Cancel.
+- `sendAgreement()` — inserts `agency_agreements` (agent sig + timestamp, status `sent`),
+  sets landlord `pending`, emails the landlord the `agency-esign.html?t=` link.
+- `pollAgreements()` (20 s) + `reconcileAgreements()` — on landlord counter-sign, marks
+  `agreement_signed`, logs a comm, and `emailSignedAgreement()` to both parties.
+- `viewSignedAgreement()` — opens a printable signed certificate + full agreement (print→PDF).
+- Landlord-detail button is now stateful: **Send agreement to sign** → **⏳ Awaiting landlord
+  signature · resend** → **✔ View signed agreement** (and **✕ Declined · re-send** path).
+
+## Deploy order for 36b
+1. Run **`agency_esign.sql`** in Supabase (after `agency_portal.sql`).
+2. Push **`agency-esign.html`** (new) and the updated **`agent.html`**.
+3. `esign.html` was reverted to original — it is NOT part of this and must not be re-pushed
+   from any earlier patched copy.
+
+## Still open
+- Onboarding step still has the offline agreement checkbox (fine — "Mark signed offline"
+  mirrors it); the primary path is now the real e-sign button on the landlord record.
+
+# Session 36c — Regulation-aligned onboarding document gate (Phase 2)
+
+Rebuilt the onboarding wizard's Identity/Ownership steps to match the **May 2025 AML +
+sanctions regime** for letting agents (Money Laundering Regs 2017; agents are now "relevant
+firms" — checks required for every letting regardless of rent, records kept 5 years).
+
+## What changed (agent.html, onboarding wizard only)
+- Step labels: `AML / ID` → **Identity & AML**, `Ownership` → **Ownership & consent**.
+- **Step 2 (Identity & AML)** now collects: photo ID, **proof of current address** (<3 months),
+  a **Sanctions (OFSI) check** confirmation (hard gate — legally required), and a
+  **limited-company toggle** that reveals certificate of incorporation + director/BO ID.
+- **Step 3 (Ownership & consent)**: proof of ownership + conditional **mortgage
+  consent-to-let** (if mortgaged) and **freeholder consent** (if leasehold).
+- `obNext` hard-gates step 2 on ID + proof of address + sanctions (+ company docs when
+  corporate); consents are soft (onboard allowed, flagged "outstanding before marketing").
+- Reusable `obDoc(key,label,ph,extra)` uploader helper (input + Attach/Replace + on-file line).
+- Step 6 summary shows the full document checklist; copy now points to the real e-sign button
+  (no more "tick to simulate"). Offline tick relabelled "Agreement already signed offline".
+- All new docs + flags persist in `agency_landlords.docs` (jsonb — no schema change):
+  `address, incorporation, directorId, mortgageConsent, freeholderConsent, sanctions,
+   sanctionsDate, isCompany, isMortgaged, isLeasehold`.
+- **Document vault** (landlord detail) now shows every collected doc, conditionally revealing
+  company/mortgage/leasehold rows. Uses the existing `uploadDoc`/`saveUploadDoc` path.
+
+No SQL change — `docs` jsonb absorbs everything. Deploy = push `agent.html`.
+
+## Still open (later phases)
+- Phase 3: **Letters & Templates** section — welcome letter + 8 agency comms via the same
+  timestamped e-sign/email pipeline (see structural plan below).
+- Property-level compliance gate (Gas/EICR/EPC min-E→C-by-2030, alarms) is tracked per
+  property already; a "ready to market" readiness badge could formalise it.
+- Tenancy-level pre-tenancy pack (How to Rent guide, EPC, gas, EICR, deposit prescribed
+  info within 30 days) — serve-to-tenant checklist.
+
+# Session 36d — Letters & Templates + AI polish (Phase 3)
+
+New **Letters & Templates** nav section — all agency→landlord comms through one branded,
+timestamped pipeline (email via ai-proxy + audit row + comms-log entry). Branding:
+**Beacon Residentials Ltd · ICO Reg. ZC164221** (falls back to agency settings when set).
+
+## New file
+- **`agency_letters.sql`** — `agency_letters` audit table (one row per send, stores the exact
+  `body_html`), RLS-scoped to the agency. Run after `agency_portal.sql`. No edge-fn change.
+
+## agent.html additions
+- `TEMPLATES[]` catalog (8) in 3 groups — Onboarding: **welcome letter**; Statements &
+  requests: **rent statement/remittance, maintenance authorisation, compliance reminder**;
+  Notices: **arrears notice, renewal offer, check-out notice, agreement termination**.
+  Each `build(l,p,brand,f)` returns `{subject, body}`, auto-filled from agency+landlord+
+  property data (e.g. rent statement computes the management-fee deduction & net remittance).
+- `letterWrap()` — branded Beacon letterhead + ICO/redress footer + "Sent via NexLet on <date>".
+- `vTemplates()` gallery + "Recently sent" history (from `S.letters`).
+- `openTemplate()` modal: landlord/property pickers + per-template fields + live preview.
+- **AI polish** (`tplPolish`) on the warm/non-legal templates (welcome, renewal) — calls
+  ai-proxy `claude-sonnet-4-5` with the agent's JWT; rewrites tone, keeps facts/figures/dates;
+  402 → graceful "send as-is". Legal/financial letters stay deterministic (no AI).
+- `tplSend()` — emails the landlord, inserts `agency_letters`, logs a "Letter" comm.
+- `tplCopy()` — copy plain text. 
+- **Auto welcome letter**: `sendWelcomeLetter()` fires from `reconcileAgreements()` the moment
+  a landlord's agreement completes — deterministic, emailed + logged, once.
+- `loadData()` now also hydrates `S.letters` from `agency_letters`.
+
+## Deploy for 36d
+1. Run **`agency_letters.sql`** in Supabase.
+2. Push **`agent.html`**.
+
+## Still open
+- Property "ready to market" readiness badge (compliance gate 2 formalised).
+- Tenancy-level pre-tenancy pack (How to Rent + certs + deposit prescribed info).
+
+# Session 36e — Beacon Residentials branding pass
+
+Rebranded all landlord-facing surfaces to **Beacon Residentials** (NexLet demoted to
+"powered by / secured by" platform attribution), driven by `agencyBrand()`
+(name `S.agency.name` || 'Beacon Residentials Ltd'; ICO `S.agency.icoNo` || 'ZC164221').
+- **agent.html sidebar**: "Beacon Residentials" (navy+green) + "Powered by NexLet" + AGENCY MODE.
+- **Agreement email** (`agreementEmailHtml`): Beacon letterhead + ICO + "secured by NexLet" footer.
+- **Signed certificate** (`signedCertHtml`): "<agency> e-signature record".
+- **Template letters** (`letterWrap`): footer now "Issued by <agency> · secured by NexLet".
+- **agency-esign.html**: title + header logo → "Beacon Residentials".
+- (Fixed a mis-applied edit that had briefly nested `agreementEmailHtml` inside
+  `signedCertHtml`; both are correct and separate now.)
+
+Deploy: push `agent.html` + `agency-esign.html`.
+
+# Session 36f — login role routing: ALREADY HANDLED (no new login file)
+
+**Correction:** a standalone `login.html` is NOT needed. The production login
+(`login.html` on nexlet.co.uk — a landlord-branded page that sends everyone to
+`landlord.html`) can stay UNTOUCHED. Agent routing already happens inside
+`landlord.html`'s init gateway (Session #35): it looks up `agencies` for the user and
+`window.location.replace('agent.html')` if they own one (unless `?portal=landlord`).
+So: landlord → landlord.html; agent → landlord.html → auto-forward to agent.html;
+agent-as-landlord → landlord.html?portal=landlord. The redundant standalone login.html
+I generated was deleted to avoid overwriting the real production login.
+
+**`agency_landlord_selfread.sql`** (kept) — RLS policy letting a managed landlord SELECT
+their OWN `agency_landlords` row. Not needed yet; unblocks Phase 2 managed-landlord routing
+(landlord.html?managed=1) + read-only portal. Run after agency_portal.sql when doing Phase 2.
+
+## Remaining from the initial spec (build order §7)
+- **Step 5 — Phase 2: referencing partner API.** Wire `credit_ref`/`credit_state` seam to a
+  regulated provider (needs partner account + keys).
+- Optional extras: property "ready to market" badge; tenancy-level pre-tenancy pack.
+
+# Session 36g — Phase 2: managed-landlord read-only portal
+
+New **standalone** read-only portal for invited landlords. Self-serve landlords + the whole
+landlord.html app are unaffected.
+
+## New files
+- **`landlord-portal.html`** (standalone, plain JS) — a landlord's own read-only view:
+  hero stats (properties / monthly rent / let), managing-agent contact card, agreement status,
+  per-property compliance RAG (Gas/EICR/EPC from `properties.certs`), tenant, and a timestamped
+  letters feed. `?preview=1` renders sample data (design preview, no login). Beacon branding.
+  On load: `claim_managed_landlord()` links the auth user → their `agency_landlords` row (by
+  email), then loads everything RLS-scoped to them. No-match → friendly "no managed portfolio".
+- **`agency_portal_phase2.sql`** (replaces agency_landlord_selfread.sql) — RLS: managed landlord
+  self-reads their `agency_landlords` row + their agency (agent contact) + their agreements +
+  their letters; `claim_managed_landlord()` SECURITY DEFINER links user_id by matching the
+  caller's OWN verified auth email to an unclaimed row. (properties read policy already existed.)
+
+## Wiring (minimal, safe, additive)
+- **agent.html**: "📧 Invite to portal" button on the landlord record → `inviteToPortal()`
+  emails the landlord a branded link to sign in; logs a comm. (`portalInviteHtml`.)
+- **landlord.html gateway** (the ONLY landlord change): after the agent check, for a
+  non-agent it calls `claim_managed_landlord()`; a real id → redirect to `landlord-portal.html`.
+  Self-serve landlords get `'none'` → no redirect, zero behaviour change. `?managed=0` opts out.
+
+## Deploy for 36g
+1. Run **`agency_portal_phase2.sql`** in Supabase (after agency_portal.sql + esign + letters).
+2. Push **`landlord-portal.html`** (new), **`agent.html`**, **`landlord.html`**.
+
+Flow: agent clicks Invite → landlord signs in with the same email → claimed + routed to the
+read-only portal automatically.
+
+## Remaining from the initial spec
+- **Step 5 — Phase 2: referencing partner API** (needs a provider account + keys).
+- Optional: property "ready to market" badge; tenancy-level pre-tenancy pack.
+
+# Session 36h — hotfix: RLS infinite-recursion (agent bounced to landlord app)
+
+**Symptom:** after running agency_portal_phase2.sql, logging in as the agent (or opening
+agent.html directly) bounced to landlord.html showing a half-loaded "0 properties" dashboard;
+felt slow. Data was never lost/mixed — verified in DB (9 properties incl. the agent's 2
+personal ones, owner RLS intact).
+
+**Root cause:** phase2's `agency_read_for_landlord` SELECT policy on `agencies` subqueries
+`agency_landlords`, whose `agency_scoped` policy subqueries `agencies` → mutual RLS loop →
+Postgres "infinite recursion detected in policy" on every read of `agencies`. So agent.html's
+`agencies` lookup errored → treated the user as non-agent → redirected to landlord.html.
+
+**Fix (`agency_rls_recursion_fix.sql`, applied):** added `my_agency_ids()` SECURITY DEFINER
+helper (returns the caller's agency ids, bypassing RLS inside the function) and rewrote the
+`agency_scoped` policies (agency_landlords + references/tenancies/invoices) to use it, so
+reading agency_landlords no longer re-reads agencies. Loop broken; agent portal loads again.
+No data touched; agent + managed-landlord access preserved.
+
+**Also this session (deployed):** fast role hint — agent.html sets `localStorage.nxl_role='agent'`
+on confirmed agent load; landlord.html redirects to agent.html instantly via that hint (before
+any query) and clears it for non-agents + on logout. Kills the slow/flashy login for agents.
+
+## Remaining from the initial spec
+- **Step 5 — Phase 2: referencing partner API** (needs a provider account + keys).
+- Optional: property "ready to market" badge; tenancy-level pre-tenancy pack.
 
 ## Scan sites — MIGRATED (Session 48)
 All document/cert/ID auto-scanners now go through the shared `aiScanFetch()` helper,

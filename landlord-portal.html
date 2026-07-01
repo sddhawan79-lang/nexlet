@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Your Portfolio — Beacon Residentials</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%230B1E3D'/><path d='M8 22V13l8-6 8 6v9' stroke='%2300C896' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/><path d='M13 22v-5h6v5' stroke='%2300C896' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --font:'DM Sans',system-ui,sans-serif; --disp:'DM Serif Display',Georgia,serif;
+  --navy:#0B1E3D; --navy-mid:#132847; --green:#00C896; --green-dark:#009970;
+  --white:#fff; --off:#F6F8FB; --border:#E4EAF1; --txt:#1A2B45; --muted:#7A8FA6;
+  --red:#E53E3E; --red-bg:#FDECEC; --amber:#D97706; --amber-bg:#FEF3C7;
+  --green-bg:rgba(0,200,150,.12); --blue:#3B6FE8;
+  --radius:12px;
+}
+body{font-family:var(--font);color:var(--txt);background:var(--off);min-height:100vh;-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:var(--disp);font-weight:400}
+a{color:var(--green-dark);text-decoration:none}
+.topbar{background:var(--navy);color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:20}
+.logo{font-family:var(--disp);font-size:20px;letter-spacing:-.3px}
+.logo span{color:var(--green)}
+.logo .plat{display:block;font-family:var(--font);font-size:9.5px;color:rgba(255,255,255,.4);letter-spacing:.4px;margin-top:1px}
+.topbar-r{display:flex;align-items:center;gap:14px;font-size:13px}
+.topbar-r .who{color:rgba(255,255,255,.75)}
+.signout{background:none;border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.75);font-family:var(--font);font-size:12px;padding:6px 12px;border-radius:7px;cursor:pointer}
+.signout:hover{background:rgba(255,255,255,.08)}
+.wrap{max-width:960px;margin:0 auto;padding:24px 20px 60px}
+.ro-banner{display:flex;align-items:center;gap:10px;background:var(--white);border:1px solid var(--border);border-left:3px solid var(--green);border-radius:10px;padding:12px 16px;font-size:13px;color:var(--muted);margin-bottom:22px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.card-hd{padding:15px 18px;border-bottom:1px solid var(--border)}
+.card-hd h2{font-size:15px;color:var(--txt)}
+.card-hd p{font-size:12px;color:var(--muted);margin-top:2px;font-family:var(--font)}
+.card-bd{padding:16px 18px}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--off);font-size:13px}
+.kv:last-child{border:none}
+.kv .k{color:var(--muted)}
+.kv .v{font-weight:600;color:var(--txt);text-align:right}
+.pill{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:100px}
+.hero{background:var(--navy);border-radius:var(--radius);padding:24px 26px;color:#fff;margin-bottom:22px;position:relative;overflow:hidden}
+.hero::after{content:'';position:absolute;top:-80px;right:-60px;width:300px;height:300px;background:radial-gradient(circle,rgba(0,200,150,.14),transparent 70%)}
+.hero h1{font-size:26px;margin-bottom:4px}
+.hero p{font-size:13.5px;color:rgba(255,255,255,.6)}
+.stat-row{display:flex;gap:28px;margin-top:18px;position:relative;z-index:1;flex-wrap:wrap}
+.stat .n{font-family:var(--disp);font-size:24px}
+.stat .l{font-size:11px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.4px;margin-top:2px}
+.sec-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:26px 2px 12px}
+.prop{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;margin-bottom:12px}
+.prop-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}
+.prop-addr{font-size:15px;font-weight:600;color:var(--navy)}
+.prop-meta{font-size:12px;color:var(--muted);margin-top:2px}
+.cert-row{display:flex;gap:8px;flex-wrap:wrap}
+.cert{flex:1;min-width:120px;border:1px solid var(--border);border-radius:9px;padding:9px 11px;font-size:12px}
+.cert .cn{color:var(--muted);font-size:11px;margin-bottom:3px}
+.cert .cv{font-weight:600}
+.empty{text-align:center;padding:40px 20px;color:var(--muted);font-size:13.5px}
+.loading{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh;gap:14px;color:var(--muted)}
+.spin{width:26px;height:26px;border:3px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.btn{display:inline-flex;align-items:center;gap:6px;font-family:var(--font);font-size:12.5px;font-weight:600;padding:8px 14px;border-radius:8px;border:1.5px solid var(--border);background:#fff;color:var(--txt);cursor:pointer;text-decoration:none}
+.btn:hover{background:var(--off)}
+@media(max-width:720px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">Beacon <span>Residentials</span><span class="plat">Powered by NexLet</span></div>
+  <div class="topbar-r"><span class="who" id="who"></span><button class="signout" onclick="signOut()">Sign out</button></div>
+</div>
+
+<div id="app"><div class="loading"><div class="spin"></div><div>Loading your portfolio…</div></div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
+<script>
+// ── Managed-landlord READ-ONLY portal. RLS makes every read their-own-only. ──
+const SUPABASE_URL      = 'https://mahtcfukgzbonwibtsxz.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1haHRjZnVrZ3pib253aWJ0c3h6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MjQ2MDAsImV4cCI6MjA5MTIwMDYwMH0.-wC55rGp1WFKfjKR3EhuXqAPDiWJ4w_e2LBXjHr_y5Y';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const $ = id => document.getElementById(id);
+const esc = v => v==null?'':String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const gbp = n => '£'+Math.round(n||0).toLocaleString('en-GB');
+const fmtDate = d => d?new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'—';
+
+function daysUntil(d){ if(!d) return null; return Math.round((new Date(d)-new Date())/864e5); }
+function certRAG(d){ if(!d) return {label:'Not on file',bg:'var(--red-bg)',color:'var(--red)'}; const n=daysUntil(d); if(n<0) return {label:'Expired',bg:'var(--red-bg)',color:'var(--red)'}; if(n<30) return {label:n+'d left',bg:'var(--amber-bg)',color:'var(--amber)'}; return {label:'Valid',bg:'var(--green-bg)',color:'var(--green-dark)'}; }
+
+async function signOut(){ await sb.auth.signOut(); location.href='login.html'; }
+
+async function boot(){
+  if(new URLSearchParams(location.search).get('preview')){ return renderSample(); }
+  const { data:{ session } } = await sb.auth.getSession();
+  if(!session){ location.href='login.html'; return; }
+
+  // Link this auth user to their managed-landlord record (by email), if not already.
+  let claim='none';
+  try{ const r=await sb.rpc('claim_managed_landlord'); claim=r.data; }catch(e){ console.warn(e); }
+
+  // Load the landlord's own record (RLS: self only).
+  const { data:me } = await sb.from('agency_landlords').select('*').eq('user_id',session.user.id).maybeSingle();
+  if(!me){ renderNoAccess(session.user.email); return; }
+  $('who').textContent = me.name || session.user.email;
+
+  const [ag, props, agr, lt] = await Promise.all([
+    sb.from('agencies').select('*').eq('id',me.agency_id).maybeSingle(),
+    sb.from('properties').select('*').eq('landlord_id',me.id),
+    sb.from('agency_agreements').select('*').eq('landlord_id',me.id).order('created_at',{ascending:false}),
+    sb.from('agency_letters').select('*').eq('landlord_id',me.id).order('created_at',{ascending:false})
+  ]);
+  render(me, ag.data||{}, props.data||[], agr.data||[], lt.data||[]);
+}
+
+function renderNoAccess(email){
+  $('app').innerHTML = `<div class="wrap"><div class="empty" style="padding-top:70px">
+    <div style="font-size:34px;margin-bottom:12px">🔑</div>
+    <h2 style="margin-bottom:8px">No managed portfolio yet</h2>
+    <p style="max-width:440px;margin:0 auto 18px">We couldn't find an agency-managed portfolio for <b>${esc(email)}</b>. If your letting agent has invited you, make sure you signed in with the same email they hold for you.</p>
+    <a class="btn" href="landlord.html?managed=0">Go to your landlord account →</a>
+  </div></div>`;
+}
+
+function render(me, ag, props, agreements, letters){
+  const totalRent = props.reduce((s,p)=>s+(p.rent||0),0);
+  const signed = agreements.find(a=>a.status==='signed');
+  const svc = me.service==='letonly'?'Tenant-find (let-only)':'Full management';
+
+  const agentCard = `
+    <div class="card"><div class="card-hd"><h2>Your managing agent</h2><p>Who to contact about your portfolio</p></div>
+      <div class="card-bd">
+        <div class="kv"><span class="k">Agency</span><span class="v">${esc(ag.name||'Beacon Residentials Ltd')}</span></div>
+        ${ag.address?`<div class="kv"><span class="k">Address</span><span class="v">${esc(ag.address)}</span></div>`:''}
+        <div class="kv"><span class="k">Service</span><span class="v">${esc(svc)}</span></div>
+        ${ag.redress_scheme?`<div class="kv"><span class="k">Redress scheme</span><span class="v">${esc(ag.redress_scheme)}</span></div>`:''}
+        ${ag.ico_no?`<div class="kv"><span class="k">ICO registration</span><span class="v">${esc(ag.ico_no)}</span></div>`:''}
+      </div></div>`;
+
+  const agrCard = `
+    <div class="card"><div class="card-hd"><h2>Management agreement</h2><p>Your instruction &amp; its status</p></div>
+      <div class="card-bd">
+        <div class="kv"><span class="k">Status</span><span class="v">${signed?`<span class="pill" style="background:var(--green-bg);color:var(--green-dark)">✓ Signed ${fmtDate(signed.landlord_signed_at)}</span>`:me.agreement_signed?`<span class="pill" style="background:var(--green-bg);color:var(--green-dark)">✓ Signed</span>`:`<span class="pill" style="background:var(--amber-bg);color:var(--amber)">Pending</span>`}</span></div>
+        <div class="kv"><span class="k">AML / ID verified</span><span class="v">${me.aml_verified?'✓ Yes':'Outstanding'}</span></div>
+        <div class="kv"><span class="k">Ownership verified</span><span class="v">${me.ownership_verified?'✓ Yes':'Outstanding'}</span></div>
+      </div></div>`;
+
+  const propCards = props.length ? props.map(p=>{
+    const c=p.certs||{}; const t=p.tenant||null;
+    const cert=(nm,d,extra)=>{const r=certRAG(d);return `<div class="cert"><div class="cn">${nm}</div><div class="cv"><span class="pill" style="background:${r.bg};color:${r.color}">${r.label}</span>${extra||''}</div></div>`;};
+    return `<div class="prop">
+      <div class="prop-top">
+        <div><div class="prop-addr">${esc(p.address)}${p.city?', '+esc(p.city):''}</div>
+          <div class="prop-meta">${gbp(p.rent)}/month${p.beds?' · '+p.beds+' bed':''}${p.fee_pct!=null?' · '+p.fee_pct+'% management fee':''}</div></div>
+        ${t?`<span class="pill" style="background:var(--green-bg);color:var(--green-dark)">Let</span>`:`<span class="pill" style="background:var(--off);color:var(--muted)">Available</span>`}
+      </div>
+      <div class="cert-row">
+        ${cert('Gas Safety',c.gas)}
+        ${cert('EICR (Electrical)',c.eicr)}
+        ${cert('EPC',c.epc,c.epcRating?` <span style="color:var(--muted);font-weight:500">· ${esc(c.epcRating)}</span>`:'')}
+      </div>
+      ${t?`<div class="prop-meta" style="margin-top:10px">Tenant: <b style="color:var(--txt)">${esc(t.name)}</b>${t.start?' · from '+fmtDate(t.start):''}</div>`:''}
+    </div>`;
+  }).join('') : `<div class="empty">No properties on file yet. Your agent will add them as they're instructed.</div>`;
+
+  const letterList = letters.length ? `<div class="card"><div class="card-hd"><h2>Letters from your agent</h2><p>Everything sent to you, timestamped</p></div>
+    <div class="card-bd" style="padding:0">${letters.slice(0,10).map(x=>`<div style="display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--off)">
+      <span style="font-size:15px">✉</span><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${esc(x.subject||x.type)}</div>
+      <div style="font-size:11px;color:var(--muted)">${new Date(x.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</div></div></div>`).join('')}</div></div>` : '';
+
+  $('app').innerHTML = `<div class="wrap">
+    <div class="ro-banner">👁 This is your read-only portfolio view. Your managing agent maintains these records — contact them for any changes.</div>
+    <div class="hero">
+      <h1>Hello, ${esc((me.name||'').split(' ')[0]||'there')}</h1>
+      <p>Your portfolio, managed by ${esc(ag.name||'Beacon Residentials Ltd')}.</p>
+      <div class="stat-row">
+        <div class="stat"><div class="n">${props.length}</div><div class="l">Properties</div></div>
+        <div class="stat"><div class="n">${gbp(totalRent)}</div><div class="l">Monthly rent</div></div>
+        <div class="stat"><div class="n">${props.filter(p=>p.tenant).length}</div><div class="l">Let</div></div>
+      </div>
+    </div>
+    <div class="grid">${agentCard}${agrCard}</div>
+    <div class="sec-title">Your properties</div>
+    ${propCards}
+    ${letterList?`<div style="margin-top:8px">${letterList}</div>`:''}
+  </div>`;
+}
+
+function renderSample(){
+  $('who').textContent='Jane Doe';
+  render(
+    {name:'Jane Doe',service:'full',aml_verified:true,ownership_verified:true,agreement_signed:true},
+    {name:'Beacon Residentials Ltd',address:'14 High Street, Leeds',redress_scheme:'The Property Ombudsman',ico_no:'ZC164221'},
+    [
+      {address:'42 Elm Street',city:'Leeds',rent:1200,beds:2,fee_pct:8,certs:{gas:'2026-11-01',eicr:'2029-01-01',epc:'2031-01-01',epcRating:'C'},tenant:{name:'Tom Blake',start:'2025-06-01'}},
+      {address:'9 Oak Court',city:'Leeds',rent:950,beds:1,fee_pct:8,certs:{gas:'2025-08-01',eicr:'',epc:'2030-01-01',epcRating:'D'},tenant:null}
+    ],
+    [{status:'signed',landlord_signed_at:'2026-05-20'}],
+    [{subject:'Welcome to Beacon Residentials',type:'welcome',created_at:'2026-05-20'},{subject:'Rent statement — June 2026 — 42 Elm Street',type:'rent_statement',created_at:'2026-06-01'}]
+  );
+}
+
+boot();
+
+</script>
+</body>
+</html>
