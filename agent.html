@@ -180,8 +180,20 @@ const rowToAgency=r=>({name:r.name||'',address:r.address||'',redress:r.redress_s
 const agencyToRow=a=>({name:a.name,address:a.address,redress_scheme:a.redress,redress_no:a.redressNo,cmp_scheme:a.cmp,cmp_no:a.cmpNo,ref_partner:a.refPartner,ico_no:a.icoNo,vat_registered:!!a.vatRegistered,vat_number:a.vatNumber,invoice_seq:a.invoiceSeq||0,payment_terms:a.paymentTerms||14,updated_at:new Date().toISOString()});
 const rowToLandlord=r=>({id:r.id,name:r.name||'',email:r.email||'',phone:r.phone||'',address:r.address||'',nrl:!!r.nrl,prsReg:r.prs_reg||'',payout:r.payout||'',contactPref:r.contact_pref||'Email',aml:!!r.aml_verified,ownership:!!r.ownership_verified,service:r.service||'full',feePct:r.fee_pct,letWeeks:r.let_weeks,agreement:!!r.agreement_signed,status:r.status||'pending',docs:r.docs||{},comms:r.comms||[]});
 const landlordToRow=l=>({id:l.id,agency_id:window._agencyId,name:l.name,email:l.email,phone:l.phone,address:l.address,nrl:!!l.nrl,prs_reg:l.prsReg,payout:l.payout,contact_pref:l.contactPref,aml_verified:!!l.aml,ownership_verified:!!l.ownership,service:l.service,fee_pct:l.feePct,let_weeks:l.letWeeks,agreement_signed:!!l.agreement,status:l.status,docs:l.docs||{},comms:l.comms||[],updated_at:new Date().toISOString()});
-const rowToProp=r=>({id:r.id,landlordId:r.landlord_id,address:r.address||'',city:r.city||'',rent:r.rent||0,beds:r.beds||1,feePct:r.fee_pct,certs:r.certs||{},tenant:r.tenant||undefined});
+const rowToProp=r=>({id:String(r.id),landlordId:r.landlord_id,address:r.address||'',city:r.city||'',rent:r.rent||0,beds:r.beds||1,feePct:r.fee_pct,certs:r.certs||{},tenant:r.tenant||undefined});
 const propToRow=p=>({id:p.id,agency_id:window._agencyId,landlord_id:p.landlordId,address:p.address,city:p.city,rent:p.rent||0,beds:p.beds||1,fee_pct:p.feePct,certs:p.certs||{},tenant:p.tenant||null});
+// properties.id is a DB-assigned bigint (NOT a client-generated text id like our other
+// tables) — a new property must be INSERTed without an id and get the real id back,
+// or the save fails outright (non-numeric text can't go into a bigint column).
+async function pushPropertyNew(p){
+  if(!LIVE) return uid('p');   // demo mode: no real DB, keep a client-side id
+  try{
+    const row=propToRow(p); delete row.id;
+    const { data, error } = await sb.from('properties').insert(row).select().single();
+    if(error){ console.error(error); toast('⚠ Could not save property — retry',1); return null; }
+    return String(data.id);
+  }catch(e){ console.error(e); toast('⚠ Could not save property — retry',1); return null; }
+}
 const rowToRef=r=>({id:r.id,applicant:r.applicant||'',propertyId:r.property_id||'',income:r.income||'',docs:r.docs||{id:false,rtr:false,income:false,employer:false,prevll:false},credit:r.credit_ref||'',creditState:r.credit_state||'not_requested',status:r.status||'none',note:r.note||''});
 const refToRow=r=>({id:r.id,agency_id:window._agencyId,applicant:r.applicant,property_id:r.propertyId,income:parseInt(r.income)||0,docs:r.docs||{},credit_ref:r.credit||'',credit_state:r.creditState||'not_requested',status:r.status||'none',note:r.note||'',updated_at:new Date().toISOString()});
 const rowToTen=r=>({id:r.id,who:r.who||'',propertyId:r.property_id||'',stage:r.stage||'instructed'});
@@ -213,31 +225,31 @@ const rowToNotice=r=>({id:r.id,landlordId:r.landlord_id,propertyId:r.property_id
 const noticeToRow=n=>({id:n.id,agency_id:window._agencyId,landlord_id:n.landlordId,property_id:n.propertyId,kind:n.kind,grounds:n.grounds||[],tenant_name:n.tenantName||'',served_date:n.served||null,expiry_date:n.expiry||null,rent_current:n.rentCurrent,rent_new:n.rentNew,compliance:n.compliance||{},doc_html:n.docHtml||'',notes:n.notes||'',status:n.status||'draft'});
 const pushAgency   =() =>_w(sb.from('agencies').update(agencyToRow(S.agency)).eq('id',window._agencyId));
 
-// ── hydrate S from Supabase (LIVE) ──
+// ── hydrate S from Supabase (LIVE) — one parallel batch, not sequential round-trips ──
 async function loadData(agency){
   S.agency=rowToAgency(agency);
   const q=t=>sb.from(t).select('*').eq('agency_id',window._agencyId);
-  const [ll,pr,rf,tn,iv]=await Promise.all([sb.from('agency_landlords').select('*').eq('agency_id',window._agencyId),q('properties'),q('agency_references'),q('tenancies'),q('invoices')]);
+  const [ll,pr,rf,tn,iv,ag,lt,nt,tns,rl,mt,iv2]=await Promise.all([
+    sb.from('agency_landlords').select('*').eq('agency_id',window._agencyId),
+    q('properties'), q('agency_references'), q('tenancies'), q('invoices'),
+    q('agency_agreements'),
+    sb.from('agency_letters').select('*').eq('agency_id',window._agencyId).order('created_at',{ascending:false}),
+    sb.from('agency_notices').select('*').eq('agency_id',window._agencyId).order('created_at',{ascending:false}),
+    q('agency_tenants'), q('agency_rent_ledger'),
+    sb.from('agency_maintenance').select('*').eq('agency_id',window._agencyId).order('created_at',{ascending:false}),
+    q('agency_inventories')
+  ]);
   S.landlords =(ll.data||[]).map(rowToLandlord);
   S.properties=(pr.data||[]).map(rowToProp);
   S.references=(rf.data||[]).map(rowToRef);
   S.tenancies =(tn.data||[]).map(rowToTen);
   S.invoices  =(iv.data||[]).map(rowToInv);
-  const ag=await sb.from('agency_agreements').select('*').eq('agency_id',window._agencyId);
   S.agreements=ag.data||[];
-  const lt=await sb.from('agency_letters').select('*').eq('agency_id',window._agencyId).order('created_at',{ascending:false});
-  S.letters=lt.data||[];
-  const nt=await sb.from('agency_notices').select('*').eq('agency_id',window._agencyId).order('created_at',{ascending:false});
-  S.notices=(nt.data||[]).map(rowToNotice);
-  const [tns,rl,mt,iv2]=await Promise.all([
-    sb.from('agency_tenants').select('*').eq('agency_id',window._agencyId),
-    sb.from('agency_rent_ledger').select('*').eq('agency_id',window._agencyId),
-    sb.from('agency_maintenance').select('*').eq('agency_id',window._agencyId).order('created_at',{ascending:false}),
-    sb.from('agency_inventories').select('*').eq('agency_id',window._agencyId)
-  ]);
-  S.tenants=(tns.data||[]).map(rowToTenant);
+  S.letters   =lt.data||[];
+  S.notices   =(nt.data||[]).map(rowToNotice);
+  S.tenants   =(tns.data||[]).map(rowToTenant);
   S.rentLedger=(rl.data||[]).map(rowToRent);
-  S.jobs=(mt.data||[]).map(rowToJob);
+  S.jobs      =(mt.data||[]).map(rowToJob);
   S.inventories2=(iv2.data||[]).map(rowToInv2);
 }
 
@@ -847,7 +859,7 @@ function obNext(){
   OB.step++; renderOnboard();
 }
 function obBack(){ if(OB.step===1){closeModal();return;} OB.step--; renderOnboard(); }
-function obFinish(){
+async function obFinish(){
   const id=uid('l');
   const ll={id,name:OB.name,email:OB.email,phone:OB.phone,address:OB.address,nrl:OB.nrl,prsReg:OB.prsReg,payout:OB.payout,contactPref:OB.contactPref,
     aml:OB.aml,ownership:OB.ownership,service:OB.service,feePct:OB.feePct,letWeeks:OB.letWeeks,agreement:OB.agreement,status:OB.agreement?'active':'pending',
@@ -856,8 +868,10 @@ function obFinish(){
       isCompany:!!OB.isCompany,isMortgaged:!!OB.isMortgaged,isLeasehold:!!OB.isLeasehold,sanctions:!!OB.sanctions,sanctionsDate:OB.sanctions?today():''},
     comms:[{id:uid('c'),date:today(),type:'Note',note:'Landlord onboarded · '+SVC[OB.service].label+(OB.agreement?' · agreement signed':' · agreement pending')}]};
   S.landlords.push(ll); pushLandlord(ll);
-  if(OB.addr){ const pid=uid('p'); const pp={id:pid,landlordId:id,address:OB.addr,city:OB.city,rent:parseInt(OB.rent)||0,beds:parseInt(OB.beds)||1}; S.properties.push(pp); pushProperty(pp);
-    const tn={id:uid('t'),who:OB.addr,propertyId:pid,stage:'instructed'}; S.tenancies.push(tn); pushTenancy(tn); }
+  if(OB.addr){ const pp={landlordId:id,address:OB.addr,city:OB.city,rent:parseInt(OB.rent)||0,beds:parseInt(OB.beds)||1};
+    const newPid=await pushPropertyNew(pp);
+    if(newPid){ pp.id=newPid; S.properties.push(pp);
+      const tn={id:uid('t'),who:OB.addr,propertyId:newPid,stage:'instructed'}; S.tenancies.push(tn); pushTenancy(tn); } }
   const nm=OB.name, signed=OB.agreement;
   save(); closeModal(); go('landlord',id); toast('✓ '+nm+' onboarded'+(signed?' — agreement signed':' — send the agreement to go live'));
 }
@@ -956,10 +970,12 @@ function addProperty(id){ const l=L(id); const defFee=(l.feePct!=null?l.feePct:D
   <div class="grid3" style="gap:10px"><div class="fg"><label>Town/City</label><input id="ap-city"></div><div class="fg"><label>Rent £/mo</label><input id="ap-rent" type="number"></div><div class="fg"><label>Beds</label><input id="ap-beds" type="number" value="2"></div></div>
   ${l.service==='full'?`<div class="fg"><label>Management fee for this property (%)</label><input id="ap-fee" type="number" step="0.5" value="${defFee}"><div class="hint">Defaults to ${defFee}% — change it to give this property a different rate (e.g. family/friends).</div></div>`:''}`;
   modal('Add property', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveAddProperty('${id}')">Add</button>`); }
-function saveAddProperty(id){ var a=val('ap-addr'); if(!a){toast('Enter an address',1);return;} var pid=uid('p'); var fEl=document.getElementById('ap-fee');
-  var pp={id:pid,landlordId:id,address:a,city:val('ap-city'),rent:parseInt(val('ap-rent'))||0,beds:parseInt(val('ap-beds'))||1,feePct:fEl?parseFloat(fEl.value):undefined};
-  var tn={id:uid('t'),who:a,propertyId:pid,stage:'instructed'};
-  S.properties.push(pp); S.tenancies.push(tn); save(); pushProperty(pp); pushTenancy(tn); closeModal(); render(); toast('✓ Property added'); }
+async function saveAddProperty(id){ var a=val('ap-addr'); if(!a){toast('Enter an address',1);return;} var fEl=document.getElementById('ap-fee');
+  var pp={landlordId:id,address:a,city:val('ap-city'),rent:parseInt(val('ap-rent'))||0,beds:parseInt(val('ap-beds'))||1,feePct:fEl?parseFloat(fEl.value):undefined};
+  var newPid=await pushPropertyNew(pp); if(!newPid) return;
+  pp.id=newPid;
+  var tn={id:uid('t'),who:a,propertyId:newPid,stage:'instructed'};
+  S.properties.push(pp); S.tenancies.push(tn); save(); pushTenancy(tn); closeModal(); render(); toast('✓ Property added'); }
 
 // ── REFERENCE MODAL ──
 let RF=null;
