@@ -92,6 +92,20 @@ h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px
 .chk.on{border-color:var(--green);background:var(--green-bg)}
 .chk .box{width:20px;height:20px;border-radius:5px;border:1.5px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff}
 .chk.on .box{background:var(--green);border-color:var(--green)}
+.tree-node{border:1px solid var(--border);border-radius:10px;margin:8px 0;overflow:hidden}
+.tree-node.lvl0{border-color:#DCE3EC}
+.tree-node summary{list-style:none;display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;background:#fff}
+.tree-node summary::-webkit-details-marker{display:none}
+.tree-node[open]>summary{border-bottom:1px solid var(--border)}
+.tree-node .tree-caret{display:inline-block;transition:transform .15s;color:var(--faint);font-size:11px}
+.tree-node[open]>summary .tree-caret{transform:rotate(90deg)}
+.tree-node .tree-ic{width:26px;height:26px;border-radius:7px;background:var(--off);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.tree-children{padding:6px 14px 10px 40px;background:#FBFCFE}
+.tree-node .tree-node{margin:8px 0}
+.tree-leaf{display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid #F1F3F6}
+.tree-leaf:last-child{border-bottom:none}
+.tree-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.chk.on .box{background:var(--green);border-color:var(--green)}
 .doc{display:flex;align-items:center;gap:11px;padding:11px 13px;border:1px solid var(--border);border-radius:9px;margin-bottom:8px}
 .doc .di{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
 .empty{padding:34px;text-align:center;color:var(--muted);font-size:13px}
@@ -127,6 +141,7 @@ h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px
     <div class="topbar"><span class="tb-title" id="tb-title">Dashboard</span><div id="tb-actions"></div></div>
     <div class="content" id="view"></div>
   </main>
+  <button class="btn navy" onclick="openAiFinder()" title="Ask AI — where do I find…?" style="position:fixed;right:22px;bottom:22px;z-index:500;border-radius:100px;padding:12px 18px;box-shadow:0 8px 24px rgba(11,30,61,.28);display:flex;align-items:center;gap:7px">✦ Ask AI</button>
 </div>
 <div id="modal-root"></div>
 <div class="toast" id="toast"></div>
@@ -181,6 +196,9 @@ const pushProperty =p  =>_w(sb.from('properties').upsert(propToRow(p)));
 const pushTenancy  =t  =>_w(sb.from('tenancies').upsert(tenToRow(t)));
 const pushReference=r  =>_w(sb.from('agency_references').upsert(refToRow(r)));
 const pushInvoice  =i  =>_w(sb.from('invoices').upsert(invToRow(i)));
+const pushNotice  =n  =>_w(sb.from('agency_notices').upsert(noticeToRow(n)));
+const rowToNotice=r=>({id:r.id,landlordId:r.landlord_id,propertyId:r.property_id,kind:r.kind||'section8',grounds:r.grounds||[],tenantName:r.tenant_name||'',served:r.served_date||'',expiry:r.expiry_date||'',rentCurrent:r.rent_current,rentNew:r.rent_new,compliance:r.compliance||{},docHtml:r.doc_html||'',notes:r.notes||'',status:r.status||'draft',createdAt:r.created_at});
+const noticeToRow=n=>({id:n.id,agency_id:window._agencyId,landlord_id:n.landlordId,property_id:n.propertyId,kind:n.kind,grounds:n.grounds||[],tenant_name:n.tenantName||'',served_date:n.served||null,expiry_date:n.expiry||null,rent_current:n.rentCurrent,rent_new:n.rentNew,compliance:n.compliance||{},doc_html:n.docHtml||'',notes:n.notes||'',status:n.status||'draft'});
 const pushAgency   =() =>_w(sb.from('agencies').update(agencyToRow(S.agency)).eq('id',window._agencyId));
 
 // ── hydrate S from Supabase (LIVE) ──
@@ -197,6 +215,8 @@ async function loadData(agency){
   S.agreements=ag.data||[];
   const lt=await sb.from('agency_letters').select('*').eq('agency_id',window._agencyId).order('created_at',{ascending:false});
   S.letters=lt.data||[];
+  const nt=await sb.from('agency_notices').select('*').eq('agency_id',window._agencyId).order('created_at',{ascending:false});
+  S.notices=(nt.data||[]).map(rowToNotice);
 }
 
 // ── auth gateway (§2a-B) + boot ──
@@ -227,7 +247,8 @@ const SEED={
   tenancies:[],
   invoices:[],
   agreements:[],
-  letters:[]
+  letters:[],
+  notices:[]
 };
 
 let S=load();
@@ -252,8 +273,8 @@ const CREDIT={not_requested:{label:'Credit: not requested',bg:'var(--off)',color
 const NAV=[
   {k:'dashboard',ic:'▦',t:'Agency Dashboard'},{k:'landlords',ic:'⚇',t:'Landlords'},
   {k:'pipeline',ic:'◫',t:'Tenancy Progression'},{k:'referencing',ic:'◷',t:'Referencing'},
-  {k:'properties',ic:'⌂',t:'Properties'},{k:'invoices',ic:'£',t:'Invoices'},
-  {k:'templates',ic:'✉',t:'Letters & Templates'},{k:'settings',ic:'⚙',t:'Agency Settings'}
+  {k:'properties',ic:'⌂',t:'Properties'},{k:'compliance',ic:'⌘',t:'Compliance'},{k:'invoices',ic:'£',t:'Invoices'},
+  {k:'templates',ic:'✉',t:'Letters & Templates'},{k:'notices',ic:'⚖',t:'Possession & Notices'},{k:'settings',ic:'⚙',t:'Agency Settings'}
 ];
 let view='dashboard', sel=null, llView=false;
 function go(v,id){ view=v; if(id!==undefined)sel=id; try{ history.replaceState(null,'','#'+v+(id!==undefined&&id!==null?('/'+id):'')); }catch(e){} window.scrollTo(0,0); render(); }
@@ -272,19 +293,20 @@ function render(){
   sf.innerHTML = S.agency.redress
     ? `<div style="font-size:11px;color:rgba(255,255,255,.6)">Redress scheme</div><div style="font-size:11.5px;color:var(--green);font-weight:700;margin-top:2px">✓ ${esc(S.agency.redress)}</div>`
     : `<div style="font-size:11px;color:rgba(255,255,255,.6)">Redress scheme</div><div style="font-size:11.5px;color:#F5B301;font-weight:700;margin-top:2px">⏳ Membership pending</div>`;
-  const _titleMap={landlord:'Landlords',property:'Properties',llportal:'Landlord Portal',invoice:'Invoices'};
+  const _titleMap={landlord:'Landlords',property:'Properties',llportal:'Landlord Portal',invoice:'Invoices',notice:'Possession & Notices',compliance:'Compliance'};
   document.getElementById('tb-title').textContent=(NAV.find(n=>n.k===view)||{}).t||_titleMap[view]||'';
   document.getElementById('tb-actions').innerHTML=topActions();
   document.getElementById('view').innerHTML=({
     dashboard:vDashboard, landlords:vLandlords, landlord:vLandlordDetail, pipeline:vPipeline,
     referencing:vReferencing, properties:vProperties, property:vPropertyDetail, llportal:vLandlordPortal,
-    invoices:vInvoices, invoice:vInvoiceDetail, settings:vSettings, templates:vTemplates
+    invoices:vInvoices, invoice:vInvoiceDetail, settings:vSettings, templates:vTemplates, notices:vNotices, notice:vNoticeDetail, compliance:vCompliance
   }[view]||vDashboard)();
 }
 function topActions(){
   if(view==='landlords'||view==='dashboard') return `<button class="btn navy" onclick="openOnboard()">＋ Onboard a landlord</button>`;
   if(view==='referencing') return `<button class="btn navy" onclick="openReference()">＋ New reference</button>`;
   if(view==='invoices') return `<button class="btn navy" onclick="openInvoice()">＋ Create invoice</button>`;
+  if(view==='notices') return `<button class="btn navy" onclick="openNotice()">＋ New notice</button>`;
   return '';
 }
 function feeOf(l){ return l.service==='full' ? (l.feePct!=null?l.feePct:DEF_FEE) : (l.letWeeks!=null?l.letWeeks:DEF_WEEKS); }
@@ -489,7 +511,7 @@ function vPropertyDetail(){
         ${p.tenant?`<div class="kv"><span class="k">Tenant</span><span class="v">${esc(p.tenant.name)}</span></div>
           <div class="kv"><span class="k">Email</span><span class="v">${esc(p.tenant.email||'—')}</span></div>
           <div class="kv" style="border:none"><span class="k">Start date</span><span class="v">${fmtDate(p.tenant.start)}</span></div>
-          <div style="margin-top:12px;display:flex;gap:8px"><button class="btn sm" onclick="toast('Portal link sent to '+'${esc(p.tenant.name)}')">Resend portal link</button><button class="btn sm" onclick="setTenant('${p.id}')">Edit tenant</button></div>`
+          <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" onclick="toast('Portal link sent to '+'${esc(p.tenant.name)}')">Resend portal link</button><button class="btn sm" onclick="setTenant('${p.id}')">Edit tenant</button><button class="btn sm" onclick="openNotice('${p.id}')">⚖ Prepare notice</button></div>`
           :`<div class="faint" style="font-size:13px;margin-bottom:12px">No tenant yet. Once referenced, set up the tenancy and issue the portal link — same engine as the landlord app.</div><button class="btn navy" onclick="setTenant('${p.id}')">＋ Set up tenant</button>`}
       </div></div>
     </div>`;
@@ -1313,7 +1335,265 @@ async function sendWelcomeLetter(l){
   l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Letter',note:'Welcome letter sent automatically on agreement completion'}); pushLandlord(l);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// POSSESSION & NOTICES (Phase C) — Section 8 (Form 3A) + Section 13 (Form 4).
+// England, Housing Act 1988 Sch 2 as amended by the Renters' Rights Act 2025
+// (S21 abolished 1 May 2026). PREPARATION + GUIDANCE, cross-checked against the
+// live GOV.UK form — NOT legal advice. Hard compliance gate before serving.
+// ═══════════════════════════════════════════════════════════════════════════
+const GOVUK_FORM3A='https://www.gov.uk/guidance/assured-tenancy-forms';
+// [code, mandatory?, {amt,unit}, label, summary]  — notice periods per ground.
+const GROUNDS=[
+  ['1',true,{amt:4,unit:'months'},'Landlord or family to occupy','The landlord or a close family member wishes to live in the property. Not usable in the first 12 months of the tenancy.'],
+  ['1A',true,{amt:4,unit:'months'},'Sale of the dwelling','The landlord intends to sell the property. Not usable in the first 12 months.'],
+  ['1B',true,{amt:4,unit:'months'},'Sale by mortgagee / rent-to-buy','Sale under a rent-to-buy or by a superior landlord.'],
+  ['2',true,{amt:4,unit:'months'},'Mortgage repossession','The lender is entitled to possession to sell with vacant possession.'],
+  ['2ZA',true,{amt:4,unit:'months'},'Superior tenancy ending','A superior lease/tenancy is coming to an end.'],
+  ['4',true,{amt:4,unit:'months'},'Student HMO relet','Let to students and needed for the next academic year (specified providers).'],
+  ['5',true,{amt:2,unit:'months'},'Minister of religion','Property held for a minister of religion and now required.'],
+  ['5A',true,{amt:2,unit:'months'},'Occupation for agriculture/other','Property required for an incoming occupier (agri/employment/supported).'],
+  ['6',true,{amt:4,unit:'months'},'Redevelopment','The landlord intends to demolish or substantially redevelop and cannot do so with the tenant in situ.'],
+  ['6A',true,{amt:4,unit:'months'},'Enforcement / compliance','Possession needed to comply with enforcement action (e.g. banning order, overcrowding, HMO).'],
+  ['7',true,{amt:2,unit:'months'},'Death of the tenant','The tenancy passed on death and possession is sought within 12 months of the landlord learning of it.'],
+  ['7A',true,{amt:4,unit:'weeks'},'Serious anti-social behaviour (conviction)','Tenant convicted of a serious offence / breach of an injunction or CBO.'],
+  ['7B',true,{amt:2,unit:'weeks'},'No right to rent','The Home Office has notified that the tenant does not have the right to rent.'],
+  ['8',true,{amt:4,unit:'weeks'},'Serious rent arrears','At least 3 months\u2019 rent unpaid (where rent is monthly) both when the notice is served and at the hearing.'],
+  ['9',false,{amt:2,unit:'months'},'Suitable alternative accommodation','Suitable alternative accommodation is available for the tenant.'],
+  ['10',false,{amt:4,unit:'weeks'},'Rent arrears (some)','Some rent is lawfully due both when the notice is served and when proceedings begin.'],
+  ['11',false,{amt:4,unit:'weeks'},'Persistent late payment','The tenant has persistently delayed paying rent.'],
+  ['12',false,{amt:2,unit:'weeks'},'Breach of tenancy','An obligation of the tenancy (other than rent) has been broken.'],
+  ['13',false,{amt:2,unit:'weeks'},'Deterioration of the property','The condition of the property has deteriorated due to the tenant/visitors.'],
+  ['14',false,{amt:0,unit:'days'},'Nuisance / anti-social behaviour','Nuisance or annoyance, or illegal/immoral use. Proceedings may begin immediately.'],
+  ['14A',false,{amt:2,unit:'weeks'},'Domestic abuse','Social landlord ground where a partner has left due to domestic abuse.'],
+  ['15',false,{amt:2,unit:'weeks'},'Deterioration of furniture','Ill-treatment of furniture provided under the tenancy.'],
+  ['16',false,{amt:2,unit:'months'},'Former employee','The tenancy was granted in consequence of employment that has ended.'],
+  ['17',false,{amt:2,unit:'weeks'},'False statement','The tenancy was granted because of a false statement by the tenant.']
+];
+function groundById(c){ return GROUNDS.find(g=>g[0]===c); }
+function _addPeriod(dateStr, per){ const d=dateStr?new Date(dateStr):new Date(); if(per.unit==='months'){ d.setMonth(d.getMonth()+per.amt); } else if(per.unit==='weeks'){ d.setDate(d.getDate()+per.amt*7); } else { d.setDate(d.getDate()+per.amt); } return d.toISOString().slice(0,10); }
+function _longestExpiry(served, codes){ let best=served||today(); codes.forEach(c=>{ const g=groundById(c); if(!g)return; const e=_addPeriod(served,g[2]); if(new Date(e)>new Date(best)) best=e; }); return best; }
+function _perLabel(per){ return per.amt===0?'Immediate (proceedings may begin at once)':per.amt+' '+per.unit; }
+
+// Pre-service compliance gate — the prerequisites a court checks. Hard-block.
+const GATE_ITEMS=[
+  ['deposit','Deposit protected & prescribed information served','Deposit in a Government-approved scheme within 30 days + prescribed info given.'],
+  ['howtorent','Current "How to Rent" guide served','The latest version was given to the tenant at the start (and on renewal).'],
+  ['gas','Valid Gas Safety certificate on file','A current CP12 has been served to the tenant.'],
+  ['eicr','Valid EICR (electrical) on file','A current EICR has been served to the tenant.'],
+  ['epc','Valid EPC (band E or above) served','A current EPC has been given to the tenant.'],
+  ['infosheet','Information Sheet served','The prescribed tenant Information Sheet has been provided.']
+];
+function _gateAuto(p){ const c=(p&&p.certs)||{}; const ok=d=>{ if(!d)return false; return new Date(d)>=new Date(); }; return { gas:ok(c.gas), eicr:ok(c.eicr), epc:ok(c.epc) }; }
+
+let NT=null;
+function openNotice(pid){
+  const props=S.properties.filter(p=>p.tenant||true);
+  const p= pid?P(pid): (S.properties.find(x=>x.tenant)||S.properties[0]||{});
+  const auto=_gateAuto(p);
+  NT={kind:'section8',propertyId:p.id||'',grounds:[],served:today(),gate:{deposit:false,howtorent:false,infosheet:false,gas:auto.gas,eicr:auto.eicr,epc:auto.epc},prsReg:false,rentNew:'',effective:_addPeriod(today(),{amt:2,unit:'months'}),reasons:''};
+  renderNotice();
+}
+function _ntProp(){ return P(NT.propertyId)||{}; }
+function _ntGateOk(){ const need=GATE_ITEMS.map(x=>x[0]); const prsNeeded=NT.grounds.some(c=>['1','1A','1B','6'].includes(c)); const base=need.every(k=>NT.gate[k]); return base && (!prsNeeded || NT.prsReg); }
+function renderNotice(){
+  const p=_ntProp(); const l=L(p.landlordId)||{}; const t=p.tenant||{};
+  const auto=_gateAuto(p);
+  const propOpts=S.properties.map(x=>`<option value="${x.id}" ${x.id===NT.propertyId?'selected':''}>${esc(x.address)}${x.tenant?' — '+esc(x.tenant.name):' (no tenant)'}</option>`).join('');
+  const isS8=NT.kind==='section8';
+  const prsNeeded=NT.grounds.some(c=>['1','1A','1B','6'].includes(c));
+  const gateHtml=GATE_ITEMS.map(([k,lab,note])=>{ const on=NT.gate[k]; const autod=(k==='gas'||k==='eicr'||k==='epc'); return `<div class="chk ${on?'on':''}" onclick="NT.gate['${k}']=!NT.gate['${k}'];renderNotice()"><div class="box">${on?'\u2713':''}</div><div><div style="font-weight:600;font-size:12.5px">${lab}${autod&&auto[k]?' <span class="faint" style="font-weight:400">\u00b7 cert valid on file</span>':''}</div><div class="faint" style="font-size:11px">${note}</div></div></div>`; }).join('')
+    + (prsNeeded?`<div class="chk ${NT.prsReg?'on':''}" onclick="NT.prsReg=!NT.prsReg;renderNotice()"><div class="box">${NT.prsReg?'\u2713':''}</div><div><div style="font-weight:600;font-size:12.5px">PRS Database registration active</div><div class="faint" style="font-size:11px">Required for grounds 1, 1A, 1B and 6 (from Sept 2026).</div></div></div>`:'');
+  const groundsHtml=GROUNDS.map(g=>{ const on=NT.grounds.includes(g[0]); return `<label style="display:flex;gap:9px;align-items:flex-start;padding:8px 10px;border:1px solid ${on?'var(--navy)':'var(--border)'};border-radius:9px;margin-bottom:6px;cursor:pointer;background:${on?'var(--off)':'#fff'}"><input type="checkbox" ${on?'checked':''} onchange="_ntToggle('${g[0]}')" style="width:auto;margin-top:2px"><div><div style="font-size:12.5px;font-weight:600;color:var(--navy)">Ground ${g[0]} · <span style="color:${g[1]?'var(--green)':'var(--amber)'}">${g[1]?'Mandatory':'Discretionary'}</span> · ${_perLabel(g[2])}</div><div style="font-size:12px;font-weight:600">${esc(g[3])}</div><div class="faint" style="font-size:11px;line-height:1.5">${esc(g[4])}</div></div></label>`; }).join('');
+  const expiry=isS8?_longestExpiry(NT.served,NT.grounds):NT.effective;
+  const gateOk=_ntGateOk();
+  const s8Body=`
+    <div class="fg"><label>Possession grounds (Schedule 2) — tick all that apply</label>
+      <div style="max-height:230px;overflow-y:auto;border:1px solid var(--border);border-radius:9px;padding:8px">${groundsHtml}</div></div>
+    <div class="grid2" style="gap:10px"><div class="fg"><label>Date notice is served</label><input type="date" value="${esc(NT.served)}" onchange="NT.served=this.value;renderNotice()"></div>
+      <div class="fg"><label>Earliest date proceedings may begin</label><input type="date" value="${esc(expiry)}" disabled style="background:var(--off)"></div></div>
+    <div class="fg"><label>Reasons / particulars (shown on the notice)</label><textarea rows="2" oninput="NT.reasons=this.value" placeholder="e.g. Rent arrears of £X as at DD/MM/YYYY; last payment DD/MM/YYYY.">${esc(NT.reasons)}</textarea></div>`;
+  const s13Body=`
+    <div class="grid2" style="gap:10px"><div class="fg"><label>Current rent (£/month)</label><input type="number" value="${esc(NT.rentCurrent!=null?NT.rentCurrent:(p.rent||''))}" onchange="NT.rentCurrent=this.value;renderNotice()"></div>
+      <div class="fg"><label>Proposed new rent (£/month)</label><input type="number" value="${esc(NT.rentNew)}" onchange="NT.rentNew=this.value;renderNotice()"></div></div>
+    <div class="fg"><label>New rent takes effect from</label><input type="date" value="${esc(NT.effective)}" onchange="NT.effective=this.value;renderNotice()"><div class="hint">Minimum 2 months\u2019 notice; not within 52 weeks of the last increase. RRA caps increases to once per year at market rent (tenant may challenge at the First-tier Tribunal).</div></div>`;
+  const body=`
+    <div class="note warn" style="margin-bottom:14px">\u26a0 Preparation & guidance only — <b>not legal advice</b>. Always download and cross-check the current prescribed form on <a href="${GOVUK_FORM3A}" target="_blank" style="color:var(--navy);font-weight:600">GOV.UK</a>. Serving the wrong ground or an invalid notice can incur penalties.</div>
+    <div class="grid2" style="gap:10px">
+      <div class="fg"><label>Notice type</label><select onchange="NT.kind=this.value;renderNotice()"><option value="section8" ${isS8?'selected':''}>Section 8 — possession (Form 3A)</option><option value="section13" ${!isS8?'selected':''}>Section 13 — rent increase (Form 4)</option></select></div>
+      <div class="fg"><label>Property / tenancy</label><select onchange="NT.propertyId=this.value;renderNotice()">${propOpts}</select></div>
+    </div>
+    ${isS8?`<div class="panel" style="margin:4px 0 14px"><div class="panel-hd" style="display:flex;justify-content:space-between;align-items:center"><h2 style="font-size:13.5px">Pre-service compliance gate</h2><span class="pill" style="background:${gateOk?'var(--green-bg)':'var(--red-bg)'};color:${gateOk?'var(--green)':'var(--red)'}">${gateOk?'\u2713 Ready to serve':'Incomplete'}</span></div><div class="panel-bd">${gateHtml}<div class="hint">All items must be satisfied — a court will refuse possession if any prerequisite was missed.</div></div></div>${s8Body}`:s13Body}`;
+  const canGen=isS8?(gateOk&&NT.grounds.length):(NT.rentNew&&NT.effective);
+  modal(isS8?'New Section 8 notice (Form 3A)':'New Section 13 notice (Form 4)', body,
+    `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" ${canGen?'':'disabled title="Complete the compliance gate and pick a ground"'} onclick="createNotice()">Generate notice</button>`);
+}
+function _ntToggle(c){ const i=NT.grounds.indexOf(c); if(i>=0)NT.grounds.splice(i,1); else NT.grounds.push(c); renderNotice(); }
+function createNotice(){
+  const p=_ntProp(); const l=L(p.landlordId)||{}; const t=p.tenant||{};
+  const isS8=NT.kind==='section8';
+  const expiry=isS8?_longestExpiry(NT.served,NT.grounds):NT.effective;
+  const n={id:uid('nt'),landlordId:p.landlordId,propertyId:p.id,kind:NT.kind,grounds:NT.grounds.slice(),tenantName:t.name||'',
+    served:NT.served,expiry,rentCurrent:isS8?null:(+NT.rentCurrent||p.rent||0),rentNew:isS8?null:(+NT.rentNew||0),
+    compliance:isS8?{...NT.gate,prsReg:NT.prsReg}:{},notes:NT.reasons||'',status:'draft',createdAt:new Date().toISOString()};
+  n.docHtml=genNoticeDoc(n);
+  S.notices=S.notices||[]; S.notices.unshift(n); save(); pushNotice(n); closeModal(); go('notice',n.id); toast('\u2713 Notice generated — review before serving');
+}
+function genNoticeDoc(n){
+  const p=P(n.propertyId)||{}; const l=L(n.landlordId)||{}; const a=S.agency; const b=agencyBrand();
+  const addr=esc(p.address||'')+(p.city?', '+esc(p.city):'');
+  if(n.kind==='section13'){
+    return `<h2 style="text-align:center;margin-top:0">Notice of rent increase</h2><p style="text-align:center;color:#7A8FA6;font-size:12px">Section 13, Housing Act 1988 — Form 4 (to like effect) · ${_dstr(today())}</p>
+      <p><b>To the tenant(s):</b> ${esc(n.tenantName||'the tenant')}<br><b>Property:</b> ${addr}</p>
+      <p>Your landlord/agent gives notice proposing a new rent for the above property.</p>
+      <table style="width:100%;font-size:13px;border-collapse:collapse;margin:12px 0">
+        <tr><td style="padding:6px 0">Current rent</td><td style="text-align:right;padding:6px 0"><b>${money2(n.rentCurrent)}/month</b></td></tr>
+        <tr><td style="padding:6px 0">Proposed new rent</td><td style="text-align:right;padding:6px 0"><b>${money2(n.rentNew)}/month</b></td></tr>
+        <tr><td style="padding:6px 0">Takes effect from</td><td style="text-align:right;padding:6px 0"><b>${_dstr(n.expiry)}</b></td></tr></table>
+      <p style="font-size:12.5px">If you do not agree, you may refer this notice to the First-tier Tribunal (Property Chamber) before the start date, and the Tribunal will decide the market rent. If you do not refer it, the new rent takes effect on the date above.</p>
+      <p style="margin-top:16px">Signed for and on behalf of the landlord: <b>${esc(b.agent||b.name)}</b>, ${esc(b.name)}<br>Date: ${_dstr(today())}</p>`;
+  }
+  const grows=n.grounds.map(c=>{ const g=groundById(c); return g?`<tr style="border-bottom:1px solid #E4EAF1"><td style="padding:8px 8px 8px 0;font-weight:600;white-space:nowrap">Ground ${g[0]}</td><td style="padding:8px 0">${esc(g[3])} — ${esc(g[4])}</td></tr>`:''; }).join('');
+  return `<h2 style="text-align:center;margin-top:0">Notice seeking possession of a property let on an assured tenancy</h2>
+    <p style="text-align:center;color:#7A8FA6;font-size:12px">Section 8, Housing Act 1988 — Form 3A (to like effect) · Served ${_dstr(n.served)}</p>
+    <p><b>1. To:</b> ${esc(n.tenantName||'the tenant(s)')}</p>
+    <p><b>2. Your landlord/agent intends to seek possession of:</b> ${addr}</p>
+    <p><b>3. Your landlord intends to seek possession on the following ground(s) in Schedule 2 to the Housing Act 1988:</b></p>
+    <table style="width:100%;font-size:12.5px;border-collapse:collapse;margin:6px 0 12px">${grows}</table>
+    <p><b>4. Particulars / reasons:</b> ${esc(n.notes||'As set out above.')}</p>
+    <p><b>5. The court proceedings will not begin until after:</b> <b style="color:#0B1E3D">${_dstr(n.expiry)}</b>. ${n.grounds.includes('14')?'(Ground 14 allows proceedings to begin immediately.)':''} Court proceedings cannot begin later than 12 months from the date this notice is served.</p>
+    <p style="font-size:12px;color:#555">This notice is served under section 8 of the Housing Act 1988. After the date in section 5, the landlord may apply to the court for a possession order. You should read this notice carefully and seek advice (e.g. Citizens Advice, Shelter, or a solicitor).</p>
+    <p style="margin-top:16px">Signed for and on behalf of the landlord: <b>${esc(b.agent||b.name)}</b>, ${esc(b.name)}${b.address?', '+esc(b.address):''}<br>Date served: ${_dstr(n.served)} · Method: to be recorded on the certificate of service</p>`;
+}
+function serveNotice(id){ const n=S.notices.find(x=>x.id===id); if(!n)return; n.status='served'; if(!n.served)n.served=today(); save(); pushNotice(n); render(); toast('\u2713 Marked as served — keep the certificate of service'); }
+function withdrawNotice(id){ const n=S.notices.find(x=>x.id===id); if(!n)return; n.status='withdrawn'; save(); pushNotice(n); render(); toast('Notice withdrawn'); }
+
+function _courtRoute(n){ const rentOnly=n.grounds.length && n.grounds.every(c=>['8','10','11'].includes(c)); return rentOnly
+  ? {name:'Possession Claim Online (PCOL)',note:'Rent-arrears-only claims can be started online.',url:'https://www.possessionclaim.gov.uk/pcol/'}
+  : {name:'Paper claim — Form N5 + N119',note:'Any non-rent ground uses the paper N5 claim form + N119 particulars.',url:'https://www.gov.uk/evicting-tenants'}; }
+
+function vNotices(){
+  const ns=S.notices||[];
+  const active=ns.filter(n=>n.status==='served').length;
+  return `<h1 class="pg">Possession &amp; Notices</h1><div class="sub">Section 8 (Form 3A) and Section 13 (Form 4), with a pre-service compliance gate and court next-steps. Preparation &amp; guidance — not legal advice.</div>
+    <div class="grid4" style="margin-bottom:18px">
+      <div class="kpi"><div class="l">Total notices</div><div class="v">${ns.length}</div></div>
+      <div class="kpi"><div class="l">Served / live</div><div class="v" style="color:var(--amber)">${active}</div></div>
+      <div class="kpi"><div class="l">Drafts</div><div class="v">${ns.filter(n=>n.status==='draft').length}</div></div>
+      <div class="kpi"><div class="l">Grounds covered</div><div class="v" style="font-size:16px">All Sch 2</div></div>
+    </div>
+    <div class="panel">${ns.length?ns.map(noticeRow).join(''):`<div class="empty">No notices yet. Click \u201cNew notice\u201d to prepare a Section 8 or Section 13 notice.</div>`}</div>`;
+}
+function noticeRow(n){ const p=P(n.propertyId)||{}; const st={draft:['Draft','var(--off)','#475569'],served:['Served','var(--amber-bg)','var(--amber)'],expired:['Expired','var(--red-bg)','var(--red)'],withdrawn:['Withdrawn','var(--off)','#94A3B8']}[n.status]||['Draft','var(--off)','#475569'];
+  const label=n.kind==='section13'?'Section 13 rent increase':'Section 8 · Ground'+(n.grounds.length>1?'s':'')+' '+n.grounds.join(', ');
+  return `<div class="row" style="cursor:pointer" onclick="go('notice','${n.id}')"><div class="av">\u2696</div>
+    <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:var(--navy)">${esc(p.address||'—')}</div>
+    <div class="faint" style="font-size:12px">${esc(label)} · ${n.kind==='section13'?'effective':'proceedings after'} ${_dstr(n.expiry)}</div></div>
+    <span class="pill" style="background:${st[1]};color:${st[2]}">${st[0]}</span></div>`;
+}
+function vNoticeDetail(){
+  const n=(S.notices||[]).find(x=>x.id===sel); if(!n) return vNotices();
+  const p=P(n.propertyId)||{}; const route=n.kind==='section8'?_courtRoute(n):null;
+  return `<div class="back no-print" onclick="go('notices')">← All notices</div>
+    <div class="no-print" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      ${n.status==='draft'?`<button class="btn navy" onclick="serveNotice('${n.id}')">Mark as served</button>`:''}
+      ${n.status!=='withdrawn'?`<button class="btn" onclick="withdrawNotice('${n.id}')">Withdraw</button>`:''}
+      <button class="btn" onclick="window.print()">🖨 Print / PDF</button>
+      <a class="btn" href="${GOVUK_FORM3A}" target="_blank">Official GOV.UK form ↗</a>
+    </div>
+    <div id="invoice-doc" class="panel" style="max-width:720px;margin:0 auto"><div style="padding:30px 34px;font-size:13px;line-height:1.7">${n.docHtml}</div></div>
+    ${route?`<div class="panel no-print" style="max-width:720px;margin:16px auto 0"><div class="panel-hd"><h2>After the notice expires — court route</h2></div><div class="panel-bd">
+      <div class="kv"><span class="k">Recommended route</span><span class="v">${esc(route.name)}</span></div>
+      <div class="kv" style="border:none"><span class="k">Note</span><span class="v" style="max-width:60%;text-align:right">${esc(route.note)}</span></div>
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><a class="btn navy sm" href="${route.url}" target="_blank">Open ${esc(route.name)} ↗</a><a class="btn sm" href="https://www.gov.uk/government/publications/certificate-of-service-n215" target="_blank">Certificate of service (N215) ↗</a></div>
+      <div class="hint">Serve the notice properly and keep proof (certificate of service). This tool prepares documents — it is not legal advice.</div>
+    </div></div>`:''}`;
+}
+
 function initials(n){ return (n||'?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase(); }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AI FEATURE FINDER — "where is X?" helper. Instant keyword match first; falls
+// back to the shared AI proxy for a free-text query. Always deep-links via go().
+// ═══════════════════════════════════════════════════════════════════════════
+const FEATURES=[
+  {v:'dashboard',t:'Agency Dashboard',d:'Portfolio overview, KPIs, alerts.',kw:'dashboard overview home summary kpi'},
+  {v:'landlords',t:'Landlords',d:'Onboard, verify AML/ID, edit instructions, log contact.',kw:'landlord onboard onboarding aml id verification contact add new landlord'},
+  {v:'pipeline',t:'Tenancy Progression',d:'Instructed → marketing → referencing → contract → move-in → managed.',kw:'pipeline progression board stage move in kanban'},
+  {v:'referencing',t:'Referencing',d:'Tenant applicant checks: ID, right-to-rent, income, employer, credit.',kw:'referencing tenant check credit right to rent rtr income employer applicant'},
+  {v:'properties',t:'Properties',d:'All properties across landlords.',kw:'property properties portfolio list address'},
+  {v:'compliance',t:'Compliance',d:'Gas Safety, EICR, EPC — tree view by landlord → property, AI cert scan.',kw:'compliance certificate cert gas safety eicr epc expiry expiring scan ai scan upload certificate'},
+  {v:'invoices',t:'Invoices',d:'Management fees (monthly/quarterly/annual), tenant-find, maintenance, rent remittance.',kw:'invoice invoicing billing fee money remittance rent collection client money cmp monthly quarterly maintenance bill'},
+  {v:'notices',t:'Possession & Notices',d:'Section 8 (Form 3A) and Section 13 (Form 4) with a pre-service compliance gate.',kw:'notice section 8 section 13 eviction possession court arrears rent increase form 3a form 4 evict'},
+  {v:'templates',t:'Letters & Templates',d:'Welcome letters, rent statements, arrears, renewals — AI-polished, e-signed & timestamped.',kw:'letter letters template templates welcome email ai polish esign e-sign send'},
+  {v:'settings',t:'Agency Settings',d:'Agency name, redress scheme, CMP, VAT, ICO, branding.',kw:'settings agency name branding redress cmp vat ico'}
+];
+function _aiSearchLocal(q){ const s=q.toLowerCase(); let best=null,bestScore=0; FEATURES.forEach(f=>{ const hay=(f.t+' '+f.d+' '+f.kw).toLowerCase(); const score=s.split(/\s+/).filter(w=>w.length>2&&hay.includes(w)).length; if(score>bestScore){bestScore=score;best=f;} }); return bestScore>0?best:null; }
+function openAiFinder(){
+  const body=`<div class="fg"><label>Ask in plain English — e.g. “where do I send a rent increase” or “how do I scan a gas certificate”</label>
+      <input id="aif-q" placeholder="Type your question…" onkeydown="if(event.key==='Enter')aiFinderRun()"></div>
+    <div id="aif-result"></div>
+    <div class="faint" style="font-size:11.5px;margin-top:10px">Popular: ${FEATURES.slice(0,6).map(f=>`<a href="#" onclick="go('${f.v}');closeModal();return false" style="color:var(--blue);margin-right:10px">${esc(f.t)}</a>`).join('')}</div>`;
+  modal('✦ Where do I find…?', body, `<button class="btn" onclick="closeModal()">Close</button><button class="btn navy" onclick="aiFinderRun()">Search</button>`);
+  setTimeout(()=>{const i=document.getElementById('aif-q');if(i)i.focus();},50);
+}
+async function aiFinderRun(){
+  const q=val('aif-q'); const box=document.getElementById('aif-result'); if(!q){return;}
+  const card=f=>`<div class="note" style="margin-top:12px;cursor:pointer" onclick="go('${f.v}');closeModal()"><b style="color:var(--navy)">${esc(f.t)} →</b><div style="margin-top:3px">${esc(f.d)}</div></div>`;
+  const local=_aiSearchLocal(q);
+  if(local){ box.innerHTML=card(local); return; }
+  if(!window._sessionToken){ box.innerHTML='<div class="faint" style="margin-top:10px">No exact match — try a section name from the sidebar, or connect to search with AI.</div>'; return; }
+  box.innerHTML='<div class="faint" style="margin-top:10px;color:var(--blue)">✦ Thinking…</div>';
+  try{
+    const list=FEATURES.map(f=>f.v+': '+f.t+' — '+f.d).join('\n');
+    const prompt=`A letting agent typed this question about where to find something in their portal: "${q}"\n\nAvailable sections:\n${list}\n\nReturn ONLY the single best matching section key (the word before the colon), nothing else. If nothing matches, return "none".`;
+    const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:20,messages:[{role:'user',content:prompt}]})});
+    const data=await res.json(); const key=((data.content&&data.content[0]&&data.content[0].text)||'').trim().toLowerCase();
+    const f=FEATURES.find(x=>x.v===key);
+    box.innerHTML = f?card(f):'<div class="faint" style="margin-top:10px">Couldn’t find a match — try browsing the sidebar.</div>';
+  }catch(e){ console.error(e); box.innerHTML='<div class="faint" style="margin-top:10px">Search unavailable right now — try browsing the sidebar.</div>'; }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// COMPLIANCE — tree view: Landlord ▸ Property ▸ Certificate (native <details>,
+// auto-expanded wherever something needs attention).
+// ═══════════════════════════════════════════════════════════════════════════
+function vCompliance(){
+  const items=[]; S.properties.forEach(p=>{ const c=p.certs||{}; [['gas','Gas Safety'],['eicr','EICR (Electrical)'],['epc','EPC']].forEach(([k,lab])=>items.push({k,lab,date:c[k],rag:certRAG(c[k])})); });
+  const tot=items.length, ok=items.filter(x=>x.rag.k==='ok').length, soon=items.filter(x=>x.rag.k==='soon').length, bad=items.filter(x=>x.rag.k==='expired'||x.rag.k==='missing').length;
+  const byLandlord=S.landlords.map(l=>{
+    const props=S.properties.filter(p=>p.landlordId===l.id);
+    const certs=[]; props.forEach(p=>{ const c=p.certs||{}; [['gas','Gas Safety'],['eicr','EICR (Electrical)'],['epc','EPC']].forEach(([k,lab])=>certs.push(certRAG(c[k]).k)); });
+    const issues=certs.filter(k=>k!=='ok').length;
+    return {l,props,issues,total:certs.length};
+  }).filter(x=>x.props.length);
+  const rows=byLandlord.map(({l,props,issues,total})=>{
+    const propHtml=props.map(p=>{
+      const c=p.certs||{}; const items3=[['gas','Gas Safety (annual)'],['eicr','EICR (every 5 yrs)'],['epc','EPC'+(c.epcRating?' · '+c.epcRating:'')]];
+      const pIssues=items3.filter(([k])=>certRAG(c[k]).k!=='ok').length;
+      const certHtml=items3.map(([k,lab])=>{ const r=certRAG(c[k]); return `<div class="tree-leaf">
+          <span class="tree-dot" style="background:${r.color}"></span>
+          <span style="flex:1;font-size:12.5px">${lab}</span>
+          <span class="faint" style="font-size:11.5px;margin-right:8px">${c[k]?fmtDate(c[k]):'No certificate'}</span>
+          <span class="pill" style="background:${r.bg};color:${r.color}">${r.label}</span>
+          <button class="btn sm" onclick="editCert('${p.id}','${k}')">${c[k]?'Update':'Add'}</button>
+        </div>`; }).join('');
+      return `<details class="tree-node" ${pIssues?'open':''}>
+        <summary><span class="tree-caret">▸</span><span class="tree-ic">⌂</span><span style="flex:1;font-weight:600;font-size:13px;color:var(--navy)">${esc(p.address)}${p.city?', '+esc(p.city):''}</span>${pIssues?`<span class="pill" style="background:var(--red-bg);color:var(--red)">${pIssues} to fix</span>`:`<span class="pill" style="background:var(--green-bg);color:var(--green)">All valid</span>`}</summary>
+        <div class="tree-children">${certHtml}</div></details>`;
+    }).join('');
+    return `<details class="tree-node lvl0" ${issues?'open':''}>
+      <summary><span class="tree-caret">▸</span><span class="tree-ic" style="background:var(--navy);color:#fff">⚇</span><span style="flex:1;font-weight:700;font-size:13.5px;color:var(--navy)">${esc(l.name)}</span><span class="faint" style="font-size:12px;margin-right:6px">${props.length} propert${props.length===1?'y':'ies'}</span>${issues?`<span class="pill" style="background:var(--red-bg);color:var(--red)">${issues} of ${total} need attention</span>`:`<span class="pill" style="background:var(--green-bg);color:var(--green)">Fully compliant</span>`}</summary>
+      <div class="tree-children">${propHtml}</div></details>`;
+  }).join('');
+  return `<h1 class="pg">Compliance</h1><div class="sub">Every certificate across your portfolio, grouped by landlord and property. Expands automatically where something needs attention.</div>
+    <div class="grid4" style="margin-bottom:18px">
+      <div class="kpi"><div class="l">Certificates tracked</div><div class="v">${tot}</div></div>
+      <div class="kpi"><div class="l">Valid</div><div class="v" style="color:var(--green)">${ok}</div></div>
+      <div class="kpi"><div class="l">Expiring soon</div><div class="v" style="color:var(--amber)">${soon}</div></div>
+      <div class="kpi"><div class="l">Expired / missing</div><div class="v" style="color:var(--red)">${bad}</div></div>
+    </div>
+    <div class="panel" style="padding:6px 10px">${rows||'<div class="empty">No properties yet.</div>'}</div>`;
+}
 function esc(v){ return v==null?'':String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function val(id){ const e=document.getElementById(id); return e?e.value.trim():''; }
 function modal(title,body,ft){ document.getElementById('modal-root').innerHTML=`<div class="ov" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="modal-hd"><h3>${title}</h3><button class="x" onclick="closeModal()">×</button></div><div class="modal-bd">${body}</div><div class="modal-ft">${ft}</div></div></div>`; }
