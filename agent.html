@@ -179,8 +179,12 @@ window._agencyId=null;          // every LIVE query is scoped to this agency
 // ── row ⇄ in-memory-object mappers (snake_case DB ⇄ camelCase S) ──
 const rowToAgency=r=>({name:r.name||'',address:r.address||'',redress:r.redress_scheme||'',redressNo:r.redress_no||'',cmp:r.cmp_scheme||'Not holding client money',cmpNo:r.cmp_no||'',refPartner:r.ref_partner||'',icoNo:r.ico_no||'',vatRegistered:!!r.vat_registered,vatNumber:r.vat_number||'',invoiceSeq:r.invoice_seq||0,paymentTerms:r.payment_terms||14});
 const agencyToRow=a=>({name:a.name,address:a.address,redress_scheme:a.redress,redress_no:a.redressNo,cmp_scheme:a.cmp,cmp_no:a.cmpNo,ref_partner:a.refPartner,ico_no:a.icoNo,vat_registered:!!a.vatRegistered,vat_number:a.vatNumber,invoice_seq:a.invoiceSeq||0,payment_terms:a.paymentTerms||14,updated_at:new Date().toISOString()});
-const rowToLandlord=r=>({id:r.id,name:r.name||'',email:r.email||'',phone:r.phone||'',address:r.address||'',nrl:!!r.nrl,prsReg:r.prs_reg||'',payout:r.payout||'',contactPref:r.contact_pref||'Email',aml:!!r.aml_verified,ownership:!!r.ownership_verified,service:r.service||'full',feePct:r.fee_pct,letWeeks:r.let_weeks,agreement:!!r.agreement_signed,status:r.status||'pending',docs:r.docs||{},comms:r.comms||[],inviteToken:r.invite_token||'',invitedAt:r.invited_at||''});
-const landlordToRow=l=>({id:l.id,agency_id:window._agencyId,name:l.name,email:l.email,phone:l.phone,address:l.address,nrl:!!l.nrl,prs_reg:l.prsReg,payout:l.payout,contact_pref:l.contactPref,aml_verified:!!l.aml,ownership_verified:!!l.ownership,service:l.service,fee_pct:l.feePct,let_weeks:l.letWeeks,agreement_signed:!!l.agreement,status:l.status,docs:l.docs||{},comms:l.comms||[],invite_token:l.inviteToken||null,invited_at:l.invitedAt||null,updated_at:new Date().toISOString()});
+const rowToLandlord=r=>({id:r.id,name:r.name||'',joint:r.joint||'',entity:r.entity||'individual',email:r.email||'',phone:r.phone||'',address:r.address||'',nrl:!!r.nrl,prsReg:r.prs_reg||'',payout:r.payout||'',contactPref:r.contact_pref||'Email',aml:!!r.aml_verified,ownership:!!r.ownership_verified,service:r.service||'full',feePct:r.fee_pct,letWeeks:r.let_weeks,agreement:!!r.agreement_signed,status:r.status||'pending',docs:r.docs||{},comms:r.comms||[],inviteToken:r.invite_token||'',invitedAt:r.invited_at||''});
+const landlordToRow=l=>({id:l.id,agency_id:window._agencyId,name:l.name,joint:l.joint||null,entity:l.entity||'individual',email:l.email,phone:l.phone,address:l.address,nrl:!!l.nrl,prs_reg:l.prsReg,payout:l.payout,contact_pref:l.contactPref,aml_verified:!!l.aml,ownership_verified:!!l.ownership,service:l.service,fee_pct:l.feePct,let_weeks:l.letWeeks,agreement_signed:!!l.agreement,status:l.status,docs:l.docs||{},comms:l.comms||[],invite_token:l.inviteToken||null,invited_at:l.invitedAt||null,updated_at:new Date().toISOString()});
+// Bill-to / statement name — a company landlord shows the company name; joint owners
+// show "A & B". `joint` holds the second owner (or is blank). `entity` = individual|joint|company.
+function landlordName(l){ if(!l) return ''; if(l.entity==='company') return l.name; return (l.joint&&l.joint.trim())?(l.name+' & '+l.joint):l.name; }
+function landlordLegalLine(l){ if(!l) return ''; if(l.entity==='company') return esc(l.name)+' <span style="font-weight:400">(company landlord)</span>'; return esc(landlordName(l)); }
 const rowToProp=r=>({id:String(r.id),landlordId:r.landlord_id,address:r.address||'',city:r.city||'',rent:r.rent||0,beds:r.beds||1,feePct:r.fee_pct,certs:r.certs||{},tenant:r.tenant||undefined});
 const propToRow=p=>({id:p.id,agency_id:window._agencyId,landlord_id:p.landlordId,address:p.address,city:p.city,rent:p.rent||0,beds:p.beds||1,fee_pct:p.feePct,certs:p.certs||{},tenant:p.tenant||null});
 // properties.id is a DB-assigned bigint (NOT a client-generated text id like our other
@@ -344,14 +348,14 @@ function render(){
   sf.innerHTML = S.agency.redress
     ? `<div style="font-size:11px;color:rgba(255,255,255,.6)">Redress scheme</div><div style="font-size:11.5px;color:var(--green);font-weight:700;margin-top:2px">✓ ${esc(S.agency.redress)}</div>`
     : `<div style="font-size:11px;color:rgba(255,255,255,.6)">Redress scheme</div><div style="font-size:11.5px;color:#F5B301;font-weight:700;margin-top:2px">⏳ Membership pending</div>`;
-  const _titleMap={landlord:'Landlords',property:'Properties',llportal:'Landlord Portal',invoice:'Invoices',notice:'Possession & Notices',compliance:'Compliance',rent:'Rent & Arrears',maintenance:'Maintenance',inventory2:'Inventory & Check-out',inventorydetail:'Inventory & Check-out'};
+  const _titleMap={landlord:'Landlords',property:'Properties',llportal:'Landlord Portal',invoice:'Invoices',notice:'Possession & Notices',compliance:'Compliance',rent:'Rent & Arrears',maintenance:'Maintenance',inventory2:'Inventory & Check-out',inventorydetail:'Inventory & Check-out',statement:'Rent & Arrears'};
   document.getElementById('tb-title').textContent=(NAV.find(n=>n.k===view)||{}).t||_titleMap[view]||'';
   document.getElementById('tb-actions').innerHTML=topActions();
   document.getElementById('view').innerHTML=({
     dashboard:vDashboard, landlords:vLandlords, landlord:vLandlordDetail, pipeline:vPipeline,
     referencing:vReferencing, properties:vProperties, property:vPropertyDetail, llportal:vLandlordPortal,
     invoices:vInvoices, invoice:vInvoiceDetail, settings:vSettings, templates:vTemplates, notices:vNotices, notice:vNoticeDetail, compliance:vCompliance,
-    rent:vRentArrears, maintenance:vMaintenance, inventory2:vInventoryList, inventorydetail:vInventoryDetail
+    rent:vRentArrears, maintenance:vMaintenance, inventory2:vInventoryList, inventorydetail:vInventoryDetail, statement:vStatement
   }[view]||vDashboard)();
 }
 function topActions(){
@@ -403,7 +407,7 @@ function landlordRow(l){
   const feeBasis = l.service==='full' ? (_rates.length<=1?(_rates[0]!=null?_rates[0]:DEF_FEE)+'%':'mixed rates') : feeOf(l)+' wks · one-off';
   return `<div class="row" onclick="go('landlord','${l.id}')" style="cursor:pointer">
     <div class="av">${initials(l.name)}</div>
-    <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:var(--navy)">${esc(l.name)}${l.nrl?' <span class="pill" style="background:var(--purple-bg);color:var(--purple)">Non-resident</span>':''}</div>
+    <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:var(--navy)">${esc(landlordName(l))}${l.entity==='company'?' <span class="pill" style="background:var(--blue-bg);color:var(--blue)">Company</span>':''}${l.nrl?' <span class="pill" style="background:var(--purple-bg);color:var(--purple)">Non-resident</span>':''}</div>
       <div class="faint" style="font-size:12px">${props.length?props.map(p=>esc(p.address)).join(', '):'No properties yet'}${rent?' · '+gbp(rent)+'/mo':''}</div></div>
     <span class="pill" style="background:${sv.bg};color:${sv.color}">${sv.label}</span>
     <div style="width:96px;text-align:right"><div style="font-size:14px;font-weight:700;color:var(--navy)">${feeTxt}</div><div class="faint" style="font-size:10.5px">${feeBasis}</div></div>
@@ -431,7 +435,7 @@ function vLandlordDetail(){
     <div class="back" onclick="go('landlords')">← All landlords</div>
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px">
       <div class="av" style="width:52px;height:52px;font-size:18px">${initials(l.name)}</div>
-      <div style="flex:1"><h1 class="pg" style="margin:0">${esc(l.name)}</h1>
+      <div style="flex:1"><h1 class="pg" style="margin:0">${esc(landlordName(l))}</h1>
         <div class="faint" style="font-size:13px">${esc(l.email)} · ${esc(l.phone)} · prefers ${esc(l.contactPref||'Email')}</div></div>
       <span class="pill" style="background:${sv.bg};color:${sv.color}">${sv.label}</span>
       <span class="pill" style="background:${st.bg};color:${st.color}">${st.label}</span>
@@ -830,7 +834,7 @@ function _invBuild(){
 }
 function renderInvoice(){
   const l=L(IV.landlordId)||{};
-  const llOpts=S.landlords.map(x=>`<option value="${x.id}" ${x.id===IV.landlordId?'selected':''}>${esc(x.name)} — ${(SVC[x.service]||SVC.full).label}</option>`).join('');
+  const llOpts=S.landlords.map(x=>`<option value="${x.id}" ${x.id===IV.landlordId?'selected':''}>${esc(landlordName(x))} — ${(SVC[x.service]||SVC.full).label}</option>`).join('');
   const DOCS=[['management','Management fee'],['remittance','Rent remittance (collect & pay out)'],['tenantfind','Tenant-find (one-off)'],['maintenance','Maintenance / disbursement']];
   const b=_invBuild();
   const net=b.lines.reduce((s,x)=>s+x.net,0);
@@ -899,7 +903,7 @@ function vInvoiceDetail(){
         </div>
         <div style="display:flex;justify-content:space-between;gap:20px;margin-bottom:22px;font-size:12.5px">
           <div><div style="font-size:10px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Bill to</div>
-            <div style="font-weight:600;color:var(--navy)">${esc(l.name||'')}</div><div class="faint" style="line-height:1.6">${esc(l.address||'')}<br>${esc(l.email||'')}</div></div>
+            <div style="font-weight:600;color:var(--navy)">${landlordLegalLine(l)}</div><div class="faint" style="line-height:1.6">${esc(l.address||'')}<br>${esc(l.email||'')}</div></div>
           <div style="text-align:right"><div class="kv" style="border:none;padding:2px 0"><span class="k" style="width:auto">Issue date</span><span class="v">${fmtDate(inv.issued)}</span></div>
             <div class="kv" style="border:none;padding:2px 0"><span class="k" style="width:auto">Due date</span><span class="v">${fmtDate(due)}</span></div>
             <div class="kv" style="border:none;padding:2px 0"><span class="k" style="width:auto">Period</span><span class="v">${esc(inv.periodLabel)}</span></div></div>
@@ -948,10 +952,10 @@ function saveSettings(){ S.agency.name=val('set-name'); S.agency.address=val('se
 
 // ── ONBOARDING WIZARD ──
 let OB=null;
-function openOnboard(){ OB={step:1,name:'',email:'',phone:'',address:'',nrl:false,prsReg:'',payout:'1st',contactPref:'Email',idDoc:'',ownDoc:'',aml:false,ownership:false,service:'full',feePct:DEF_FEE,letWeeks:DEF_WEEKS,addr:'',city:'',rent:'',beds:'2',agreement:false,
+function openOnboard(){ OB={step:1,name:'',joint:'',entity:'individual',email:'',phone:'',address:'',nrl:false,prsReg:'',payout:'1st',contactPref:'Email',idDoc:'',ownDoc:'',aml:false,ownership:false,service:'full',feePct:DEF_FEE,letWeeks:DEF_WEEKS,addr:'',city:'',rent:'',beds:'2',agreement:false,
   addrDoc:'',sanctions:false,isCompany:false,incorpDoc:'',dirIdDoc:'',isMortgaged:false,mortgageConsentDoc:'',isLeasehold:false,freeholderConsentDoc:''}; renderOnboard(); }
 function obNext(){
-  if(OB.step===1){ OB.name=val('ob-name');OB.email=val('ob-email');OB.phone=val('ob-phone');OB.address=val('ob-address');OB.prsReg=val('ob-prs');OB.payout=val('ob-payout');OB.contactPref=val('ob-pref'); if(!OB.name){toast('Enter the landlord name',1);return;} }
+  if(OB.step===1){ OB.name=val('ob-name');OB.joint=val('ob-joint');OB.email=val('ob-email');OB.phone=val('ob-phone');OB.address=val('ob-address');OB.prsReg=val('ob-prs');OB.payout=val('ob-payout');OB.contactPref=val('ob-pref'); if(!OB.name){toast(OB.entity==='company'?'Enter the company name':'Enter the landlord name',1);return;} }
   if(OB.step===2){ if(!OB.idDoc&&!OB.aml){toast('Attach photo ID to continue (AML requirement)',1);return;} if(!OB.addrDoc){toast('Attach proof of address — required for AML',1);return;} if(!OB.sanctions){toast('Confirm the sanctions (OFSI) check — legally required since May 2025',1);return;} if(OB.isCompany&&(!OB.incorpDoc||!OB.dirIdDoc)){toast('Company landlord: attach incorporation certificate + director ID',1);return;} }
   if(OB.step===3){ if(!OB.ownDoc&&!OB.ownership){toast('Attach proof of ownership to continue',1);return;} }
   if(OB.step===4){ OB.addr=val('ob-addr');OB.city=val('ob-city');OB.rent=val('ob-rent');OB.beds=val('ob-beds'); }
@@ -961,7 +965,7 @@ function obNext(){
 function obBack(){ if(OB.step===1){closeModal();return;} OB.step--; renderOnboard(); }
 async function obFinish(){
   const id=uid('l');
-  const ll={id,name:OB.name,email:OB.email,phone:OB.phone,address:OB.address,nrl:OB.nrl,prsReg:OB.prsReg,payout:OB.payout,contactPref:OB.contactPref,
+  const ll={id,name:OB.name,joint:OB.joint||'',entity:OB.entity||'individual',email:OB.email,phone:OB.phone,address:OB.address,nrl:OB.nrl,prsReg:OB.prsReg,payout:OB.payout,contactPref:OB.contactPref,
     aml:OB.aml,ownership:OB.ownership,service:OB.service,feePct:OB.feePct,letWeeks:OB.letWeeks,agreement:OB.agreement,status:OB.agreement?'active':'pending',
     docs:{id:OB.idDoc||'',address:OB.addrDoc||'',ownership:OB.ownDoc||'',agreement:OB.agreement?'Signed offline':'',
       incorporation:OB.incorpDoc||'',directorId:OB.dirIdDoc||'',mortgageConsent:OB.mortgageConsentDoc||'',freeholderConsent:OB.freeholderConsentDoc||'',
@@ -982,7 +986,12 @@ function renderOnboard(){
   const labels=['Details','Identity & AML','Ownership & consent','Property','Service & fee','Agreement'];
   const stepper=`<div class="steps">${labels.map((l,i)=>`<div class="st ${s===i+1?'on':s>i+1?'done':''}"><span class="n">${s>i+1?'✓':i+1}</span>${l}</div>`).join('')}</div>`;
   let body='';
-  if(s===1) body=`<div class="fg"><label>Full name *</label><input id="ob-name" value="${esc(OB.name)}" placeholder="Landlord's name"></div>
+  if(s===1) body=`<div class="fg"><label>Landlord type</label><select id="ob-entity" onchange="OB.name=val('ob-name');OB.joint=val('ob-joint');OB.entity=this.value;renderOnboard()">
+      <option value="individual" ${OB.entity==='individual'?'selected':''}>Individual</option>
+      <option value="joint" ${OB.entity==='joint'?'selected':''}>Joint owners</option>
+      <option value="company" ${OB.entity==='company'?'selected':''}>Limited company</option></select></div>
+    <div class="fg"><label>${OB.entity==='company'?'Company name *':'Full name *'}</label><input id="ob-name" value="${esc(OB.name)}" placeholder="${OB.entity==='company'?'e.g. Acme Property Ltd':'Landlord\u2019s name'}"></div>
+    ${OB.entity==='joint'?`<div class="fg"><label>Second owner's full name</label><input id="ob-joint" value="${esc(OB.joint)}" placeholder="Joint owner"></div>`:`<input type="hidden" id="ob-joint" value="${esc(OB.joint)}">`}
     <div class="inline2"><div class="fg"><label>Email</label><input id="ob-email" value="${esc(OB.email)}" placeholder="name@email.com"></div>
     <div class="fg"><label>Phone</label><input id="ob-phone" value="${esc(OB.phone)}"></div></div>
     <div class="fg"><label>Correspondence address</label><input id="ob-address" value="${esc(OB.address)}"></div>
@@ -1045,12 +1054,17 @@ function _obFee(){ const isF=OB.service==='full'; if(isF)OB.feePct=parseFloat(va
 
 // ── EDIT INSTRUCTION & FEE (per landlord) ──
 function editInstruction(id){ const l=L(id);
-  const body=`<div class="fg"><label>Service level</label><select id="ei-service" onchange="document.getElementById('ei-fee-wrap').innerHTML=this.value==='full'?'<input id=\\'ei-fee\\' type=number step=0.5 value=${l.feePct!=null?l.feePct:DEF_FEE}> % of monthly rent':'<input id=\\'ei-weeks\\' type=number step=0.5 value=${l.letWeeks!=null?l.letWeeks:DEF_WEEKS}> weeks rent (one-off)'">
+  const body=`<div class="grid2" style="gap:10px"><div class="fg"><label>Landlord type</label><select id="ei-entity" onchange="document.getElementById('ei-joint-wrap').style.display=this.value==='joint'?'block':'none'">
+      <option value="individual" ${(l.entity||'individual')==='individual'?'selected':''}>Individual</option>
+      <option value="joint" ${l.entity==='joint'?'selected':''}>Joint owners</option>
+      <option value="company" ${l.entity==='company'?'selected':''}>Limited company</option></select></div>
+    <div class="fg" id="ei-joint-wrap" style="display:${l.entity==='joint'?'block':'none'}"><label>Second owner</label><input id="ei-joint" value="${esc(l.joint||'')}" placeholder="Joint owner"></div></div>
+    <div class="fg"><label>Service level</label><select id="ei-service" onchange="document.getElementById('ei-fee-wrap').innerHTML=this.value==='full'?'<input id=\\'ei-fee\\' type=number step=0.5 value=${l.feePct!=null?l.feePct:DEF_FEE}> % of monthly rent':'<input id=\\'ei-weeks\\' type=number step=0.5 value=${l.letWeeks!=null?l.letWeeks:DEF_WEEKS}> weeks rent (one-off)'">
     <option value="full" ${l.service==='full'?'selected':''}>Full management</option><option value="letonly" ${l.service==='letonly'?'selected':''}>Let-only</option></select></div>
     <div class="fg"><label>Your fee (editable)</label><div class="feebox" id="ei-fee-wrap">${l.service==='full'?`<input id="ei-fee" type="number" step="0.5" value="${l.feePct!=null?l.feePct:DEF_FEE}"> % of monthly rent`:`<input id="ei-weeks" type="number" step="0.5" value="${l.letWeeks!=null?l.letWeeks:DEF_WEEKS}"> weeks' rent (one-off)`}</div></div>`;
   modal('Edit instruction & fee', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveInstruction('${id}')">Save</button>`);
 }
-function saveInstruction(id){ const l=L(id); l.service=val('ei-service'); if(l.service==='full')l.feePct=parseFloat(val('ei-fee'))||DEF_FEE; else l.letWeeks=parseFloat(val('ei-weeks'))||DEF_WEEKS;
+function saveInstruction(id){ const l=L(id); l.entity=val('ei-entity')||'individual'; l.joint=l.entity==='joint'?val('ei-joint'):''; l.service=val('ei-service'); if(l.service==='full')l.feePct=parseFloat(val('ei-fee'))||DEF_FEE; else l.letWeeks=parseFloat(val('ei-weeks'))||DEF_WEEKS;
   l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:'Instruction updated · '+SVC[l.service].label+' · fee '+(l.service==='full'?l.feePct+'%':l.letWeeks+' wks')});
   save(); pushLandlord(l); closeModal(); render(); toast('✓ Instruction updated'); }
 
@@ -1710,9 +1724,11 @@ function vRentArrears(){
       <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:var(--navy)">${esc(t.name)}</div>
       <div class="faint" style="font-size:12px">${esc(p.address||'—')} · ${gbp(t.rent)}/mo${last?' · last paid '+fmtDate(last.paidDate):''}</div></div>
       ${arrears>0?`<span class="pill" style="background:var(--red-bg);color:var(--red)">${gbp(arrears)} arrears</span>`:`<span class="pill" style="background:var(--green-bg);color:var(--green)">Up to date</span>`}
+      ${arrears>0?`<button class="btn sm" style="border-color:var(--amber);color:var(--amber)" onclick="arrearsAction('${t.id}')">⚖ Arrears action</button>`:''}
       <button class="btn sm" onclick="logPaymentPicker('${t.id}')">Log payment</button></div>`;
   }).join('');
-  return `<h1 class="pg">Rent &amp; Arrears</h1><div class="sub">Rent due is generated monthly per active tenancy. Mark payments as received to keep arrears accurate — this also feeds the Ground 8 arrears threshold on Possession &amp; Notices.</div>
+  return `<h1 class="pg">Rent &amp; Arrears</h1><div class="sub">Rent due is generated monthly per active tenancy. Mark payments as received to keep arrears accurate — this also feeds the Ground 8 arrears threshold on Possession &amp; Notices, and notifies full-management landlords with a statement.</div>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:12px"><button class="btn" onclick="openStatement()">📄 Landlord statement (½-yearly / yearly)</button></div>
     <div class="grid4" style="margin-bottom:18px">
       <div class="kpi"><div class="l">Active tenancies</div><div class="v">${ts.length}</div></div>
       <div class="kpi"><div class="l">Total arrears</div><div class="v" style="color:${totalArrears>0?'var(--red)':'var(--green)'}">${gbp(totalArrears)}</div></div>
@@ -1732,7 +1748,174 @@ function renderDueList(tid){
   if(!dues.length) return '<div class="faint" style="font-size:13px;margin-top:10px">No outstanding amounts for this tenant.</div>';
   return `<div style="margin-top:10px">${dues.map(r=>`<div class="kv"><span class="k">${fmtDate(r.due)} · ${gbp(r.amount)}${r.status==='late'?' <span style=\"color:var(--red);font-weight:600\">(late)</span>':''}</span><span class="v"><button class="btn sm" onclick="markPaid('${r.id}')">Mark paid</button></span></div>`).join('')}</div>`;
 }
-function markPaid(rid){ const r=(S.rentLedger||[]).find(x=>x.id===rid); if(!r)return; r.status='paid'; r.paidDate=today(); pushRent(r); closeModal(); render(); toast('✓ Payment logged'); }
+function markPaid(rid){
+  const r=(S.rentLedger||[]).find(x=>x.id===rid); if(!r)return;
+  r.status='paid'; r.paidDate=today(); pushRent(r);
+  const t=(S.tenants||[]).find(x=>x.id===r.tenantId)||{};
+  const p=P(t.propertyId)||{}; const l=L(p.landlordId)||{};
+  closeModal();
+  // Full-management: rent is received on the landlord's behalf → confirm the received-
+  // and-remitted notification (correct wording + net-of-fee statement) before it sends.
+  if(l.id && l.service==='full'){ _rentReceivedConfirm(r,t,p,l); return; }
+  render(); toast('✓ Payment logged');
+}
+// Confirmation step — the agent stays in control of what the landlord receives.
+function _rentReceivedConfirm(r,t,p,l){
+  const fee=Math.round(r.amount*propFee(p))/100; const net=Math.round((r.amount-fee)*100)/100;
+  const period=new Date(r.due).toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+  const body=`<div class="note" style="margin-bottom:14px">Rent of <b>${gbp(r.amount)}</b> from <b>${esc(t.name)}</b> for <b>${esc(p.address)}</b> is marked received (${fmtDate(r.paidDate)}). As you manage this let, we'll notify <b>${esc(landlordName(l))}</b> and record a rent statement.</div>
+    <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:14px;font-size:12.5px;line-height:1.8;margin-bottom:6px">
+      <div style="display:flex;justify-content:space-between"><span>Rent received · ${esc(period)}</span><b>${money2(r.amount)}</b></div>
+      <div style="display:flex;justify-content:space-between"><span>Less: management fee (${propFee(p)}%)</span><b style="color:var(--red)">− ${money2(fee)}</b></div>
+      <div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);margin-top:6px;padding-top:6px"><b>Net to remit to landlord</b><b style="color:var(--navy)">${money2(net)}</b></div>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;margin:12px 0 2px;cursor:pointer"><input type="checkbox" id="rp-email" style="width:auto" ${l.email?'checked':''} ${l.email?'':'disabled'}> Email the statement to ${l.email?esc(l.email):'landlord (no email on file)'}</label>`;
+  modal('Rent received — notify landlord', body,
+    `<button class="btn" onclick="closeModal();render();toast('✓ Payment logged')">Skip</button><button class="btn navy" onclick="_rentReceivedSend('${r.id}')">Send statement</button>`);
+}
+async function _rentReceivedSend(rid){
+  const r=(S.rentLedger||[]).find(x=>x.id===rid); if(!r){closeModal();return;}
+  const t=(S.tenants||[]).find(x=>x.id===r.tenantId)||{}; const p=P(t.propertyId)||{}; const l=L(p.landlordId)||{};
+  const doEmail=(document.getElementById('rp-email')||{}).checked;
+  const fee=Math.round(r.amount*propFee(p))/100; const net=Math.round((r.amount-fee)*100)/100;
+  const period=new Date(r.due).toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+  const subject=`Rent received & statement — ${period} — ${p.address||''}`;
+  const html=`<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#1A2B45">
+    <div style="background:#0B1E3D;padding:18px 22px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:18px;font-weight:700">${esc(agencyBrand().name)}</span></div>
+    <div style="padding:22px;border:1px solid #E4EAF1;border-top:none;border-radius:0 0 10px 10px">
+      <p>Dear ${esc(landlordName(l))},</p>
+      <p>We confirm we have <b>received your tenant's rent</b> for <b>${esc(period)}</b> in respect of <b>${esc(p.address||'your property')}</b>, and have processed your statement below.</p>
+      <table style="width:100%;border-collapse:collapse;font-size:14px;margin:14px 0">
+        <tr><td style="padding:8px 0;border-bottom:1px solid #E4EAF1">Rent received</td><td style="padding:8px 0;border-bottom:1px solid #E4EAF1;text-align:right">${_money(r.amount)}</td></tr>
+        <tr><td style="padding:8px 0;border-bottom:1px solid #E4EAF1">Management fee (${propFee(p)}%)</td><td style="padding:8px 0;border-bottom:1px solid #E4EAF1;text-align:right">− ${_money(fee)}</td></tr>
+        <tr><td style="padding:10px 0;font-weight:700">Net remitted to you</td><td style="padding:10px 0;text-align:right;font-weight:700;color:#009970">${_money(net)}</td></tr></table>
+      <p>The net sum will be paid to your nominated account in line with your instruction${l.payout?` (payout date: ${esc(l.payout)})`:''}. Please retain this statement for your records.</p>
+      <p style="color:#7A8FA6;font-size:12px">${esc(agencyBrand().name)} · held under our Client Money Protection scheme. This is an automated statement; reply with any queries.</p>
+    </div></div>`;
+  // Audit row + comms log + document trail (agency_letters).
+  const row={id:uid('lt'),agency_id:window._agencyId,landlord_id:l.id,property_id:p.id,type:'rent_statement',subject,body_html:html,status:'sent'};
+  if(LIVE){ try{ await sb.from('agency_letters').insert(row); }catch(e){ console.error(e); } }
+  S.letters=S.letters||[]; S.letters.unshift({...row,created_at:new Date().toISOString()});
+  if(doEmail && l.email) agencyEmail(l.email, subject, html);
+  l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Statement',note:`Rent received ${gbp(r.amount)} · ${period} · net ${gbp(net)} to landlord`+(doEmail&&l.email?' · emailed':'')}); pushLandlord(l);
+  closeModal(); render(); toast('✓ Rent statement recorded'+(doEmail&&l.email?' & emailed':''));
+}
+
+// ── ARREARS — correct legal escalation. Months of unpaid rent drive the recommended
+//    step: friendly reminder → formal 7-day arrears letter → Section 8 (Ground 8 is
+//    mandatory at ≥2 months' arrears; Grounds 10/11 are discretionary). ──
+function arrearsMonths(t){ const owed=tenantArrears(t.id); return t.rent?owed/t.rent:0; }
+function arrearsStep(t){
+  const m=arrearsMonths(t);
+  if(m>=2) return {k:'s8',label:'Section 8 — Ground 8 (mandatory)',color:'var(--red)',bg:'var(--red-bg)',note:'Two or more months\u2019 rent is unpaid. Ground 8 is a mandatory possession ground — serve a Section 8 notice (min. 4 weeks). Grounds 10 & 11 (some/persistent arrears) can be added.'};
+  if(m>=1) return {k:'formal',label:'Formal arrears letter (7-day)',color:'var(--amber)',bg:'var(--amber-bg)',note:'A month\u2019s rent is outstanding. Send a formal arrears letter giving 7 days to pay before further action, and keep it on file.'};
+  if(m>0) return {k:'reminder',label:'Friendly reminder',color:'var(--blue)',bg:'var(--blue-bg)',note:'Rent is late. Send a courteous reminder — most arrears clear at this stage.'};
+  return null;
+}
+function arrearsAction(tid){
+  const t=(S.tenants||[]).find(x=>x.id===tid)||{}; const p=P(t.propertyId)||{}; const l=L(p.landlordId)||{};
+  const step=arrearsStep(t); if(!step){ toast('This tenant is up to date',0); return; }
+  const owed=tenantArrears(t.id); const m=arrearsMonths(t);
+  const body=`<div class="note" style="margin-bottom:12px"><b>${esc(t.name)}</b> · ${esc(p.address||'')}<br>Arrears: <b style="color:var(--red)">${gbp(owed)}</b> (${m.toFixed(1)} months' rent)</div>
+    <div style="background:${step.bg};border:1px solid ${step.color};border-radius:10px;padding:13px 15px;margin-bottom:12px">
+      <div style="font-weight:700;color:${step.color};font-size:13px;margin-bottom:4px">Recommended: ${step.label}</div>
+      <div style="font-size:12.5px;line-height:1.6;color:var(--txt)">${step.note}</div></div>
+    <div class="hint" style="margin-bottom:10px">Full legal escalation ladder — reminder → 7-day formal letter → Section 8. Ground 8 needs ≥2 months' arrears both at service and at the hearing.</div>`;
+  const actions = step.k==='s8'
+    ? `<button class="btn" onclick="closeModal()">Close</button><button class="btn navy" onclick="closeModal();_arrearsLetter('${tid}');">Send arrears letter first</button><button class="btn" style="background:var(--red);color:#fff;border-color:var(--red)" onclick="closeModal();_startS8('${tid}')">Prepare Section 8 →</button>`
+    : `<button class="btn" onclick="closeModal()">Close</button><button class="btn navy" onclick="closeModal();_arrearsLetter('${tid}')">Send ${step.k==='formal'?'formal arrears letter':'reminder'}</button>`;
+  modal('Arrears action — '+esc(t.name), body, actions);
+}
+function _arrearsLetter(tid){
+  const t=(S.tenants||[]).find(x=>x.id===tid)||{}; const p=P(t.propertyId)||{};
+  // Hand off to the Letters module pre-set to the arrears template for this property.
+  go('templates');
+  toast('Open "Arrears reminder" and select '+(p.address||'the property'),0);
+}
+function _startS8(tid){
+  const t=(S.tenants||[]).find(x=>x.id===tid)||{}; const p=P(t.propertyId)||{};
+  go('notices');
+  toast('Start a Section 8 notice for '+(p.address||'this property')+' — Grounds 8/10/11',0);
+}
+function markPaidOld(){}
+
+// ── PERIODIC LANDLORD STATEMENT — half-yearly / yearly summary of rent collected,
+//    fees and net remitted, per property. Printable; uses landlordName (joint/company).
+let ST=null;
+function openStatement(){
+  const mgmt=S.landlords.filter(l=>l.service==='full');
+  const first=mgmt[0]||S.landlords[0]||{};
+  ST={landlordId:first.id||'', period:'half', y:new Date().getFullYear(), half:new Date().getMonth()<6?1:2};
+  renderStatementPicker();
+}
+function renderStatementPicker(){
+  const opts=S.landlords.map(l=>`<option value="${l.id}" ${l.id===ST.landlordId?'selected':''}>${esc(landlordName(l))}</option>`).join('');
+  const yrs=[0,1,2].map(d=>new Date().getFullYear()-d);
+  const body=`
+    <div class="fg"><label>Landlord</label><select onchange="ST.landlordId=this.value">${opts}</select></div>
+    <div class="grid2" style="gap:10px">
+      <div class="fg"><label>Period</label><select onchange="ST.period=this.value;renderStatementPicker()">
+        <option value="half" ${ST.period==='half'?'selected':''}>Half-yearly</option>
+        <option value="year" ${ST.period==='year'?'selected':''}>Yearly</option></select></div>
+      <div class="fg"><label>Year</label><select onchange="ST.y=parseInt(this.value)">${yrs.map(y=>`<option ${y===ST.y?'selected':''}>${y}</option>`).join('')}</select></div>
+    </div>
+    ${ST.period==='half'?`<div class="fg"><label>Half</label><select onchange="ST.half=parseInt(this.value)"><option value="1" ${ST.half===1?'selected':''}>H1 · Jan–Jun</option><option value="2" ${ST.half===2?'selected':''}>H2 · Jul–Dec</option></select></div>`:''}
+    <div class="hint">Aggregates every rent payment marked received in the period, per property, less your management fee.</div>`;
+  modal('Landlord statement', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="buildStatement()">Generate statement</button>`);
+}
+function buildStatement(){
+  const l=L(ST.landlordId); if(!l.id){toast('Pick a landlord',1);return;}
+  const from = ST.period==='year' ? new Date(ST.y,0,1) : new Date(ST.y,ST.half===1?0:6,1);
+  const to   = ST.period==='year' ? new Date(ST.y,11,31) : new Date(ST.y,ST.half===1?5:11,31);
+  const label= ST.period==='year' ? 'Year '+ST.y : (ST.half===1?'H1 (Jan–Jun) ':'H2 (Jul–Dec) ')+ST.y;
+  const props=S.properties.filter(p=>p.landlordId===l.id);
+  const rows=props.map(p=>{
+    const paid=(S.rentLedger||[]).filter(r=>r.propertyId===p.id && r.status==='paid' && r.paidDate && new Date(r.paidDate)>=from && new Date(r.paidDate)<=to);
+    const rent=paid.reduce((s,r)=>s+r.amount,0); const fee=Math.round(rent*propFee(p))/100; const net=Math.round((rent-fee)*100)/100;
+    return {p,count:paid.length,rent,fee,net};
+  }).filter(r=>r.count>0);
+  const tot=rows.reduce((a,r)=>({rent:a.rent+r.rent,fee:a.fee+r.fee,net:a.net+r.net}),{rent:0,fee:0,net:0});
+  const a=S.agency;
+  ST.doc=`<div style="padding:30px 34px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;gap:20px">
+      <div><div style="font-family:var(--disp);font-size:20px;color:var(--navy);line-height:1.2">${esc(a.name||'Beacon Residentials Ltd')}</div>
+        <div class="faint" style="font-size:12px;line-height:1.6;margin-top:4px;white-space:pre-line">${esc(a.address||'')}${a.redressNo?'\nRedress: '+esc(a.redress||'')+' · '+esc(a.redressNo):''}</div></div>
+      <div style="text-align:right;flex-shrink:0"><div style="font-family:var(--disp);font-size:18px;color:var(--navy);white-space:nowrap">LANDLORD STATEMENT</div>
+        <div class="faint" style="font-size:12.5px;margin-top:4px">${esc(label)}</div></div>
+    </div>
+    <div style="font-size:12.5px;margin-bottom:18px"><div style="font-size:10px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Statement for</div>
+      <div style="font-weight:600;color:var(--navy)">${landlordLegalLine(l)}</div><div class="faint">${esc(l.address||'')}</div></div>
+    <table style="width:100%;border-collapse:collapse;font-size:12.5px;margin-bottom:16px">
+      <thead><tr style="border-bottom:2px solid var(--navy)"><th style="text-align:left;padding:8px 0;color:var(--faint);font-size:10px;text-transform:uppercase;letter-spacing:.5px">Property</th><th style="text-align:right;padding:8px 0;color:var(--faint);font-size:10px">Payments</th><th style="text-align:right;padding:8px 0;color:var(--faint);font-size:10px">Rent received</th><th style="text-align:right;padding:8px 0;color:var(--faint);font-size:10px">Fee</th><th style="text-align:right;padding:8px 0;color:var(--faint);font-size:10px">Net</th></tr></thead>
+      <tbody>${rows.length?rows.map(r=>`<tr style="border-bottom:1px solid var(--border)"><td style="padding:10px 0">${esc(r.p.address)}</td><td style="text-align:right">${r.count}</td><td style="text-align:right">${money2(r.rent)}</td><td style="text-align:right;color:var(--red)">− ${money2(r.fee)}</td><td style="text-align:right;font-weight:600">${money2(r.net)}</td></tr>`).join(''):`<tr><td colspan="5" style="padding:16px 0;text-align:center;color:var(--muted)">No rent recorded as received in this period.</td></tr>`}</tbody>
+      ${rows.length?`<tfoot><tr style="border-top:2px solid var(--navy);font-weight:700;color:var(--navy)"><td style="padding:10px 0">Total</td><td></td><td style="text-align:right">${money2(tot.rent)}</td><td style="text-align:right">− ${money2(tot.fee)}</td><td style="text-align:right">${money2(tot.net)}</td></tr></tfoot>`:''}
+    </table>
+    <div class="faint" style="font-size:11px;line-height:1.6">Summary of rent collected on your behalf, less management fees, for the period shown. Held under our Client Money Protection scheme. Retain for your records / tax return.</div>
+  </div>`;
+  view='statement'; render();
+}
+function vStatement(){
+  if(!ST||!ST.doc) return vRentArrears();
+  const l=L(ST.landlordId)||{};
+  return `<div class="back no-print" onclick="go('rent')">← Rent &amp; Arrears</div>
+    <div class="no-print" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <button class="btn navy" onclick="window.print()">🖨 Print / PDF</button>
+      ${l.email?`<button class="btn" onclick="emailStatement()">✉ Email to ${esc(l.email)}</button>`:''}
+      <button class="btn" onclick="openStatement()">Change period</button>
+    </div>
+    <div id="invoice-doc" class="panel" style="max-width:720px;margin:0 auto">${ST.doc}</div>`;
+}
+async function emailStatement(){
+  const l=L(ST.landlordId)||{}; if(!l.email){toast('No email on file',1);return;}
+  const subject='Your landlord statement — '+esc(l.name);
+  const html=`<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#1A2B45"><p>Dear ${esc(landlordName(l))},</p><p>Please find your landlord statement attached below.</p>${ST.doc}</div>`;
+  const row={id:uid('lt'),agency_id:window._agencyId,landlord_id:l.id,type:'statement',subject,body_html:html,status:'sent'};
+  if(LIVE){ try{ await sb.from('agency_letters').insert(row); }catch(e){ console.error(e); } }
+  S.letters=S.letters||[]; S.letters.unshift({...row,created_at:new Date().toISOString()});
+  agencyEmail(l.email, subject, html);
+  l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Statement',note:'Landlord statement emailed'}); pushLandlord(l);
+  toast('✓ Statement emailed to '+l.email);
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MAINTENANCE — incl. Awaab's Law hazard timers
