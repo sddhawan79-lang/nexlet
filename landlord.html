@@ -13575,11 +13575,16 @@ function pgRentFinance(){
   const isLand = isLandlordOrAbove();
   return `<div class="pg">
     <h1>Rent &amp; Finance</h1>
-    <div style="display:flex;gap:8px;margin:16px 0 20px">
+    <div style="display:flex;gap:8px;margin:16px 0 20px;flex-wrap:wrap">
+      <button class="btn btn-sm ${window._rfTab==='insights'?'btn-navy':''}" onclick="window._rfTab='insights';nav('rent-finance')">Insights</button>
+      <button class="btn btn-sm ${(!window._rfTab||window._rfTab==='rent')?'btn-navy':''}" onclick="window._rfTab='rent';nav('rent-finance')">Rent</button>
+      <button class="btn btn-sm ${window._rfTab==='reconcile'?'btn-navy':''}" onclick="window._rfTab='reconcile';nav('rent-finance')">Reconcile${(()=>{const n=(window._nxlImportTx||[]).filter(t=>!t.matched).length;return n?` <span class="badge b-amber" style="margin-left:2px">${n}</span>`:'';})()}</button>
       <button class="btn btn-sm ${window._rfTab==='finance'?'btn-navy':''}" onclick="window._rfTab='finance';nav('rent-finance')">Finance</button>
       <button class="btn btn-sm ${window._rfTab==='mtd'?'btn-navy':''}" onclick="window._rfTab='mtd';nav('rent-finance')">MTD Tax</button>
     </div>
     ${(()=>{
+      if(window._rfTab==='insights') return pgInsights();
+      if(window._rfTab==='reconcile'){ if(isStarter()) return _rfUpgrade('Bank Reconciliation','Auto-match rent from an imported statement and categorise expenses for MTD.'); return pgReconcile(); }
       if(window._rfTab==='finance') return pgFinancials();
       if(window._rfTab==='mtd'){
         if(!planHas('mtd')) return '<div class="panel"><div class="ph2"><h2>MTD Tax Reporting</h2><p>Available on Landlord plan and above</p></div><div style="padding:20px;text-align:center"><button class="btn btn-navy" onclick="redirectToCheckout(\'landlord\')">Upgrade to Landlord</button></div></div>';
@@ -13592,6 +13597,194 @@ function pgRentFinance(){
   </div>`;
 }
 if(!window._rfTab) window._rfTab = 'rent';
+
+// ════════════════════════════════════════════════════════════════════════════
+//  FINANCIAL HUB — Insights + Reconcile (Phase A upgrade)
+//  Insights = shop-window analytics for ALL tiers. Reconcile = Landlord+.
+//  Rent matches persist via the existing markRentPaid() → rent_payments table.
+// ════════════════════════════════════════════════════════════════════════════
+function _rfUpgrade(title, sub){
+  return `<div class="content"><div class="panel"><div class="ph2"><div><h2>${title}</h2><p>${sub}</p></div></div>
+    <div style="padding:26px;text-align:center">
+      <div style="font-size:13px;color:var(--muted);margin-bottom:16px">Available on the Landlord plan and above.</div>
+      <button class="btn btn-navy" onclick="redirectToCheckout('landlord')">Upgrade to Landlord</button>
+    </div></div></div>`;
+}
+
+// Property market value — used for yield / LTV / equity. Uses a stored value if the
+// landlord has entered one, otherwise a clearly-labelled estimate (BTL ~72% LTV, or a
+// 5.5% gross-yield proxy for unmortgaged) so the metrics are meaningful from day one.
+function _propVal(p){ return p.value || p.est_value || (p.mortgage_outstanding ? Math.round(p.mortgage_outstanding/0.72) : Math.round((p.rent||0)*12/0.055)); }
+function _propValEst(p){ return !(p.value||p.est_value); }
+
+function _rentThisMonth(){
+  const key = new Date().toISOString().slice(0,7);
+  const collected = D.rent.filter(r=>r.status==='Paid').filter(r=>{const d=r.paid_date||r.paid||r.due_date;return d&&d.startsWith(key);}).reduce((s,r)=>s+(r.amount||0),0);
+  const expected = D.properties.reduce((s,p)=>s+(p.rent||0),0);
+  const arrears = D.rent.filter(r=>r.status==='Late'||r.status==='Due').reduce((s,r)=>s+(r.amount||0),0);
+  return { collected, expected, arrears };
+}
+function _portfolioFin(){
+  const annualRent = D.properties.reduce((s,p)=>s+(p.rent||0),0)*12;
+  const totalValue = D.properties.reduce((s,p)=>s+_propVal(p),0);
+  const totalDebt  = D.properties.reduce((s,p)=>s+(p.mortgage_outstanding||0),0);
+  const annualCosts= D.properties.reduce((s,p)=>s+(p.mortgage_monthly||0)*12,0)+D.insurance.reduce((s,i)=>s+(i.premium||0),0)+D.properties.reduce((s,p)=>s+getMaintCostMonthly(p.id)*12,0);
+  const grossYield = totalValue?annualRent/totalValue*100:0;
+  const netYield   = totalValue?(annualRent-annualCosts)/totalValue*100:0;
+  const ltv        = totalValue?totalDebt/totalValue*100:0;
+  const equity     = totalValue-totalDebt;
+  const units      = D.properties.length;
+  const letCount   = D.properties.filter(p=>D.tenants.some(t=>String(t.prop_id)===String(p.id)&&t.status==='Active')).length;
+  const occupancy  = units?letCount/units*100:0;
+  return { annualRent,totalValue,totalDebt,annualCosts,grossYield,netYield,ltv,equity,units,letCount,occupancy };
+}
+function _taxSetAside(){
+  const f=_portfolioFin(); const prof=getMTDProfile();
+  const mortInterest=D.properties.reduce((s,p)=>s+(p.mortgage_monthly||0)*12,0)*(parseFloat(prof.interestPct||100)/100);
+  const allowable=D.insurance.reduce((s,i)=>s+(i.premium||0),0)+D.properties.reduce((s,p)=>s+getMaintCostTotal(p.id),0)+parseFloat(prof.otherExpenses||0)+(window._nxlImportTx||[]).filter(t=>t.matched==='expensed'&&t.cat!=='finance').reduce((s,t)=>s+t.amount,0);
+  const taxable=Math.max(0,f.annualRent-allowable);
+  const rate=prof.taxBand==='higher'?0.40:prof.taxBand==='additional'?0.45:0.20;
+  const net=Math.max(0,taxable*rate-mortInterest*0.20);
+  return { net, quarterly:net/4 };
+}
+
+function pgInsights(){
+  const f=_portfolioFin(); const m=_rentThisMonth(); const tax=_taxSetAside();
+  const collectedPct=m.expected?Math.round(m.collected/m.expected*100):0;
+  const anyEst=D.properties.some(_propValEst);
+  const mc=(label,val,sub,col)=>`<div class="mc"><div class="mc-top"><span class="mc-label">${label}</span></div><div class="mc-val" style="color:${col}">${val}</div><div class="mc-sub">${sub}</div></div>`;
+  return `<div class="topbar"><span class="tb-title">Portfolio Insights</span></div>
+  <div class="content">
+    <div class="ph"><h1>Portfolio Insights</h1><p>Live performance across your portfolio — yield, equity, occupancy and cash position</p></div>
+    <div class="metrics">
+      ${mc('Rent collected','£'+Math.round(m.collected).toLocaleString(),collectedPct+'% of £'+Math.round(m.expected).toLocaleString()+' this month','var(--status-green-dark)')}
+      ${mc('Gross yield',f.grossYield.toFixed(1)+'%','Net '+f.netYield.toFixed(1)+'% after costs','var(--navy)')}
+      ${mc('Portfolio LTV',f.ltv.toFixed(0)+'%','£'+Math.round(f.equity).toLocaleString()+' equity',f.ltv<75?'var(--status-green-dark)':'var(--amber)')}
+      ${mc('Occupancy',f.occupancy.toFixed(0)+'%',f.letCount+' of '+f.units+' let',f.occupancy===100?'var(--status-green-dark)':'var(--amber)')}
+    </div>
+    <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-bottom:16px">
+      <div class="panel" style="margin:0">
+        <div class="ph2"><div><h2>Per-property performance</h2><p>Yield, LTV and let status${anyEst?' · value estimated where not set':''}</p></div></div>
+        <div class="tw"><table>
+          <thead><tr><th>Property</th><th>Rent</th><th>Value</th><th>Yield</th><th>LTV</th><th>Status</th></tr></thead>
+          <tbody>${activeProperties().map(p=>{
+            const val=_propVal(p), est=_propValEst(p);
+            const yld=val?(p.rent*12)/val*100:0;
+            const ltv=val?((p.mortgage_outstanding||0)/val*100):0;
+            const let_=D.tenants.some(t=>String(t.prop_id)===String(p.id)&&t.status==='Active');
+            return `<tr>
+              <td class="td-bold">${esc(p.address)}<div style="font-size:11px;color:var(--muted);font-weight:400">${esc(p.city||'')} ${esc(p.postcode||'')}</div></td>
+              <td style="font-weight:600;color:var(--status-green-dark)">£${(p.rent||0).toLocaleString()}</td>
+              <td>£${val.toLocaleString()}${est?'<span style="font-size:10px;color:var(--muted)"> est</span>':''}</td>
+              <td><span class="badge ${yld>=5?'b-green':yld>=3?'b-amber':'b-red'}">${yld.toFixed(1)}%</span></td>
+              <td><span class="badge ${ltv<60?'b-green':ltv<75?'b-amber':'b-red'}">${ltv.toFixed(0)}%</span></td>
+              <td>${let_?'<span class="badge b-green">Let</span>':'<span class="badge b-amber">Void</span>'}</td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table></div>
+        ${anyEst?`<div style="padding:8px 14px;font-size:11px;color:var(--muted)">* Values marked "est" are estimated from mortgage/rent. Add a market value on each property for exact yield, LTV &amp; equity.</div>`:''}
+      </div>
+      <div class="panel" style="margin:0">
+        <div class="ph2"><div><h2>Cash position</h2><p>This month</p></div></div>
+        <div style="padding:16px 18px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font-size:12px;color:var(--muted)">Collected</span><span style="font-weight:700;color:var(--status-green-dark)">£${Math.round(m.collected).toLocaleString()}</span></div>
+          <div style="height:7px;border-radius:100px;background:var(--off);overflow:hidden;margin-bottom:14px"><div style="height:100%;width:${collectedPct}%;background:var(--status-green);border-radius:100px"></div></div>
+          <div style="display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid var(--border)"><span style="font-size:12px;color:var(--muted)">Expected</span><span style="font-weight:600">£${Math.round(m.expected).toLocaleString()}</span></div>
+          <div style="display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid var(--border)"><span style="font-size:12px;color:var(--muted)">In arrears</span><span style="font-weight:600;color:var(--red)">£${Math.round(m.arrears).toLocaleString()}</span></div>
+          <div style="display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid var(--border)"><span style="font-size:12px;color:var(--muted)">Tax set-aside / mo</span><span style="font-weight:600;color:var(--amber)">£${Math.round(tax.quarterly/3).toLocaleString()}</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel" style="background:linear-gradient(135deg,#0B1E3D,#162F5C);color:#fff;border:none">
+      <div style="padding:20px 22px">
+        <div style="font-size:11px;font-weight:600;color:var(--accent);letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px">✦ AI Portfolio Insight</div>
+        <div style="font-size:14px;color:rgba(255,255,255,0.85);line-height:1.7">${D.properties.length?`Your portfolio is worth £${Math.round(f.totalValue).toLocaleString()} with £${Math.round(f.equity).toLocaleString()} equity (LTV ${f.ltv.toFixed(0)}%). You've collected ${collectedPct}% of this month's rent${m.arrears>0?`, with £${Math.round(m.arrears).toLocaleString()} outstanding to chase.`:'.'} ${f.grossYield>=5?'Gross yield of '+f.grossYield.toFixed(1)+'% is strong.':'Gross yield of '+f.grossYield.toFixed(1)+'% is below the 5% benchmark — review rents at renewal.'} At your ${(getMTDProfile().taxBand||'basic')} rate, set aside ~£${Math.round(tax.quarterly).toLocaleString()}/quarter for tax.`:'Add properties to see portfolio insights.'}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── RECONCILE — import a bank statement, auto-match incoming to expected rent ──
+if(!window._nxlImportTx) window._nxlImportTx = [];
+const _SA105 = { repairs:'Property repairs & maintenance', finance:'Loan interest & finance costs (S24)', insurance:'Rent, rates, insurance', professional:'Legal, management & professional fees', other:'Other allowable', personal:'Personal / not allowable' };
+function _expectedUnpaid(){
+  const rows=[];
+  activeProperties().forEach(p=>{ (buildRentSchedule(p.id)||[]).forEach(r=>{ if(r.status==='Due'||r.status==='Late') rows.push({...r,prop_id:p.id,address:p.address}); }); });
+  D.rent.forEach(r=>{ if((r.status==='Due'||r.status==='Late')&&!rows.find(x=>String(x.id)===String(r.id))) rows.push({...r,address:(P(r.prop_id)||{}).address}); });
+  return rows;
+}
+function _matchTx(tx){
+  if(tx.dir!=='in') return null;
+  const cands=_expectedUnpaid();
+  let best=cands.find(r=>{ if(Math.abs((r.amount||0)-tx.amount)>1) return false; const lead=D.tenants.find(t=>String(t.prop_id)===String(r.prop_id)&&t.status==='Active'); const sn=lead?(lead.name||'').split(' ').slice(-1)[0].toUpperCase():''; return sn&&tx.desc.toUpperCase().includes(sn); });
+  if(best) return best;
+  return cands.find(r=>Math.abs((r.amount||0)-tx.amount)<=1)||null;
+}
+function _guessCat(desc){ const d=desc.toUpperCase(); if(/MORTGAGE|LOAN|HALIFAX|NATWEST MTG/.test(d))return'finance'; if(/INSUR|DIRECT LINE|AVIVA|AXA/.test(d))return'insurance'; if(/REPAIR|PLUMB|ELECTRIC|BOILER|GAS SAFE|BUILDER|HANDY/.test(d))return'repairs'; if(/ACCOUNT|SOLICIT|LEGAL|LETTING|MANAGE/.test(d))return'professional'; return'other'; }
+function moImportStatement(){
+  openMo('Import bank statement','Paste rows from your online banking (CSV) — Date, Description, Amount',`
+    <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:10px">Download a CSV/statement export from your bank, open it, and paste the rows below. One transaction per line — we detect date, description and amount automatically. Nothing connects to your bank.</div>
+    <textarea id="stmt-in" style="width:100%;height:150px;font-family:monospace;font-size:12px;padding:10px;border:1px solid var(--border);border-radius:8px" placeholder="2026-07-01, BACS CREDIT T BLAKE RENT, 1200
+2026-07-02, HALIFAX MORTGAGE, -640
+2026-07-04, PLUMBWELL LTD BOILER, -185"></textarea>
+    <div style="margin-top:8px"><button class="btn btn-sm" onclick="document.getElementById('stmt-in').value='2026-07-01, BACS CREDIT T BLAKE RENT, 1200\\n2026-07-02, FASTER PAYMENT A KHAN, 975\\n2026-07-02, HALIFAX MORTGAGE 42 ELM, -640\\n2026-07-04, PLUMBWELL LTD BOILER REPAIR, -185\\n2026-07-05, DIRECT LINE LANDLORD INS, -280\\n2026-07-06, CARD PAYMENT TESCO, -42'">↳ Load sample</button></div>
+  `,`<button class="btn" onclick="closeMo()">Cancel</button><button class="btn btn-navy" onclick="_parseStatement()">Import transactions</button>`);
+}
+function _parseStatement(){
+  const raw=(document.getElementById('stmt-in').value||'').trim(); if(!raw){toast('Paste some rows first',true);return;}
+  const tx=[];
+  raw.split('\n').forEach((line,i)=>{
+    const parts=line.split(/[,\t]/).map(s=>s.trim()); if(parts.length<2) return;
+    const amtRaw=parts.find(x=>/^-?[£$]?\d[\d,]*\.?\d*$/.test(x.replace(/[£$,]/g,'')))||parts[parts.length-1];
+    const amt=parseFloat(String(amtRaw).replace(/[£$,]/g,'')); if(isNaN(amt)) return;
+    const date=parts.find(x=>/\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{2,4}/.test(x))||new Date().toISOString().slice(0,10);
+    const desc=parts.filter(x=>x!==amtRaw&&x!==date).join(' ')||'Transaction';
+    tx.push({ id:'tx'+Date.now()+i, date, desc, amount:Math.abs(amt), dir:amt>=0?'in':'out', cat:amt<0?_guessCat(desc):null, matched:null });
+  });
+  window._nxlImportTx=tx; closeMo(); toast('✓ Imported '+tx.length+' transactions'); nav('rent-finance');
+}
+async function _reconcileRent(txId){
+  const tx=window._nxlImportTx.find(t=>t.id===txId); if(!tx) return;
+  const r=_matchTx(tx); if(!r){toast('No expected rent matched',true);return;}
+  await markRentPaid(r.id||r.prop_id, r.due_date); tx.matched=r.id||('paid');
+  toast('✓ Rent reconciled'); window._rfTab='reconcile'; nav('rent-finance');
+}
+function _logExpense(txId){ const tx=window._nxlImportTx.find(t=>t.id===txId); if(!tx)return; tx.matched=(tx.cat==='personal')?'excluded':'expensed'; toast(tx.cat==='personal'?'Excluded as personal':'Logged to '+_SA105[tx.cat]); nav('rent-finance'); }
+function _setTxCat(txId,v){ const tx=window._nxlImportTx.find(t=>t.id===txId); if(tx)tx.cat=v; }
+function pgReconcile(){
+  const tx=window._nxlImportTx||[];
+  const unmatched=tx.filter(t=>!t.matched); const done=tx.filter(t=>t.matched);
+  const row=t=>{
+    if(t.dir==='in'){ const r=_matchTx(t);
+      return `<div style="display:flex;align-items:center;gap:13px;padding:13px 18px;border-bottom:1px solid var(--border)">
+        <div style="width:36px;height:36px;border-radius:9px;background:var(--status-green-bg);color:var(--status-green-dark);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:700">↓</div>
+        <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.desc)}</div><div style="font-size:11.5px;color:var(--muted)">${esc(t.date)} · incoming</div></div>
+        <div style="text-align:right;flex-shrink:0"><div style="font-weight:700;color:var(--status-green-dark)">+£${t.amount.toLocaleString()}</div>
+        ${r?`<button class="btn btn-sm" style="margin-top:5px;border-color:var(--accent);color:var(--accent-dark)" onclick="_reconcileRent('${t.id}')">↳ ${esc(r.address||'')} · confirm</button>`:'<span class="badge b-grey" style="margin-top:5px">No match</span>'}</div>
+      </div>`; }
+    const opts=Object.entries(_SA105).map(([k,v])=>`<option value="${k}" ${t.cat===k?'selected':''}>${v}</option>`).join('');
+    return `<div style="display:flex;align-items:center;gap:13px;padding:13px 18px;border-bottom:1px solid var(--border)">
+      <div style="width:36px;height:36px;border-radius:9px;background:var(--red-bg);color:var(--red);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:700">↑</div>
+      <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.desc)}</div><div style="font-size:11.5px;color:var(--muted)">${esc(t.date)} · outgoing</div></div>
+      <div style="text-align:right;flex-shrink:0"><div style="font-weight:700;color:var(--red)">−£${t.amount.toLocaleString()}</div>
+      <div style="display:flex;gap:6px;margin-top:5px;align-items:center"><select onchange="_setTxCat('${t.id}',this.value)" style="font-size:12px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;max-width:150px">${opts}</select><button class="btn btn-sm btn-navy" onclick="_logExpense('${t.id}')">Log</button></div></div>
+    </div>`;
+  };
+  return `<div class="topbar"><span class="tb-title">Reconcile</span><div class="tb-right"><button class="btn btn-navy" onclick="moImportStatement()">⤓ Import statement</button></div></div>
+  <div class="content">
+    <div class="ph"><h1>Reconcile</h1><p>Match imported payments to expected rent, and categorise expenses for your tax return</p></div>
+    ${tx.length===0?`<div class="panel"><div style="padding:34px;text-align:center">
+        <div style="font-size:15px;font-weight:600;margin-bottom:6px">No statement imported yet</div>
+        <div style="font-size:13px;color:var(--muted);max-width:420px;margin:0 auto 16px;line-height:1.6">Import a bank statement (CSV) to auto-match rent payments to the right property and tenant, and sort expenses into HMRC categories. Rent you confirm here is saved to your rent tracker automatically.</div>
+        <button class="btn btn-navy" onclick="moImportStatement()">⤓ Import a statement</button>
+        <div style="margin-top:14px"><span style="font-size:12px;color:var(--muted)">Prefer automatic? </span><span class="badge b-blue">Live bank feed — Portfolio, coming soon</span></div>
+      </div></div>`
+    :`${unmatched.length?`<div class="panel"><div class="ph2"><div><h2>To reconcile</h2><p>${unmatched.length} item${unmatched.length>1?'s':''} · incoming auto-matched to expected rent</p></div></div>${unmatched.map(row).join('')}</div>`:`<div class="panel"><div style="padding:26px;text-align:center;color:var(--muted)"><div style="font-size:22px">✓</div><div style="font-weight:600;color:var(--txt)">All caught up</div></div></div>`}
+      ${done.length?`<div class="panel"><div class="ph2"><div><h2>Reconciled</h2><p>${done.length} matched this session</p></div></div>${done.map(t=>`<div style="display:flex;align-items:center;gap:13px;padding:12px 18px;border-bottom:1px solid var(--border);opacity:.72"><div style="width:32px;height:32px;border-radius:8px;background:var(--off);color:var(--status-green-dark);display:flex;align-items:center;justify-content:center;flex-shrink:0">✓</div><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">${esc(t.desc)}</div><div style="font-size:11px;color:var(--muted)">${esc(t.date)} · ${t.matched==='expensed'?_SA105[t.cat]:t.matched==='excluded'?'Excluded (personal)':'Rent matched'}</div></div><div style="font-weight:600;color:${t.dir==='in'?'var(--status-green-dark)':'var(--muted)'}">${t.dir==='in'?'+':'−'}£${t.amount.toLocaleString()}</div></div>`).join('')}</div>`:''}
+      <div style="font-size:11.5px;color:var(--muted);background:var(--off);border-radius:8px;padding:11px 14px;line-height:1.6">🔒 Statement import is manual and private — nothing connects to your bank. Confirmed rent is saved to your rent tracker; expense categories preview your MTD position (persistent expense books arrive with the next update).</div>`}
+  </div>`;
+}
+
 
 function pgDocuments(){
   return `<div class="pg">
