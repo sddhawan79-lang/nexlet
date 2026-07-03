@@ -95,24 +95,42 @@ async function signOut(){ await sb.auth.signOut(); location.href='login.html'; }
 async function boot(){
   if(new URLSearchParams(location.search).get('preview')){ return renderSample(); }
   const { data:{ session } } = await sb.auth.getSession();
-  if(!session){ location.href='login.html'; return; }
+  if(!session){
+    const inv=new URLSearchParams(location.search).get('invite');
+    location.href='login.html?next='+encodeURIComponent('landlord-portal.html')+(inv?('&invite='+encodeURIComponent(inv)):'');
+    return;
+  }
 
-  // Link this auth user to their managed-landlord record (by email), if not already.
-  let claim='none';
-  try{ const r=await sb.rpc('claim_managed_landlord'); claim=r.data; }catch(e){ console.warn(e); }
+  // Link this auth user to their managed-landlord record. Prefer the secure invite
+  // token (set when the agent sends the portal invite) — falls back to the older
+  // email-match claim for any invite sent before tokens existed.
+  const inviteToken=new URLSearchParams(location.search).get('invite');
+  if(inviteToken){
+    try{ await sb.rpc('agency_landlord_invite_accept',{p_token:inviteToken}); }catch(e){ console.warn(e); }
+    try{ history.replaceState(null,'','landlord-portal.html'); }catch(e){}
+  }
+  try{ await sb.rpc('claim_managed_landlord'); }catch(e){ console.warn(e); }
 
   // Load the landlord's own record (RLS: self only).
   const { data:me } = await sb.from('agency_landlords').select('*').eq('user_id',session.user.id).maybeSingle();
   if(!me){ renderNoAccess(session.user.email); return; }
   $('who').textContent = me.name || session.user.email;
 
-  const [ag, props, agr, lt] = await Promise.all([
+  const [ag, props, agr, lt, msgs] = await Promise.all([
     sb.from('agencies').select('*').eq('id',me.agency_id).maybeSingle(),
     sb.from('properties').select('*').eq('landlord_id',me.id),
     sb.from('agency_agreements').select('*').eq('landlord_id',me.id).order('created_at',{ascending:false}),
-    sb.from('agency_letters').select('*').eq('landlord_id',me.id).order('created_at',{ascending:false})
+    sb.from('agency_letters').select('*').eq('landlord_id',me.id).order('created_at',{ascending:false}),
+    sb.from('agency_messages').select('*').eq('landlord_id',me.id).order('created_at',{ascending:true})
   ]);
-  render(me, ag.data||{}, props.data||[], agr.data||[], lt.data||[]);
+  window._me=me;
+  render(me, ag.data||{}, props.data||[], agr.data||[], lt.data||[], msgs.data||[]);
+  setInterval(pollMessages, 15000);
+}
+async function pollMessages(){
+  if(!window._me) return;
+  try{ const {data}=await sb.from('agency_messages').select('*').eq('landlord_id',window._me.id).order('created_at',{ascending:true});
+    if(data){ const wrap=$('msg-list'); if(wrap) wrap.innerHTML=msgBubbles(data); } }catch(e){}
 }
 
 function renderNoAccess(email){
@@ -124,7 +142,7 @@ function renderNoAccess(email){
   </div></div>`;
 }
 
-function render(me, ag, props, agreements, letters){
+function render(me, ag, props, agreements, letters, msgs){
   const totalRent = props.reduce((s,p)=>s+(p.rent||0),0);
   const signed = agreements.find(a=>a.status==='signed');
   const svc = me.service==='letonly'?'Tenant-find (let-only)':'Full management';
@@ -170,6 +188,12 @@ function render(me, ag, props, agreements, letters){
       <span style="font-size:15px">✉</span><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${esc(x.subject||x.type)}</div>
       <div style="font-size:11px;color:var(--muted)">${new Date(x.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</div></div></div>`).join('')}</div></div>` : '';
 
+  const msgCard = `<div class="card"><div class="card-hd"><h2>Messages</h2><p>Two-way, timestamped — talk directly with ${esc(ag.name||'your agent')}</p></div>
+    <div class="card-bd">
+      <div id="msg-list" style="max-height:280px;overflow-y:auto;margin-bottom:12px">${msgBubbles(msgs||[])}</div>
+      <div style="display:flex;gap:8px"><input id="msg-input" placeholder="Write a message…" style="flex:1;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:13.5px" onkeydown="if(event.key==='Enter')sendMsg()"><button class="btn" style="background:var(--navy);color:#fff;border-color:var(--navy)" onclick="sendMsg()">Send</button></div>
+    </div></div>`;
+
   $('app').innerHTML = `<div class="wrap">
     <div class="ro-banner">👁 This is your read-only portfolio view. Your managing agent maintains these records — contact them for any changes.</div>
     <div class="hero">
@@ -184,8 +208,28 @@ function render(me, ag, props, agreements, letters){
     <div class="grid">${agentCard}${agrCard}</div>
     <div class="sec-title">Your properties</div>
     ${propCards}
-    ${letterList?`<div style="margin-top:8px">${letterList}</div>`:''}
+    <div style="margin-top:8px">${msgCard}</div>
+    ${letterList?`<div style="margin-top:16px">${letterList}</div>`:''}
   </div>`;
+}
+function msgBubbles(msgs){
+  if(!msgs.length) return '<div style="color:var(--muted);font-size:13px;text-align:center;padding:16px 0">No messages yet — say hello below.</div>';
+  return msgs.map(m=>{ const mine=m.sender==='landlord'; return `<div style="display:flex;justify-content:${mine?'flex-end':'flex-start'};margin-bottom:8px">
+    <div style="max-width:78%;background:${mine?'var(--navy)':'var(--off)'};color:${mine?'#fff':'var(--txt)'};border-radius:11px;padding:9px 13px">
+      <div style="font-size:13px;line-height:1.5;white-space:pre-wrap">${esc(m.body)}</div>
+      <div style="font-size:10px;margin-top:3px;color:${mine?'rgba(255,255,255,.55)':'var(--muted)'}">${mine?'You':'Agent'} · ${new Date(m.created_at).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+    </div></div>`; }).join('');
+}
+async function sendMsg(){
+  const el=$('msg-input'); const body=(el.value||'').trim(); if(!body||!window._me) return;
+  el.disabled=true;
+  const row={id:'msg'+Math.random().toString(36).slice(2,10),agency_id:window._me.agency_id,landlord_id:window._me.id,sender:'landlord',body};
+  const { error } = await sb.from('agency_messages').insert(row);
+  el.disabled=false;
+  if(error){ console.error(error); alert('Could not send — please try again'); return; }
+  el.value='';
+  const { data } = await sb.from('agency_messages').select('*').eq('landlord_id',window._me.id).order('created_at',{ascending:true});
+  if(data) $('msg-list').innerHTML=msgBubbles(data);
 }
 
 function renderSample(){

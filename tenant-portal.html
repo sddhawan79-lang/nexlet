@@ -7,134 +7,262 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%230B1E3D'/><path d='M8 22V13l8-6 8 6v9' stroke='%2300C896' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/><path d='M13 22v-5h6v5' stroke='%2300C896' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
   --font:'DM Sans',system-ui,sans-serif; --disp:'DM Serif Display',Georgia,serif;
-  --navy:#0B1E3D; --green:#00C896; --green-dark:#009970;
-  --off:#F6F8FB; --border:#E4EAF1; --txt:#1A2B45; --muted:#7A8FA6;
-  --red:#E53E3E; --red-bg:#FDECEC; --amber:#D97706; --amber-bg:#FEF3C7; --green-bg:rgba(0,200,150,.12);
+  --navy:#0B1E3D; --navy-mid:#132847; --green:#00C896; --green-dark:#009970;
+  --white:#fff; --off:#F6F8FB; --border:#E4EAF1; --txt:#1A2B45; --muted:#7A8FA6;
+  --red:#E53E3E; --red-bg:#FDECEC; --amber:#D97706; --amber-bg:#FEF3C7;
+  --green-bg:rgba(0,200,150,.12); --blue:#3B6FE8; --blue-bg:#EAF0FE;
   --radius:12px;
 }
 body{font-family:var(--font);color:var(--txt);background:var(--off);min-height:100vh;-webkit-font-smoothing:antialiased}
-h1,h2{font-family:var(--disp);font-weight:400}
+h1,h2,h3{font-family:var(--disp);font-weight:400}
+a{color:var(--green-dark);text-decoration:none}
 .topbar{background:var(--navy);color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:20}
-.logo{font-family:var(--disp);font-size:20px}
+.logo{font-family:var(--disp);font-size:20px;letter-spacing:-.3px}
 .logo span{color:var(--green)}
-.logo .plat{display:block;font-family:var(--font);font-size:9.5px;color:rgba(255,255,255,.4);margin-top:1px}
+.logo .plat{display:block;font-family:var(--font);font-size:9.5px;color:rgba(255,255,255,.4);letter-spacing:.4px;margin-top:1px}
+.topbar-r{display:flex;align-items:center;gap:14px;font-size:13px}
+.topbar-r .who{color:rgba(255,255,255,.75)}
 .signout{background:none;border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.75);font-family:var(--font);font-size:12px;padding:6px 12px;border-radius:7px;cursor:pointer}
-.wrap{max-width:820px;margin:0 auto;padding:24px 20px 60px}
-.ro-banner{display:flex;gap:10px;background:#fff;border:1px solid var(--border);border-left:3px solid var(--green);border-radius:10px;padding:12px 16px;font-size:13px;color:var(--muted);margin-bottom:20px}
-.hero{background:var(--navy);border-radius:var(--radius);padding:24px 26px;color:#fff;margin-bottom:20px}
-.hero h1{font-size:24px}
-.hero p{font-size:13px;color:rgba(255,255,255,.6);margin-top:4px}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
-.card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
-.card-hd{padding:14px 18px;border-bottom:1px solid var(--border)}
-.card-hd h2{font-size:14.5px}
+.signout:hover{background:rgba(255,255,255,.08)}
+.wrap{max-width:960px;margin:0 auto;padding:24px 20px 60px}
+.ro-banner{display:flex;align-items:center;gap:10px;background:var(--white);border:1px solid var(--border);border-left:3px solid var(--green);border-radius:10px;padding:12px 16px;font-size:13px;color:var(--muted);margin-bottom:22px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.card-hd{padding:15px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px}
+.card-hd h2{font-size:15px;color:var(--txt)}
+.card-hd p{font-size:12px;color:var(--muted);margin-top:2px;font-family:var(--font)}
 .card-bd{padding:16px 18px}
-.kv{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--off);font-size:13px}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--off);font-size:13px}
 .kv:last-child{border:none}
-.kv .k{color:var(--muted)}.kv .v{font-weight:600;text-align:right}
-.pill{display:inline-flex;font-size:11px;font-weight:600;padding:3px 9px;border-radius:100px}
-.btn{display:inline-flex;align-items:center;gap:6px;font-family:var(--font);font-size:12.5px;font-weight:600;padding:9px 16px;border-radius:8px;border:1.5px solid var(--border);background:#fff;color:var(--txt);cursor:pointer}
-.btn.navy{background:var(--navy);color:#fff;border-color:var(--navy)}
-textarea,select,input{width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:13px;margin-top:4px}
-label{font-size:12px;font-weight:600;color:var(--txt)}
-.fg{margin-bottom:12px}
+.kv .k{color:var(--muted)}
+.kv .v{font-weight:600;color:var(--txt);text-align:right}
+.pill{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:100px;white-space:nowrap}
+.hero{background:var(--navy);border-radius:var(--radius);padding:24px 26px;color:#fff;margin-bottom:22px;position:relative;overflow:hidden}
+.hero::after{content:'';position:absolute;top:-80px;right:-60px;width:300px;height:300px;background:radial-gradient(circle,rgba(0,200,150,.14),transparent 70%)}
+.hero h1{font-size:26px;margin-bottom:4px}
+.hero p{font-size:13.5px;color:rgba(255,255,255,.6)}
+.stat-row{display:flex;gap:28px;margin-top:18px;position:relative;z-index:1;flex-wrap:wrap}
+.stat .n{font-family:var(--disp);font-size:24px}
+.stat .l{font-size:11px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.4px;margin-top:2px}
+.sec-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:26px 2px 12px}
+.cert-row{display:flex;gap:8px;flex-wrap:wrap}
+.cert{flex:1;min-width:120px;border:1px solid var(--border);border-radius:9px;padding:9px 11px;font-size:12px}
+.cert .cn{color:var(--muted);font-size:11px;margin-bottom:3px}
+.cert .cv{font-weight:600}
+.empty{text-align:center;padding:40px 20px;color:var(--muted);font-size:13.5px}
 .loading{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh;gap:14px;color:var(--muted)}
 .spin{width:26px;height:26px;border:3px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-.empty{text-align:center;padding:40px 20px;color:var(--muted);font-size:13.5px}
-.job{border-bottom:1px solid var(--off);padding:10px 0}
-.job:last-child{border:none}
+.btn{display:inline-flex;align-items:center;gap:6px;font-family:var(--font);font-size:12.5px;font-weight:600;padding:8px 14px;border-radius:8px;border:1.5px solid var(--border);background:#fff;color:var(--txt);cursor:pointer;text-decoration:none}
+.btn:hover{background:var(--off)}
+.btn-navy{background:var(--navy);color:#fff;border-color:var(--navy)}
+.btn-navy:hover{background:var(--navy-mid)}
+.fg{margin-bottom:14px}
+.fg label{display:block;font-size:11.5px;font-weight:600;color:var(--txt);margin-bottom:5px}
+.fg input,.fg select,.fg textarea{width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:13.5px;color:var(--txt);background:#fff}
+.job{border:1px solid var(--border);border-radius:9px;padding:11px 13px;margin-bottom:8px}
+.job .t{font-size:13px;font-weight:600;color:var(--navy)}
+.job .m{font-size:11.5px;color:var(--muted);margin:2px 0 4px}
+.msg-in{display:flex;gap:8px}
+.msg-in input{flex:1;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:13.5px}
 @media(max-width:720px){.grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
+
 <div class="topbar">
   <div class="logo">Beacon <span>Residentials</span><span class="plat">Powered by NexLet</span></div>
-  <div style="display:flex;align-items:center;gap:14px;font-size:13px">
-    <span id="who" style="color:rgba(255,255,255,.75)"></span>
-    <button class="signout" onclick="signOut()">Sign out</button>
-  </div>
+  <div class="topbar-r"><span class="who" id="who"></span><button class="signout" onclick="signOut()">Sign out</button></div>
 </div>
+
 <div id="app"><div class="loading"><div class="spin"></div><div>Loading your tenancy…</div></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
 <script>
-const SUPABASE_URL='https://mahtcfukgzbonwibtsxz.supabase.co';
-const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1haHRjZnVrZ3pib253aWJ0c3h6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MjQ2MDAsImV4cCI6MjA5MTIwMDYwMH0.-wC55rGp1WFKfjKR3EhuXqAPDiWJ4w_e2LBXjHr_y5Y';
-const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
-const $=id=>document.getElementById(id);
-const esc=v=>v==null?'':String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-const gbp=n=>'£'+Math.round(n||0).toLocaleString('en-GB');
-const fmtDate=d=>d?new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'—';
-let ME=null;
+// ── Tenant portal — enterprise-grade read + limited-write access for a managed
+// tenant: view their tenancy & the property's compliance certs (read-only),
+// report maintenance issues (writes agency_maintenance, reported_by='tenant'),
+// message their agent (2-way, timestamped), and see the notices served to them
+// (sent/received/archived trail). RLS scopes every read/write to their own row.
+const SUPABASE_URL      = 'https://mahtcfukgzbonwibtsxz.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1haHRjZnVrZ3pib253aWJ0c3h6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MjQ2MDAsImV4cCI6MjA5MTIwMDYwMH0.-wC55rGp1WFKfjKR3EhuXqAPDiWJ4w_e2LBXjHr_y5Y';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const $ = id => document.getElementById(id);
+const esc = v => v==null?'':String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const gbp = n => '£'+Math.round(n||0).toLocaleString('en-GB');
+const fmtDate = d => d?new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'—';
+
+function daysUntil(d){ if(!d) return null; return Math.round((new Date(d)-new Date())/864e5); }
+function certRAG(d){ if(!d) return {label:'Not on file',bg:'var(--red-bg)',color:'var(--red)'}; const n=daysUntil(d); if(n<0) return {label:'Expired',bg:'var(--red-bg)',color:'var(--red)'}; if(n<30) return {label:n+'d left',bg:'var(--amber-bg)',color:'var(--amber)'}; return {label:'Valid',bg:'var(--green-bg)',color:'var(--green-dark)'}; }
 
 async function signOut(){ await sb.auth.signOut(); location.href='login.html'; }
 
 async function boot(){
-  if(new URLSearchParams(location.search).get('preview')) return renderSample();
+  if(new URLSearchParams(location.search).get('preview')){ return renderSample(); }
   const { data:{ session } } = await sb.auth.getSession();
-  if(!session){ location.href='login.html'; return; }
-  let claim='none'; try{ const r=await sb.rpc('claim_managed_tenant'); claim=r.data; }catch(e){}
+  if(!session){
+    const inv=new URLSearchParams(location.search).get('invite');
+    location.href='login.html?next='+encodeURIComponent('tenant-portal.html')+(inv?('&invite='+encodeURIComponent(inv)):'');
+    return;
+  }
+
+  const inviteToken=new URLSearchParams(location.search).get('invite');
+  if(inviteToken){
+    try{ await sb.rpc('agency_tenant_invite_accept',{p_token:inviteToken}); }catch(e){ console.warn(e); }
+    try{ history.replaceState(null,'','tenant-portal.html'); }catch(e){}
+  }
+  try{ await sb.rpc('claim_managed_tenant'); }catch(e){ console.warn(e); }
+
   const { data:me } = await sb.from('agency_tenants').select('*').eq('user_id',session.user.id).maybeSingle();
-  if(!me){ $('app').innerHTML=`<div class="wrap"><div class="empty" style="padding-top:70px"><div style="font-size:34px;margin-bottom:12px">🔑</div><h2 style="margin-bottom:8px">No tenancy found</h2><p>We couldn't find a tenancy for <b>${esc(session.user.email)}</b>. Make sure you signed in with the email your agent holds for you.</p></div></div>`; return; }
-  ME=me; $('who').textContent=me.name||session.user.email;
-  const [ag,p,rl,mt]=await Promise.all([
+  if(!me){ renderNoAccess(session.user.email); return; }
+  $('who').textContent = me.name || session.user.email;
+  window._me = me;
+
+  const [propR, agR, jobsR, noticesR, msgsR] = await Promise.all([
+    sb.from('properties').select('*').eq('id', me.property_id).maybeSingle(),
     sb.from('agencies').select('*').eq('id', me.agency_id).maybeSingle(),
-    sb.from('properties').select('*').eq('id',me.property_id).maybeSingle(),
-    sb.from('agency_rent_ledger').select('*').eq('tenant_id',me.id).order('due_date',{ascending:false}),
-    sb.from('agency_maintenance').select('*').eq('tenant_id',me.id).order('created_at',{ascending:false})
+    sb.from('agency_maintenance').select('*').eq('tenant_id', me.id).order('created_at',{ascending:false}),
+    sb.from('agency_notices').select('*').eq('property_id', me.property_id).order('created_at',{ascending:false}),
+    sb.from('agency_messages').select('*').eq('tenant_id', me.id).order('created_at',{ascending:true})
   ]);
-  render(me, (ag&&ag.data)||{}, (p&&p.data)||{}, rl.data||[], mt.data||[]);
+  render(me, agR.data||{}, propR.data||{}, jobsR.data||[], noticesR.data||[], msgsR.data||[]);
+  setInterval(pollMessages, 15000);
+}
+async function pollMessages(){
+  if(!window._me) return;
+  try{ const {data}=await sb.from('agency_messages').select('*').eq('tenant_id',window._me.id).order('created_at',{ascending:true});
+    if(data){ const wrap=$('msg-list'); if(wrap) wrap.innerHTML=msgBubbles(data); } }catch(e){}
 }
 
-function render(me, ag, p, ledger, jobs){
-  const c=p.certs||{};
-  const arrears=ledger.filter(r=>r.status!=='paid'&&new Date(r.due_date)<=new Date()).reduce((s,r)=>s+r.amount,0);
-  $('app').innerHTML = `<div class="wrap">
-    <div class="ro-banner">👁 This is your tenancy portal. Contact your managing agent for anything you can't do here.</div>
-    <div class="hero"><h1>Hello, ${esc((me.name||'').split(' ')[0]||'there')}</h1><p>${esc(p.address||'')}${p.city?', '+esc(p.city):''} · managed by ${esc(ag.name||'Beacon Residentials Ltd')}</p></div>
-    <div class="grid">
-      <div class="card"><div class="card-hd"><h2>Your tenancy</h2></div><div class="card-bd">
-        <div class="kv"><span class="k">Rent</span><span class="v">${gbp(me.rent)}/month</span></div>
-        <div class="kv"><span class="k">Start date</span><span class="v">${fmtDate(me.start_date)}</span></div>
-        <div class="kv"><span class="k">Deposit</span><span class="v">${me.deposit?gbp(me.deposit)+(me.scheme?' · '+esc(me.scheme):''):'—'}</span></div>
-        <div class="kv" style="border:none"><span class="k">Rent status</span><span class="v">${arrears>0?`<span class="pill" style="background:var(--red-bg);color:var(--red)">${gbp(arrears)} due</span>`:`<span class="pill" style="background:var(--green-bg);color:var(--green-dark)">Up to date</span>`}</span></div>
-      </div></div>
-      <div class="card"><div class="card-hd"><h2>Property compliance</h2></div><div class="card-bd">
-        <div class="kv"><span class="k">Gas Safety</span><span class="v">${c.gas?fmtDate(c.gas):'—'}</span></div>
-        <div class="kv"><span class="k">EICR</span><span class="v">${c.eicr?fmtDate(c.eicr):'—'}</span></div>
-        <div class="kv" style="border:none"><span class="k">EPC</span><span class="v">${c.epc?fmtDate(c.epc)+(c.epcRating?' · '+esc(c.epcRating):''):'—'}</span></div>
-      </div></div>
+function renderNoAccess(email){
+  $('app').innerHTML = `<div class="wrap"><div class="empty" style="padding-top:70px">
+    <div style="font-size:34px;margin-bottom:12px">🔑</div>
+    <h2 style="margin-bottom:8px">No tenancy found</h2>
+    <p style="max-width:440px;margin:0 auto 18px">We couldn't find a tenancy on file for <b>${esc(email)}</b>. If your letting agent has invited you, make sure you signed in with the same email — or ask them to re-send the invite.</p>
+  </div></div>`;
+}
+
+function render(me, ag, prop, jobs, notices, msgs){
+  const c=(prop&&prop.certs)||{};
+  const cert=(nm,d,extra)=>{const r=certRAG(d);return `<div class="cert"><div class="cn">${nm}</div><div class="cv"><span class="pill" style="background:${r.bg};color:${r.color}">${r.label}</span>${extra||''}</div></div>`;};
+
+  const tenancyCard=`<div class="card"><div class="card-hd"><h2>Your tenancy</h2><p>Key details on file</p></div><div class="card-bd">
+    <div class="kv"><span class="k">Property</span><span class="v">${esc((prop&&prop.address)||'—')}${prop&&prop.city?', '+esc(prop.city):''}</span></div>
+    <div class="kv"><span class="k">Monthly rent</span><span class="v">${gbp(me.rent)}</span></div>
+    <div class="kv"><span class="k">Tenancy start</span><span class="v">${fmtDate(me.start_date)}</span></div>
+    <div class="kv"><span class="k">Deposit held</span><span class="v">${me.deposit!=null?gbp(me.deposit):'—'}${me.scheme?' · '+esc(me.scheme):''}</span></div>
+    <div class="kv" style="border:none"><span class="k">Status</span><span class="v"><span class="pill" style="background:${me.status==='active'?'var(--green-bg)':'var(--off)'};color:${me.status==='active'?'var(--green-dark)':'var(--muted)'}">${me.status==='active'?'Active':esc(me.status||'—')}</span></span></div>
+  </div></div>`;
+
+  const agentCard=`<div class="card"><div class="card-hd"><h2>Your managing agent</h2><p>Who to contact</p></div><div class="card-bd">
+    <div class="kv"><span class="k">Agency</span><span class="v">${esc(ag.name||'Beacon Residentials Ltd')}</span></div>
+    ${ag.address?`<div class="kv"><span class="k">Address</span><span class="v">${esc(ag.address)}</span></div>`:''}
+    <div class="kv" style="border:none"><span class="k">Redress scheme</span><span class="v">${esc(ag.redress_scheme||'—')}</span></div>
+  </div></div>`;
+
+  const certCard = prop ? `<div class="card" style="margin-top:16px"><div class="card-hd"><h2>Property compliance</h2><p>Certificates your agent keeps current</p></div><div class="card-bd">
+    <div class="cert-row">
+      ${cert('Gas Safety',c.gas)}
+      ${cert('EICR (Electrical)',c.eicr)}
+      ${cert('EPC',c.epc,c.epcRating?` <span style="color:var(--muted);font-weight:500">· ${esc(c.epcRating)}</span>`:'')}
     </div>
-    <div class="card" style="margin-bottom:20px"><div class="card-hd" style="display:flex;justify-content:space-between;align-items:center"><h2>Report a maintenance issue</h2></div>
-      <div class="card-bd">
-        <div class="fg"><label>Category</label><select id="mt-cat">${['General','Plumbing','Electrical','Heating','Damp & mould','Appliance','Structural','Pest control'].map(x=>`<option>${x}</option>`).join('')}</select></div>
-        <div class="fg"><label>Describe the issue</label><textarea id="mt-desc" rows="3" placeholder="What's happening, and where?"></textarea></div>
-        <button class="btn navy" onclick="reportIssue()">Submit report</button>
-      </div></div>
-    <div class="card"><div class="card-hd"><h2>Your reported issues</h2></div>
-      <div class="card-bd">${jobs.length?jobs.map(j=>`<div class="job"><div style="font-weight:600;font-size:13px">${esc(j.category)}</div><div style="font-size:12.5px;color:var(--muted)">${esc(j.description)}</div><div style="font-size:11px;color:var(--muted);margin-top:3px">${fmtDate(j.created_at)} · <span style="text-transform:capitalize">${esc((j.status||'').replace('_',' '))}</span></div></div>`).join(''):'<div class="faint" style="color:var(--muted);font-size:13px">No issues reported yet.</div>'}</div></div>
+  </div></div>` : '';
+
+  const jobRows = jobs.length ? jobs.map(j=>`<div class="job">
+      <div class="t">${esc(j.category||'General')}${j.damp_mould?' · damp/mould':''}</div>
+      <div class="m">${fmtDate(j.created_at)} · ${esc((j.status||'reported').replace('_',' '))}</div>
+      <div style="font-size:12.5px;color:var(--txt)">${esc(j.description||'—')}</div>
+    </div>`).join('') : `<div class="empty" style="padding:20px 0">No maintenance issues reported yet.</div>`;
+
+  const maintCard = `<div class="card" style="margin-top:16px"><div class="card-hd"><h2>Maintenance</h2><p>Report an issue — your agent is notified</p></div><div class="card-bd">
+    <div class="fg"><label>Category</label><select id="jb-cat">${['General','Plumbing','Electrical','Heating','Damp & mould','Appliance','Structural','Pest control'].map(x=>`<option>${x}</option>`).join('')}</select></div>
+    <div class="fg"><label>What's the issue?</label><textarea id="jb-desc" rows="3" placeholder="Describe what's wrong and where"></textarea></div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;margin-bottom:14px;cursor:pointer"><input type="checkbox" id="jb-damp" style="width:auto"> This involves damp or mould</label>
+    <button class="btn btn-navy" onclick="reportJob()">Report issue</button>
+    <div class="sec-title" style="margin-top:22px">Your reports</div>
+    ${jobRows}
+  </div></div>`;
+
+  const noticeRows = notices.length ? notices.map(n=>{
+    const st = n.status==='served'?['Received',  'var(--amber-bg)','var(--amber)'] : n.status==='withdrawn'?['Archived','var(--off)','#94A3B8'] : ['Not yet sent','var(--off)','#475569'];
+    return `<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--off)">
+      <span style="font-size:16px">⚖</span>
+      <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${n.kind==='section13'?'Notice of rent increase':'Section 8 possession notice'}</div>
+      <div style="font-size:11px;color:var(--muted)">${fmtDate(n.served_date||n.created_at)}</div></div>
+      <span class="pill" style="background:${st[1]};color:${st[2]}">${st[0]}</span></div>`;
+  }).join('') : `<div class="empty" style="padding:20px 0">No notices on file.</div>`;
+  const docCard = `<div class="card" style="margin-top:16px"><div class="card-hd"><h2>Documents</h2><p>Notices served to you — sent, received &amp; archived</p></div><div class="card-bd" style="padding-top:4px">${noticeRows}</div></div>`;
+
+  const msgCard = `<div class="card" style="margin-top:16px"><div class="card-hd"><h2>Messages</h2><p>Two-way, timestamped — talk directly with ${esc(ag.name||'your agent')}</p></div>
+    <div class="card-bd">
+      <div id="msg-list" style="max-height:280px;overflow-y:auto;margin-bottom:12px">${msgBubbles(msgs||[])}</div>
+      <div class="msg-in"><input id="msg-input" placeholder="Write a message…" onkeydown="if(event.key==='Enter')sendMsg()"><button class="btn btn-navy" onclick="sendMsg()">Send</button></div>
+    </div></div>`;
+
+  $('app').innerHTML = `<div class="wrap">
+    <div class="ro-banner">👁 This is your tenancy portal. Your letting agent manages the records above — message them for anything you need changed.</div>
+    <div class="hero">
+      <h1>Hello, ${esc((me.name||'').split(' ')[0]||'there')}</h1>
+      <p>Your tenancy at ${esc((prop&&prop.address)||'your property')}, managed by ${esc(ag.name||'Beacon Residentials Ltd')}.</p>
+      <div class="stat-row">
+        <div class="stat"><div class="n">${gbp(me.rent)}</div><div class="l">Monthly rent</div></div>
+        <div class="stat"><div class="n">${fmtDate(me.start_date)}</div><div class="l">Tenancy start</div></div>
+        <div class="stat"><div class="n">${jobs.filter(j=>j.status!=='completed').length}</div><div class="l">Open issues</div></div>
+      </div>
+    </div>
+    <div class="grid">${tenancyCard}${agentCard}</div>
+    ${certCard}
+    ${maintCard}
+    ${docCard}
+    ${msgCard}
   </div>`;
 }
-async function reportIssue(){
-  const desc=$('mt-desc').value.trim(); if(!desc){ alert('Please describe the issue'); return; }
-  const job={id:'mt'+Date.now().toString(36)+Math.random().toString(36).slice(2,8),agency_id:ME.agency_id,property_id:ME.property_id,tenant_id:ME.id,reported_by:'tenant',category:$('mt-cat').value,description:desc,severity:'normal',damp_mould:$('mt-cat').value==='Damp & mould',status:'reported'};
-  const {error}=await sb.from('agency_maintenance').insert(job);
-  if(error){ alert('Could not submit — please try again or contact your agent directly.'); return; }
-  boot();
+function msgBubbles(msgs){
+  if(!msgs.length) return '<div style="color:var(--muted);font-size:13px;text-align:center;padding:16px 0">No messages yet — say hello below.</div>';
+  return msgs.map(m=>{ const mine=m.sender==='tenant'; return `<div style="display:flex;justify-content:${mine?'flex-end':'flex-start'};margin-bottom:8px">
+    <div style="max-width:78%;background:${mine?'var(--navy)':'var(--off)'};color:${mine?'#fff':'var(--txt)'};border-radius:11px;padding:9px 13px">
+      <div style="font-size:13px;line-height:1.5;white-space:pre-wrap">${esc(m.body)}</div>
+      <div style="font-size:10px;margin-top:3px;color:${mine?'rgba(255,255,255,.55)':'var(--muted)'}">${mine?'You':'Agent'} · ${new Date(m.created_at).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+    </div></div>`; }).join('');
 }
+async function sendMsg(){
+  const el=$('msg-input'); const body=(el.value||'').trim(); if(!body||!window._me) return;
+  el.disabled=true;
+  const row={id:'msg'+Math.random().toString(36).slice(2,10),agency_id:window._me.agency_id,tenant_id:window._me.id,property_id:window._me.property_id,sender:'tenant',body};
+  const { error } = await sb.from('agency_messages').insert(row);
+  el.disabled=false;
+  if(error){ console.error(error); alert('Could not send — please try again'); return; }
+  el.value='';
+  const { data } = await sb.from('agency_messages').select('*').eq('tenant_id',window._me.id).order('created_at',{ascending:true});
+  if(data) $('msg-list').innerHTML=msgBubbles(data);
+}
+async function reportJob(){
+  if(!window._me){ return; }
+  const desc=$('jb-desc').value.trim();
+  if(!desc){ alert('Please describe the issue'); return; }
+  const row={id:'mt'+Math.random().toString(36).slice(2,10),agency_id:window._me.agency_id,property_id:window._me.property_id,tenant_id:window._me.id,reported_by:'tenant',category:$('jb-cat').value,description:desc,photos:[],severity:$('jb-damp').checked?'hazard':'normal',damp_mould:$('jb-damp').checked,status:'reported'};
+  const { error } = await sb.from('agency_maintenance').insert(row);
+  if(error){ console.error(error); alert('Could not report — please try again'); return; }
+  location.reload();
+}
+
 function renderSample(){
   $('who').textContent='Tom Blake';
-  render({name:'Tom Blake',rent:1200,start_date:'2025-06-01',deposit:1385,scheme:'DPS',agency_id:'x'},
-    {name:'Beacon Residentials Ltd'},
+  render(
+    {name:'Tom Blake',rent:1200,start_date:'2025-06-01',deposit:1385,scheme:'DPS',status:'active',property_id:1,agency_id:'demo'},
+    {name:'Beacon Residentials Ltd',address:'14 High Street, Leeds',redress_scheme:'The Property Ombudsman'},
     {address:'42 Elm Street',city:'Leeds',certs:{gas:'2026-11-01',eicr:'2029-01-01',epc:'2031-01-01',epcRating:'C'}},
-    [], [{category:'Heating',description:'Radiator in bedroom not heating up',created_at:'2026-06-10',status:'in_progress'}]);
+    [{category:'Heating',description:'Radiator in the back bedroom is cold at the top — might need bleeding.',status:'acknowledged',created_at:'2026-06-20'}],
+    [{kind:'section13',status:'served',served_date:'2026-05-01'}],
+    [{sender:'agent',body:'Hi Tom, just confirming the gas engineer will visit this Thursday between 10am–2pm.',created_at:'2026-06-18T09:00:00Z'},{sender:'tenant',body:'Thanks for letting me know, I will make sure someone is in.',created_at:'2026-06-18T10:15:00Z'}]
+  );
 }
+
 boot();
 </script>
 </body>

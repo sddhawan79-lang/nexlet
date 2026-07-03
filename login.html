@@ -217,9 +217,15 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     return;
   }
 
+  // Optional ?next=<page> (+ optional &invite=<token>) — used when arriving here via a
+  // portal invite link so the invited landlord/tenant lands back where they started
+  // instead of always going to the main landlord app.
+  const _next = new URLSearchParams(location.search).get('next');
+  const _nextUrl = () => { if(!_next) return 'landlord.html'; const inv=new URLSearchParams(location.search).get('invite'); return _next+(inv?(_next.includes('?')?'&':'?')+'invite='+encodeURIComponent(inv):''); };
+
   const { data: { session } } = await sb.auth.getSession();
   if (session) {
-    window.location.href = 'landlord.html';
+    window.location.href = _nextUrl();
     return;
   }
 
@@ -232,7 +238,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       document.getElementById('newpass-view').style.display = 'block';
       return;
     }
-    if (session) window.location.href = 'landlord.html';
+    if (session) window.location.href = _nextUrl();
   });
 })();
 
@@ -269,7 +275,9 @@ async function login() {
     document.getElementById('password').classList.add('error');
     document.getElementById('password').value = '';
   } else {
-    window.location.href = 'landlord.html';
+    const _next = new URLSearchParams(location.search).get('next');
+    const _inv = new URLSearchParams(location.search).get('invite');
+    window.location.href = _next ? (_next+(_inv?(_next.includes('?')?'&':'?')+'invite='+encodeURIComponent(_inv):'')) : 'landlord.html';
     const optIn = document.getElementById('newsletter-opt-in')?.checked || false;
     if (optIn && data?.user?.id) {
       await sb.from('user_profiles').update({ newsletter_opted_in: true }).eq('user_id', data.user.id);
