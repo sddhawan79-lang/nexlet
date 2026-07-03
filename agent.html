@@ -135,6 +135,7 @@ h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px
       <div id="scheme-foot" style="margin:0 0 12px;padding:10px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px"></div>
       <div class="sb-user"><div class="sb-av">SD</div><div>Saurabh — Agent</div></div>
       <a href="landlord.html?portal=landlord" style="display:block;margin-top:10px;font-size:11px;color:rgba(255,255,255,.5);text-decoration:none">↩ Switch to landlord portal</a>
+      <a href="#" onclick="agentLogout();return false" style="display:block;margin-top:8px;font-size:11px;color:rgba(255,255,255,.5);text-decoration:none">⎋ Log out</a>
     </div>
   </aside>
   <main class="main">
@@ -178,8 +179,8 @@ window._agencyId=null;          // every LIVE query is scoped to this agency
 // ── row ⇄ in-memory-object mappers (snake_case DB ⇄ camelCase S) ──
 const rowToAgency=r=>({name:r.name||'',address:r.address||'',redress:r.redress_scheme||'',redressNo:r.redress_no||'',cmp:r.cmp_scheme||'Not holding client money',cmpNo:r.cmp_no||'',refPartner:r.ref_partner||'',icoNo:r.ico_no||'',vatRegistered:!!r.vat_registered,vatNumber:r.vat_number||'',invoiceSeq:r.invoice_seq||0,paymentTerms:r.payment_terms||14});
 const agencyToRow=a=>({name:a.name,address:a.address,redress_scheme:a.redress,redress_no:a.redressNo,cmp_scheme:a.cmp,cmp_no:a.cmpNo,ref_partner:a.refPartner,ico_no:a.icoNo,vat_registered:!!a.vatRegistered,vat_number:a.vatNumber,invoice_seq:a.invoiceSeq||0,payment_terms:a.paymentTerms||14,updated_at:new Date().toISOString()});
-const rowToLandlord=r=>({id:r.id,name:r.name||'',email:r.email||'',phone:r.phone||'',address:r.address||'',nrl:!!r.nrl,prsReg:r.prs_reg||'',payout:r.payout||'',contactPref:r.contact_pref||'Email',aml:!!r.aml_verified,ownership:!!r.ownership_verified,service:r.service||'full',feePct:r.fee_pct,letWeeks:r.let_weeks,agreement:!!r.agreement_signed,status:r.status||'pending',docs:r.docs||{},comms:r.comms||[]});
-const landlordToRow=l=>({id:l.id,agency_id:window._agencyId,name:l.name,email:l.email,phone:l.phone,address:l.address,nrl:!!l.nrl,prs_reg:l.prsReg,payout:l.payout,contact_pref:l.contactPref,aml_verified:!!l.aml,ownership_verified:!!l.ownership,service:l.service,fee_pct:l.feePct,let_weeks:l.letWeeks,agreement_signed:!!l.agreement,status:l.status,docs:l.docs||{},comms:l.comms||[],updated_at:new Date().toISOString()});
+const rowToLandlord=r=>({id:r.id,name:r.name||'',email:r.email||'',phone:r.phone||'',address:r.address||'',nrl:!!r.nrl,prsReg:r.prs_reg||'',payout:r.payout||'',contactPref:r.contact_pref||'Email',aml:!!r.aml_verified,ownership:!!r.ownership_verified,service:r.service||'full',feePct:r.fee_pct,letWeeks:r.let_weeks,agreement:!!r.agreement_signed,status:r.status||'pending',docs:r.docs||{},comms:r.comms||[],inviteToken:r.invite_token||'',invitedAt:r.invited_at||''});
+const landlordToRow=l=>({id:l.id,agency_id:window._agencyId,name:l.name,email:l.email,phone:l.phone,address:l.address,nrl:!!l.nrl,prs_reg:l.prsReg,payout:l.payout,contact_pref:l.contactPref,aml_verified:!!l.aml,ownership_verified:!!l.ownership,service:l.service,fee_pct:l.feePct,let_weeks:l.letWeeks,agreement_signed:!!l.agreement,status:l.status,docs:l.docs||{},comms:l.comms||[],invite_token:l.inviteToken||null,invited_at:l.invitedAt||null,updated_at:new Date().toISOString()});
 const rowToProp=r=>({id:String(r.id),landlordId:r.landlord_id,address:r.address||'',city:r.city||'',rent:r.rent||0,beds:r.beds||1,feePct:r.fee_pct,certs:r.certs||{},tenant:r.tenant||undefined});
 const propToRow=p=>({id:p.id,agency_id:window._agencyId,landlord_id:p.landlordId,address:p.address,city:p.city,rent:p.rent||0,beds:p.beds||1,fee_pct:p.feePct,certs:p.certs||{},tenant:p.tenant||null});
 // properties.id is a DB-assigned bigint (NOT a client-generated text id like our other
@@ -213,8 +214,11 @@ const pushTenantRec =t =>_w(sb.from('agency_tenants').upsert(tenantToRow(t)));
 const pushRent    =r  =>_w(sb.from('agency_rent_ledger').upsert(rentToRow(r)));
 const pushJob     =j  =>_w(sb.from('agency_maintenance').upsert(jobToRow(j)));
 const pushInv2    =v  =>_w(sb.from('agency_inventories').upsert(inv2ToRow(v)));
-const rowToTenant=r=>({id:r.id,propertyId:r.property_id,landlordId:r.landlord_id,userId:r.user_id,name:r.name||'',email:r.email||'',phone:r.phone||'',start:r.start_date||'',end:r.end_date||'',rent:r.rent||0,deposit:r.deposit,scheme:r.scheme||'',schemeRef:r.scheme_ref||'',status:r.status||'active'});
-const tenantToRow=t=>({id:t.id,agency_id:window._agencyId,property_id:t.propertyId,landlord_id:t.landlordId,name:t.name,email:t.email||'',phone:t.phone||'',start_date:t.start||null,end_date:t.end||null,rent:t.rent||0,deposit:t.deposit,scheme:t.scheme||'',scheme_ref:t.schemeRef||'',status:t.status||'active',updated_at:new Date().toISOString()});
+const rowToTenant=r=>({id:r.id,propertyId:r.property_id,landlordId:r.landlord_id,userId:r.user_id,name:r.name||'',email:r.email||'',phone:r.phone||'',start:r.start_date||'',end:r.end_date||'',rent:r.rent||0,deposit:r.deposit,scheme:r.scheme||'',schemeRef:r.scheme_ref||'',status:r.status||'active',inviteToken:r.invite_token||'',invitedAt:r.invited_at||''});
+const tenantToRow=t=>({id:t.id,agency_id:window._agencyId,property_id:t.propertyId,landlord_id:t.landlordId,name:t.name,email:t.email||'',phone:t.phone||'',start_date:t.start||null,end_date:t.end||null,rent:t.rent||0,deposit:t.deposit,scheme:t.scheme||'',scheme_ref:t.schemeRef||'',status:t.status||'active',invite_token:t.inviteToken||null,invited_at:t.invitedAt||null,updated_at:new Date().toISOString()});
+const rowToMsg=r=>({id:r.id,landlordId:r.landlord_id,tenantId:r.tenant_id,propertyId:r.property_id,sender:r.sender||'agent',body:r.body||'',createdAt:r.created_at});
+const msgToRow=m=>({id:m.id,agency_id:window._agencyId,landlord_id:m.landlordId||null,tenant_id:m.tenantId||null,property_id:m.propertyId||null,sender:m.sender||'agent',body:m.body||''});
+const pushMessage=m=>_w(sb.from('agency_messages').insert(msgToRow(m)));
 const rowToRent=r=>({id:r.id,propertyId:r.property_id,tenantId:r.tenant_id,due:r.due_date,amount:r.amount||0,paidDate:r.paid_date||'',status:r.status||'due',notes:r.notes||''});
 const rentToRow=r=>({id:r.id,agency_id:window._agencyId,property_id:r.propertyId,tenant_id:r.tenantId,due_date:r.due,amount:r.amount||0,paid_date:r.paidDate||null,status:r.status||'due',notes:r.notes||''});
 const rowToJob=r=>({id:r.id,propertyId:r.property_id,tenantId:r.tenant_id,reportedBy:r.reported_by||'agent',category:r.category||'General',description:r.description||'',photos:r.photos||[],severity:r.severity||'normal',dampMould:!!r.damp_mould,status:r.status||'reported',createdAt:r.created_at});
@@ -229,7 +233,7 @@ const pushAgency   =() =>_w(sb.from('agencies').update(agencyToRow(S.agency)).eq
 async function loadData(agency){
   S.agency=rowToAgency(agency);
   const q=t=>sb.from(t).select('*').eq('agency_id',window._agencyId);
-  const [ll,pr,rf,tn,iv,ag,lt,nt,tns,rl,mt,iv2]=await Promise.all([
+  const [ll,pr,rf,tn,iv,ag,lt,nt,tns,rl,mt,iv2,msg]=await Promise.all([
     sb.from('agency_landlords').select('*').eq('agency_id',window._agencyId),
     q('properties'), q('agency_references'), q('tenancies'), q('invoices'),
     q('agency_agreements'),
@@ -237,7 +241,8 @@ async function loadData(agency){
     sb.from('agency_notices').select('*').eq('agency_id',window._agencyId).order('created_at',{ascending:false}),
     q('agency_tenants'), q('agency_rent_ledger'),
     sb.from('agency_maintenance').select('*').eq('agency_id',window._agencyId).order('created_at',{ascending:false}),
-    q('agency_inventories')
+    q('agency_inventories'),
+    sb.from('agency_messages').select('*').eq('agency_id',window._agencyId).order('created_at',{ascending:true})
   ]);
   S.landlords =(ll.data||[]).map(rowToLandlord);
   S.properties=(pr.data||[]).map(rowToProp);
@@ -251,6 +256,12 @@ async function loadData(agency){
   S.rentLedger=(rl.data||[]).map(rowToRent);
   S.jobs      =(mt.data||[]).map(rowToJob);
   S.inventories2=(iv2.data||[]).map(rowToInv2);
+  S.messages  =(msg.data||[]).map(rowToMsg);
+}
+async function pollMessages(){
+  if(!LIVE) return;
+  try{ const {data}=await sb.from('agency_messages').select('*').eq('agency_id',window._agencyId).order('created_at',{ascending:true});
+    if(data){ S.messages=data.map(rowToMsg); if(view==='landlord'||view==='property') render(); } }catch(e){}
 }
 
 // ── auth gateway (§2a-B) + boot ──
@@ -268,6 +279,7 @@ async function boot(){
   try{ await loadData(agency); }catch(e){ console.error(e); toast('⚠ Could not load agency data',1); }
   reconcileAgreements();
   setInterval(pollAgreements, 20000);   // pick up landlord counter-signatures live
+  setInterval(pollMessages, 15000);     // pick up new landlord/tenant messages live
   restoreView();
   render();
 }
@@ -286,7 +298,8 @@ const SEED={
   tenants:[],
   rentLedger:[],
   jobs:[],
-  inventories2:[]
+  inventories2:[],
+  messages:[]
 };
 
 let S=load();
@@ -466,8 +479,46 @@ function vLandlordDetail(){
         <div class="panel"><div class="panel-hd"><h2>Communications</h2><span class="faint" style="font-size:12px">Keep in touch</span></div><div class="panel-bd">
           ${(l.comms&&l.comms.length)?`<div class="tl">${l.comms.slice().reverse().map(c=>`<div class="tl-item"><div style="font-size:12.5px;font-weight:700;color:var(--navy)">${esc(c.type)} <span class="faint" style="font-weight:400">· ${esc(c.date)}</span></div><div style="font-size:12.5px;color:var(--muted);line-height:1.5;margin-top:2px">${esc(c.note)}</div></div>`).join('')}</div>`:`<div class="faint" style="font-size:12.5px">No contact logged yet. Use "Log contact" to record calls, emails and notes.</div>`}
         </div></div>
+        ${msgPanel('landlord',l.id)}
+        ${docTrailPanel(l)}
       </div>
     </div>`;
+}
+// ── MESSAGES — 2-way, timestamped, per landlord/tenant thread. Agent replies here;
+// the landlord/tenant portal has the matching half. Archived by simply never deleting.
+function _thread(kind,id){ return (S.messages||[]).filter(m=>kind==='landlord'?m.landlordId===id:m.tenantId===id).sort((a,b)=>new Date(a.createdAt||0)-new Date(b.createdAt||0)); }
+function msgPanel(kind,id){
+  const items=_thread(kind,id);
+  const bubbles=items.length?items.map(m=>{ const mine=m.sender==='agent'; return `<div style="display:flex;justify-content:${mine?'flex-end':'flex-start'};margin-bottom:8px">
+      <div style="max-width:78%;background:${mine?'var(--navy)':'var(--off)'};color:${mine?'#fff':'var(--txt)'};border-radius:11px;padding:9px 13px">
+        <div style="font-size:12.5px;line-height:1.5;white-space:pre-wrap">${esc(m.body)}</div>
+        <div style="font-size:10px;margin-top:3px;color:${mine?'rgba(255,255,255,.55)':'var(--faint)'}">${mine?'You':(kind==='landlord'?'Landlord':'Tenant')} · ${new Date(m.createdAt).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+      </div></div>`; }).join(''):'<div class="faint" style="font-size:12.5px;padding:6px 0">No messages yet — start the conversation below.</div>';
+  return `<div class="panel"><div class="panel-hd"><h2>Messages</h2><span class="faint" style="font-size:12px">Timestamped · 2-way</span></div><div class="panel-bd">
+    <div style="max-height:260px;overflow-y:auto;margin-bottom:10px">${bubbles}</div>
+    <div style="display:flex;gap:8px"><input id="msg-in-${kind}-${id}" placeholder="Write a message…" style="flex:1" onkeydown="if(event.key==='Enter'){msgSend('${kind}','${id}');}"><button class="btn navy sm" onclick="msgSend('${kind}','${id}')">Send</button></div>
+  </div></div>`;
+}
+function msgSend(kind,id){
+  const el=document.getElementById('msg-in-'+kind+'-'+id); const body=(el.value||'').trim(); if(!body) return;
+  const l=kind==='landlord'?L(id):null; const pid=kind==='tenant'?((S.tenants||[]).find(t=>t.id===id)||{}).propertyId:null;
+  const m={id:uid('msg'),landlordId:kind==='landlord'?id:null,tenantId:kind==='tenant'?id:null,propertyId:pid||null,sender:'agent',body,createdAt:new Date().toISOString()};
+  S.messages=S.messages||[]; S.messages.push(m); pushMessage(m); el.value=''; render(); toast('✓ Message sent');
+}
+// ── DOCUMENTS — unified sent/signed/archived trail (agreements + letters + notices).
+function _landlordDocs(l){
+  const out=[];
+  (S.agreements||[]).filter(a=>a.landlord_id===l.id).forEach(a=>out.push({label:(a.service==='letonly'?'Tenant-Find':'Management')+' Agreement',type:'Agreement',date:a.landlord_signed_at||a.agent_signed_at||a.created_at,status:a.status==='signed'?'Signed':a.status==='declined'?'Declined':a.status==='void'?'Archived':'Sent — awaiting signature'}));
+  (S.letters||[]).filter(x=>x.landlord_id===l.id).forEach(x=>out.push({label:x.subject||x.type,type:'Letter',date:x.created_at,status:'Sent'}));
+  S.properties.filter(p=>p.landlordId===l.id).forEach(p=>{ (S.notices||[]).filter(n=>n.propertyId===p.id).forEach(n=>out.push({label:(n.kind==='section13'?'Section 13 rent increase':'Section 8 notice')+' — '+p.address,type:'Notice',date:n.served||n.createdAt,status:n.status==='served'?'Served':n.status==='withdrawn'?'Archived':'Draft'})); });
+  return out.sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
+}
+function docTrailPanel(l){
+  const docs=_landlordDocs(l);
+  const pillColor={Signed:['var(--green-bg)','var(--green)'],Served:['var(--amber-bg)','var(--amber)'],Sent:['var(--blue-bg)','var(--blue)'],'Sent — awaiting signature':['var(--amber-bg)','var(--amber)'],Archived:['var(--off)','#94A3B8'],Declined:['var(--red-bg)','var(--red)'],Draft:['var(--off)','#475569']};
+  return `<div class="panel"><div class="panel-hd"><h2>Documents</h2><span class="faint" style="font-size:12px">Sent, signed &amp; archived — full trail</span></div>
+    ${docs.length?docs.map(d=>{ const c=pillColor[d.status]||['var(--off)','#475569']; return `<div class="row"><div class="av" style="font-size:15px">${d.type==='Agreement'?'✍️':d.type==='Notice'?'⚖':'✉'}</div><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:var(--navy)">${esc(d.label)}</div><div class="faint" style="font-size:11.5px">${d.type} · ${d.date?fmtDate(d.date):'—'}</div></div><span class="pill" style="background:${c[0]};color:${c[1]}">${d.status}</span></div>`; }).join(''):`<div class="empty">No documents yet.</div>`}
+  </div>`;
 }
 
 // ── PIPELINE ──
@@ -556,7 +607,18 @@ function vPropertyDetail(){
           <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" onclick="inviteTenantToPortal('${p.id}')">📧 Invite to tenant portal</button><button class="btn sm" onclick="setTenant('${p.id}')">Edit tenant</button><button class="btn sm" onclick="openNotice('${p.id}')">⚖ Prepare notice</button></div>`
           :`<div class="faint" style="font-size:13px;margin-bottom:12px">No tenant yet. Once referenced, set up the tenancy and issue the portal link — same engine as the landlord app.</div><button class="btn navy" onclick="setTenant('${p.id}')">＋ Set up tenant</button>`}
       </div></div>
+      ${(()=>{ const rec=tenantRecFor(p.id); return rec?msgPanel('tenant',rec.id):''; })()}
+      ${propDocTrailPanel(p)}
     </div>`;
+}
+// Tenant-facing document trail for one property — notices served, all archived (never deleted).
+function propDocTrailPanel(p){
+  const docs=(S.notices||[]).filter(n=>n.propertyId===p.id).map(n=>({label:(n.kind==='section13'?'Section 13 rent increase':'Section 8 notice'),date:n.served||n.createdAt,status:n.status==='served'?'Served — received by tenant':n.status==='withdrawn'?'Archived':'Draft (not yet sent)'})).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
+  if(!docs.length) return '';
+  const pillColor={'Served — received by tenant':['var(--amber-bg)','var(--amber)'],Archived:['var(--off)','#94A3B8'],'Draft (not yet sent)':['var(--off)','#475569']};
+  return `<div class="panel"><div class="panel-hd"><h2>Documents sent to this tenant</h2><span class="faint" style="font-size:12px">Sent, received &amp; archived</span></div>
+    ${docs.map(d=>{ const c=pillColor[d.status]||['var(--off)','#475569']; return `<div class="row"><div class="av" style="font-size:15px">⚖</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${esc(d.label)}</div><div class="faint" style="font-size:11.5px">${d.date?fmtDate(d.date):'—'}</div></div><span class="pill" style="background:${c[0]};color:${c[1]}">${d.status}</span></div>`; }).join('')}
+  </div>`;
 }
 function editPropFee(pid){ const p=P(pid);
   const body=`<div class="note" style="margin-bottom:14px">Set the management fee for <b>${esc(p.address)}</b>. This is per-property — charge a different rate here (e.g. a family/friends discount) without affecting the landlord's other properties. Invoices use each property's own rate.</div>
@@ -621,7 +683,9 @@ function saveTenant(pid){ const p=P(pid); const nm=val('tn-name'); if(!nm){toast
 function inviteTenantToPortal(pid){
   const p=P(pid); const rec=tenantRecFor(pid);
   if(!rec||!rec.email){ toast('Set up the tenant with an email first',1); return; }
-  const login=new URL('login.html', location.href).href;
+  const token=rec.inviteToken||(uid('tvt')+Math.random().toString(36).slice(2,10));
+  rec.inviteToken=token; rec.invitedAt=new Date().toISOString();
+  const login=new URL('login.html?next='+encodeURIComponent('tenant-portal.html')+'&invite='+encodeURIComponent(token), location.href).href;
   agencyEmail(rec.email, 'Your tenancy portal — '+agencyBrand().name, tenantPortalInviteHtml(rec,p,login));
   rec.invited=true; pushTenantRec(rec); toast('✓ Portal invite sent to '+rec.name);
 }
@@ -665,7 +729,10 @@ function vInvoices(){
   const invs=S.invoices||[];
   const outstanding=invs.filter(i=>i.status==='sent'||i.status==='overdue').reduce((s,i)=>s+invTotal(i).gross,0);
   const paidYTD=invs.filter(i=>i.status==='paid').reduce((s,i)=>s+invTotal(i).gross,0);
+  const reminders=_nextInvoiceReminders();
+  const reminderHtml=reminders.length?`<div class="note warn" style="margin-bottom:16px">⏰ ${reminders.map(r=>`<b>${esc(r.l.name)}</b> — next invoice ${r.days<0?'overdue by '+(-r.days)+' day'+(r.days<-1?'s':''):r.days===0?'due today':'due in '+r.days+' day'+(r.days>1?'s':'')} (period from ${fmtDate(r.next)}) <a href="#" onclick="openInvoiceFor('${r.l.id}');return false" style="color:var(--navy);font-weight:600">Create it →</a>`).join('<br>')}</div>`:'';
   return `<h1 class="pg">Invoices</h1><div class="sub">Bill your management fees — quarterly, in advance. Sequential numbering, ${S.agency.vatRegistered?'VAT':'non-VAT'} invoices, stored for your records.</div>
+    ${reminderHtml}
     <div class="grid4" style="margin-bottom:20px">
       <div class="kpi"><div class="l">Invoices</div><div class="v">${invs.length}</div></div>
       <div class="kpi"><div class="l">Outstanding</div><div class="v" style="color:var(--amber)">${money2(outstanding)}</div><div class="s">sent / overdue</div></div>
@@ -689,12 +756,26 @@ let IV=null;
 function _iso(d){ return d.toISOString().slice(0,10); }
 const FREQ_LABEL={monthly:'Monthly',quarterly:'Quarterly (in advance)',annual:'Annual'};
 function _periodIdxs(freq){ return freq==='monthly'?[0,1,2,3,4,5,6,7,8,9,10,11]:freq==='annual'?[0]:[0,1,2,3]; }
-function _period(freq,y,idx){
-  if(freq==='monthly'){ const from=new Date(y,idx,1),to=new Date(y,idx+1,0); return {label:from.toLocaleDateString('en-GB',{month:'long',year:'numeric'}),from:_iso(from),to:_iso(to),months:1}; }
-  if(freq==='annual'){ return {label:'Year '+y,from:y+'-01-01',to:y+'-12-31',months:12}; }
-  const qm=[['Q1','Jan–Mar',0],['Q2','Apr–Jun',3],['Q3','Jul–Sep',6],['Q4','Oct–Dec',9]]; const [lab,span,m]=qm[idx]; const from=new Date(y,m,1),to=new Date(y,m+3,0); return {label:lab+' '+y+' ('+span+')',from:_iso(from),to:_iso(to),months:3};
+function _period(freq,y,idx,anchor){
+  // anchor = calendar month (1-12) the landlord's billing year starts from — default 1
+  // (Jan, i.e. normal calendar quarters) unless set to their tenancy's start month.
+  anchor=anchor||1;
+  if(freq==='monthly'){ const base=new Date(y,(anchor-1)+idx,1); const from=base,to=new Date(base.getFullYear(),base.getMonth()+1,0); return {label:from.toLocaleDateString('en-GB',{month:'long',year:'numeric'}),from:_iso(from),to:_iso(to),months:1}; }
+  if(freq==='annual'){ const from=new Date(y,anchor-1,1); const to=new Date(y+1,anchor-1,0); return {label:anchor===1?'Year '+y:from.toLocaleDateString('en-GB',{month:'short',year:'numeric'})+' – '+to.toLocaleDateString('en-GB',{month:'short',year:'numeric'}),from:_iso(from),to:_iso(to),months:12}; }
+  const startMonth=(anchor-1)+idx*3; const from=new Date(y,startMonth,1),to=new Date(y,startMonth+3,0);
+  const lab='Q'+(idx+1)+' '+from.toLocaleDateString('en-GB',{month:'short'})+'–'+to.toLocaleDateString('en-GB',{month:'short'})+' '+to.getFullYear();
+  return {label:lab,from:_iso(from),to:_iso(to),months:3};
 }
-function _defaultIdx(freq){ const m=new Date().getMonth(); return freq==='monthly'?m:freq==='annual'?0:Math.floor(m/3); }
+function _defaultIdx(freq,anchor){ anchor=anchor||1; const m=new Date().getMonth(); const off=((m-(anchor-1))+12)%12; return freq==='monthly'?off:freq==='annual'?0:Math.floor(off/3); }
+// Anchor = the calendar month (1-12) a landlord's billing periods should start from.
+// Defaults to the EARLIEST active tenancy start date across their properties (e.g. a
+// tenancy that started in March bills Mar–May, Jun–Aug… instead of forced Jan–Mar
+// calendar quarters) — editable per-invoice if the agent wants a different anchor.
+function _landlordAnchorMonth(lid){
+  const props=S.properties.filter(p=>p.landlordId===lid);
+  const starts=props.map(p=>{ const rec=tenantRecFor(p.id); return (rec&&rec.start)||(p.tenant&&p.tenant.start)||''; }).filter(Boolean).sort();
+  return starts.length ? (new Date(starts[0]).getMonth()+1) : 1;
+}
 function openInvoice(){
   const mgmt=S.landlords.filter(l=>l.service==='full'&&S.properties.some(p=>p.landlordId===l.id));
   const first=mgmt[0]||S.landlords[0]||{};
@@ -703,8 +784,22 @@ function openInvoice(){
 function openInvoiceFor(id){
   const l=L(id)||{};
   const docType = l.service==='letonly' ? 'tenantfind' : 'management';
-  IV={landlordId:id,docType,freq:'quarterly',y:new Date().getFullYear(),idx:_defaultIdx('quarterly'),items:[{desc:'',amount:''}],otherDeduct:'',otherDesc:'',status:'draft'};
+  const anchor=_landlordAnchorMonth(id);
+  IV={landlordId:id,docType,freq:'quarterly',y:new Date().getFullYear(),anchor,idx:_defaultIdx('quarterly',anchor),items:[{desc:'',amount:''}],otherDeduct:'',otherDesc:'',status:'draft'};
   renderInvoice();
+}
+// Next-invoice reminders — flags full-management landlords whose last management
+// invoice's period has ended (or ends within 7 days) so nothing gets missed.
+function _nextInvoiceReminders(){
+  const out=[];
+  S.landlords.filter(l=>l.service==='full').forEach(l=>{
+    const invs=(S.invoices||[]).filter(i=>i.landlordId===l.id&&i.type==='management'&&i.supplyTo).sort((a,b)=>new Date(b.supplyTo)-new Date(a.supplyTo));
+    if(!invs.length) return; // no invoice history yet — nothing to remind against
+    const next=new Date(invs[0].supplyTo); next.setDate(next.getDate()+1);
+    const days=Math.round((next-new Date())/864e5);
+    if(days<=7) out.push({l,next:_iso(next),days});
+  });
+  return out;
 }
 // Build the current document from IV → {lines, title, totalLabel, period, kind, vat}
 function _invBuild(){
@@ -719,7 +814,7 @@ function _invBuild(){
     return {lines:lines.length?lines:[{desc:'Works / disbursement',net:0}],title:'INVOICE',totalLabel:'Total due',period:{label:'On completion',from:today(),to:today()},kind:'invoice',vat:!!S.agency.vatRegistered};
   }
   if(IV.docType==='remittance'){
-    const pd=_period(IV.freq||'monthly',IV.y,IV.idx);
+    const pd=_period(IV.freq||'monthly',IV.y,IV.idx,IV.anchor);
     const rentCollected=Math.round(rent*pd.months*100)/100;
     const feeNet=props.reduce((s,p)=>s+p.rent*propFee(p)/100,0)*pd.months;
     const fee=Math.round(feeNet*(S.agency.vatRegistered?1.2:1)*100)/100;
@@ -729,7 +824,7 @@ function _invBuild(){
     return {lines,title:'REMITTANCE STATEMENT',totalLabel:'Net paid to landlord',period:pd,kind:'remittance',vat:false};
   }
   // management (recurring)
-  const pd=_period(IV.freq||'quarterly',IV.y,IV.idx);
+  const pd=_period(IV.freq||'quarterly',IV.y,IV.idx,IV.anchor);
   const lines=props.map(p=>({desc:`Management fee · ${p.address} · ${propFee(p)}% of ${gbp(p.rent)}/mo × ${pd.months} month${pd.months>1?'s':''}${IV.freq==='quarterly'?' (in advance)':''}`,net:Math.round(p.rent*propFee(p)/100*pd.months*100)/100}));
   return {lines:lines.length?lines:[{desc:'Management fee',net:0}],title:'INVOICE',totalLabel:'Total due',period:pd,kind:'invoice',vat:!!S.agency.vatRegistered};
 }
@@ -740,11 +835,16 @@ function renderInvoice(){
   const b=_invBuild();
   const net=b.lines.reduce((s,x)=>s+x.net,0);
   const showPeriod = IV.docType==='management'||IV.docType==='remittance';
+  const anchorTenancy=_landlordAnchorMonth(IV.landlordId);
   const periodBlock = showPeriod ? `
     <div class="grid2" style="gap:10px">
-      <div class="fg"><label>Frequency</label><select onchange="IV.freq=this.value;IV.idx=_defaultIdx(this.value);renderInvoice()">${['monthly','quarterly','annual'].map(f=>`<option value="${f}" ${IV.freq===f?'selected':''}>${FREQ_LABEL[f]}</option>`).join('')}</select></div>
-      <div class="fg"><label>Period</label><select onchange="IV.idx=parseInt(this.value);renderInvoice()">${_periodIdxs(IV.freq).map(i=>`<option value="${i}" ${IV.idx===i?'selected':''}>${_period(IV.freq,IV.y,i).label}</option>`).join('')}</select></div>
-    </div>` : '';
+      <div class="fg"><label>Frequency</label><select onchange="IV.freq=this.value;IV.idx=_defaultIdx(this.value,IV.anchor);renderInvoice()">${['monthly','quarterly','annual'].map(f=>`<option value="${f}" ${IV.freq===f?'selected':''}>${FREQ_LABEL[f]}</option>`).join('')}</select></div>
+      <div class="fg"><label>Period</label><select onchange="IV.idx=parseInt(this.value);renderInvoice()">${_periodIdxs(IV.freq).map(i=>`<option value="${i}" ${IV.idx===i?'selected':''}>${_period(IV.freq,IV.y,i,IV.anchor).label}</option>`).join('')}</select></div>
+    </div>
+    <div class="fg"><label>Billing period starts <span class="faint">(defaults to the tenancy start month — change if this landlord's properties should bill on a different cycle)</span></label>
+      <select onchange="IV.anchor=parseInt(this.value);IV.idx=_defaultIdx(IV.freq,IV.anchor);renderInvoice()">
+        ${[1,2,3,4,5,6,7,8,9,10,11,12].map(m=>`<option value="${m}" ${IV.anchor===m?'selected':''}>${new Date(2000,m-1,1).toLocaleDateString('en-GB',{month:'long'})}${m===anchorTenancy?' (tenancy start)':''}</option>`).join('')}
+      </select></div>` : '';
   const maintBlock = IV.docType==='maintenance' ? `
     <div class="fg"><label>Work items (billed to the landlord)</label>
       ${(IV.items||[]).map((it,i)=>`<div style="display:flex;gap:8px;margin-bottom:6px"><input placeholder="e.g. Boiler repair — contractor invoice" value="${esc(it.desc)}" oninput="IV.items[${i}].desc=this.value" style="flex:1"><input type="number" placeholder="£" value="${esc(it.amount)}" onchange="IV.items[${i}].amount=this.value;renderInvoice()" style="width:110px"></div>`).join('')}
@@ -1210,9 +1310,10 @@ function agencyBrand(){ const a=S.agency; return { name:a.name||'Beacon Resident
 async function inviteToPortal(id){
   const l=L(id); if(!l.id) return;
   if(!l.email){ toast('Add the landlord\'s email first (Edit details)',1); return; }
-  const link=new URL('landlord-portal.html', location.href).href;
-  const login=new URL('login.html', location.href).href;
-  await agencyEmail(l.email, 'Your portfolio portal — '+agencyBrand().name, portalInviteHtml(l,link,login));
+  const token=l.inviteToken||(uid('lvt')+Math.random().toString(36).slice(2,10));
+  l.inviteToken=token; l.invitedAt=new Date().toISOString();
+  const link=new URL('login.html?next='+encodeURIComponent('landlord-portal.html')+'&invite='+encodeURIComponent(token), location.href).href;
+  await agencyEmail(l.email, 'Your portfolio portal — '+agencyBrand().name, portalInviteHtml(l,link,link));
   l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:'Read-only portal invite sent to '+l.email});
   pushLandlord(l); render(); toast('✓ Portal invite sent to '+l.name);
 }
@@ -1854,6 +1955,11 @@ function vCompliance(){
       <div class="kpi"><div class="l">Expired / missing</div><div class="v" style="color:var(--red)">${bad}</div></div>
     </div>
     <div class="panel" style="padding:6px 10px">${rows||'<div class="empty">No properties yet.</div>'}</div>`;
+}
+async function agentLogout(){
+  try{ if(sb) await sb.auth.signOut(); }catch(e){ console.error(e); }
+  try{ localStorage.removeItem('nxl_role'); }catch(e){}
+  location.href='login.html';
 }
 function esc(v){ return v==null?'':String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function val(id){ const e=document.getElementById(id); return e?e.value.trim():''; }
