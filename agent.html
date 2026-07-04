@@ -210,6 +210,10 @@ const invToRow=i=>({id:i.id,agency_id:window._agencyId,no:i.no,landlord_id:i.lan
 async function _w(promise){ if(!LIVE)return; try{ const {error}=await promise; if(error){console.error(error);toast('⚠ Save failed — retry',1);} }catch(e){ console.error(e); toast('⚠ Save failed — retry',1); } }
 const pushLandlord =l  =>_w(sb.from('agency_landlords').upsert(landlordToRow(l)));
 const pushProperty =p  =>_w(sb.from('properties').upsert(propToRow(p)));
+const pushListing  =l  =>_w(sb.from('agency_listings').upsert({id:l.id,agency_id:window._agencyId,data:l,updated_at:new Date().toISOString()}));
+const pushApplicant=a  =>_w(sb.from('agency_applicants').upsert({id:a.id,agency_id:window._agencyId,data:a,updated_at:new Date().toISOString()}));
+const pushViewing  =v  =>_w(sb.from('agency_viewings').upsert({id:v.id,agency_id:window._agencyId,data:v,updated_at:new Date().toISOString()}));
+const pushOffer    =o  =>_w(sb.from('agency_offers').upsert({id:o.id,agency_id:window._agencyId,data:o,updated_at:new Date().toISOString()}));
 const pushTenancy  =t  =>_w(sb.from('tenancies').upsert(tenToRow(t)));
 const pushReference=r  =>_w(sb.from('agency_references').upsert(refToRow(r)));
 const pushInvoice  =i  =>_w(sb.from('invoices').upsert(invToRow(i)));
@@ -261,6 +265,19 @@ async function loadData(agency){
   S.jobs      =(mt.data||[]).map(rowToJob);
   S.inventories2=(iv2.data||[]).map(rowToInv2);
   S.messages  =(msg.data||[]).map(rowToMsg);
+  // Lettings front-half (graceful — tables may not exist until sql-agency-lettings.sql is run)
+  try{
+    const [lst,app,vw,of]=await Promise.all([
+      sb.from('agency_listings').select('*').eq('agency_id',window._agencyId),
+      sb.from('agency_applicants').select('*').eq('agency_id',window._agencyId),
+      sb.from('agency_viewings').select('*').eq('agency_id',window._agencyId),
+      sb.from('agency_offers').select('*').eq('agency_id',window._agencyId)
+    ]);
+    if(lst.data) S.listings=lst.data.map(r=>r.data);
+    if(app.data) S.applicants=app.data.map(r=>r.data);
+    if(vw.data)  S.viewings=vw.data.map(r=>r.data);
+    if(of.data)  S.offers=of.data.map(r=>r.data);
+  }catch(e){ /* run sql-agency-lettings.sql to enable */ }
 }
 async function pollMessages(){
   if(!LIVE) return;
@@ -303,6 +320,10 @@ const SEED={
   rentLedger:[],
   jobs:[],
   inventories2:[],
+  listings:[],
+  applicants:[],
+  viewings:[],
+  offers:[],
   messages:[]
 };
 
@@ -327,6 +348,7 @@ const CREDIT={not_requested:{label:'Credit: not requested',bg:'var(--off)',color
 
 const NAV=[
   {k:'dashboard',ic:'▦',t:'Agency Dashboard'},{k:'landlords',ic:'⚇',t:'Landlords'},
+  {k:'marketing',ic:'🏷',t:'Marketing'},{k:'applicants',ic:'◕',t:'Applicants & Viewings'},{k:'offers',ic:'£',t:'Offers'},
   {k:'pipeline',ic:'◫',t:'Tenancy Progression'},{k:'referencing',ic:'◷',t:'Referencing'},
   {k:'properties',ic:'⌂',t:'Properties'},{k:'compliance',ic:'⌘',t:'Compliance'},{k:'rent',ic:'£',t:'Rent & Arrears'},{k:'maintenance',ic:'🔧',t:'Maintenance'},{k:'inventory2',ic:'📄',t:'Inventory & Check-out'},{k:'invoices',ic:'£',t:'Invoices'},
   {k:'templates',ic:'✉',t:'Letters & Templates'},{k:'notices',ic:'⚖',t:'Possession & Notices'},{k:'settings',ic:'⚙',t:'Agency Settings'}
@@ -353,6 +375,7 @@ function render(){
   document.getElementById('tb-actions').innerHTML=topActions();
   document.getElementById('view').innerHTML=({
     dashboard:vDashboard, landlords:vLandlords, landlord:vLandlordDetail, pipeline:vPipeline,
+    marketing:vMarketing, listing:vListingDetail, applicants:vApplicants, offers:vOffers,
     referencing:vReferencing, properties:vProperties, property:vPropertyDetail, llportal:vLandlordPortal,
     invoices:vInvoices, invoice:vInvoiceDetail, settings:vSettings, templates:vTemplates, notices:vNotices, notice:vNoticeDetail, compliance:vCompliance,
     rent:vRentArrears, maintenance:vMaintenance, inventory2:vInventoryList, inventorydetail:vInventoryDetail, statement:vStatement
@@ -366,6 +389,8 @@ function topActions(){
   if(view==='rent') return `<button class="btn navy" onclick="logPaymentPicker()">＋ Log a payment</button>`;
   if(view==='maintenance') return `<button class="btn navy" onclick="openJob()">＋ Log a job</button>`;
   if(view==='inventory2') return `<button class="btn navy" onclick="openInventory()">＋ New inventory</button>`;
+  if(view==='marketing') return `<button class="btn navy" onclick="openListing()">＋ Create listing</button>`;
+  if(view==='applicants') return `<button class="btn navy" onclick="openApplicant()">＋ New enquiry</button>`;
   return '';
 }
 function feeOf(l){ return l.service==='full' ? (l.feePct!=null?l.feePct:DEF_FEE) : (l.letWeeks!=null?l.letWeeks:DEF_WEEKS); }
@@ -374,6 +399,285 @@ function feeOf(l){ return l.service==='full' ? (l.feePct!=null?l.feePct:DEF_FEE)
 function propFee(p){ const l=L(p.landlordId); return p.feePct!=null?p.feePct : (l.feePct!=null?l.feePct:DEF_FEE); }
 // Total monthly management fee a full-management landlord generates (sum of their properties).
 function landlordMonthlyFee(l){ return S.properties.filter(p=>p.landlordId===l.id).reduce((s,p)=>s+p.rent*propFee(p)/100,0); }
+
+// ════════════════════════════════════════════════════════════════════════════
+//  LETTINGS FRONT-HALF — Marketing (listings) · Applicants & Viewings · Offers
+//  The "win & fill" funnel: Listing → Enquiries → Viewings → Offers → Referencing.
+//  Demo persists via save(); LIVE persists via push* to agency_listings/applicants/
+//  viewings/offers (see sql-agency-lettings.sql). Accepting an offer hands off to
+//  the existing Referencing module.
+// ════════════════════════════════════════════════════════════════════════════
+const LISTING_STATUS={ draft:['Draft','var(--off)','#64748B'], live:['Live','var(--green-bg)','var(--green)'], let:['Let Agreed','var(--blue-bg)','var(--blue)'], archived:['Archived','var(--off)','#94A3B8'] };
+const APP_STATUS={ new:['New enquiry','var(--blue-bg)','var(--blue)'], viewing:['Viewing booked','var(--amber-bg)','var(--amber)'], offer:['Offer made','var(--purple-bg)','var(--purple)'], referencing:['Referencing','var(--green-bg)','var(--green)'], placed:['Placed','var(--green-bg)','var(--green)'], archived:['Archived','var(--off)','#94A3B8'] };
+const OFFER_STATUS={ offered:['Offered','var(--amber-bg)','var(--amber)'], negotiating:['Negotiating','var(--blue-bg)','var(--blue)'], accepted:['Accepted','var(--green-bg)','var(--green)'], rejected:['Rejected','var(--red-bg)','var(--red)'], withdrawn:['Withdrawn','var(--off)','#94A3B8'] };
+const SOURCES=['Rightmove','Zoopla','Website','Walk-in','Phone','Referral'];
+function _pill(map,k){ const v=map[k]||['—','var(--off)','#64748B']; return `<span class="pill" style="background:${v[1]};color:${v[2]}">${v[0]}</span>`; }
+function LST(id){ return (S.listings||[]).find(x=>x.id===id)||{}; }
+function _listingApps(id){ return (S.applicants||[]).filter(a=>a.listingId===id); }
+function _appViewings(id){ return (S.viewings||[]).filter(v=>v.applicantId===id).sort((a,b)=>new Date(a.when)-new Date(b.when)); }
+function _appOffers(id){ return (S.offers||[]).filter(o=>o.applicantId===id); }
+
+// ── MARKETING (listings) ──
+function vMarketing(){
+  const ls=S.listings||[];
+  const live=ls.filter(l=>l.status==='live').length, letd=ls.filter(l=>l.status==='let').length;
+  const enq=(S.applicants||[]).length, views=(S.viewings||[]).filter(v=>v.status==='scheduled').length;
+  return `<h1 class="pg">Marketing</h1><div class="sub">Create a listing, publish it to Rightmove, Zoopla and your own site, and track enquiries, viewings and offers against it — your win-and-fill funnel.</div>
+    <div class="grid4" style="margin-bottom:18px">
+      ${kpiCard(live,'Live listings','var(--green)')}
+      ${kpiCard(enq,'Enquiries','var(--blue)')}
+      ${kpiCard(views,'Viewings booked','var(--amber)')}
+      ${kpiCard(letd,'Let agreed','var(--navy)')}
+    </div>
+    ${ls.length? `<div class="grid2" style="gap:14px">${ls.map(listingCard).join('')}</div>`
+    : `<div class="panel"><div class="empty" style="padding:36px;text-align:center">
+        <div style="font-size:15px;font-weight:700;margin-bottom:6px">No listings yet</div>
+        <div class="faint" style="font-size:13px;max-width:440px;margin:0 auto 16px;line-height:1.6">Create a property listing to start marketing it. You can link a property you already manage, or add a new one you've just won.</div>
+        <button class="btn navy" onclick="openListing()">＋ Create a listing</button>
+        <button class="btn" style="margin-left:8px" onclick="_seedLettings()">↳ Load sample data</button>
+      </div></div>`}`;
+}
+function listingCard(l){
+  const apps=_listingApps(l.id), offers=(S.offers||[]).filter(o=>o.listingId===l.id);
+  const portals=[['Rightmove',l.portals&&l.portals.rightmove],['Zoopla',l.portals&&l.portals.zoopla],['Website',l.portals&&l.portals.website]];
+  return `<div class="panel" style="margin:0;cursor:pointer" onclick="go('listing','${l.id}')">
+    <div style="height:96px;background:linear-gradient(135deg,var(--navy),var(--navy2));display:flex;align-items:center;justify-content:space-between;padding:0 16px;color:#fff">
+      <div><div style="font-family:var(--disp);font-size:17px">${gbp(l.rent)}<span style="font-size:12px;opacity:.7">/mo</span></div><div style="font-size:11.5px;opacity:.7">${l.beds} bed · ${esc(l.ptype||'Property')} · ${l.furnished||'Unfurnished'}</div></div>
+      ${_pill(LISTING_STATUS,l.status)}
+    </div>
+    <div class="panel-bd">
+      <div style="font-weight:600;color:var(--navy);font-size:14px">${esc(l.address)}</div>
+      <div class="faint" style="font-size:12px;margin-bottom:10px">${esc(l.postcode||'')}${l.available?' · available '+fmtDate(l.available):''}</div>
+      <div style="display:flex;gap:6px;margin-bottom:12px">${portals.map(([n,on])=>`<span class="pill" style="background:${on?'var(--green-bg)':'var(--off)'};color:${on?'var(--green)':'#94A3B8'}">${on?'✓ ':''}${n}</span>`).join('')}</div>
+      <div style="display:flex;gap:16px;font-size:12px;color:var(--muted);border-top:1px solid var(--border);padding-top:10px">
+        <span><b style="color:var(--txt)">${apps.length}</b> enquiries</span>
+        <span><b style="color:var(--txt)">${(S.viewings||[]).filter(v=>apps.some(a=>a.id===v.applicantId)).length}</b> viewings</span>
+        <span><b style="color:var(--txt)">${offers.length}</b> offers</span>
+      </div>
+    </div>
+  </div>`;
+}
+function kpiCard(n,label,col){ return `<div class="panel" style="margin:0"><div class="panel-bd" style="text-align:center"><div style="font-family:var(--disp);font-size:30px;color:${col}">${n}</div><div class="faint" style="font-size:12px">${label}</div></div></div>`; }
+
+function openListing(id){
+  const l=id?LST(id):{id:uid('lst'),status:'draft',portals:{website:true},features:[]};
+  const props=S.properties.filter(p=>!( S.listings||[]).some(x=>x.propertyId===p.id&&x.id!==l.id));
+  const propOpts=`<option value="">— New / standalone —</option>`+props.map(p=>`<option value="${p.id}" ${l.propertyId===p.id?'selected':''}>${esc(p.address)}</option>`).join('');
+  const body=`
+    <div class="fg"><label>Link an existing managed property (optional)</label><select id="ls-prop" onchange="_listingFromProp(this.value)">${propOpts}</select></div>
+    <div class="grid2" style="gap:10px"><div class="fg"><label>Address *</label><input id="ls-addr" value="${esc(l.address||'')}" placeholder="12 High Street"></div><div class="fg"><label>Postcode</label><input id="ls-pc" value="${esc(l.postcode||'')}"></div></div>
+    <div class="grid3" style="gap:10px">
+      <div class="fg"><label>Monthly rent (£)</label><input id="ls-rent" type="number" value="${l.rent||''}"></div>
+      <div class="fg"><label>Bedrooms</label><input id="ls-beds" type="number" value="${l.beds||''}"></div>
+      <div class="fg"><label>Bathrooms</label><input id="ls-baths" type="number" value="${l.baths||''}"></div>
+    </div>
+    <div class="grid3" style="gap:10px">
+      <div class="fg"><label>Type</label><select id="ls-type">${['Flat','Terraced house','Semi-detached','Detached','Maisonette','Studio','HMO room'].map(t=>`<option ${l.ptype===t?'selected':''}>${t}</option>`).join('')}</select></div>
+      <div class="fg"><label>Furnishing</label><select id="ls-furn">${['Unfurnished','Furnished','Part-furnished'].map(t=>`<option ${l.furnished===t?'selected':''}>${t}</option>`).join('')}</select></div>
+      <div class="fg"><label>Available from</label><input id="ls-avail" type="date" value="${l.available||''}"></div>
+    </div>
+    <div class="fg"><label>EPC rating</label><select id="ls-epc">${['','A','B','C','D','E','F','G'].map(t=>`<option ${l.epc===t?'selected':''}>${t||'—'}</option>`).join('')}</select></div>
+    <div class="fg"><label>Description</label><textarea id="ls-desc" rows="3" placeholder="Bright two-bed flat close to transport…">${esc(l.description||'')}</textarea></div>
+    <div class="fg"><label>Key features (comma-separated)</label><input id="ls-feat" value="${esc((l.features||[]).join(', '))}" placeholder="Garden, Parking, Double glazing"></div>`;
+  modal(id?'Edit listing':'Create listing', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveListing('${l.id}')">Save listing</button>`);
+  window._edLST=l;
+}
+function _listingFromProp(pid){ if(!pid)return; const p=P(pid); if(!p.id)return; const s=id=>document.getElementById(id); if(s('ls-addr'))s('ls-addr').value=p.address||''; if(s('ls-pc'))s('ls-pc').value=p.postcode||p.city||''; if(s('ls-rent'))s('ls-rent').value=p.rent||''; if(s('ls-beds'))s('ls-beds').value=p.beds||''; window._edLST.propertyId=pid; }
+function saveListing(lid){
+  const l=window._edLST||{id:lid}; const v=id=>val(id);
+  l.address=v('ls-addr'); if(!l.address){toast('Enter an address',1);return;}
+  l.propertyId=val('ls-prop')||l.propertyId||null;
+  l.postcode=v('ls-pc'); l.rent=parseFloat(v('ls-rent'))||0; l.beds=parseInt(v('ls-beds'))||0; l.baths=parseInt(v('ls-baths'))||0;
+  l.ptype=v('ls-type'); l.furnished=v('ls-furn'); l.available=v('ls-avail')||null; l.epc=v('ls-epc'); l.description=v('ls-desc');
+  l.features=(v('ls-feat')||'').split(',').map(x=>x.trim()).filter(Boolean);
+  l.shareToken=l.shareToken||(uid('sh')+Math.random().toString(36).slice(2,8));
+  S.listings=S.listings||[]; if(!S.listings.find(x=>x.id===l.id)) S.listings.push(l);
+  save(); pushListing&&pushListing(l); closeModal(); go('listing',l.id); toast('✓ Listing saved');
+}
+function togglePortal(lid,portal){ const l=LST(lid); l.portals=l.portals||{}; l.portals[portal]=!l.portals[portal]; if(Object.values(l.portals).some(Boolean)&&l.status==='draft')l.status='live'; save(); pushListing&&pushListing(l); render(); }
+function publishListing(lid){ const l=LST(lid); l.portals={rightmove:true,zoopla:true,website:true}; l.status='live'; l.publishedAt=today(); save(); pushListing&&pushListing(l); render(); toast('✓ Published to Rightmove, Zoopla & your site'); }
+function markLet(lid){ const l=LST(lid); l.status='let'; save(); pushListing&&pushListing(l); render(); toast('✓ Marked let agreed'); }
+
+function vListingDetail(){
+  const l=LST(sel); if(!l.id) return vMarketing();
+  const apps=_listingApps(l.id); const offers=(S.offers||[]).filter(o=>o.listingId===l.id);
+  const shareUrl=`nexlet.co.uk/l/${l.shareToken||''}`;
+  return `<div class="back no-print" onclick="go('marketing')">← Marketing</div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:6px">
+      <div><h1 class="pg" style="margin:0">${esc(l.address)}</h1><div class="sub">${gbp(l.rent)}/mo · ${l.beds} bed · ${esc(l.ptype||'')} · ${esc(l.furnished||'')} ${_pill(LISTING_STATUS,l.status)}</div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" onclick="openListing('${l.id}')">Edit</button>
+        ${l.status!=='let'?`<button class="btn navy" onclick="publishListing('${l.id}')">Publish to all</button><button class="btn" onclick="markLet('${l.id}')">Mark let</button>`:''}
+        <button class="btn" onclick="openApplicant(null,'${l.id}')">＋ Add enquiry</button>
+      </div>
+    </div>
+    <div class="grid2" style="gap:14px;align-items:start">
+      <div>
+        <div class="panel"><div class="panel-hd"><h2>Portals</h2><span class="faint" style="font-size:12px">Where it's advertised</span></div><div class="panel-bd">
+          ${[['rightmove','Rightmove'],['zoopla','Zoopla'],['website','Your website']].map(([k,n])=>`<div class="kv"><span class="k">${n}</span><span class="v"><label style="display:inline-flex;align-items:center;gap:7px;cursor:pointer;font-size:13px"><input type="checkbox" ${l.portals&&l.portals[k]?'checked':''} onchange="togglePortal('${l.id}','${k}')" style="width:auto"> ${l.portals&&l.portals[k]?'Live':'Off'}</label></span></div>`).join('')}
+          <div class="kv" style="border:none"><span class="k">Shareable link</span><span class="v" style="font-size:12px"><a href="#" onclick="navigator.clipboard&&navigator.clipboard.writeText('${shareUrl}');toast('Link copied');return false">${shareUrl} 📋</a></span></div>
+          <div class="hint" style="margin-top:10px">Rightmove &amp; Zoopla require agency membership + a data-feed agreement — that's the one integration your developer wires (see brief). Toggles here drive the feed NexLet generates.</div>
+        </div></div>
+        <div class="panel"><div class="panel-hd"><h2>Listing details</h2></div><div class="panel-bd">
+          <div class="kv"><span class="k">Postcode</span><span class="v">${esc(l.postcode||'—')}</span></div>
+          <div class="kv"><span class="k">Bed / bath</span><span class="v">${l.beds} / ${l.baths||'—'}</span></div>
+          <div class="kv"><span class="k">Available</span><span class="v">${l.available?fmtDate(l.available):'—'}</span></div>
+          <div class="kv"><span class="k">EPC</span><span class="v">${esc(l.epc||'—')}</span></div>
+          ${(l.features||[]).length?`<div class="kv" style="border:none"><span class="k">Features</span><span class="v">${l.features.map(f=>`<span class="pill" style="background:var(--off);color:var(--muted)">${esc(f)}</span>`).join(' ')}</span></div>`:''}
+          ${l.description?`<div style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-top:8px">${esc(l.description)}</div>`:''}
+        </div></div>
+      </div>
+      <div>
+        <div class="panel"><div class="panel-hd"><h2>Enquiries &amp; viewings</h2><span class="faint" style="font-size:12px">${apps.length}</span></div>
+          ${apps.length?apps.map(a=>applicantRow(a,true)).join(''):`<div class="empty" style="padding:22px;text-align:center"><span class="faint" style="font-size:12.5px">No enquiries yet.</span></div>`}
+        </div>
+        <div class="panel"><div class="panel-hd"><h2>Offers</h2><span class="faint" style="font-size:12px">${offers.length}</span></div>
+          ${offers.length?offers.map(offerRow).join(''):`<div class="empty" style="padding:22px;text-align:center"><span class="faint" style="font-size:12.5px">No offers yet.</span></div>`}
+        </div>
+      </div>
+    </div>`;
+}
+
+// ── APPLICANTS & VIEWINGS (CRM) ──
+function vApplicants(){
+  const apps=(S.applicants||[]).filter(a=>a.status!=='archived');
+  const upcoming=(S.viewings||[]).filter(v=>v.status==='scheduled').sort((a,b)=>new Date(a.when)-new Date(b.when));
+  return `<h1 class="pg">Applicants &amp; Viewings</h1><div class="sub">Your enquiry inbox and viewing diary. Capture leads from the portals, book viewings, log feedback, and push hot applicants to an offer.</div>
+    ${upcoming.length?`<div class="panel"><div class="panel-hd"><h2>Upcoming viewings</h2><span class="faint" style="font-size:12px">${upcoming.length}</span></div>
+      ${upcoming.map(v=>{ const a=(S.applicants||[]).find(x=>x.id===v.applicantId)||{}; const l=LST(v.listingId); return `<div class="row"><div class="av" style="background:var(--amber-bg);color:var(--amber)">${new Date(v.when).getDate()}</div><div style="flex:1"><div style="font-weight:600;font-size:13px;color:var(--navy)">${esc(a.name||'Applicant')} · ${esc(l.address||'')}</div><div class="faint" style="font-size:11.5px">${new Date(v.when).toLocaleString('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div></div><button class="btn sm" onclick="viewingDone('${v.id}')">Log feedback</button></div>`; }).join('')}
+    </div>`:''}
+    <div class="panel"><div class="panel-hd"><h2>Applicants</h2><span class="faint" style="font-size:12px">${apps.length} active</span></div>
+      ${apps.length?apps.map(a=>applicantRow(a,false)).join(''):`<div class="empty" style="padding:30px;text-align:center"><div style="font-size:14px;font-weight:600;margin-bottom:4px">No applicants yet</div><div class="faint" style="font-size:12.5px;margin-bottom:14px">Log an enquiry when someone contacts you about a listing.</div><button class="btn navy" onclick="openApplicant()">＋ Add enquiry</button></div>`}
+    </div>`;
+}
+function applicantRow(a,compact){
+  const l=LST(a.listingId); const vs=_appViewings(a.id); const nextV=vs.find(v=>v.status==='scheduled');
+  return `<div class="row">
+    <div class="av">${(a.name||'?').split(' ').map(x=>x[0]).join('').slice(0,2).toUpperCase()}</div>
+    <div style="flex:1;min-width:0">
+      <div style="font-weight:600;font-size:13.5px;color:var(--navy)">${esc(a.name||'Applicant')} ${_pill(APP_STATUS,a.status)}</div>
+      <div class="faint" style="font-size:11.5px">${esc(a.source||'')}${a.budget?' · budget '+gbp(a.budget):''}${l.address&&!compact?' · '+esc(l.address):''}${nextV?' · viewing '+new Date(nextV.when).toLocaleDateString('en-GB',{day:'numeric',month:'short'}):''}</div>
+    </div>
+    <div style="display:flex;gap:6px;flex-shrink:0">
+      ${a.status==='new'||a.status==='viewing'?`<button class="btn sm" onclick="bookViewing('${a.id}')">Book viewing</button>`:''}
+      ${a.status!=='referencing'&&a.status!=='placed'?`<button class="btn sm navy" onclick="recordOffer('${a.id}')">Offer</button>`:''}
+      <button class="btn sm" onclick="openApplicant('${a.id}')">·</button>
+    </div>
+  </div>`;
+}
+function openApplicant(id,listingId){
+  const a=id?(S.applicants||[]).find(x=>x.id===id):{id:uid('app'),status:'new',listingId:listingId||''};
+  const lOpts=`<option value="">— No listing —</option>`+(S.listings||[]).map(l=>`<option value="${l.id}" ${a.listingId===l.id?'selected':''}>${esc(l.address)}</option>`).join('');
+  const body=`
+    <div class="grid2" style="gap:10px"><div class="fg"><label>Name *</label><input id="ap-name" value="${esc(a.name||'')}"></div><div class="fg"><label>Phone</label><input id="ap-phone" value="${esc(a.phone||'')}"></div></div>
+    <div class="grid2" style="gap:10px"><div class="fg"><label>Email</label><input id="ap-email" value="${esc(a.email||'')}"></div><div class="fg"><label>Budget (£/mo)</label><input id="ap-budget" type="number" value="${a.budget||''}"></div></div>
+    <div class="grid2" style="gap:10px"><div class="fg"><label>Source</label><select id="ap-source">${SOURCES.map(s=>`<option ${a.source===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="fg"><label>Interested in</label><select id="ap-listing">${lOpts}</select></div></div>
+    <div class="fg"><label>Note</label><textarea id="ap-note" rows="2">${esc(a.note||'')}</textarea></div>
+    ${id?`<div class="fg"><label>Status</label><select id="ap-status">${Object.keys(APP_STATUS).map(k=>`<option value="${k}" ${a.status===k?'selected':''}>${APP_STATUS[k][0]}</option>`).join('')}</select></div>`:''}`;
+  modal(id?'Edit applicant':'New enquiry', body, `<button class="btn" onclick="closeModal()">Cancel</button>${id?`<button class="btn" style="color:var(--red)" onclick="archiveApplicant('${a.id}')">Archive</button>`:''}<button class="btn navy" onclick="saveApplicant('${a.id}')">Save</button>`);
+  window._edAPP=a;
+}
+function saveApplicant(id){
+  const a=window._edAPP||{id}; a.name=val('ap-name'); if(!a.name){toast('Enter a name',1);return;}
+  a.phone=val('ap-phone'); a.email=val('ap-email'); a.budget=parseFloat(val('ap-budget'))||0; a.source=val('ap-source'); a.listingId=val('ap-listing'); a.note=val('ap-note');
+  if(document.getElementById('ap-status')) a.status=val('ap-status');
+  a.createdAt=a.createdAt||new Date().toISOString();
+  S.applicants=S.applicants||[]; if(!S.applicants.find(x=>x.id===a.id)) S.applicants.push(a);
+  save(); pushApplicant&&pushApplicant(a); closeModal(); render(); toast('✓ Saved');
+}
+function archiveApplicant(id){ const a=(S.applicants||[]).find(x=>x.id===id); if(a){a.status='archived';save();pushApplicant&&pushApplicant(a);} closeModal(); render(); }
+function bookViewing(appId){
+  const a=(S.applicants||[]).find(x=>x.id===appId)||{};
+  const body=`<div class="note" style="margin-bottom:12px"><b>${esc(a.name)}</b>${a.listingId?' · '+esc(LST(a.listingId).address):''}</div>
+    <div class="grid2" style="gap:10px"><div class="fg"><label>Date</label><input id="vw-date" type="date" value="${today()}"></div><div class="fg"><label>Time</label><input id="vw-time" type="time" value="17:30"></div></div>
+    <div class="fg"><label>Note (access, meeting point…)</label><input id="vw-note"></div>`;
+  modal('Book viewing', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveViewing('${appId}')">Book viewing</button>`);
+}
+function saveViewing(appId){
+  const a=(S.applicants||[]).find(x=>x.id===appId); if(!a)return;
+  const when=val('vw-date')+'T'+(val('vw-time')||'17:30');
+  const v={id:uid('vw'),applicantId:appId,listingId:a.listingId||'',when,note:val('vw-note'),status:'scheduled'};
+  S.viewings=S.viewings||[]; S.viewings.push(v); a.status='viewing';
+  save(); pushViewing&&pushViewing(v); pushApplicant&&pushApplicant(a); closeModal(); render(); toast('✓ Viewing booked');
+}
+function viewingDone(vid){
+  const v=(S.viewings||[]).find(x=>x.id===vid); if(!v)return;
+  const body=`<div class="fg"><label>Outcome</label><select id="vf-out"><option value="interested">Interested — wants to proceed</option><option value="maybe">Maybe / thinking</option><option value="no">Not interested</option><option value="noshow">No-show</option></select></div>
+    <div class="fg"><label>Feedback</label><textarea id="vf-note" rows="2"></textarea></div>`;
+  modal('Viewing feedback', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveViewingFeedback('${vid}')">Save</button>`);
+}
+function saveViewingFeedback(vid){
+  const v=(S.viewings||[]).find(x=>x.id===vid); if(!v)return;
+  const out=val('vf-out'); v.status=out==='noshow'?'noshow':'done'; v.outcome=out; v.feedback=val('vf-note');
+  const a=(S.applicants||[]).find(x=>x.id===v.applicantId);
+  if(a){ if(out==='interested'){/* keep for offer */} else if(out==='no'){ a.status='archived'; } pushApplicant&&pushApplicant(a); }
+  save(); pushViewing&&pushViewing(v); closeModal(); render(); toast('✓ Feedback saved');
+}
+
+// ── OFFERS ──
+function vOffers(){
+  const offers=(S.offers||[]).slice().sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0));
+  const pending=offers.filter(o=>o.status==='offered'||o.status==='negotiating');
+  return `<h1 class="pg">Offers</h1><div class="sub">Every offer received across your listings. Accept one to send the applicant straight into referencing.</div>
+    <div class="grid4" style="margin-bottom:18px">
+      ${kpiCard(pending.length,'Awaiting decision','var(--amber)')}
+      ${kpiCard(offers.filter(o=>o.status==='accepted').length,'Accepted','var(--green)')}
+      ${kpiCard(offers.length,'Total offers','var(--navy)')}
+      ${kpiCard(gbp(offers.filter(o=>o.status==='accepted').reduce((s,o)=>s+(o.amount||0),0)),'Agreed rent /mo','var(--blue)')}
+    </div>
+    <div class="panel">${offers.length?offers.map(o=>offerRow(o,true)).join(''):`<div class="empty" style="padding:30px;text-align:center"><div style="font-size:14px;font-weight:600;margin-bottom:4px">No offers yet</div><div class="faint" style="font-size:12.5px">Record an offer from an applicant in Applicants &amp; Viewings.</div></div>`}</div>`;
+}
+function offerRow(o,full){
+  const a=(S.applicants||[]).find(x=>x.id===o.applicantId)||{}; const l=LST(o.listingId);
+  return `<div class="row">
+    <div class="av" style="background:var(--purple-bg);color:var(--purple)">£</div>
+    <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13.5px;color:var(--navy)">${gbp(o.amount)}/mo — ${esc(a.name||'Applicant')} ${_pill(OFFER_STATUS,o.status)}</div>
+      <div class="faint" style="font-size:11.5px">${full&&l.address?esc(l.address)+' · ':''}${o.moveIn?'move-in '+fmtDate(o.moveIn):''}${o.note?' · '+esc(o.note):''}</div></div>
+    <div style="display:flex;gap:6px;flex-shrink:0">
+      ${o.status==='offered'||o.status==='negotiating'?`<button class="btn sm" style="color:var(--green)" onclick="offerAction('${o.id}','accepted')">Accept</button><button class="btn sm" style="color:var(--red)" onclick="offerAction('${o.id}','rejected')">Reject</button>`:''}
+    </div>
+  </div>`;
+}
+function recordOffer(appId){
+  const a=(S.applicants||[]).find(x=>x.id===appId)||{}; const l=LST(a.listingId);
+  const body=`<div class="note" style="margin-bottom:12px"><b>${esc(a.name)}</b>${l.address?' · '+esc(l.address)+' (asking '+gbp(l.rent)+')':''}</div>
+    <div class="grid2" style="gap:10px"><div class="fg"><label>Offer (£/mo)</label><input id="of-amt" type="number" value="${l.rent||''}"></div><div class="fg"><label>Move-in date</label><input id="of-move" type="date"></div></div>
+    <div class="fg"><label>Note</label><input id="of-note" placeholder="e.g. 6-month break clause requested"></div>`;
+  modal('Record offer', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveOffer('${appId}')">Record offer</button>`);
+}
+function saveOffer(appId){
+  const a=(S.applicants||[]).find(x=>x.id===appId); if(!a)return;
+  const o={id:uid('of'),applicantId:appId,listingId:a.listingId||'',amount:parseFloat(val('of-amt'))||0,moveIn:val('of-move')||null,note:val('of-note'),status:'offered',createdAt:new Date().toISOString()};
+  S.offers=S.offers||[]; S.offers.push(o); a.status='offer';
+  save(); pushOffer&&pushOffer(o); pushApplicant&&pushApplicant(a); closeModal(); render(); toast('✓ Offer recorded');
+}
+function offerAction(oid,status){
+  const o=(S.offers||[]).find(x=>x.id===oid); if(!o)return; o.status=status;
+  const a=(S.applicants||[]).find(x=>x.id===o.applicantId);
+  if(status==='accepted'&&a){ a.status='referencing'; pushApplicant&&pushApplicant(a);
+    // hand off to Referencing: pre-seed a reference for this applicant + property
+    const l=LST(o.listingId);
+    S.references=S.references||[]; S.references.push({id:uid('r'),applicant:a.name,propertyId:l.propertyId||'',income:0,docs:{},creditState:'not_requested',status:'none',note:'From accepted offer — '+gbp(o.amount)+'/mo'});
+    if(l.id){ l.status='let'; pushListing&&pushListing(l); }
+    toast('✓ Accepted — applicant sent to Referencing');
+  } else { toast('Offer '+status); }
+  save(); pushOffer&&pushOffer(o); render();
+}
+
+// ── demo sample data (demo mode only) ──
+function _seedLettings(){
+  const p=S.properties[0]||{};
+  const l1={id:uid('lst'),propertyId:p.id||null,address:p.address||'42 Elm Street',postcode:p.postcode||'LS6 2AB',rent:p.rent||1200,beds:2,baths:1,ptype:'Flat',furnished:'Unfurnished',available:today(),epc:'C',status:'live',portals:{rightmove:true,zoopla:true,website:true},features:['Garden','Double glazing','Close to station'],description:'Bright two-bedroom flat with a private garden, moments from transport links.',shareToken:uid('sh')};
+  const l2={id:uid('lst'),address:'8 Maple Court',postcode:'LS2 9JT',rent:975,beds:1,baths:1,ptype:'Flat',furnished:'Furnished',available:today(),epc:'B',status:'draft',portals:{website:true},features:['Concierge','Gym'],description:'Modern one-bed in a managed block with concierge and gym.',shareToken:uid('sh')};
+  S.listings=[l1,l2];
+  const a1={id:uid('app'),name:'Priya Sharma',phone:'07700 900123',email:'priya@example.com',budget:1250,source:'Rightmove',listingId:l1.id,status:'viewing',note:'Professional couple, no pets',createdAt:new Date().toISOString()};
+  const a2={id:uid('app'),name:'James Reid',phone:'07700 900456',email:'james@example.com',budget:1000,source:'Zoopla',listingId:l1.id,status:'offer',note:'Relocating for work',createdAt:new Date().toISOString()};
+  const a3={id:uid('app'),name:'Chloe Adams',phone:'07700 900789',email:'chloe@example.com',budget:975,source:'Website',listingId:l2.id,status:'new',note:'',createdAt:new Date().toISOString()};
+  S.applicants=[a1,a2,a3];
+  S.viewings=[{id:uid('vw'),applicantId:a1.id,listingId:l1.id,when:today()+'T17:30',status:'scheduled',note:'Meet at property'}];
+  S.offers=[{id:uid('of'),applicantId:a2.id,listingId:l1.id,amount:1175,moveIn:today(),note:'6-month break clause requested',status:'offered',createdAt:new Date().toISOString()}];
+  save(); render(); toast('✓ Sample data loaded');
+}
 
 // ── DASHBOARD ──
 function vDashboard(){
