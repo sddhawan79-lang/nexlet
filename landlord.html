@@ -1342,7 +1342,7 @@ function getDocStatus(doc, certList, insuranceList, naDocs) {
 
 window._scanningDocs = window._scanningDocs || new Set(); // tracks docs scanning in this session only
 const D = {
-  properties: [], tenants: [], certs: [], maintenance: [], rent: [], insurance: [],
+  properties: [], tenants: [], certs: [], maintenance: [], rent: [], insurance: [], expenses: [],
   emailLog: [], customTemplates: [], contractors: [], jobAssignments: [], tenantDocs: [],
   _invReports: [],
   esignReq: [],
@@ -1670,6 +1670,12 @@ async function loadData() {
       D._invReports = [...dbReports, ...D._invReports.filter(r => !r._fromDb)];
     }
   } catch(e) { /* table may not exist yet */ }
+
+  // Load persistent expense ledger (Financial Hub · graceful — table may not exist yet)
+  try {
+    const { data: xpData } = await sb.from('property_expenses').select('*').eq('user_id', currentUser.id).order('date', {ascending:false});
+    if (xpData?.length) D.expenses = xpData;
+  } catch(_e) { /* run sql-property_expenses.sql to enable */ }
 }
 
 // ── PLAN GATING HELPERS ──
@@ -13641,7 +13647,8 @@ function _portfolioFin(){
 function _taxSetAside(){
   const f=_portfolioFin(); const prof=getMTDProfile();
   const mortInterest=D.properties.reduce((s,p)=>s+(p.mortgage_monthly||0)*12,0)*(parseFloat(prof.interestPct||100)/100);
-  const allowable=D.insurance.reduce((s,i)=>s+(i.premium||0),0)+D.properties.reduce((s,p)=>s+getMaintCostTotal(p.id),0)+parseFloat(prof.otherExpenses||0)+(window._nxlImportTx||[]).filter(t=>t.matched==='expensed'&&t.cat!=='finance').reduce((s,t)=>s+t.amount,0);
+  const ledger=(D.expenses||[]).filter(e=>e.sa105_cat!=='finance').reduce((s,e)=>s+(e.amount||0),0);
+  const allowable=D.insurance.reduce((s,i)=>s+(i.premium||0),0)+D.properties.reduce((s,p)=>s+getMaintCostTotal(p.id),0)+parseFloat(prof.otherExpenses||0)+ledger;
   const taxable=Math.max(0,f.annualRent-allowable);
   const rate=prof.taxBand==='higher'?0.40:prof.taxBand==='additional'?0.45:0.20;
   const net=Math.max(0,taxable*rate-mortInterest*0.20);
@@ -13749,7 +13756,15 @@ async function _reconcileRent(txId){
   await markRentPaid(r.id||r.prop_id, r.due_date); tx.matched=r.id||('paid');
   toast('✓ Rent reconciled'); window._rfTab='reconcile'; nav('rent-finance');
 }
-function _logExpense(txId){ const tx=window._nxlImportTx.find(t=>t.id===txId); if(!tx)return; tx.matched=(tx.cat==='personal')?'excluded':'expensed'; toast(tx.cat==='personal'?'Excluded as personal':'Logged to '+_SA105[tx.cat]); nav('rent-finance'); }
+async function _logExpense(txId){
+  const tx=window._nxlImportTx.find(t=>t.id===txId); if(!tx)return;
+  if(tx.cat==='personal'){ tx.matched='excluded'; toast('Excluded as personal'); nav('rent-finance'); return; }
+  const row={ user_id:(typeof currentUser!=='undefined'&&currentUser)?currentUser.id:null, prop_id:null, date:tx.date||new Date().toISOString().slice(0,10), description:tx.desc||'', amount:tx.amount||0, sa105_cat:tx.cat||'other', source:'import' };
+  D.expenses=D.expenses||[];
+  try{ const {data,error}=await sb.from('property_expenses').insert(row).select().single(); if(error) throw error; D.expenses.unshift(data||row); tx.matched='expensed'; toast('\u2713 Logged to '+_SA105[tx.cat]); }
+  catch(e){ D.expenses.unshift(row); tx.matched='expensed'; toast('Logged \u2014 '+_SA105[tx.cat]); }
+  nav('rent-finance');
+}
 function _setTxCat(txId,v){ const tx=window._nxlImportTx.find(t=>t.id===txId); if(tx)tx.cat=v; }
 function pgReconcile(){
   const tx=window._nxlImportTx||[];
@@ -15026,7 +15041,8 @@ function pgMTD() {
   const mortgageInterestAnnual = Math.round(totalMortgageAnnual * (parseFloat(profile.interestPct||100)/100));
   const totalMaintAnnual = D.properties.reduce((s,p) => s + getMaintCostTotal(p.id), 0);
   const totalInsAnnual = D.insurance.reduce((s,ii) => s + (ii.premium||0), 0);
-  const allowableExpenses = totalMaintAnnual + totalInsAnnual;
+  const ledgerExpensesAnnual = (D.expenses||[]).filter(e=>e.sa105_cat!=='finance').reduce((s,e)=>s+(e.amount||0),0);
+  const allowableExpenses = totalMaintAnnual + totalInsAnnual + ledgerExpensesAnnual;
   const otherExpenses = parseFloat(profile.otherExpenses||0);
 
   // Section 24: full finance cost relief removed, 20% basic rate credit only
