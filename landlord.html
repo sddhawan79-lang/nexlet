@@ -1550,7 +1550,7 @@ async function loadData() {
     sb.from('job_assignments').select('*, tenant_maintenance(id, prop_id, tenancy_ref, category, description, priority, photo_urls, submitted_at, landlord_notified)'),
     sb.from('tenant_documents').select('*').order('uploaded_at', {ascending: false}),
     sb.from('user_profiles').select('*').eq('id', currentUser.id).maybeSingle(),
-    sb.from('stripe_subscriptions').select('plan_name').eq('user_id', currentUser.id).maybeSingle(),
+    sb.from('stripe_subscriptions').select('plan_name, status').eq('user_id', currentUser.id).maybeSingle(),
     sb.from('esign_requests').select('*').order('created_at', {ascending: false}),
     sb.from('calendar_events').select('*').eq('user_id', currentUser.id).order('date', {ascending: true}),
     sb.from('tenant_maintenance').select('id, prop_id, tenancy_ref, category, description, priority, photo_urls, submitted_at').order('submitted_at', {ascending: false}),
@@ -1647,7 +1647,14 @@ async function loadData() {
   }
   // Resolve PAID plan from Stripe (null if none). Final access is decided in TRIAL RESOLUTION
   // (initApp): paid plan > active trial > read-only. Never fail open to a paid tier.
-  window._paidPlan = (sub.data && sub.data.plan_name) ? sub.data.plan_name : null;
+  // ⚠ A canceled/past-due sub leaves plan_name in the row but MUST NOT grant access —
+  // otherwise a cancelled member keeps their tier forever. So we require the Stripe
+  // status to NOT be an inactive one. (null/legacy status = treat as active so existing
+  // payers aren't locked out; the webhook writes a real status on every event.)
+  const _subStatus = (sub.data && sub.data.status) || null;
+  const _inactiveStatuses = ['canceled','cancelled','unpaid','past_due','incomplete','incomplete_expired','paused'];
+  const _subActive = sub.data && sub.data.plan_name && !_inactiveStatuses.includes(_subStatus);
+  window._paidPlan = _subActive ? sub.data.plan_name : null;
   window._userPlan = window._paidPlan || 'expired';
   if (er.data?.length) D.esignReq = er.data;
   if (ce.data?.length) D.calEvents = ce.data;
