@@ -1987,8 +1987,18 @@ async function initApp() {
     }
 
     // ── ACCESS DECISION (fail-closed) ──
-    // 1) active paid plan wins  2) else inside 30-day trial = full access  3) else read-only.
-    if (window._paidPlan) {
+    // 1) founder/owner test account = full access  2) active paid plan wins
+    // 3) else inside 30-day trial = full access  4) else read-only.
+    // FOUNDER TEST ACCESS: put your own login email(s) below to unlock every feature
+    // (Portfolio + all add-ons) regardless of plan/trial — for testing. This is safe to
+    // leave in: nobody else can use it without your password to log in as this email.
+    const FOUNDER_EMAILS = ['REPLACE_WITH_YOUR_EMAIL@example.com'];
+    const _founder = currentUser && currentUser.email &&
+      FOUNDER_EMAILS.map(e => e.toLowerCase()).includes((currentUser.email || '').toLowerCase());
+    if (_founder) {
+      window._userPlan = 'portfolio';
+      if (D.userProfile) D.userProfile.inventory_addon = true;
+    } else if (window._paidPlan) {
       window._userPlan = window._paidPlan;
     } else if (_trialState.isTrialing) {
       window._userPlan = 'portfolio';
