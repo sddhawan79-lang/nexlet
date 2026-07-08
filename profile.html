@@ -457,7 +457,20 @@ html,body{min-height:100%;font-family:var(--font);color:var(--txt);background:va
       </div><!-- /plan-grid -->
 
       <p class="billing-note">Annual billing available — pay 10 months, get 12 (2 months free).</p>
-      <p class="manage-note">Questions? <a href="mailto:documents@nexlet.co.uk">documents@nexlet.co.uk</a></p>
+
+      <!-- ── AI INVENTORY REPORTS ADD-ON ── -->
+      <div id="addon-row" style="margin-top:18px;border:1.5px solid var(--border);border-radius:12px;padding:16px 18px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+        <div style="flex:1;min-width:220px">
+          <div style="font-size:13.5px;font-weight:700;color:var(--txt)">✦ AI Inventory Reports <span style="font-weight:500;color:var(--muted)">— add-on</span></div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">Move-in/check-out condition reports with AI deposit-deduction schedules. Included free on Portfolio.</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;flex-shrink:0">
+          <div style="font-size:15px;font-weight:700;color:var(--navy)">£5.99<span style="font-size:11px;font-weight:400;color:var(--muted)">/mo</span></div>
+          <button class="plan-btn" id="addon-btn" data-price="price_1Tr4gmIWIWxNh9b74zsWzsVx" style="width:auto;padding:9px 18px;white-space:nowrap">Add for £5.99/mo</button>
+        </div>
+      </div>
+
+      <p class="manage-note">Questions? <a href="/cdn-cgi/l/email-protection#690d060a1c040c071d1a29070c11050c1d470a06471c02"><span class="__cf_email__" data-cfemail="593d363a2c343c372d2a19373c21353c2d773a36772c32">[email&#160;protected]</span></a></p>
     </div>
   </section>
 
@@ -499,7 +512,7 @@ html,body{min-height:100%;font-family:var(--font);color:var(--txt);background:va
 
 <!-- ── SCRIPTS ── -->
 <!-- Supabase CDN must load first -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
 <!-- Shared libs -->
 <script src="js/lib/supabase-client.js"></script>
 <script src="js/lib/auth.js"></script>
@@ -527,6 +540,30 @@ async function cancelSubscription() {
     alert('Could not cancel — please email documents@nexlet.co.uk');
   }
 }
+(function(){
+  // ── AI Inventory Reports add-on — reflect current state on the button ──
+  // Reuses the exact same generic .plan-btn wiring in js/profile.js (any button
+  // with data-price gets a working Stripe Checkout click handler for free).
+  window.RSA.Auth.getSession().then(async function(session){
+    if (!session) return;
+    var uid = session.user.id;
+    var [{ data: prof }, { data: sub }] = await Promise.all([
+      window.RSA.sb.from('user_profiles').select('inventory_addon').eq('id', uid).maybeSingle(),
+      window.RSA.sb.from('stripe_subscriptions').select('plan_name,status').eq('user_id', uid).maybeSingle()
+    ]);
+    var btn = document.getElementById('addon-btn');
+    if (!btn) return;
+    var isPortfolio = sub && sub.plan_name === 'portfolio' && (sub.status === 'active' || sub.status === 'trialing');
+    var hasAddon = prof && prof.inventory_addon;
+    if (isPortfolio) {
+      btn.textContent = 'Included in Portfolio ✓';
+      btn.disabled = true;
+    } else if (hasAddon) {
+      btn.textContent = 'Active ✓';
+      btn.disabled = true;
+    }
+  }).catch(function(){});
+})();
 (function(){
   var uid = null;
   var optedIn = null;
