@@ -709,7 +709,11 @@ Session 8 introduced a 3-checkbox pre-generation consent gate for 4 legal docume
 | 58 | Plan defaulted **open** to `portfolio` — non-payers / cancelled / lapsed users got the top tier free | Billing / Access | **FIXED June 2026** — access now fail-closed: paid plan > active trial > read-only (`expired`). See §9. |
 | 59 | Plan gating bypassable via non-sidebar entry points (Discover, dashboard buttons, hash URLs); `pgFinancials`, MTD tab, `moInventoryReport` reachable un-gated | Access / Revenue | **FIXED June 2026** — central `featureGate()` in `nav()` + action gate on `moInventoryReport` + Discover lock badges. |
 | 60 | Paying customers still flagged `plan:'trial'` could be force-expired after 30 days | Billing | **FIXED June 2026** — an active paid subscription always wins in the access decision. |
-| 61 | **Plan enforcement is client-side only** — Supabase tables / functions are not plan-guarded; a technical user can bypass gating | Security | **Open** — add plan + property-limit checks to RLS / edge functions. |
+| 61 | **Plan enforcement is client-side only** — Supabase tables / functions are not plan-guarded; a technical user can bypass gating | Security | **PARTIALLY FIXED Session 49** — `ai-proxy` now requires a valid Supabase JWT (or a service secret for cron) and enforces server-side monthly AI allowances via `ai_usage`/`bump_ai_usage()`; on Anthropic failure/credit exhaustion it degrades gracefully (503 `degraded:true`) instead of erroring, and the client already falls back to manual entry. Remaining: other tables besides AI usage are still not plan-guarded server-side — a technical user can still read/write property data their plan shouldn't allow (RLS scopes by ownership, not by plan tier). |
+| 64 | Cancelled Stripe subscriptions kept full paid-tier access forever (webhook cleared `status` but left `plan_name` untouched; app only read `plan_name`) | Billing / Access | **FIXED Session 49** — `landlord.html` access decision now requires `status` to be active/trialing before granting a paid plan (inactive statuses: `canceled`,`cancelled`,`unpaid`,`past_due`,`incomplete`,`incomplete_expired`,`paused`); `stripe-webhook`'s `customer.subscription.deleted` handler now also nulls `plan_name`. |
+| 65 | `stripe-webhook`'s `PRICE_TO_PLAN` used stale/wrong Price IDs that didn't match what `profile.html`/`landlord.html` actually send to Checkout — silently downgraded paying customers to `'unknown'` | Billing | **FIXED Session 49** — corrected to `price_1TX2zp2LDL4FOJhEvpaUe6sa` (starter) / `price_1TcSLU2LDL4FOJhEamxB9g97` (landlord) / `price_1TcSPs2LDL4FOJhEJS7VUati` (portfolio) — verified to match `profile.html`'s `data-price` attributes exactly. |
+| 66 | AI Inventory Reports add-on (£5.99/mo) had no purchase flow anywhere — paywall linked to `profile.html` but no button existed, and nothing set `user_profiles.inventory_addon` | Billing / Feature gap | **FIXED Session 49** — see full write-up below. |
+| 67 | 4 of 5 Storage buckets were public/open (maintenance photos, signed PDFs, certificates, property docs) | Security | **FIXED Session 49 (user-run SQL)** — bucket policies restricted to owned paths; user confirmed test upload/open still works post-lockdown. |
 | 62 | User data interpolated into `innerHTML` / inline `onclick` without escaping (stored XSS risk) | Security | **Open** — escape user-supplied strings before render. |
 | 63 | AI inventory is photo-heavy (storage + per-report AI cost) yet sold flat under Portfolio | Cost / Pricing | **Planned** — pay-per-report credits available to all tiers; compress photos client-side, keep report PDF as the durable artifact. |
 | 11 | `parseInt()` on UUID `prop_id`/`tenant_id` values — produces NaN | Data integrity | **FIXED Session 7** — replaced with `String()` (22 locations) |
@@ -6022,3 +6026,173 @@ manual entry. Migrated: `scanAndFill` (certs), ID + Right-to-Rent scanners, `sca
 (`type:'ai'`) helper. Landlord-initiated *generation* features (legal doc drafting, AI
 chat, inventory reports) still use direct `fetch` + `aiProxy()` — they already surface
 402 via the wrapper and aren't autofill scans, so they were intentionally left as-is.
+
+---
+
+# Session 49 — 9 July 2026 — Agency Lettings Front-Half, Financial Hub, Billing/Access Hardening, Stripe Fixes
+
+Large session across `agent.html`, `landlord.html`, `profile.html`, and Supabase edge
+functions. Grouped by area.
+
+## 1. Agency Portal (`agent.html`) — win-and-fill lettings front-half
+Added the piece a full letting agency needs that the portal didn't have: winning and
+filling a tenancy, not just managing one once let.
+- **New nav sections:** Marketing, Applicants & Viewings, Offers.
+- **Marketing** — create a listing (optionally linked to an existing managed property),
+  toggle Rightmove/Zoopla/Website live per-listing (`togglePortal`, `publishListing`),
+  shareable listing link (`shareToken`), listing cards show enquiry/viewing/offer counts.
+  Actual portal push is a hook (needs Rightmove/Zoopla agency membership + feed
+  agreement) — the UI and data model are complete now.
+- **Applicants & Viewings** — enquiry inbox (`openApplicant`), viewing diary
+  (`bookViewing`/`viewingDone` + feedback), applicant status pipeline (new → viewing →
+  offer → referencing → placed).
+- **Offers** — `recordOffer`/`offerAction`; accepting an offer auto-creates a
+  `agency_references` row and hands the applicant into the existing Referencing module;
+  marks the listing Let Agreed.
+- **New SQL:** `sql-agency-lettings.sql` — `agency_listings`, `agency_applicants`,
+  `agency_viewings`, `agency_offers` (flexible `jsonb`-per-row, RLS via existing
+  `my_agency_ids()`). New push helpers: `pushListing`/`pushApplicant`/`pushViewing`/`pushOffer`.
+- Verified via a real-schema Node harness (`new Function()` parse + logic execution) —
+  zero syntax errors, `_matchTx`-style applicant/property linking confirmed correct.
+
+## 2. Agency Portal — rent, arrears, statements, joint/company landlords
+- **Rent received → landlord notification.** `markPaid()` now opens a confirmation
+  (`_rentReceivedConfirm`) showing rent − management fee = net, before emailing/logging a
+  timestamped rent statement with correct "received & remitted / Client Money Protection"
+  wording (`_rentReceivedSend`). Recorded into `agency_letters` (document trail).
+- **Arrears legal escalation** (`arrearsStep`/`arrearsAction`) — recommends the correct
+  step by months owed: friendly reminder (<1mo) → formal 7-day letter (≥1mo) →
+  **Section 8 Ground 8** (mandatory, ≥2mo arrears), linking to Letters/Notices.
+- **Half-yearly / yearly landlord statements** (`openStatement`/`buildStatement`) —
+  printable/emailable per-property rent/fee/net summary for a chosen landlord + period.
+- **Tenancy-anchored invoice quarters** — `_period()`/`_landlordAnchorMonth()` now anchor
+  billing quarters to a landlord's earliest tenancy start month (editable per-invoice)
+  instead of forced calendar Jan–Mar quarters. Added a next-invoice due/overdue reminder
+  banner on the Invoices page (`_nextInvoiceReminders`).
+- **Joint & company landlords** — `landlord.entity` (`individual`/`joint`/`company`) +
+  `landlord.joint` (second owner). `landlordName()`/`landlordLegalLine()` render "Jane Doe
+  & John Doe" or a company name correctly on invoices, statements and the portfolio list.
+  Onboarding + Edit Instruction updated. **SQL:** `sql-agency_landlord_entity.sql`
+  (`alter table agency_landlords add column joint text, entity text default 'individual'`).
+- **Logout button** added under the agent sidebar (`agentLogout()`) — previously only
+  reachable via "Switch to landlord portal".
+
+## 3. Agency Portal — 2-way messaging, secure invite tokens, tenant portal
+- **`agency_messages`** table — timestamped 2-way thread per landlord or per tenant
+  (`sender`: agent/landlord/tenant). RLS: agent reads/writes all in their agency;
+  landlord/tenant read/write only their own thread. `msgPanel()`/`msgSend()`/`pollMessages()`
+  (15s poll) in `agent.html`; matching UI in `landlord-portal.html` and new
+  `tenant-portal.html`.
+- **Secure invite tokens** — replaced email-match claiming with `invite_token` +
+  `invited_at` columns on `agency_landlords`/`agency_tenants`, and
+  `agency_landlord_invite_accept(token)` / `agency_tenant_invite_accept(token)`
+  SECURITY DEFINER RPCs that bind the invited user's new auth account to their record on
+  first login via `?invite=<token>`. **SQL:** `sql-agency_messages_and_invites.sql`.
+- **`login.html`** patched to carry `?next=<page>&invite=<token>` through sign-in so an
+  invited landlord/tenant lands back on the right portal page post-login.
+- **New file `tenant-portal.html`** — tenant-facing portal (view tenancy details, report
+  maintenance issues as `reported_by:'tenant'`, message the agent, view notices
+  served/document trail). Mirrors `landlord-portal.html`'s token-invite pattern.
+- **Unified document trail** (`docTrailPanel`/`propDocTrailPanel` in `agent.html`) —
+  combined sent/signed/archived view across agreements, letters and notices per landlord
+  and per tenant.
+
+## 4. Landlord app (`landlord.html`) — Financial Hub (Phase A: 8→9 on Hammock comparison)
+Closed the gap vs Hammock-style tools (real bank reconciliation feeding actual tax
+figures) while keeping compliance/legal/MTD as NexLet's existing edge — without
+requiring live open banking (deliberately deferred; see §6).
+- **New Rent & Finance tabs:** **Insights** (all tiers — the shop-window: gross/net
+  yield, portfolio LTV + equity, occupancy, per-property table, cash position, arrears,
+  tax set-aside, AI insight line — `pgInsights()`/`_portfolioFin()`/`_propVal()` with a
+  clearly labelled estimate fallback when a property has no `value` set) and **Reconcile**
+  (Landlord+ — `pgReconcile()`/`moImportStatement()`/`_parseStatement()`: paste a bank
+  statement CSV, auto-match incoming payments to expected rent by amount + tenant
+  surname (`_matchTx`), confirming calls the existing `markRentPaid()` so it persists to
+  `rent_payments` for real; outgoings get an HMRC SA105 category dropdown). Starter users
+  see an upgrade prompt (`_rfUpgrade`); a "Connect bank — Portfolio, coming soon" teaser
+  seeds the future premium live-feed upsell.
+- **Persistent expense ledger** — Reconcile's categorised expenses now save to a new
+  **`property_expenses`** table (`_logExpense` upserts; loaded in `loadData()`) instead of
+  session-only `window._nxlImportTx` state, and feed real numbers into both
+  `_taxSetAside()` (Insights) and `pgMTD`'s allowable-expenses total
+  (`ledgerExpensesAnnual`). **SQL:** `sql-property_expenses.sql`.
+
+## 5. Billing / access hardening (the actual pre-launch-blocking fixes)
+Full audit surfaced two real leaks — both fixed:
+- **Cancellation access leak** — see Known Issues #64 above. Client-side fix in
+  `landlord.html`'s access-decision block; webhook-side fix in `stripe-webhook`.
+- **Open `ai-proxy` endpoint** — see Known Issues #61 above. Hardened with an auth gate
+  (valid Supabase JWT, or `x-service-secret` header for cron/server callers), server-side
+  monthly AI usage metering (`ai_usage` table + `bump_ai_usage()` RPC, limits: trial 15 ·
+  starter 40 · landlord 200 · portfolio 800/month — kept in sync with
+  `AI_MONTHLY_LIMITS` client-side), and graceful degradation: any Anthropic failure,
+  rate-limit, or credit exhaustion returns `503 {degraded:true}` with a friendly message
+  instead of an error — failed calls are never counted, and the existing `aiScanFetch`/
+  `aiProxy` client helpers already fall back to manual entry on this response, so users
+  are never stuck. **SQL:** `sql-ai-usage.sql`.
+- **Founder test-access** — `FOUNDER_EMAILS` allow-list in `landlord.html`'s access
+  decision grants full Portfolio + all add-ons when the founder's own email
+  (`sddhawan79@gmail.com`) logs in, for live testing without touching real plan data.
+- **Storage buckets** — 4 of 5 were public; locked down via SQL given directly in chat
+  (not a saved file) restricting reads/writes to owned paths. User confirmed a test
+  document upload + open still works post-lockdown.
+- **`privacy.html`** — Data Retention section (§10) already existed and was
+  well-drafted; added a **Right to Rent** row (tenancy + 1 year, Immigration Act 2014
+  statutory) and a paragraph tying cancellation → read-only → 12-month grace →
+  deletion to the actual product behaviour.
+
+## 6. Stripe — checkout, webhook, add-on, live setup (mostly user-executed with guidance)
+- **`stripe-webhook`** (`FIX-stripe-webhook-index.ts`) — `PRICE_TO_PLAN` corrected (see
+  Known Issues #65); `customer.subscription.deleted` now nulls `plan_name`; **new AI
+  Inventory Reports add-on** (£5.99/mo, Price ID `price_1Tr4gmIWIWxNh9b74zsWzsVx`) handled
+  as its own separate Stripe subscription (never overwrites the main plan row) — new
+  **`stripe_addons`** table (`user_id` PK, `stripe_subscription_id`, `status`) +
+  `user_profiles.inventory_addon` set/cleared independently of the main plan on
+  checkout/update/cancel. **SQL:** `sql-stripe-addon.sql`.
+- **`profile.html`** — added the add-on's purchase card (reuses the existing generic
+  `.plan-btn`/`data-price` wiring in `js/profile.js` — zero JS framework changes needed);
+  inline script shows "Included in Portfolio ✓" or "Active ✓" and disables the button
+  when already entitled.
+- **Live Stripe dashboard setup (user-executed):** created the add-on's recurring Price
+  in the product catalogue; registered a webhook destination (`nexlet-webhook`) pointing
+  at `.../functions/v1/stripe-webhook` listening to `checkout.session.completed`,
+  `customer.subscription.updated`, `customer.subscription.deleted`; updated the
+  `STRIPE_WEBHOOK_SECRET` Supabase secret to match; confirmed only one webhook
+  destination exists (no stale duplicate); confirmed Stripe's own "Successful payments"
+  and "Refunds" customer emails are on, and subscription-management self-service link
+  enabled. **Noted as pre-existing/unused, safe to ignore or clean up later:**
+  `create-checkout-session` and `supabase-functions-deploy-stripe-cancel` edge functions —
+  nothing in the app calls either.
+
+## 7. Legal / developer handoff
+- **`NexLet Developer Brief.html`** — consolidated developer pick-up doc (security/auth,
+  API integrations & hooks, data/backend, codebase/ops, technical reference of every
+  hook by exact function/field name). Supersedes the older `Developer-Handoff.html`.
+- **`DEV-SPEC-agency-portal.md`** updated — Financial Hub entry, backlog reorganised,
+  Knowledge Hub flagged as highest-leverage post-launch/SEO growth item.
+- **`NexLet Post-Launch To-Do.html`** updated — added Knowledge Hub (public SEO content
+  library) as a Growth item; audit log/staff roles noted as an enhancement.
+- Solicitor review requested (Terms liability cap, DPA/processor positioning, "not legal
+  advice" wording for generated notices, PI insurance) — outcome pending, not NexLet's
+  code to fix.
+
+## Still open after this session
+- **Live smoke-test** (real Stripe subscribe → feature unlock → add-on → cancel →
+  read-only) — not yet run at time of writing; Stripe dashboard setup (webhook, secrets,
+  Price IDs) is confirmed complete and ready for it.
+- Marketing & sales phase — not started.
+- Referencing partner credit-check **API** (still v1/manual — needs a partner contract).
+- Live open-banking bank feed (Financial Hub's "Connect bank" is a Portfolio teaser only).
+- Client-money accounting, key-management register, reporting dashboard (arrears/fee
+  income/compliance calendar) for the agency portal — designed/scoped, not yet built.
+- RLS/table-level plan-guarding beyond AI usage (Known Issue #61 remainder).
+- XSS sweep beyond high-risk vectors (Known Issue #62, unchanged this session).
+- A friend/collaborator flagged `landlord.html` as slow to load and suggested splitting
+  the file — **decision: do not split pre-launch** (real regression risk vs. a load-time
+  issue that's usually fixable via Cloudflare settings — Auto Minify HTML/CSS/JS, Brotli,
+  Browser Cache TTL, and confirming Rocket Loader is OFF since it can break inline
+  scripts this app relies on). File-splitting remains on the post-launch backlog if still
+  slow after that.
+- A Cloudflare "174 security threats" digest email was received and correctly identified
+  as Cloudflare's routine WAF activity report (blocked bots/scanners), not a code
+  vulnerability count — no action needed beyond confirming Bot Fight Mode is on.
