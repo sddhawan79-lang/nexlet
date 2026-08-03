@@ -185,8 +185,8 @@ const landlordToRow=l=>({id:l.id,agency_id:window._agencyId,name:l.name,joint:l.
 // show "A & B". `joint` holds the second owner (or is blank). `entity` = individual|joint|company.
 function landlordName(l){ if(!l) return ''; if(l.entity==='company') return l.name; return (l.joint&&l.joint.trim())?(l.name+' & '+l.joint):l.name; }
 function landlordLegalLine(l){ if(!l) return ''; if(l.entity==='company') return esc(l.name)+' <span style="font-weight:400">(company landlord)</span>'; return esc(landlordName(l)); }
-const rowToProp=r=>({id:String(r.id),landlordId:r.landlord_id,address:r.address||'',city:r.city||'',rent:r.rent||0,beds:r.beds||1,feePct:r.fee_pct,certs:r.certs||{},tenant:r.tenant||undefined});
-const propToRow=p=>({id:p.id,agency_id:window._agencyId,landlord_id:p.landlordId,address:p.address,city:p.city,rent:p.rent||0,beds:p.beds||1,fee_pct:p.feePct,certs:p.certs||{},tenant:p.tenant||null});
+const rowToProp=r=>({id:String(r.id),landlordId:r.landlord_id,address:r.address||'',city:r.city||'',postcode:r.postcode||'',ptype:r.ptype||'',rent:r.rent||0,beds:r.beds||1,baths:r.baths||1,furnished:r.furnished||'',epc:r.epc||'',councilTaxBand:r.council_tax_band||'',rentDueDay:r.rent_due_day||'1st',available:r.available||null,description:r.description||'',features:r.features||[],feePct:r.fee_pct,certs:r.certs||{},tenant:r.tenant||undefined});
+const propToRow=p=>({id:p.id,agency_id:window._agencyId,landlord_id:p.landlordId,address:p.address,city:p.city,postcode:p.postcode||null,ptype:p.ptype||null,rent:p.rent||0,beds:p.beds||1,baths:p.baths||1,furnished:p.furnished||null,epc:p.epc||null,council_tax_band:p.councilTaxBand||null,rent_due_day:p.rentDueDay||'1st',available:p.available||null,description:p.description||null,features:p.features||[],fee_pct:p.feePct,certs:p.certs||{},tenant:p.tenant||null});
 // properties.id is a DB-assigned bigint (NOT a client-generated text id like our other
 // tables) — a new property must be INSERTed without an id and get the real id back,
 // or the save fails outright (non-numeric text can't go into a bigint column).
@@ -195,7 +195,7 @@ async function pushPropertyNew(p){
   try{
     const row=propToRow(p); delete row.id;
     const { data, error } = await sb.from('properties').insert(row).select().single();
-    if(error){ console.error(error); toast('⚠ Could not save property — retry',1); return null; }
+    if(error){ console.error(error); toast('⚠ Could not save property: '+(error.message||'unknown error'),1); return null; }
     return String(data.id);
   }catch(e){ console.error(e); toast('⚠ Could not save property — retry',1); return null; }
 }
@@ -1083,8 +1083,11 @@ function propDocTrailPanel(p){
     ${docs.map(d=>{ const c=pillColor[d.status]||['var(--off)','#475569']; return `<div class="row"><div class="av" style="font-size:15px">⚖</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${esc(d.label)}</div><div class="faint" style="font-size:11.5px">${d.date?fmtDate(d.date):'—'}</div></div><span class="pill" style="background:${c[0]};color:${c[1]}">${d.status}</span></div>`; }).join('')}
   </div>`;
 }
+function _rentDayOpts(sel){ const ord=n=>n+(n%10===1&&n!==11?'st':n%10===2&&n!==12?'nd':n%10===3&&n!==13?'rd':'th');
+  let out=''; for(let i=1;i<=28;i++){ const v=ord(i); out+=`<option ${sel===v?'selected':''}>${v}</option>`; }
+  out+=`<option ${sel==='Last working day'?'selected':''}>Last working day</option>`; return out; }
 function editRentDueDay(pid){ const p=P(pid);
-  const body=`<div class="fg"><label>Rent due day</label><select id="rd-day"><option ${p.rentDueDay==='1st'?'selected':''}>1st</option><option ${p.rentDueDay==='15th'?'selected':''}>15th</option><option ${p.rentDueDay==='Last working day'?'selected':''}>Last working day</option></select></div>`;
+  const body=`<div class="fg"><label>Rent due day</label><select id="rd-day">${_rentDayOpts(p.rentDueDay)}</select></div>`;
   modal('Rent due day — '+esc(p.address), body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveRentDueDay('${pid}')">Save</button>`); }
 function saveRentDueDay(pid){ const p=P(pid); p.rentDueDay=val('rd-day'); save(); pushProperty(p); closeModal(); render(); toast('✓ Rent due day updated'); }
 function editPropRent(pid){ const p=P(pid); const isLet=!!p.tenant;
@@ -1438,9 +1441,9 @@ function obNext(){
 }
 function obBack(){ if(OB.step===1){closeModal();return;} OB.step--; renderOnboard(); }
 function obToggleFeat(f){ OB.featChips=OB.featChips||[]; const i=OB.featChips.indexOf(f); if(i>-1)OB.featChips.splice(i,1); else OB.featChips.push(f); renderOnboard(); }
-function _obDraftToProp(){ OB.addr=val('ob-addr');OB.pc=val('ob-pc');OB.city=val('ob-city');OB.ptype=val('ob-ptype');OB.rent=val('ob-rent');OB.beds=val('ob-beds');OB.baths=val('ob-baths');OB.furnished=val('ob-furn');OB.epc=val('ob-epc');OB.rentDueDay=val('ob-rentday');OB.avail=val('ob-avail');OB.feat=val('ob-feat');OB.desc=val('ob-desc');
+function _obDraftToProp(){ OB.addr=val('ob-addr');OB.pc=val('ob-pc');OB.city=val('ob-city');OB.ptype=val('ob-ptype');OB.rent=val('ob-rent');OB.beds=val('ob-beds');OB.baths=val('ob-baths');OB.furnished=val('ob-furn');OB.epc=val('ob-epc');OB.rentDueDay=val('ob-rentday');OB.avail=val('ob-avail');OB.councilTaxBand=val('ob-ctax');OB.feat=val('ob-feat');OB.desc=val('ob-desc');
   if(!OB.addr) return null;
-  return {addr:OB.addr,pc:OB.pc,city:OB.city,ptype:OB.ptype,rent:OB.rent,beds:OB.beds,baths:OB.baths,furnished:OB.furnished,epc:OB.epc,rentDueDay:OB.rentDueDay,avail:OB.avail,
+  return {addr:OB.addr,pc:OB.pc,city:OB.city,ptype:OB.ptype,rent:OB.rent,beds:OB.beds,baths:OB.baths,furnished:OB.furnished,epc:OB.epc,rentDueDay:OB.rentDueDay,avail:OB.avail,councilTaxBand:OB.councilTaxBand,
     features:[...(OB.featChips||[]),...(OB.feat||'').split(',').map(x=>x.trim()).filter(Boolean)],desc:OB.desc}; }
 function obAddAnotherProp(){ const p=_obDraftToProp(); if(!p){toast('Enter an address first',1);return;}
   OB.properties=OB.properties||[]; OB.properties.push(p);
@@ -1459,7 +1462,7 @@ async function obFinish(){
   S.landlords.push(ll); pushLandlord(ll);
   const allProps=[...(OB.properties||[])]; const draft=_obDraftToProp(); if(draft) allProps.push(draft);
   for(const dp of allProps){
-    const pp={landlordId:id,address:dp.addr,postcode:dp.pc,city:dp.city,ptype:dp.ptype,rent:parseInt(dp.rent)||0,beds:parseInt(dp.beds)||1,baths:parseInt(dp.baths)||1,furnished:dp.furnished,epc:dp.epc,rentDueDay:dp.rentDueDay||'1st',available:dp.avail||null,description:dp.desc,features:dp.features||[]};
+    const pp={landlordId:id,address:dp.addr,postcode:dp.pc,city:dp.city,ptype:dp.ptype,rent:parseInt(dp.rent)||0,beds:parseInt(dp.beds)||1,baths:parseInt(dp.baths)||1,furnished:dp.furnished,epc:dp.epc,councilTaxBand:dp.councilTaxBand,rentDueDay:dp.rentDueDay||'1st',available:dp.avail||null,description:dp.desc,features:dp.features||[]};
     const newPid=await pushPropertyNew(pp);
     if(newPid){ pp.id=newPid; S.properties.push(pp);
       const tn={id:uid('t'),who:dp.addr,propertyId:newPid,stage:'instructed'}; S.tenancies.push(tn); pushTenancy(tn); }
@@ -1582,11 +1585,12 @@ function renderOnboard(){
     <div class="fg"><label>Bathrooms</label><input id="ob-baths" type="number" value="${esc(OB.baths)}"></div></div>
     <div class="grid3" style="gap:10px"><div class="fg"><label>Furnishing</label><select id="ob-furn">${['Unfurnished','Furnished','Part-furnished'].map(t=>`<option ${OB.furnished===t?'selected':''}>${t}</option>`).join('')}</select></div>
     <div class="fg"><label>EPC rating <span class="faint">(if known)</span></label><select id="ob-epc">${['','A','B','C','D','E','F','G'].map(t=>`<option ${OB.epc===t?'selected':''}>${t||'—'}</option>`).join('')}</select></div>
-    <div class="fg"><label>Rent due day</label><select id="ob-rentday"><option ${OB.rentDueDay==='1st'?'selected':''}>1st</option><option ${OB.rentDueDay==='15th'?'selected':''}>15th</option><option ${OB.rentDueDay==='Last working day'?'selected':''}>Last working day</option></select></div></div>
+    <div class="fg"><label>Rent due day</label><select id="ob-rentday">${_rentDayOpts(OB.rentDueDay)}</select></div></div>
     <div class="fg"><label>Available from</label><input id="ob-avail" type="date" value="${OB.avail||''}"></div>
     <div class="fg"><label>Key features</label>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">${['Garden','Parking','Garage','Balcony','Pets allowed','Bike storage','Dishwasher','Washing machine'].map(f=>`<label style="display:flex;align-items:center;gap:5px;font-size:12px;background:var(--off);border:1px solid var(--border);border-radius:6px;padding:5px 10px;cursor:pointer"><input type="checkbox" style="width:auto" ${(OB.featChips||[]).includes(f)?'checked':''} onchange="obToggleFeat('${f}')"> ${f}</label>`).join('')}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">${['Garden','Parking','Garage','Balcony','Pets allowed','Bike storage','Dishwasher','Washing machine','Students considered','DSS/Housing Benefit accepted'].map(f=>`<label style="display:flex;align-items:center;gap:5px;font-size:12px;background:var(--off);border:1px solid var(--border);border-radius:6px;padding:5px 10px;cursor:pointer"><input type="checkbox" style="width:auto" ${(OB.featChips||[]).includes(f)?'checked':''} onchange="obToggleFeat('${f}')"> ${f}</label>`).join('')}</div>
       <input id="ob-feat" value="${esc(OB.feat)}" placeholder="Other features, comma-separated"></div>
+    <div class="fg"><label>Council Tax band <span class="faint">(required material info for listings)</span></label><select id="ob-ctax">${['','A','B','C','D','E','F','G','H'].map(t=>`<option ${OB.councilTaxBand===t?'selected':''}>${t||'—'}</option>`).join('')}</select></div>
     <div class="fg"><label>Description <span class="faint">(optional — used for marketing later)</span></label><textarea id="ob-desc" rows="2" placeholder="Bright two-bed flat close to transport…">${esc(OB.desc||'')}</textarea></div>
     <button class="btn" onclick="obAddAnotherProp()">＋ Save &amp; add another property</button>
     <div class="hint" style="color:var(--faint);margin-top:8px">Compliance docs (gas/EICR/EPC) upload in each property's compliance tab — same engine as the landlord app.</div>`;
@@ -1668,17 +1672,18 @@ function addProperty(id){ const l=L(id); const defFee=(l.feePct!=null?l.feePct:D
   <div class="grid3" style="gap:10px"><div class="fg"><label>Expected rent £/mo</label><input id="ap-rent" type="number"></div><div class="fg"><label>Bedrooms</label><input id="ap-beds" type="number" value="2"></div><div class="fg"><label>Bathrooms</label><input id="ap-baths" type="number" value="1"></div></div>
   <div class="grid3" style="gap:10px"><div class="fg"><label>Furnishing</label><select id="ap-furn">${['Unfurnished','Furnished','Part-furnished'].map(t=>`<option>${t}</option>`).join('')}</select></div>
   <div class="fg"><label>EPC rating <span class="faint">(if known)</span></label><select id="ap-epc">${['','A','B','C','D','E','F','G'].map(t=>`<option>${t||'—'}</option>`).join('')}</select></div>
-  <div class="fg"><label>Rent due day</label><select id="ap-rentday"><option>1st</option><option>15th</option><option>Last working day</option></select></div></div>
+  <div class="fg"><label>Rent due day</label><select id="ap-rentday">${_rentDayOpts('1st')}</select></div></div>
   <div class="fg"><label>Available from</label><input id="ap-avail" type="date"></div>
   <div class="fg"><label>Key features</label>
-    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">${['Garden','Parking','Garage','Balcony','Pets allowed','Bike storage','Dishwasher','Washing machine'].map(f=>`<label style="display:flex;align-items:center;gap:5px;font-size:12px;background:var(--off);border:1px solid var(--border);border-radius:6px;padding:5px 10px;cursor:pointer"><input type="checkbox" style="width:auto" value="${f}" class="ap-feat-chip"> ${f}</label>`).join('')}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">${['Garden','Parking','Garage','Balcony','Pets allowed','Bike storage','Dishwasher','Washing machine','Students considered','DSS/Housing Benefit accepted'].map(f=>`<label style="display:flex;align-items:center;gap:5px;font-size:12px;background:var(--off);border:1px solid var(--border);border-radius:6px;padding:5px 10px;cursor:pointer"><input type="checkbox" style="width:auto" value="${f}" class="ap-feat-chip"> ${f}</label>`).join('')}</div>
     <input id="ap-feat" placeholder="Other features, comma-separated"></div>
+  <div class="fg"><label>Council Tax band <span class="faint">(required material info for listings)</span></label><select id="ap-ctax">${['','A','B','C','D','E','F','G','H'].map(t=>`<option>${t||'—'}</option>`).join('')}</select></div>
   <div class="fg"><label>Description <span class="faint">(optional)</span></label><textarea id="ap-desc" rows="2"></textarea></div>
   ${l.service==='full'?`<div class="fg"><label>Management fee for this property (%)</label><input id="ap-fee" type="number" step="0.5" value="${defFee}"><div class="hint">Defaults to ${defFee}% — change it to give this property a different rate (e.g. family/friends).</div></div>`:''}`;
   modal('Add property', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveAddProperty('${id}')">Add</button>`); }
 async function saveAddProperty(id){ var a=val('ap-addr'); if(!a){toast('Enter an address',1);return;} var fEl=document.getElementById('ap-fee');
   var chips=[...document.querySelectorAll('.ap-feat-chip:checked')].map(c=>c.value);
-  var pp={landlordId:id,address:a,postcode:val('ap-pc'),city:val('ap-city'),ptype:val('ap-ptype'),rent:parseInt(val('ap-rent'))||0,beds:parseInt(val('ap-beds'))||1,baths:parseInt(val('ap-baths'))||1,furnished:val('ap-furn'),epc:val('ap-epc'),rentDueDay:val('ap-rentday')||'1st',available:val('ap-avail')||null,description:val('ap-desc'),features:[...chips,...(val('ap-feat')||'').split(',').map(x=>x.trim()).filter(Boolean)],feePct:fEl?parseFloat(fEl.value):undefined};
+  var pp={landlordId:id,address:a,postcode:val('ap-pc'),city:val('ap-city'),ptype:val('ap-ptype'),rent:parseInt(val('ap-rent'))||0,beds:parseInt(val('ap-beds'))||1,baths:parseInt(val('ap-baths'))||1,furnished:val('ap-furn'),epc:val('ap-epc'),councilTaxBand:val('ap-ctax'),rentDueDay:val('ap-rentday')||'1st',available:val('ap-avail')||null,description:val('ap-desc'),features:[...chips,...(val('ap-feat')||'').split(',').map(x=>x.trim()).filter(Boolean)],feePct:fEl?parseFloat(fEl.value):undefined};
   var newPid=await pushPropertyNew(pp); if(!newPid) return;
   pp.id=newPid;
   var tn={id:uid('t'),who:a,propertyId:newPid,stage:'instructed'};
