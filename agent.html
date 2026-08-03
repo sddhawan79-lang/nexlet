@@ -1438,8 +1438,16 @@ async function obFinish(){
   const nm=OB.name, signed=OB.agreement;
   save(); closeModal(); go('landlord',id); toast('✓ '+nm+' onboarded'+(signed?' — agreement signed':' — send the agreement to go live'));
 }
-// Reusable onboarding document uploader (input + attach/replace + on-file line).
-function obDoc(key,label,ph,extra){ const v=OB[key]||''; return `<div class="fg"><label>${label}</label><div style="display:flex;gap:8px"><input id="ob-${key}" value="${esc(v)}" placeholder="filename or reference" style="flex:1"><button class="btn" onclick="OB.${key}=val('ob-${key}')||'${ph}';${extra||''}renderOnboard()">${v?'Replace':'Attach'}</button></div>${v?`<div class="faint" style="font-size:11px;margin-top:4px">✓ ${esc(v)} on file</div>`:''}</div>`; }
+// Reusable onboarding document uploader — real file picker, stores the actual filename.
+function obDoc(key,label,hint,extra){ const v=OB[key]||''; return `<div class="fg"><label>${label}</label>
+  <label style="display:flex;align-items:center;gap:10px;padding:10px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer" onmouseover="this.style.borderColor='var(--navy)'" onmouseout="this.style.borderColor='var(--border)'">
+    <span style="font-size:18px">📄</span>
+    <div style="flex:1"><div style="font-size:12.5px;font-weight:600">${v?'Replace file':'Click to attach a file'}</div><div class="faint" style="font-size:11px">${hint||'PDF or image'}</div></div>
+    <input type="file" accept="image/*,.pdf" style="display:none" onchange="obAttachFile(this,'${key}','${(extra||'').replace(/'/g,"\\'")}')">
+  </label>
+  ${v?`<div class="faint" style="font-size:11px;margin-top:4px">✓ ${esc(v)} on file <a href="javascript:void(0)" onclick="OB.${key}='';${key==='idDoc'?'OB.aml=false;':''}${key==='ownDoc'?'OB.ownership=false;':''}renderOnboard()" style="color:var(--red);margin-left:8px">remove</a></div>`:''}
+  </div>`; }
+function obAttachFile(input,key,extraCode){ const f=input.files[0]; if(!f) return; OB[key]=f.name; if(extraCode) (new Function(extraCode))(); renderOnboard(); }
 function renderOnboard(){
   const s=OB.step;
   const labels=['Details','Identity & AML','Ownership & consent','Property','Service & fee','Agreement'];
@@ -1460,17 +1468,17 @@ function renderOnboard(){
     <div class="fg"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" style="width:auto" ${OB.nrl?'checked':''} onchange="OB.nrl=this.checked"> Lives abroad (Non-Resident Landlord)</label><div class="hint">If abroad, the NRL scheme applies — tax deducted unless registered.</div></div></div>`;
   if(s===2) body=`<div class="note" style="margin-bottom:14px">Anti-money-laundering &amp; sanctions checks — legally required for every letting since 14 May 2025 (Money Laundering Regs 2017). Verify identity, current address, and screen against the UK/OFSI sanctions list. Keep records for 5 years.</div>
     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;margin-bottom:14px"><input type="checkbox" style="width:auto" ${OB.isCompany?'checked':''} onchange="OB.isCompany=this.checked;renderOnboard()"> This is a limited-company / corporate landlord</label>
-    ${obDoc('idDoc','Photo ID <span class="faint">(passport or driving licence)</span>','passport.pdf','OB.aml=true;')}
-    ${obDoc('addrDoc','Proof of current address <span class="faint">(utility bill / bank statement, under 3 months)</span>','utility_bill.pdf')}
-    ${OB.isCompany?obDoc('incorpDoc','Certificate of incorporation','certificate_of_incorporation.pdf')+obDoc('dirIdDoc','Director / beneficial-owner ID','director_id.pdf'):''}
+    ${obDoc('idDoc','Photo ID <span class="faint">(passport or driving licence)</span>','e.g. passport.pdf','OB.aml=true;')}
+    ${obDoc('addrDoc','Proof of current address <span class="faint">(utility bill / bank statement, under 3 months)</span>','e.g. utility_bill.pdf')}
+    ${OB.isCompany?obDoc('incorpDoc','Certificate of incorporation','e.g. certificate_of_incorporation.pdf')+obDoc('dirIdDoc','Director / beneficial-owner ID','e.g. director_id.pdf'):''}
     <div class="chk ${OB.sanctions?'on':''}" onclick="OB.sanctions=!OB.sanctions;renderOnboard()"><div class="box">${OB.sanctions?'✓':''}</div><div><div style="font-weight:600;font-size:13px">Sanctions (OFSI) check completed</div><div class="faint" style="font-size:11px">Screened against the UK financial sanctions list — no match${OB.sanctions?' · '+fmtDate(today()):''}</div></div></div>
     <div class="chk ${OB.aml?'on':''}" onclick="OB.aml=!OB.aml;renderOnboard()"><div class="box">${OB.aml?'✓':''}</div><div><div style="font-weight:600;font-size:13px">Identity &amp; AML check passed</div><div class="faint" style="font-size:11px">Auto-ticks once ID is attached — untick if checks are incomplete</div></div></div>`;
   if(s===3) body=`<div class="note" style="margin-bottom:14px">Confirm the landlord is legally entitled to let — and that any lender or freeholder permits letting. Title register, mortgage statement or council tax bill.</div>
-    ${obDoc('ownDoc','Proof of ownership <span class="faint">(title register / mortgage statement / council tax)</span>','title_register.pdf','OB.ownership=true;')}
+    ${obDoc('ownDoc','Proof of ownership <span class="faint">(title register / mortgage statement / council tax)</span>','e.g. title_register.pdf','OB.ownership=true;')}
     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;margin:2px 0 12px"><input type="checkbox" style="width:auto" ${OB.isMortgaged?'checked':''} onchange="OB.isMortgaged=this.checked;renderOnboard()"> Property is mortgaged <span class="faint">(lender consent-to-let needed)</span></label>
-    ${OB.isMortgaged?obDoc('mortgageConsentDoc','Mortgage lender consent-to-let','consent_to_let.pdf'):''}
+    ${OB.isMortgaged?obDoc('mortgageConsentDoc','Mortgage lender consent-to-let','e.g. consent_to_let.pdf'):''}
     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;margin:2px 0 12px"><input type="checkbox" style="width:auto" ${OB.isLeasehold?'checked':''} onchange="OB.isLeasehold=this.checked;renderOnboard()"> Property is leasehold <span class="faint">(freeholder consent may be needed)</span></label>
-    ${OB.isLeasehold?obDoc('freeholderConsentDoc','Freeholder / managing-agent consent to sublet','freeholder_consent.pdf'):''}
+    ${OB.isLeasehold?obDoc('freeholderConsentDoc','Freeholder / managing-agent consent to sublet','e.g. freeholder_consent.pdf'):''}
     <div class="chk ${OB.ownership?'on':''}" onclick="OB.ownership=!OB.ownership;renderOnboard()"><div class="box">${OB.ownership?'✓':''}</div><div><div style="font-weight:600;font-size:13px">Ownership &amp; right-to-let confirmed</div><div class="faint" style="font-size:11px">Auto-ticks once proof is attached</div></div></div>`;
   if(s===4) body=`<div class="faint" style="font-size:12px;margin-bottom:12px">Add their first property (optional now — add more later from their record).</div>
     <div class="fg"><label>Address</label><input id="ob-addr" value="${esc(OB.addr)}" placeholder="e.g. 12 High Street"></div>
@@ -1541,10 +1549,15 @@ function saveComm(id){ const l=L(id); const note=val('cm-note'); if(!note){toast
   l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:val('cm-type'),note}); save(); pushLandlord(l); closeModal(); render(); toast('✓ Contact logged'); }
 
 // ── DOC UPLOAD / PROPERTY ADD ──
-function uploadDoc(id,col){ const l=L(id); l.docs=l.docs||{}; const def=col==='id'?'id_document.pdf':col==='ownership'?'proof_of_ownership.pdf':'mgmt_agreement.pdf';
-  const body=`<div class="fg"><label>${col==='id'?'Photo ID (AML)':col==='ownership'?'Proof of ownership':'Signed agreement'}</label><input id="ud-name" value="" placeholder="${def}"><div class="hint">In production this opens a file picker + AI scan. Enter a filename to simulate.</div></div>`;
-  modal('Upload document', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveUploadDoc('${id}','${col}','${def}')">Attach</button>`); }
-function saveUploadDoc(id,col,def){ var n=val('ud-name')||def; var l=S.landlords.find(x=>x.id===id); l.docs=l.docs||{}; l.docs[col]=n; if(col==='id')l.aml=true; if(col==='ownership')l.ownership=true; if(col==='agreement'){l.agreement=true;l.status='active';} save(); pushLandlord(l); closeModal(); render(); toast('✓ Document attached'); }
+function uploadDoc(id,col){ const l=L(id);
+  const label=col==='id'?'Photo ID (AML)':col==='ownership'?'Proof of ownership':'Signed agreement';
+  const body=`<div class="fg"><label>${label}</label>
+    <label style="display:flex;align-items:center;gap:10px;padding:10px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer">
+      <span style="font-size:18px">📄</span><div style="font-size:12.5px;font-weight:600;flex:1">Click to attach a file</div>
+      <input type="file" accept="image/*,.pdf" style="display:none" onchange="saveUploadDoc('${id}','${col}',this)">
+    </label></div>`;
+  modal('Upload document', body, `<button class="btn" onclick="closeModal()">Cancel</button>`); }
+function saveUploadDoc(id,col,input){ const f=input.files[0]; if(!f) return; var l=S.landlords.find(x=>x.id===id); l.docs=l.docs||{}; l.docs[col]=f.name; if(col==='id')l.aml=true; if(col==='ownership')l.ownership=true; if(col==='agreement'){l.agreement=true;l.status='active';} save(); pushLandlord(l); closeModal(); render(); toast('✓ Document attached'); }
 function addProperty(id){ const l=L(id); const defFee=(l.feePct!=null?l.feePct:DEF_FEE); const body=`<div class="fg"><label>Address</label><input id="ap-addr" placeholder="e.g. 12 High Street"></div>
   <div class="grid3" style="gap:10px"><div class="fg"><label>Town/City</label><input id="ap-city"></div><div class="fg"><label>Rent £/mo</label><input id="ap-rent" type="number"></div><div class="fg"><label>Beds</label><input id="ap-beds" type="number" value="2"></div></div>
   ${l.service==='full'?`<div class="fg"><label>Management fee for this property (%)</label><input id="ap-fee" type="number" step="0.5" value="${defFee}"><div class="hint">Defaults to ${defFee}% — change it to give this property a different rate (e.g. family/friends).</div></div>`:''}`;
