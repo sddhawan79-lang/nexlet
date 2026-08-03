@@ -1412,10 +1412,11 @@ function saveSettings(){ S.agency.name=val('set-name'); S.agency.address=val('se
 let OB=null;
 function openOnboard(){ OB={step:1,name:'',joint:'',entity:'individual',email:'',phone:'',address:'',nrl:false,prsReg:'',payout:'1st',contactPref:'Email',idDoc:'',ownDoc:'',aml:false,ownership:false,service:'full',feePct:DEF_FEE,letWeeks:DEF_WEEKS,addr:'',city:'',rent:'',beds:'2',agreement:false,
   addrDoc:'',sanctions:false,isCompany:false,incorpDoc:'',dirIdDoc:'',isMortgaged:false,mortgageConsentDoc:'',isLeasehold:false,freeholderConsentDoc:''}; renderOnboard(); }
+function obSkipDocs(){ OB.skipDocs=true; obNext(); }
 function obNext(){
   if(OB.step===1){ OB.name=val('ob-name');OB.joint=val('ob-joint');OB.email=val('ob-email');OB.phone=val('ob-phone');OB.address=val('ob-address');OB.prsReg=val('ob-prs');OB.payout=val('ob-payout');OB.contactPref=val('ob-pref'); if(!OB.name){toast(OB.entity==='company'?'Enter the company name':'Enter the landlord name',1);return;} }
-  if(OB.step===2){ if(!OB.idDoc&&!OB.aml){toast('Attach photo ID to continue (AML requirement)',1);return;} if(!OB.addrDoc){toast('Attach proof of address — required for AML',1);return;} if(!OB.sanctions){toast('Confirm the sanctions (OFSI) check — legally required since May 2025',1);return;} if(OB.isCompany&&(!OB.incorpDoc||!OB.dirIdDoc)){toast('Company landlord: attach incorporation certificate + director ID',1);return;} }
-  if(OB.step===3){ if(!OB.ownDoc&&!OB.ownership){toast('Attach proof of ownership to continue',1);return;} }
+  if(OB.step===2&&!OB.skipDocs){ if(!OB.idDoc&&!OB.aml){toast('Attach photo ID to continue (AML requirement), or use "Skip for now"',1);return;} if(!OB.addrDoc){toast('Attach proof of address — required for AML, or use "Skip for now"',1);return;} if(!OB.sanctions){toast('Confirm the sanctions (OFSI) check — legally required since May 2025',1);return;} if(OB.isCompany&&(!OB.incorpDoc||!OB.dirIdDoc)){toast('Company landlord: attach incorporation certificate + director ID',1);return;} }
+  if(OB.step===3&&!OB.skipDocs){ if(!OB.ownDoc&&!OB.ownership){toast('Attach proof of ownership to continue, or use "Skip for now"',1);return;} }
   if(OB.step===4){ OB.addr=val('ob-addr');OB.city=val('ob-city');OB.rent=val('ob-rent');OB.beds=val('ob-beds'); }
   if(OB.step===5){ OB.service=val('ob-service'); OB.feePct=parseFloat(val('ob-fee'))||DEF_FEE; OB.letWeeks=parseFloat(val('ob-weeks'))||DEF_WEEKS; }
   OB.step++; renderOnboard();
@@ -1463,14 +1464,16 @@ function renderOnboard(){
     ${obDoc('addrDoc','Proof of current address <span class="faint">(utility bill / bank statement, under 3 months)</span>','utility_bill.pdf')}
     ${OB.isCompany?obDoc('incorpDoc','Certificate of incorporation','certificate_of_incorporation.pdf')+obDoc('dirIdDoc','Director / beneficial-owner ID','director_id.pdf'):''}
     <div class="chk ${OB.sanctions?'on':''}" onclick="OB.sanctions=!OB.sanctions;renderOnboard()"><div class="box">${OB.sanctions?'✓':''}</div><div><div style="font-weight:600;font-size:13px">Sanctions (OFSI) check completed</div><div class="faint" style="font-size:11px">Screened against the UK financial sanctions list — no match${OB.sanctions?' · '+fmtDate(today()):''}</div></div></div>
-    <div class="chk ${OB.aml?'on':''}" onclick="OB.aml=!OB.aml;renderOnboard()"><div class="box">${OB.aml?'✓':''}</div><div><div style="font-weight:600;font-size:13px">Identity &amp; AML check passed</div><div class="faint" style="font-size:11px">Auto-ticks once ID is attached — untick if checks are incomplete</div></div></div>`;
+    <div class="chk ${OB.aml?'on':''}" onclick="OB.aml=!OB.aml;renderOnboard()"><div class="box">${OB.aml?'✓':''}</div><div><div style="font-weight:600;font-size:13px">Identity &amp; AML check passed</div><div class="faint" style="font-size:11px">Auto-ticks once ID is attached — untick if checks are incomplete</div></div></div>
+    <div style="margin-top:10px;font-size:11.5px"><a href="javascript:void(0)" onclick="obSkipDocs()" style="color:var(--muted)">Don't have these yet? Skip for now, add before sending the agreement →</a></div>`;
   if(s===3) body=`<div class="note" style="margin-bottom:14px">Confirm the landlord is legally entitled to let — and that any lender or freeholder permits letting. Title register, mortgage statement or council tax bill.</div>
     ${obDoc('ownDoc','Proof of ownership <span class="faint">(title register / mortgage statement / council tax)</span>','title_register.pdf','OB.ownership=true;')}
     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;margin:2px 0 12px"><input type="checkbox" style="width:auto" ${OB.isMortgaged?'checked':''} onchange="OB.isMortgaged=this.checked;renderOnboard()"> Property is mortgaged <span class="faint">(lender consent-to-let needed)</span></label>
     ${OB.isMortgaged?obDoc('mortgageConsentDoc','Mortgage lender consent-to-let','consent_to_let.pdf'):''}
     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;margin:2px 0 12px"><input type="checkbox" style="width:auto" ${OB.isLeasehold?'checked':''} onchange="OB.isLeasehold=this.checked;renderOnboard()"> Property is leasehold <span class="faint">(freeholder consent may be needed)</span></label>
     ${OB.isLeasehold?obDoc('freeholderConsentDoc','Freeholder / managing-agent consent to sublet','freeholder_consent.pdf'):''}
-    <div class="chk ${OB.ownership?'on':''}" onclick="OB.ownership=!OB.ownership;renderOnboard()"><div class="box">${OB.ownership?'✓':''}</div><div><div style="font-weight:600;font-size:13px">Ownership &amp; right-to-let confirmed</div><div class="faint" style="font-size:11px">Auto-ticks once proof is attached</div></div></div>`;
+    <div class="chk ${OB.ownership?'on':''}" onclick="OB.ownership=!OB.ownership;renderOnboard()"><div class="box">${OB.ownership?'✓':''}</div><div><div style="font-weight:600;font-size:13px">Ownership &amp; right-to-let confirmed</div><div class="faint" style="font-size:11px">Auto-ticks once proof is attached</div></div></div>
+    <div style="margin-top:10px;font-size:11.5px"><a href="javascript:void(0)" onclick="obSkipDocs()" style="color:var(--muted)">Don't have this yet? Skip for now, add before sending the agreement →</a></div>`;
   if(s===4) body=`<div class="faint" style="font-size:12px;margin-bottom:12px">Add their first property (optional now — add more later from their record).</div>
     <div class="fg"><label>Address</label><input id="ob-addr" value="${esc(OB.addr)}" placeholder="e.g. 12 High Street"></div>
     <div class="grid3" style="gap:10px"><div class="fg"><label>Town/City</label><input id="ob-city" value="${esc(OB.city)}"></div>
@@ -1489,9 +1492,14 @@ function renderOnboard(){
   }
   if(s===6){ const isF=OB.service==='full';
     const outstanding=[];
+    if(!OB.idDoc) outstanding.push('photo ID');
+    if(!OB.addrDoc) outstanding.push('proof of address');
+    if(!OB.sanctions) outstanding.push('sanctions check');
+    if(!OB.ownDoc) outstanding.push('proof of ownership');
     if(OB.isMortgaged&&!OB.mortgageConsentDoc) outstanding.push('mortgage consent-to-let');
     if(OB.isLeasehold&&!OB.freeholderConsentDoc) outstanding.push('freeholder consent');
-    body=`<div class="note" style="margin-bottom:14px">Review the instruction. After onboarding, open the landlord's record and click <b>“Send agreement to sign”</b> to e-sign the ${isF?'Letting &amp; Management':'Tenant-Find'} Agreement — the landlord counter-signs by secure link and both of you receive a timestamped copy.</div>
+    body=`${outstanding.length?`<div class="note" style="margin-bottom:14px;background:#FEF2E7;border-color:rgba(184,110,32,.3);color:#8a5a1a"><b>⚠ Still needed before you send the agreement:</b> ${outstanding.join(', ')}. You can finish onboarding now and chase these separately.</div>`:''}
+    <div class="note" style="margin-bottom:14px">Review the instruction. After onboarding, open the landlord's record and click <b>“Send agreement to sign”</b> to e-sign the ${isF?'Letting &amp; Management':'Tenant-Find'} Agreement — the landlord counter-signs by secure link and both of you receive a timestamped copy.</div>
     <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:14px 16px;font-size:12.5px;line-height:1.8;margin-bottom:14px">
       <b>${esc(OB.name||'Landlord')}</b> · ${SVC[OB.service].label}<br>
       Fee: <b>${isF?OB.feePct+'% of monthly rent':OB.letWeeks+" weeks' rent (one-off)"}</b><br>
