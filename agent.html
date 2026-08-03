@@ -1412,18 +1412,20 @@ function saveSettings(){ S.agency.name=val('set-name'); S.agency.address=val('se
 // ── ONBOARDING WIZARD ──
 let OB=null;
 function openOnboard(){ OB={step:1,name:'',joint:'',entity:'individual',email:'',phone:'',address:'',nrl:false,prsReg:'',payout:'1st',contactPref:'Email',idDoc:'',ownDoc:'',aml:false,ownership:false,service:'full',feePct:DEF_FEE,letWeeks:DEF_WEEKS,addr:'',city:'',rent:'',beds:'2',agreement:false,
-  addrDoc:'',sanctions:false,isCompany:false,incorpDoc:'',dirIdDoc:'',isMortgaged:false,mortgageConsentDoc:'',isLeasehold:false,freeholderConsentDoc:''};
+  addrDoc:'',sanctions:false,isCompany:false,incorpDoc:'',dirIdDoc:'',isMortgaged:false,mortgageConsentDoc:'',isLeasehold:false,freeholderConsentDoc:'',
+  addr:'',pc:'',city:'',ptype:'Flat',rent:'',beds:'',baths:'',furnished:'Unfurnished',epc:'',avail:'',feat:'',desc:'',featChips:[]};
   OB._file_={}; renderOnboard(); }
 function obSkipDocs(){ OB.skipDocs=true; obNext(); OB.skipDocs=false; }
 function obNext(){
   if(OB.step===1){ OB.name=val('ob-name');OB.joint=val('ob-joint');OB.email=val('ob-email');OB.phone=val('ob-phone');OB.address=val('ob-address');OB.prsReg=val('ob-prs');OB.payout=val('ob-payout');OB.contactPref=val('ob-pref'); if(!OB.name){toast(OB.entity==='company'?'Enter the company name':'Enter the landlord name',1);return;} }
   if(OB.step===2&&!OB.skipDocs){ if(!OB.idDoc&&!OB.aml){toast('Attach photo ID to continue (AML requirement), or use "Skip for now"',1);return;} if(!OB.addrDoc){toast('Attach proof of address — required for AML, or use "Skip for now"',1);return;} if(!OB.sanctions){toast('Confirm the sanctions (OFSI) check — legally required since May 2025',1);return;} if(OB.isCompany&&(!OB.incorpDoc||!OB.dirIdDoc)){toast('Company landlord: attach incorporation certificate + director ID',1);return;} }
   if(OB.step===3&&!OB.skipDocs){ if(!OB.ownDoc&&!OB.ownership){toast('Attach proof of ownership to continue, or use "Skip for now"',1);return;} }
-  if(OB.step===4){ OB.addr=val('ob-addr');OB.city=val('ob-city');OB.rent=val('ob-rent');OB.beds=val('ob-beds'); }
+  if(OB.step===4){ OB.addr=val('ob-addr');OB.pc=val('ob-pc');OB.city=val('ob-city');OB.ptype=val('ob-ptype');OB.rent=val('ob-rent');OB.beds=val('ob-beds');OB.baths=val('ob-baths');OB.furnished=val('ob-furn');OB.epc=val('ob-epc');OB.avail=val('ob-avail');OB.feat=val('ob-feat');OB.desc=val('ob-desc'); }
   if(OB.step===5){ OB.service=val('ob-service'); OB.feePct=parseFloat(val('ob-fee'))||DEF_FEE; OB.letWeeks=parseFloat(val('ob-weeks'))||DEF_WEEKS; }
   OB.step++; renderOnboard();
 }
 function obBack(){ if(OB.step===1){closeModal();return;} OB.step--; renderOnboard(); }
+function obToggleFeat(f){ OB.featChips=OB.featChips||[]; const i=OB.featChips.indexOf(f); if(i>-1)OB.featChips.splice(i,1); else OB.featChips.push(f); renderOnboard(); }
 async function obFinish(){
   const id=uid('l');
   const ll={id,name:OB.name,joint:OB.joint||'',entity:OB.entity||'individual',email:OB.email,phone:OB.phone,address:OB.address,nrl:OB.nrl,prsReg:OB.prsReg,payout:OB.payout,contactPref:OB.contactPref,
@@ -1433,7 +1435,7 @@ async function obFinish(){
       isCompany:!!OB.isCompany,isMortgaged:!!OB.isMortgaged,isLeasehold:!!OB.isLeasehold,sanctions:!!OB.sanctions,sanctionsDate:OB.sanctions?today():''},
     comms:[{id:uid('c'),date:today(),type:'Note',note:'Landlord onboarded · '+SVC[OB.service].label+(OB.agreement?' · agreement signed':' · agreement pending')}]};
   S.landlords.push(ll); pushLandlord(ll);
-  if(OB.addr){ const pp={landlordId:id,address:OB.addr,city:OB.city,rent:parseInt(OB.rent)||0,beds:parseInt(OB.beds)||1};
+  if(OB.addr){ const pp={landlordId:id,address:OB.addr,postcode:OB.pc,city:OB.city,ptype:OB.ptype,rent:parseInt(OB.rent)||0,beds:parseInt(OB.beds)||1,baths:parseInt(OB.baths)||1,furnished:OB.furnished,epc:OB.epc,available:OB.avail||null,description:OB.desc,features:[...(OB.featChips||[]),...(OB.feat||'').split(',').map(x=>x.trim()).filter(Boolean)]};
     const newPid=await pushPropertyNew(pp);
     if(newPid){ pp.id=newPid; S.properties.push(pp);
       const tn={id:uid('t'),who:OB.addr,propertyId:newPid,stage:'instructed'}; S.tenancies.push(tn); pushTenancy(tn); } }
@@ -1546,10 +1548,20 @@ function renderOnboard(){
     ${OB.isLeasehold?obDoc('freeholderConsentDoc','Freeholder / managing-agent consent to sublet','e.g. freeholder_consent.pdf'):''}
     <div class="chk ${OB.ownership?'on':''}" onclick="OB.ownership=!OB.ownership;renderOnboard()"><div class="box">${OB.ownership?'✓':''}</div><div><div style="font-weight:600;font-size:13px">Ownership &amp; right-to-let confirmed</div><div class="faint" style="font-size:11px">Confirm once you've reviewed the proof above</div></div></div>`;
   if(s===4) body=`<div class="faint" style="font-size:12px;margin-bottom:12px">Add their first property (optional now — add more later from their record).</div>
-    <div class="fg"><label>Address</label><input id="ob-addr" value="${esc(OB.addr)}" placeholder="e.g. 12 High Street"></div>
-    <div class="grid3" style="gap:10px"><div class="fg"><label>Town/City</label><input id="ob-city" value="${esc(OB.city)}"></div>
-    <div class="fg"><label>Rent £/mo</label><input id="ob-rent" type="number" value="${esc(OB.rent)}"></div>
-    <div class="fg"><label>Beds</label><input id="ob-beds" type="number" value="${esc(OB.beds)}"></div></div>
+    <div class="grid2" style="gap:10px"><div class="fg"><label>Address</label><input id="ob-addr" value="${esc(OB.addr)}" placeholder="e.g. 12 High Street"></div>
+    <div class="fg"><label>Postcode</label><input id="ob-pc" value="${esc(OB.pc)}"></div></div>
+    <div class="grid2" style="gap:10px"><div class="fg"><label>Town/City</label><input id="ob-city" value="${esc(OB.city)}"></div>
+    <div class="fg"><label>Property type</label><select id="ob-ptype">${['Flat','Terraced house','Semi-detached','Detached','Maisonette','Studio','HMO room'].map(t=>`<option ${OB.ptype===t?'selected':''}>${t}</option>`).join('')}</select></div></div>
+    <div class="grid3" style="gap:10px"><div class="fg"><label>Rent £/mo</label><input id="ob-rent" type="number" value="${esc(OB.rent)}"></div>
+    <div class="fg"><label>Bedrooms</label><input id="ob-beds" type="number" value="${esc(OB.beds)}"></div>
+    <div class="fg"><label>Bathrooms</label><input id="ob-baths" type="number" value="${esc(OB.baths)}"></div></div>
+    <div class="grid3" style="gap:10px"><div class="fg"><label>Furnishing</label><select id="ob-furn">${['Unfurnished','Furnished','Part-furnished'].map(t=>`<option ${OB.furnished===t?'selected':''}>${t}</option>`).join('')}</select></div>
+    <div class="fg"><label>EPC rating <span class="faint">(if known)</span></label><select id="ob-epc">${['','A','B','C','D','E','F','G'].map(t=>`<option ${OB.epc===t?'selected':''}>${t||'—'}</option>`).join('')}</select></div>
+    <div class="fg"><label>Available from</label><input id="ob-avail" type="date" value="${OB.avail||''}"></div></div>
+    <div class="fg"><label>Key features</label>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">${['Garden','Parking','Garage','Balcony','Pets allowed','Bike storage','Dishwasher','Washing machine'].map(f=>`<label style="display:flex;align-items:center;gap:5px;font-size:12px;background:var(--off);border:1px solid var(--border);border-radius:6px;padding:5px 10px;cursor:pointer"><input type="checkbox" style="width:auto" ${(OB.featChips||[]).includes(f)?'checked':''} onchange="obToggleFeat('${f}')"> ${f}</label>`).join('')}</div>
+      <input id="ob-feat" value="${esc(OB.feat)}" placeholder="Other features, comma-separated"></div>
+    <div class="fg"><label>Description <span class="faint">(optional — used for marketing later)</span></label><textarea id="ob-desc" rows="2" placeholder="Bright two-bed flat close to transport…">${esc(OB.desc||'')}</textarea></div>
     <div class="hint" style="color:var(--faint)">Compliance docs (gas/EICR/EPC) upload in the property's compliance tab — same engine as the landlord app.</div>`;
   if(s===5){ const rent=parseInt(OB.rent)||0; const isF=OB.service==='full';
     body=`<div class="faint" style="font-size:12px;margin-bottom:12px">Pick the service level and set your fee — this becomes the instruction recorded in the management agreement.</div>
