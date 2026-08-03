@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body{margin:0}
+    doc-page:not(:defined){visibility:hidden}
+    doc-page{font-family:Georgia,'Times New Roman',serif;font-size:12.5pt;line-height:1.55;color:#1a1a1a}
+    h1{font-size:22pt;margin:0 0 4px;font-family:Arial,sans-serif}
+    h2{font-size:14pt;margin:28px 0 8px;font-family:Arial,sans-serif;border-bottom:1.5px solid #0B1E3D;padding-bottom:4px;color:#0B1E3D}
+    h3{font-size:12.5pt;margin:16px 0 4px;font-family:Arial,sans-serif}
+    .meta{font-family:Arial,sans-serif;font-size:10.5pt;color:#555;margin-bottom:22px}
+    .fill{background:#FEF6E7;padding:1px 4px;border-radius:2px}
+    table{border-collapse:collapse;width:100%;font-size:11pt;margin:10px 0}
+    td,th{border:1px solid #ccc;padding:6px 8px;text-align:left;vertical-align:top}
+    th{background:#F3F4F6;font-family:Arial,sans-serif;font-size:10.5pt}
+    ul,ol{padding-left:20px}
+    li{margin-bottom:4px}
+  </style>
+</helmet>
+<doc-page margin="0.9in">
+  <h1>Anti-Money Laundering Policy &amp; Business Risk Assessment</h1>
+  <div class="meta">Beacon Residentials Ltd · Company No. 10990778 · Prepared under the Money Laundering, Terrorist Financing and Transfer of Funds (Information on the Payer) Regulations 2017 (as amended)<br>
+  Date adopted: <span class="fill">[DD/MM/YYYY]</span> · Review due: <span class="fill">[DD/MM/YYYY + 12 months]</span> · HMRC MLR registration no.: <span class="fill">[insert once registered]</span></div>
+
+  <h2>1. Purpose and scope</h2>
+  <p>This policy sets out how Beacon Residentials Ltd ("the Business") identifies, assesses and manages the risk of money laundering and terrorist financing arising from its lettings activity, and confirms the procedures followed to meet the Money Laundering Regulations 2017 ("the Regulations"). It applies to all lettings work carried out by the Business, whether Let-Only or Full Management.</p>
+  <p>The Business does not hold client money (rent is paid directly from tenant to landlord; the Business invoices the landlord separately for its fees) and does not currently operate a Client Money Protection scheme. This materially reduces — but does not remove — money laundering risk, since letting agency business itself is a regulated activity under the 2017 Regulations regardless of whether client money is held.</p>
+
+  <h2>2. Money Laundering Reporting Officer (MLRO)</h2>
+  <p>Name: <span class="fill">[insert name]</span> &nbsp; Role: <span class="fill">[e.g. Director / Sole Trader]</span> &nbsp; Contact: <span class="fill">[email/phone]</span></p>
+  <p>The MLRO is responsible for: receiving internal reports of suspicious activity, deciding whether to submit a Suspicious Activity Report (SAR) to the National Crime Agency (NCA), keeping this policy under review, and acting as the point of contact for HMRC.</p>
+
+  <h2>3. Business risk assessment</h2>
+  <table>
+    <tr><th>Risk factor</th><th>Assessment</th><th>Rating</th></tr>
+    <tr><td>Customer type</td><td>Predominantly individual UK-resident landlords with a single let property; occasional limited-company or non-resident landlords.</td><td class="fill">Low–Medium</td></tr>
+    <tr><td>Geographic risk</td><td>Properties and landlords based in <span class="fill">[your operating area]</span>, UK only. No overseas property transactions.</td><td class="fill">Low</td></tr>
+    <tr><td>Product/service risk</td><td>Let-Only and Full Management. No client money held; rent flows tenant→landlord directly, so the Business is not a conduit for laundered funds via rent payments.</td><td class="fill">Low</td></tr>
+    <tr><td>Delivery channel risk</td><td>Landlords onboarded face-to-face (valuation visit) wherever possible; documents collected via the NexLet platform.</td><td class="fill">Low</td></tr>
+    <tr><td>Non-resident / overseas landlords</td><td>Where a landlord lives abroad (NRL scheme), identity and address verification is harder to confirm in person — treated as elevated risk requiring Enhanced Due Diligence (Section 5).</td><td class="fill">Medium</td></tr>
+    <tr><td>Corporate / trust landlords</td><td>Company or trust-owned properties require identification of all beneficial owners with ≥25% control.</td><td class="fill">Medium</td></tr>
+  </table>
+  <p>Overall business risk rating: <span class="fill">[Low / Medium]</span> — reviewed annually or on any material change to the business (e.g. taking on Client Money Protection, expanding overseas, or a large increase in portfolio size).</p>
+
+  <h2>4. Standard Customer Due Diligence (CDD)</h2>
+  <p>Applied to every landlord before instruction is accepted and the management agreement is signed:</p>
+  <ol>
+    <li><b>Identity verification</b> — current passport, driving licence, or biometric residence permit. Verified in NexLet by AI document-read cross-checked against the name supplied.</li>
+    <li><b>Address verification</b> — utility bill or bank statement dated within the last 3 months.</li>
+    <li><b>Proof of ownership / right to let</b> — Land Registry title register, mortgage statement, or council tax bill in the landlord's name; verified against the identity above.</li>
+    <li><b>Sanctions screening</b> — every landlord (and any joint owner or company director) is screened by name against the UK Sanctions List (the consolidated gov.uk list, successor to the OFSI Consolidated List since 28 January 2026) before instruction. Result and timestamp are logged.</li>
+    <li><b>Corporate landlords</b> — certificate of incorporation plus identity documents for all directors and beneficial owners holding 25% or more.</li>
+  </ol>
+
+  <h2>5. Enhanced Due Diligence (EDD)</h2>
+  <p>Enhanced measures apply where any of the following are present:</p>
+  <ul>
+    <li>The landlord is a Politically Exposed Person (PEP), or a family member/known close associate of one.</li>
+    <li>The landlord is resident outside the UK (Non-Resident Landlord).</li>
+    <li>Ownership is held through a company registered outside the UK, or a trust structure.</li>
+    <li>The sanctions screen returns a possible match that cannot immediately be ruled out.</li>
+    <li>Funds for the property's purchase, or the rental income destination, appear inconsistent with the landlord's stated circumstances.</li>
+  </ul>
+  <p>EDD means: obtaining additional independent evidence of identity, establishing source of funds/wealth where relevant, and — for any unresolved sanctions or PEP concern — the MLRO must approve the instruction before it proceeds, or decline it.</p>
+
+  <h2>6. Sanctions compliance</h2>
+  <p>Every landlord is screened against the UK Sanctions List before onboarding completes. A confirmed true match is a criminal offence to proceed with — the instruction must not go ahead, and the MLRO must report the match to the Office of Financial Sanctions Implementation (OFSI) without delay. A possible match with low confidence is reviewed manually by the MLRO before being cleared or escalated; this review is recorded.</p>
+
+  <h2>7. Ongoing monitoring</h2>
+  <p>Landlord details are reviewed if circumstances change materially (e.g. property transferred to a company, landlord moves abroad, new joint owner added). All landlord records are re-screened against the sanctions list if any of these triggers occur, and otherwise are not routinely re-screened absent a trigger.</p>
+
+  <h2>8. Record keeping</h2>
+  <p>All CDD documents, sanctions screening results, and any SAR-related records are retained for a minimum of <b>5 years</b> from the end of the business relationship, per Regulation 40. Records are stored securely within NexLet (access-controlled, owner-only) and are not shared beyond what is necessary for the letting relationship.</p>
+
+  <h2>9. Reporting suspicious activity</h2>
+  <p>Any suspicion of money laundering or terrorist financing — regardless of how small — must be reported internally to the MLRO immediately and in writing. Staff must not "tip off" the person concerned. The MLRO decides whether to submit a SAR to the NCA via the online SAR portal, and keeps a written record of that decision and its reasoning.</p>
+
+  <h2>10. Staff training</h2>
+  <p>All staff involved in landlord onboarding receive AML awareness training covering: how to recognise red flags, this policy's CDD/EDD procedures, and the internal reporting route to the MLRO. Training is refreshed at least annually and logged below.</p>
+  <table>
+    <tr><th>Name</th><th>Role</th><th>Training completed</th><th>Date</th></tr>
+    <tr><td class="fill">[name]</td><td class="fill">[role]</td><td class="fill">[topic/source]</td><td class="fill">[date]</td></tr>
+  </table>
+
+  <h2>11. Review</h2>
+  <p>This policy and the business risk assessment in Section 3 are reviewed at least annually, and immediately following any change in the nature, scale or complexity of the business (e.g. adopting Client Money Protection, expanding overseas, or a significant rise in portfolio size).</p>
+  <p>Signed: <span class="fill">[name]</span>, <span class="fill">[role]</span> &nbsp; Date: <span class="fill">[DD/MM/YYYY]</span></p>
+
+  <template id="__bundler_thumbnail">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 56"><rect width="80" height="56" fill="#0B1E3D"/><text x="12" y="32" font-family="Georgia,serif" font-size="14" fill="#fff">AML</text></svg>
+  </template>
+</doc-page>
+
+</x-dc>
+</body>
+</html>
