@@ -1404,6 +1404,7 @@ function vSettings(){
       <div class="hint" style="margin:-6px 0 14px;color:var(--faint)">Leave VAT off until you cross the £90k threshold or register voluntarily. Switching to Yes makes every new invoice a VAT invoice automatically.</div>
       <div class="fg"><label>Invoice payment terms (days)</label><input id="set-terms" type="number" value="${a.paymentTerms||14}" style="max-width:120px"></div>
       <button class="btn navy" onclick="saveSettings()">Save settings</button>
+      <div class="note" style="margin-top:16px"><b>AML Policy &amp; Risk Assessment</b> — required by HMRC once you register for Money Laundering Regulations supervision. <a href="AML Policy %26 Risk Assessment.dc.html" target="_blank">Open / print the template →</a></div>
     </div></div>`;
 }
 function saveSettings(){ S.agency.name=val('set-name'); S.agency.address=val('set-address'); S.agency.redress=val('set-redress'); S.agency.redressNo=val('set-redressno'); S.agency.cmp=val('set-cmp'); S.agency.icoNo=val('set-ico'); S.agency.refPartner=val('set-ref'); S.agency.vatRegistered=val('set-vat')==='yes'; S.agency.vatNumber=val('set-vatno'); S.agency.paymentTerms=parseInt(val('set-terms'))||14; save(); pushAgency(); render(); toast('✓ Settings saved'); }
