@@ -886,8 +886,8 @@ function vLandlordDetail(){
   const rent=props.reduce((s,p)=>s+(p.rent||0),0);
   const sv=SVC[l.service]||SVC.full, st=STATUS[l.status]||STATUS.pending;
   const d=l.docs||{};
-  const docRow=(label,name,icon,col)=>`<div class="doc"><div class="di" style="background:${name?'var(--green-bg)':'var(--off)'};color:${name?'var(--green)':'var(--faint)'}">${icon}</div>
-    <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${label}</div><div class="faint" style="font-size:11.5px">${name?esc(name):'Not uploaded'}</div></div>
+  const docRow=(label,name,icon,col,date)=>`<div class="doc"><div class="di" style="background:${name?'var(--green-bg)':'var(--off)'};color:${name?'var(--green)':'var(--faint)'}">${icon}</div>
+    <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${label}</div><div class="faint" style="font-size:11.5px">${name?esc(name)+(date?' · verified '+fmtDate(date):''):'Not uploaded'}</div></div>
     ${name?`<span class="pill" style="background:var(--green-bg);color:var(--green)">✓ On file</span>`:`<button class="btn sm" onclick="uploadDoc('${l.id}','${col}')">Upload</button>`}</div>`;
   return `
     <div class="back" onclick="go('landlords')">← All landlords</div>
@@ -901,7 +901,7 @@ function vLandlordDetail(){
     <div style="display:flex;gap:8px;margin:14px 0 18px">
       <button class="btn navy" onclick="openComm('${l.id}')">＋ Log contact</button>
       <button class="btn" onclick="go('llportal','${l.id}')">👁 View as landlord</button>
-      <button class="btn" onclick="inviteToPortal('${l.id}')">📧 Invite to portal</button>
+      <button class="btn" onclick="inviteToPortal('${l.id}')">📧 Invite landlord to portal</button>
       ${(()=>{ const a=agreementFor(l.id);
         if(l.agreement) return `<button class="btn" onclick="viewSignedAgreement('${l.id}')">✔ View signed agreement</button>`;
         if(a&&a.status==='sent') return `<button class="btn" onclick="openAgreement('${l.id}')" style="border-color:var(--amber);color:var(--amber)">⏳ Awaiting landlord signature · resend</button>`;
@@ -917,18 +917,18 @@ function vLandlordDetail(){
           <div class="kv"><span class="k">Service level</span><span class="v">${sv.label}</span></div>
           <div class="kv"><span class="k">Your fee</span><span class="v">${l.service==='full'?(gbp(landlordMonthlyFee(l))+'/mo total · set per property'):feeOf(l)+" weeks' rent (one-off)"+(rent?' · '+gbp(rent/4.345*feeOf(l)):'')}</span></div>
           <div class="kv"><span class="k">Correspondence</span><span class="v">${esc(l.address||'—')}</span></div>
-          <div class="kv"><span class="k">Rent payout date</span><span class="v">${esc(l.payout||'—')}</span></div>
           <div class="kv"><span class="k">PRS Database</span><span class="v">${l.prsReg?'✓ '+esc(l.prsReg):'<span style="color:var(--amber)">⚠ Not verified</span>'}</span></div>
           <div class="kv"><span class="k">Non-resident (NRL)</span><span class="v">${l.nrl?'<span style="color:var(--purple)">Yes — NRL scheme applies</span>':'No'}</span></div>
-          <div class="kv" style="border:none"><span class="k">AML / ID</span><span class="v">${l.aml?'✓ Verified':'<span style="color:var(--red)">Outstanding</span>'}</span></div>
+          <div class="kv"><span class="k">AML / ID</span><span class="v">${l.aml?'✓ Verified '+(d.amlDate?'('+fmtDate(d.amlDate)+')':''):'<span style="color:var(--red)">Outstanding</span>'}</span></div>
+          <div class="kv" style="border:none"><span class="k">Sanctions screen</span><span class="v">${d.sanctions?'✓ Clear '+(d.sanctionsDate?'('+fmtDate(d.sanctionsDate)+')':''):'<span style="color:var(--red)">Not yet run</span>'}</span></div>
         </div></div>
         <div class="panel"><div class="panel-hd"><h2>Document vault</h2></div><div class="panel-bd">
-          ${docRow('Photo ID (AML)',d.id,'🪪','id')}
-          ${docRow('Proof of address (AML)',d.address,'🏠','address')}
+          ${docRow('Photo ID (AML)',d.id,'🪪','id',d.idDate)}
+          ${docRow('Proof of address (AML)',d.address,'🏠','address',d.addressDate)}
           ${(d.isCompany||d.incorporation)?docRow('Certificate of incorporation',d.incorporation,'🏢','incorporation'):''}
           ${(d.isCompany||d.directorId)?docRow('Director / owner ID',d.directorId,'🪪','directorId'):''}
-          ${docRow('Proof of ownership',d.ownership,'📜','ownership')}
-          ${(d.isMortgaged||d.mortgageConsent)?docRow('Mortgage consent-to-let',d.mortgageConsent,'🏦','mortgageConsent'):''}
+          ${docRow('Proof of ownership',d.ownership,'📜','ownership',d.ownershipDate)}
+          ${(d.isMortgaged||d.mortgageConsent)?docRow('Mortgage consent-to-let <span class="faint">(landlord\'s own responsibility to obtain)</span>',d.mortgageConsent,'🏦','mortgageConsent'):''}
           ${(d.isLeasehold||d.freeholderConsent)?docRow('Freeholder consent',d.freeholderConsent,'🔑','freeholderConsent'):''}
           ${docRow('Signed management agreement',d.agreement,'✍️','agreement')}
         </div></div>
@@ -1051,7 +1051,7 @@ function vPropertyDetail(){
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">
       <div class="av" style="width:50px;height:50px;font-size:20px">⌂</div>
       <div style="flex:1"><h1 class="pg" style="margin:0">${esc(p.address)}</h1>
-        <div class="faint" style="font-size:13px">${esc(p.city||'')} · ${p.beds} bed · ${gbp(p.rent)}/mo · Managed for <a href="#" onclick="go('landlord','${l.id}');return false" style="color:var(--blue)">${esc(l.name||'—')}</a></div></div>
+        <div class="faint" style="font-size:13px">${esc(p.city||'')} · ${p.beds} bed · <b>${gbp(p.rent)}/mo</b> ${p.tenant?'achieved':'expected'} <a href="#" onclick="editPropRent('${p.id}');return false" style="color:var(--blue);font-size:12px;margin-left:2px">edit</a> · Managed for <a href="#" onclick="go('landlord','${l.id}');return false" style="color:var(--blue)">${esc(l.name||'—')}</a></div></div>
       <span class="pill" style="background:${comp.pct===100?'var(--green-bg)':'var(--amber-bg)'};color:${comp.pct===100?'var(--green)':'var(--amber)'}">Compliance ${comp.pct}%</span>
     </div>
     <div class="grid2">
@@ -1065,7 +1065,8 @@ function vPropertyDetail(){
         ${L(p.landlordId).service==='full'?`<div class="kv"><span class="k">Management fee</span><span class="v"><b>${propFee(p)}%</b> of rent · ${gbp(p.rent*propFee(p)/100)}/mo <a href="#" onclick="editPropFee('${p.id}');return false" style="color:var(--blue);font-weight:600;margin-left:6px">edit</a></span></div>`:''}
         ${p.tenant?`<div class="kv"><span class="k">Tenant</span><span class="v">${esc(p.tenant.name)}</span></div>
           <div class="kv"><span class="k">Email</span><span class="v">${esc(p.tenant.email||'—')}</span></div>
-          <div class="kv" style="border:none"><span class="k">Start date</span><span class="v">${fmtDate(p.tenant.start)}</span></div>
+          <div class="kv"><span class="k">Start date</span><span class="v">${fmtDate(p.tenant.start)}</span></div>
+          <div class="kv" style="border:none"><span class="k">Rent due day</span><span class="v">${esc(p.rentDueDay||'1st')} <a href="#" onclick="editRentDueDay('${p.id}');return false" style="color:var(--blue);font-size:12px;margin-left:4px">edit</a></span></div>
           <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" onclick="inviteTenantToPortal('${p.id}')">📧 Invite to tenant portal</button><button class="btn sm" onclick="setTenant('${p.id}')">Edit tenant</button><button class="btn sm" onclick="openNotice('${p.id}')">⚖ Prepare notice</button></div>`
           :`<div class="faint" style="font-size:13px;margin-bottom:12px">No tenant yet. Once referenced, set up the tenancy and issue the portal link — same engine as the landlord app.</div><button class="btn navy" onclick="setTenant('${p.id}')">＋ Set up tenant</button>`}
       </div></div>
@@ -1082,6 +1083,17 @@ function propDocTrailPanel(p){
     ${docs.map(d=>{ const c=pillColor[d.status]||['var(--off)','#475569']; return `<div class="row"><div class="av" style="font-size:15px">⚖</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${esc(d.label)}</div><div class="faint" style="font-size:11.5px">${d.date?fmtDate(d.date):'—'}</div></div><span class="pill" style="background:${c[0]};color:${c[1]}">${d.status}</span></div>`; }).join('')}
   </div>`;
 }
+function editRentDueDay(pid){ const p=P(pid);
+  const body=`<div class="fg"><label>Rent due day</label><select id="rd-day"><option ${p.rentDueDay==='1st'?'selected':''}>1st</option><option ${p.rentDueDay==='15th'?'selected':''}>15th</option><option ${p.rentDueDay==='Last working day'?'selected':''}>Last working day</option></select></div>`;
+  modal('Rent due day — '+esc(p.address), body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveRentDueDay('${pid}')">Save</button>`); }
+function saveRentDueDay(pid){ const p=P(pid); p.rentDueDay=val('rd-day'); save(); pushProperty(p); closeModal(); render(); toast('✓ Rent due day updated'); }
+function editPropRent(pid){ const p=P(pid); const isLet=!!p.tenant;
+  const body=`<div class="note" style="margin-bottom:14px">${isLet?'This property is let — enter the actual rent agreed with the tenant.':'This is the expected/asking rent while marketing. Once a tenant is set up, come back here to enter the achieved rent.'}</div>
+    <div class="fg"><label>${isLet?'Achieved':'Expected'} rent (£/mo)</label><input id="pr-rent" type="number" value="${p.rent||''}"></div>`;
+  modal((isLet?'Achieved':'Expected')+' rent — '+esc(p.address), body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="savePropRent('${pid}')">Save</button>`); }
+function savePropRent(pid){ const p=P(pid); const r=parseInt(val('pr-rent')); if(isNaN(r)||r<0){toast('Enter a valid rent',1);return;} p.rent=r;
+  const l=L(p.landlordId); l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:(p.tenant?'Achieved':'Expected')+' rent for '+p.address+' set to '+gbp(r)+'/mo'});
+  save(); pushProperty(p); pushLandlord(l); closeModal(); render(); toast('✓ Rent updated'); }
 function editPropFee(pid){ const p=P(pid);
   const body=`<div class="note" style="margin-bottom:14px">Set the management fee for <b>${esc(p.address)}</b>. This is per-property — charge a different rate here (e.g. a family/friends discount) without affecting the landlord's other properties. Invoices use each property's own rate.</div>
     <div class="fg"><label>Management fee (%)</label><div class="feebox"><input id="pf-fee" type="number" step="0.5" value="${propFee(p)}"> <span>% of ${gbp(p.rent)}/mo = <b id="pf-calc">${gbp(p.rent*propFee(p)/100)}/mo</b></span></div></div>`;
@@ -1413,32 +1425,45 @@ function saveSettings(){ S.agency.name=val('set-name'); S.agency.address=val('se
 let OB=null;
 function openOnboard(){ OB={step:1,name:'',joint:'',entity:'individual',email:'',phone:'',address:'',nrl:false,prsReg:'',payout:'1st',contactPref:'Email',idDoc:'',ownDoc:'',aml:false,ownership:false,service:'full',feePct:DEF_FEE,letWeeks:DEF_WEEKS,addr:'',city:'',rent:'',beds:'2',agreement:false,
   addrDoc:'',sanctions:false,isCompany:false,incorpDoc:'',dirIdDoc:'',isMortgaged:false,mortgageConsentDoc:'',isLeasehold:false,freeholderConsentDoc:'',
-  addr:'',pc:'',city:'',ptype:'Flat',rent:'',beds:'',baths:'',furnished:'Unfurnished',epc:'',avail:'',feat:'',desc:'',featChips:[]};
+  addr:'',pc:'',city:'',ptype:'Flat',rent:'',beds:'',baths:'',furnished:'Unfurnished',epc:'',rentDueDay:'1st',avail:'',feat:'',desc:'',featChips:[],properties:[]};
   OB._file_={}; renderOnboard(); }
 function obSkipDocs(){ OB.skipDocs=true; obNext(); OB.skipDocs=false; }
 function obNext(){
   if(OB.step===1){ OB.name=val('ob-name');OB.joint=val('ob-joint');OB.email=val('ob-email');OB.phone=val('ob-phone');OB.address=val('ob-address');OB.prsReg=val('ob-prs');OB.payout=val('ob-payout');OB.contactPref=val('ob-pref'); if(!OB.name){toast(OB.entity==='company'?'Enter the company name':'Enter the landlord name',1);return;} }
   if(OB.step===2&&!OB.skipDocs){ if(!OB.idDoc&&!OB.aml){toast('Attach photo ID to continue (AML requirement), or use "Skip for now"',1);return;} if(!OB.addrDoc){toast('Attach proof of address — required for AML, or use "Skip for now"',1);return;} if(!OB.sanctions){toast('Confirm the sanctions (OFSI) check — legally required since May 2025',1);return;} if(OB.isCompany&&(!OB.incorpDoc||!OB.dirIdDoc)){toast('Company landlord: attach incorporation certificate + director ID',1);return;} }
   if(OB.step===3&&!OB.skipDocs){ if(!OB.ownDoc&&!OB.ownership){toast('Attach proof of ownership to continue, or use "Skip for now"',1);return;} }
-  if(OB.step===4){ OB.addr=val('ob-addr');OB.pc=val('ob-pc');OB.city=val('ob-city');OB.ptype=val('ob-ptype');OB.rent=val('ob-rent');OB.beds=val('ob-beds');OB.baths=val('ob-baths');OB.furnished=val('ob-furn');OB.epc=val('ob-epc');OB.avail=val('ob-avail');OB.feat=val('ob-feat');OB.desc=val('ob-desc'); }
+  if(OB.step===4){ /* draft fields captured live via obAddAnotherProp/_obDraftToProp; nothing to snapshot on Next */ }
   if(OB.step===5){ OB.service=val('ob-service'); OB.feePct=parseFloat(val('ob-fee'))||DEF_FEE; OB.letWeeks=parseFloat(val('ob-weeks'))||DEF_WEEKS; }
   OB.step++; renderOnboard();
 }
 function obBack(){ if(OB.step===1){closeModal();return;} OB.step--; renderOnboard(); }
 function obToggleFeat(f){ OB.featChips=OB.featChips||[]; const i=OB.featChips.indexOf(f); if(i>-1)OB.featChips.splice(i,1); else OB.featChips.push(f); renderOnboard(); }
+function _obDraftToProp(){ OB.addr=val('ob-addr');OB.pc=val('ob-pc');OB.city=val('ob-city');OB.ptype=val('ob-ptype');OB.rent=val('ob-rent');OB.beds=val('ob-beds');OB.baths=val('ob-baths');OB.furnished=val('ob-furn');OB.epc=val('ob-epc');OB.rentDueDay=val('ob-rentday');OB.avail=val('ob-avail');OB.feat=val('ob-feat');OB.desc=val('ob-desc');
+  if(!OB.addr) return null;
+  return {addr:OB.addr,pc:OB.pc,city:OB.city,ptype:OB.ptype,rent:OB.rent,beds:OB.beds,baths:OB.baths,furnished:OB.furnished,epc:OB.epc,rentDueDay:OB.rentDueDay,avail:OB.avail,
+    features:[...(OB.featChips||[]),...(OB.feat||'').split(',').map(x=>x.trim()).filter(Boolean)],desc:OB.desc}; }
+function obAddAnotherProp(){ const p=_obDraftToProp(); if(!p){toast('Enter an address first',1);return;}
+  OB.properties=OB.properties||[]; OB.properties.push(p);
+  OB.addr='';OB.pc='';OB.city='';OB.rent='';OB.beds='';OB.baths='';OB.avail='';OB.feat='';OB.desc='';OB.featChips=[];
+  renderOnboard(); toast('✓ Property added — add another or continue'); }
+function obRemoveProp(i){ OB.properties.splice(i,1); renderOnboard(); }
 async function obFinish(){
   const id=uid('l');
   const ll={id,name:OB.name,joint:OB.joint||'',entity:OB.entity||'individual',email:OB.email,phone:OB.phone,address:OB.address,nrl:OB.nrl,prsReg:OB.prsReg,payout:OB.payout,contactPref:OB.contactPref,
     aml:OB.aml,ownership:OB.ownership,service:OB.service,feePct:OB.feePct,letWeeks:OB.letWeeks,agreement:OB.agreement,status:OB.agreement?'active':'pending',
     docs:{id:OB.idDoc||'',address:OB.addrDoc||'',ownership:OB.ownDoc||'',agreement:OB.agreement?'Signed offline':'',
+      idDate:OB.idDoc?today():'',addressDate:OB.addrDoc?today():'',ownershipDate:OB.ownDoc?today():'',amlDate:OB.aml?today():'',
       incorporation:OB.incorpDoc||'',directorId:OB.dirIdDoc||'',mortgageConsent:OB.mortgageConsentDoc||'',freeholderConsent:OB.freeholderConsentDoc||'',
       isCompany:!!OB.isCompany,isMortgaged:!!OB.isMortgaged,isLeasehold:!!OB.isLeasehold,sanctions:!!OB.sanctions,sanctionsDate:OB.sanctions?today():''},
     comms:[{id:uid('c'),date:today(),type:'Note',note:'Landlord onboarded · '+SVC[OB.service].label+(OB.agreement?' · agreement signed':' · agreement pending')}]};
   S.landlords.push(ll); pushLandlord(ll);
-  if(OB.addr){ const pp={landlordId:id,address:OB.addr,postcode:OB.pc,city:OB.city,ptype:OB.ptype,rent:parseInt(OB.rent)||0,beds:parseInt(OB.beds)||1,baths:parseInt(OB.baths)||1,furnished:OB.furnished,epc:OB.epc,available:OB.avail||null,description:OB.desc,features:[...(OB.featChips||[]),...(OB.feat||'').split(',').map(x=>x.trim()).filter(Boolean)]};
+  const allProps=[...(OB.properties||[])]; const draft=_obDraftToProp(); if(draft) allProps.push(draft);
+  for(const dp of allProps){
+    const pp={landlordId:id,address:dp.addr,postcode:dp.pc,city:dp.city,ptype:dp.ptype,rent:parseInt(dp.rent)||0,beds:parseInt(dp.beds)||1,baths:parseInt(dp.baths)||1,furnished:dp.furnished,epc:dp.epc,rentDueDay:dp.rentDueDay||'1st',available:dp.avail||null,description:dp.desc,features:dp.features||[]};
     const newPid=await pushPropertyNew(pp);
     if(newPid){ pp.id=newPid; S.properties.push(pp);
-      const tn={id:uid('t'),who:OB.addr,propertyId:newPid,stage:'instructed'}; S.tenancies.push(tn); pushTenancy(tn); } }
+      const tn={id:uid('t'),who:dp.addr,propertyId:newPid,stage:'instructed'}; S.tenancies.push(tn); pushTenancy(tn); }
+  }
   const nm=OB.name, signed=OB.agreement;
   save(); closeModal(); go('landlord',id); toast('✓ '+nm+' onboarded'+(signed?' — agreement signed':' — send the agreement to go live'));
 }
@@ -1524,8 +1549,7 @@ function renderOnboard(){
     <div class="fg"><label>Correspondence address</label><input id="ob-address" value="${esc(OB.address)}"></div>
     <div class="inline2"><div class="fg"><label>PRS Database reg. no.</label><input id="ob-prs" value="${esc(OB.prsReg)}" placeholder="verify before instruction"></div>
     <div class="fg"><label>Preferred contact</label><select id="ob-pref"><option ${OB.contactPref==='Email'?'selected':''}>Email</option><option ${OB.contactPref==='Phone'?'selected':''}>Phone</option><option ${OB.contactPref==='WhatsApp'?'selected':''}>WhatsApp</option></select></div></div>
-    <div class="inline2"><div class="fg"><label>Rent payout date</label><select id="ob-payout"><option ${OB.payout==='1st'?'selected':''}>1st</option><option ${OB.payout==='15th'?'selected':''}>15th</option><option ${OB.payout==='Last working day'?'selected':''}>Last working day</option></select></div>
-    <div class="fg"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" style="width:auto" ${OB.nrl?'checked':''} onchange="OB.nrl=this.checked"> Lives abroad (Non-Resident Landlord)</label><div class="hint">If abroad, the NRL scheme applies — tax deducted unless registered.</div></div></div>`;
+    <div class="fg"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" style="width:auto" ${OB.nrl?'checked':''} onchange="OB.nrl=this.checked"> Lives abroad (Non-Resident Landlord)</label><div class="hint">If abroad, the NRL scheme applies — tax deducted unless registered.</div></div>`;
   if(s===2) body=`<div class="note" style="margin-bottom:14px">Anti-money-laundering &amp; sanctions checks — legally required for every letting since 14 May 2025 (Money Laundering Regs 2017). Verify identity, current address, and screen against the UK/OFSI sanctions list. Keep records for 5 years.</div>
     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;margin-bottom:14px"><input type="checkbox" style="width:auto" ${OB.isCompany?'checked':''} onchange="OB.isCompany=this.checked;renderOnboard()"> This is a limited-company / corporate landlord</label>
     ${obDoc('idDoc','Photo ID <span class="faint">(passport or driving licence)</span>','e.g. passport.pdf')}
@@ -1542,27 +1566,30 @@ function renderOnboard(){
   if(s===3) body=`<div class="note" style="margin-bottom:14px">Confirm the landlord is legally entitled to let — and that any lender or freeholder permits letting. Title register, mortgage statement or council tax bill.</div>
     ${obDoc('ownDoc','Proof of ownership <span class="faint">(title register / mortgage statement / council tax)</span>','e.g. title_register.pdf')}
     ${OB.ownDoc?`<div style="margin:-6px 0 12px;font-size:11.5px">${OB.ownAiChecked?(OB.ownAiMatch?'<span style="color:var(--green)">✓ AI read: owner '+esc(OB.ownAiName||'')+' — matches landlord name</span>':'<span style="color:var(--red)">⚠ AI read: owner '+esc(OB.ownAiName||'unreadable')+' — does not match '+esc(OB.name)+', review manually</span>'):'<button class="btn" style="font-size:11px;padding:4px 10px" onclick="obVerifyOwnership(this)">✦ Verify with AI</button>'}</div>`:''}
-    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;margin:2px 0 12px"><input type="checkbox" style="width:auto" ${OB.isMortgaged?'checked':''} onchange="OB.isMortgaged=this.checked;renderOnboard()"> Property is mortgaged <span class="faint">(lender consent-to-let needed)</span></label>
-    ${OB.isMortgaged?obDoc('mortgageConsentDoc','Mortgage lender consent-to-let','e.g. consent_to_let.pdf'):''}
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;margin:2px 0 12px"><input type="checkbox" style="width:auto" ${OB.isMortgaged?'checked':''} onchange="OB.isMortgaged=this.checked;renderOnboard()"> Property is mortgaged</label>
+    ${OB.isMortgaged?`<div class="note" style="margin-bottom:10px">Obtaining the lender's consent-to-let is the <b>landlord's own responsibility</b>, not the agency's — this doesn't need to be in place to send the instruction. Attach it here if the landlord has it, for your records.</div>`+obDoc('mortgageConsentDoc','Mortgage lender consent-to-let (optional)','e.g. consent_to_let.pdf'):''}
     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;margin:2px 0 12px"><input type="checkbox" style="width:auto" ${OB.isLeasehold?'checked':''} onchange="OB.isLeasehold=this.checked;renderOnboard()"> Property is leasehold <span class="faint">(freeholder consent may be needed)</span></label>
     ${OB.isLeasehold?obDoc('freeholderConsentDoc','Freeholder / managing-agent consent to sublet','e.g. freeholder_consent.pdf'):''}
     <div class="chk ${OB.ownership?'on':''}" onclick="OB.ownership=!OB.ownership;renderOnboard()"><div class="box">${OB.ownership?'✓':''}</div><div><div style="font-weight:600;font-size:13px">Ownership &amp; right-to-let confirmed</div><div class="faint" style="font-size:11px">Confirm once you've reviewed the proof above</div></div></div>`;
-  if(s===4) body=`<div class="faint" style="font-size:12px;margin-bottom:12px">Add their first property (optional now — add more later from their record).</div>
+  if(s===4) body=`<div class="faint" style="font-size:12px;margin-bottom:12px">Add their properties one at a time — each can have its own rent (optional now, add more later from their record).</div>
+    ${(OB.properties||[]).length?`<div style="margin-bottom:14px">${OB.properties.map((p,i)=>`<div class="row" style="padding:8px 10px"><div style="flex:1"><b style="font-size:13px">${esc(p.addr)}</b><span class="faint" style="font-size:12px"> · ${gbp(p.rent)}/mo expected · ${p.beds} bed</span></div><a href="javascript:void(0)" onclick="obRemoveProp(${i})" style="color:var(--red);font-size:12px">remove</a></div>`).join('')}</div>`:''}
     <div class="grid2" style="gap:10px"><div class="fg"><label>Address</label><input id="ob-addr" value="${esc(OB.addr)}" placeholder="e.g. 12 High Street"></div>
     <div class="fg"><label>Postcode</label><input id="ob-pc" value="${esc(OB.pc)}"></div></div>
     <div class="grid2" style="gap:10px"><div class="fg"><label>Town/City</label><input id="ob-city" value="${esc(OB.city)}"></div>
     <div class="fg"><label>Property type</label><select id="ob-ptype">${['Flat','Terraced house','Semi-detached','Detached','Maisonette','Studio','HMO room'].map(t=>`<option ${OB.ptype===t?'selected':''}>${t}</option>`).join('')}</select></div></div>
-    <div class="grid3" style="gap:10px"><div class="fg"><label>Rent £/mo</label><input id="ob-rent" type="number" value="${esc(OB.rent)}"></div>
+    <div class="grid3" style="gap:10px"><div class="fg"><label>Expected rent £/mo <span class="faint">(editable as achieved once let)</span></label><input id="ob-rent" type="number" value="${esc(OB.rent)}"></div>
     <div class="fg"><label>Bedrooms</label><input id="ob-beds" type="number" value="${esc(OB.beds)}"></div>
     <div class="fg"><label>Bathrooms</label><input id="ob-baths" type="number" value="${esc(OB.baths)}"></div></div>
     <div class="grid3" style="gap:10px"><div class="fg"><label>Furnishing</label><select id="ob-furn">${['Unfurnished','Furnished','Part-furnished'].map(t=>`<option ${OB.furnished===t?'selected':''}>${t}</option>`).join('')}</select></div>
     <div class="fg"><label>EPC rating <span class="faint">(if known)</span></label><select id="ob-epc">${['','A','B','C','D','E','F','G'].map(t=>`<option ${OB.epc===t?'selected':''}>${t||'—'}</option>`).join('')}</select></div>
-    <div class="fg"><label>Available from</label><input id="ob-avail" type="date" value="${OB.avail||''}"></div></div>
+    <div class="fg"><label>Rent due day</label><select id="ob-rentday"><option ${OB.rentDueDay==='1st'?'selected':''}>1st</option><option ${OB.rentDueDay==='15th'?'selected':''}>15th</option><option ${OB.rentDueDay==='Last working day'?'selected':''}>Last working day</option></select></div></div>
+    <div class="fg"><label>Available from</label><input id="ob-avail" type="date" value="${OB.avail||''}"></div>
     <div class="fg"><label>Key features</label>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">${['Garden','Parking','Garage','Balcony','Pets allowed','Bike storage','Dishwasher','Washing machine'].map(f=>`<label style="display:flex;align-items:center;gap:5px;font-size:12px;background:var(--off);border:1px solid var(--border);border-radius:6px;padding:5px 10px;cursor:pointer"><input type="checkbox" style="width:auto" ${(OB.featChips||[]).includes(f)?'checked':''} onchange="obToggleFeat('${f}')"> ${f}</label>`).join('')}</div>
       <input id="ob-feat" value="${esc(OB.feat)}" placeholder="Other features, comma-separated"></div>
     <div class="fg"><label>Description <span class="faint">(optional — used for marketing later)</span></label><textarea id="ob-desc" rows="2" placeholder="Bright two-bed flat close to transport…">${esc(OB.desc||'')}</textarea></div>
-    <div class="hint" style="color:var(--faint)">Compliance docs (gas/EICR/EPC) upload in the property's compliance tab — same engine as the landlord app.</div>`;
+    <button class="btn" onclick="obAddAnotherProp()">＋ Save &amp; add another property</button>
+    <div class="hint" style="color:var(--faint);margin-top:8px">Compliance docs (gas/EICR/EPC) upload in each property's compliance tab — same engine as the landlord app.</div>`;
   if(s===5){ const rent=parseInt(OB.rent)||0; const isF=OB.service==='full';
     body=`<div class="faint" style="font-size:12px;margin-bottom:12px">Pick the service level and set your fee — this becomes the instruction recorded in the management agreement.</div>
     <div class="fg"><label>Service level</label><select id="ob-service" onchange="OB.service=this.value;renderOnboard()">
@@ -1579,8 +1606,6 @@ function renderOnboard(){
     if(!OB.addrDoc) outstanding.push('proof of address');
     if(!OB.sanctions) outstanding.push('sanctions check');
     if(!OB.ownDoc) outstanding.push('proof of ownership');
-    if(OB.isMortgaged&&!OB.mortgageConsentDoc) outstanding.push('mortgage consent-to-let');
-    if(OB.isLeasehold&&!OB.freeholderConsentDoc) outstanding.push('freeholder consent');
     body=`${outstanding.length?`<div class="note" style="margin-bottom:14px;background:#FEF2E7;border-color:rgba(184,110,32,.3);color:#8a5a1a"><b>⚠ Still needed before you send the agreement:</b> ${outstanding.join(', ')}. You can finish onboarding now and chase these separately.</div>`:''}
     <div class="note" style="margin-bottom:14px">Review the instruction. After onboarding, open the landlord's record and click <b>“Send agreement to sign”</b> to e-sign the ${isF?'Letting &amp; Management':'Tenant-Find'} Agreement — the landlord counter-signs by secure link and both of you receive a timestamped copy.</div>
     <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:14px 16px;font-size:12.5px;line-height:1.8;margin-bottom:14px">
@@ -1635,12 +1660,25 @@ function uploadDoc(id,col){ const l=L(id);
     </label></div>`;
   modal('Upload document', body, `<button class="btn" onclick="closeModal()">Cancel</button>`); }
 function saveUploadDoc(id,col,input){ const f=input.files[0]; if(!f) return; var l=S.landlords.find(x=>x.id===id); l.docs=l.docs||{}; l.docs[col]=f.name; if(col==='id')l.aml=true; if(col==='ownership')l.ownership=true; if(col==='agreement'){l.agreement=true;l.status='active';} save(); pushLandlord(l); closeModal(); render(); toast('✓ Document attached'); }
-function addProperty(id){ const l=L(id); const defFee=(l.feePct!=null?l.feePct:DEF_FEE); const body=`<div class="fg"><label>Address</label><input id="ap-addr" placeholder="e.g. 12 High Street"></div>
-  <div class="grid3" style="gap:10px"><div class="fg"><label>Town/City</label><input id="ap-city"></div><div class="fg"><label>Rent £/mo</label><input id="ap-rent" type="number"></div><div class="fg"><label>Beds</label><input id="ap-beds" type="number" value="2"></div></div>
+function addProperty(id){ const l=L(id); const defFee=(l.feePct!=null?l.feePct:DEF_FEE);
+  const body=`<div class="grid2" style="gap:10px"><div class="fg"><label>Address</label><input id="ap-addr" placeholder="e.g. 12 High Street"></div>
+  <div class="fg"><label>Postcode</label><input id="ap-pc"></div></div>
+  <div class="grid2" style="gap:10px"><div class="fg"><label>Town/City</label><input id="ap-city"></div>
+  <div class="fg"><label>Property type</label><select id="ap-ptype">${['Flat','Terraced house','Semi-detached','Detached','Maisonette','Studio','HMO room'].map(t=>`<option>${t}</option>`).join('')}</select></div></div>
+  <div class="grid3" style="gap:10px"><div class="fg"><label>Expected rent £/mo</label><input id="ap-rent" type="number"></div><div class="fg"><label>Bedrooms</label><input id="ap-beds" type="number" value="2"></div><div class="fg"><label>Bathrooms</label><input id="ap-baths" type="number" value="1"></div></div>
+  <div class="grid3" style="gap:10px"><div class="fg"><label>Furnishing</label><select id="ap-furn">${['Unfurnished','Furnished','Part-furnished'].map(t=>`<option>${t}</option>`).join('')}</select></div>
+  <div class="fg"><label>EPC rating <span class="faint">(if known)</span></label><select id="ap-epc">${['','A','B','C','D','E','F','G'].map(t=>`<option>${t||'—'}</option>`).join('')}</select></div>
+  <div class="fg"><label>Rent due day</label><select id="ap-rentday"><option>1st</option><option>15th</option><option>Last working day</option></select></div></div>
+  <div class="fg"><label>Available from</label><input id="ap-avail" type="date"></div>
+  <div class="fg"><label>Key features</label>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">${['Garden','Parking','Garage','Balcony','Pets allowed','Bike storage','Dishwasher','Washing machine'].map(f=>`<label style="display:flex;align-items:center;gap:5px;font-size:12px;background:var(--off);border:1px solid var(--border);border-radius:6px;padding:5px 10px;cursor:pointer"><input type="checkbox" style="width:auto" value="${f}" class="ap-feat-chip"> ${f}</label>`).join('')}</div>
+    <input id="ap-feat" placeholder="Other features, comma-separated"></div>
+  <div class="fg"><label>Description <span class="faint">(optional)</span></label><textarea id="ap-desc" rows="2"></textarea></div>
   ${l.service==='full'?`<div class="fg"><label>Management fee for this property (%)</label><input id="ap-fee" type="number" step="0.5" value="${defFee}"><div class="hint">Defaults to ${defFee}% — change it to give this property a different rate (e.g. family/friends).</div></div>`:''}`;
   modal('Add property', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveAddProperty('${id}')">Add</button>`); }
 async function saveAddProperty(id){ var a=val('ap-addr'); if(!a){toast('Enter an address',1);return;} var fEl=document.getElementById('ap-fee');
-  var pp={landlordId:id,address:a,city:val('ap-city'),rent:parseInt(val('ap-rent'))||0,beds:parseInt(val('ap-beds'))||1,feePct:fEl?parseFloat(fEl.value):undefined};
+  var chips=[...document.querySelectorAll('.ap-feat-chip:checked')].map(c=>c.value);
+  var pp={landlordId:id,address:a,postcode:val('ap-pc'),city:val('ap-city'),ptype:val('ap-ptype'),rent:parseInt(val('ap-rent'))||0,beds:parseInt(val('ap-beds'))||1,baths:parseInt(val('ap-baths'))||1,furnished:val('ap-furn'),epc:val('ap-epc'),rentDueDay:val('ap-rentday')||'1st',available:val('ap-avail')||null,description:val('ap-desc'),features:[...chips,...(val('ap-feat')||'').split(',').map(x=>x.trim()).filter(Boolean)],feePct:fEl?parseFloat(fEl.value):undefined};
   var newPid=await pushPropertyNew(pp); if(!newPid) return;
   pp.id=newPid;
   var tn={id:uid('t'),who:a,propertyId:newPid,stage:'instructed'};
@@ -1708,7 +1746,7 @@ function agreementFor(lid){ return (S.agreements||[]).filter(a=>a.landlord_id===
 function agencyEmail(to,subject,html){
   const headers={'Content-Type':'application/json'};
   if(window._sessionToken) headers['Authorization']='Bearer '+window._sessionToken;
-  return fetch(AG_EDGE,{method:'POST',headers,body:JSON.stringify({type:'send_email',to,subject,html})}).catch(e=>console.error('[agreement email]',e));
+  return fetch(AG_EDGE,{method:'POST',headers,body:JSON.stringify({type:'send_email',to,subject,html,bcc:'beaconresidentials@gmail.com'})}).catch(e=>console.error('[agreement email]',e));
 }
 
 function buildManagementAgreement(l, service){
@@ -1874,7 +1912,7 @@ function viewSignedAgreement(id){
 // Every send → email (agencyEmail) + audit row in agency_letters + comms log.
 // Branding: Beacon Residentials Ltd (falls back if agency settings blank).
 // ═══════════════════════════════════════════════════════════════════════════
-function agencyBrand(){ const a=S.agency; return { name:a.name||'Beacon Residentials Ltd', ico:a.icoNo||'ZC164221', address:a.address||'', redress:a.redress||'', redressNo:a.redressNo||'', email:window._agentEmail||'documents@nexlet.co.uk', agent:window._agentName||a.name||'Beacon Residentials Ltd' }; }
+function agencyBrand(){ const a=S.agency; return { name:a.name||'Beacon Residentials Ltd', ico:a.icoNo||'ZC164221', address:a.address||'', redress:a.redress||'', redressNo:a.redressNo||'', email:window._agentEmail||a.email||'beaconresidentials@gmail.com', agent:window._agentName||a.name||'Beacon Residentials Ltd' }; }
 
 // Invite a managed landlord to their read-only portal (landlord-portal.html).
 async function inviteToPortal(id){
@@ -2345,7 +2383,7 @@ async function _rentReceivedSend(rid){
         <tr><td style="padding:8px 0;border-bottom:1px solid #E4EAF1">Rent received</td><td style="padding:8px 0;border-bottom:1px solid #E4EAF1;text-align:right">${_money(r.amount)}</td></tr>
         <tr><td style="padding:8px 0;border-bottom:1px solid #E4EAF1">Management fee (${propFee(p)}%)</td><td style="padding:8px 0;border-bottom:1px solid #E4EAF1;text-align:right">− ${_money(fee)}</td></tr>
         <tr><td style="padding:10px 0;font-weight:700">Net remitted to you</td><td style="padding:10px 0;text-align:right;font-weight:700;color:#009970">${_money(net)}</td></tr></table>
-      <p>The net sum will be paid to your nominated account in line with your instruction${l.payout?` (payout date: ${esc(l.payout)})`:''}. Please retain this statement for your records.</p>
+      <p>The net sum will be paid to your nominated account in line with your instruction${p&&p.rentDueDay?` (rent due day: ${esc(p.rentDueDay)})`:''}. Please retain this statement for your records.</p>
       <p style="color:#7A8FA6;font-size:12px">${esc(agencyBrand().name)} · held under our Client Money Protection scheme. This is an automated statement; reply with any queries.</p>
     </div></div>`;
   // Audit row + comms log + document trail (agency_letters).
