@@ -91,6 +91,12 @@ function daysUntil(d){ if(!d) return null; return Math.round((new Date(d)-new Da
 function certRAG(d){ if(!d) return {label:'Not on file',bg:'var(--red-bg)',color:'var(--red)'}; const n=daysUntil(d); if(n<0) return {label:'Expired',bg:'var(--red-bg)',color:'var(--red)'}; if(n<30) return {label:n+'d left',bg:'var(--amber-bg)',color:'var(--amber)'}; return {label:'Valid',bg:'var(--green-bg)',color:'var(--green-dark)'}; }
 
 async function signOut(){ await sb.auth.signOut(); location.href='login.html'; }
+function viewMyAgreement(){
+  const a=window._signedAgreement; if(!a){ return; }
+  const w=window.open('','_blank'); if(!w) return;
+  w.document.write(`<!DOCTYPE html><html><head><title>Signed agreement</title><meta charset="utf-8"><style>body{font-family:Georgia,serif;max-width:720px;margin:40px auto;padding:0 24px;line-height:1.7;color:#1A2B45}h2{text-align:center}@media print{body{margin:0;padding:24px}}</style></head><body>${a.document_html||'<p>No document on file.</p>'}<script>window.print=window.print</script></body></html>`);
+  w.document.close();
+}
 
 async function boot(){
   if(new URLSearchParams(location.search).get('preview')){ return renderSample(); }
@@ -143,8 +149,9 @@ function renderNoAccess(email){
 }
 
 function render(me, ag, props, agreements, letters, msgs){
+  window._signedAgreement = agreements.find(a=>a.status==='signed')||null;
   const totalRent = props.reduce((s,p)=>s+(p.rent||0),0);
-  const signed = agreements.find(a=>a.status==='signed');
+  const signed = window._signedAgreement;
   const svc = me.service==='letonly'?'Tenant-find (let-only)':'Full management';
 
   const agentCard = `
@@ -162,7 +169,8 @@ function render(me, ag, props, agreements, letters, msgs){
       <div class="card-bd">
         <div class="kv"><span class="k">Status</span><span class="v">${signed?`<span class="pill" style="background:var(--green-bg);color:var(--green-dark)">✓ Signed ${fmtDate(signed.landlord_signed_at)}</span>`:me.agreement_signed?`<span class="pill" style="background:var(--green-bg);color:var(--green-dark)">✓ Signed</span>`:`<span class="pill" style="background:var(--amber-bg);color:var(--amber)">Pending</span>`}</span></div>
         <div class="kv"><span class="k">AML / ID verified</span><span class="v">${me.aml_verified?'✓ Yes':'Outstanding'}</span></div>
-        <div class="kv"><span class="k">Ownership verified</span><span class="v">${me.ownership_verified?'✓ Yes':'Outstanding'}</span></div>
+        <div class="kv" style="${signed?'':'border:none'}"><span class="k">Ownership verified</span><span class="v">${me.ownership_verified?'✓ Yes':'Outstanding'}</span></div>
+        ${signed?`<div style="margin-top:12px"><button class="btn sm" onclick="viewMyAgreement()">📄 View / download signed agreement</button></div>`:''}
       </div></div>`;
 
   const propCards = props.length ? props.map(p=>{

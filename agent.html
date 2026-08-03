@@ -160,8 +160,10 @@ h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px
 // agencies → landlords → properties hierarchy + RLS.
 // ─────────────────────────────────────────────────────────────
 const LS='nexlet_agency_v3';
-const DEF_FEE=7.5;        // default full-management % of monthly rent (editable per landlord)
-const DEF_WEEKS=3;        // default let-only fee = weeks of rent (editable per landlord)
+const DEF_FEE=7.5;        // sole-agency full-management % default (editable per landlord)
+const DEF_WEEKS=3;        // sole-agency let-only default = weeks of rent (editable per landlord)
+const MULTI_FEE=12;       // multiple-agency full-management % default — higher: agent competes, isn't guaranteed the instruction
+const MULTI_WEEKS=4.345;  // multiple-agency let-only default ≈ 1 month's rent
 const REF_PARTNERS=['Vouch','FCC Paragon','HomeLet','Van Mildert','Goodlord (Acquire)'];
 
 // ─────────────────────────────────────────────────────────────
@@ -1426,9 +1428,9 @@ function saveSettings(){ S.agency.name=val('set-name'); S.agency.address=val('se
 
 // ── ONBOARDING WIZARD ──
 let OB=null;
-function openOnboard(){ OB={step:1,name:'',joint:'',entity:'individual',email:'',phone:'',address:'',nrl:false,prsReg:'',payout:'1st',contactPref:'Email',idDoc:'',ownDoc:'',aml:false,ownership:false,service:'full',feePct:DEF_FEE,letWeeks:DEF_WEEKS,addr:'',city:'',rent:'',beds:'2',agreement:false,
+function openOnboard(){ OB={step:1,name:'',joint:'',jointEmail:'',entity:'individual',email:'',phone:'',address:'',nrl:false,prsReg:'',contactPref:'Email',idDoc:'',ownDoc:'',aml:false,ownership:false,service:'full',feePct:DEF_FEE,letWeeks:DEF_WEEKS,addr:'',city:'',rent:'',beds:'2',agreement:false,
   addrDoc:'',sanctions:false,isCompany:false,incorpDoc:'',dirIdDoc:'',isMortgaged:false,mortgageConsentDoc:'',isLeasehold:false,freeholderConsentDoc:'',
-  addr:'',pc:'',city:'',ptype:'Flat',rent:'',beds:'',baths:'',furnished:'Unfurnished',epc:'',rentDueDay:'1st',avail:'',feat:'',desc:'',featChips:[],properties:[]};
+  addr:'',pc:'',city:'',ptype:'Flat',rent:'',beds:'',baths:'',furnished:'Unfurnished',epc:'',rentDueDay:'1st',avail:'',feat:'',desc:'',featChips:[],properties:[],agencyType:'sole'};
   OB._file_={}; renderOnboard(); }
 function obSkipDocs(){ OB.skipDocs=true; obNext(); OB.skipDocs=false; }
 function obNext(){
@@ -1436,7 +1438,7 @@ function obNext(){
   if(OB.step===2&&!OB.skipDocs){ if(!OB.idDoc&&!OB.aml){toast('Attach photo ID to continue (AML requirement), or use "Skip for now"',1);return;} if(!OB.addrDoc){toast('Attach proof of address — required for AML, or use "Skip for now"',1);return;} if(!OB.sanctions){toast('Confirm the sanctions (OFSI) check — legally required since May 2025',1);return;} if(OB.isCompany&&(!OB.incorpDoc||!OB.dirIdDoc)){toast('Company landlord: attach incorporation certificate + director ID',1);return;} }
   if(OB.step===3&&!OB.skipDocs){ if(!OB.ownDoc&&!OB.ownership){toast('Attach proof of ownership to continue, or use "Skip for now"',1);return;} }
   if(OB.step===4){ /* draft fields captured live via obAddAnotherProp/_obDraftToProp; nothing to snapshot on Next */ }
-  if(OB.step===5){ OB.service=val('ob-service'); OB.feePct=parseFloat(val('ob-fee'))||DEF_FEE; OB.letWeeks=parseFloat(val('ob-weeks'))||DEF_WEEKS; }
+  if(OB.step===5){ OB.service=val('ob-service'); OB.agencyType=val('ob-agtype')||OB.agencyType||'sole'; OB.feePct=parseFloat(val('ob-fee'))||(OB.agencyType==='multiple'?MULTI_FEE:DEF_FEE); OB.letWeeks=parseFloat(val('ob-weeks'))||(OB.agencyType==='multiple'?MULTI_WEEKS:DEF_WEEKS); }
   OB.step++; renderOnboard();
 }
 function obBack(){ if(OB.step===1){closeModal();return;} OB.step--; renderOnboard(); }
@@ -1452,8 +1454,8 @@ function obAddAnotherProp(){ const p=_obDraftToProp(); if(!p){toast('Enter an ad
 function obRemoveProp(i){ OB.properties.splice(i,1); renderOnboard(); }
 async function obFinish(){
   const id=uid('l');
-  const ll={id,name:OB.name,joint:OB.joint||'',entity:OB.entity||'individual',email:OB.email,phone:OB.phone,address:OB.address,nrl:OB.nrl,prsReg:OB.prsReg,payout:OB.payout,contactPref:OB.contactPref,
-    aml:OB.aml,ownership:OB.ownership,service:OB.service,feePct:OB.feePct,letWeeks:OB.letWeeks,agreement:OB.agreement,status:OB.agreement?'active':'pending',
+  const ll={id,name:OB.name,joint:OB.joint||'',jointEmail:OB.jointEmail||'',entity:OB.entity||'individual',email:OB.email,phone:OB.phone,address:OB.address,nrl:OB.nrl,prsReg:OB.prsReg,contactPref:OB.contactPref,
+    aml:OB.aml,ownership:OB.ownership,service:OB.service,agencyType:OB.agencyType||'sole',feePct:OB.feePct,letWeeks:OB.letWeeks,agreement:OB.agreement,status:OB.agreement?'active':'pending',
     docs:{id:OB.idDoc||'',address:OB.addrDoc||'',ownership:OB.ownDoc||'',agreement:OB.agreement?'Signed offline':'',
       idDate:OB.idDoc?today():'',addressDate:OB.addrDoc?today():'',ownershipDate:OB.ownDoc?today():'',amlDate:OB.aml?today():'',
       incorporation:OB.incorpDoc||'',directorId:OB.dirIdDoc||'',mortgageConsent:OB.mortgageConsentDoc||'',freeholderConsent:OB.freeholderConsentDoc||'',
@@ -1546,7 +1548,8 @@ function renderOnboard(){
       <option value="joint" ${OB.entity==='joint'?'selected':''}>Joint owners</option>
       <option value="company" ${OB.entity==='company'?'selected':''}>Limited company</option></select></div>
     <div class="fg"><label>${OB.entity==='company'?'Company name *':'Full name *'}</label><input id="ob-name" value="${esc(OB.name)}" placeholder="${OB.entity==='company'?'e.g. Acme Property Ltd':'Landlord\u2019s name'}"></div>
-    ${OB.entity==='joint'?`<div class="fg"><label>Second owner's full name</label><input id="ob-joint" value="${esc(OB.joint)}" placeholder="Joint owner"></div>`:`<input type="hidden" id="ob-joint" value="${esc(OB.joint)}">`}
+    ${OB.entity==='joint'?`<div class="fg"><label>Second owner's full name *</label><input id="ob-joint" value="${esc(OB.joint)}" placeholder="Joint owner"></div>
+    <div class="fg"><label>Second owner's email *</label><input id="ob-jointemail" value="${esc(OB.jointEmail)}" placeholder="name2@email.com"></div>`:`<input type="hidden" id="ob-joint" value="${esc(OB.joint)}"><input type="hidden" id="ob-jointemail" value="${esc(OB.jointEmail)}">`}
     <div class="inline2"><div class="fg"><label>Email</label><input id="ob-email" value="${esc(OB.email)}" placeholder="name@email.com"></div>
     <div class="fg"><label>Phone</label><input id="ob-phone" value="${esc(OB.phone)}"></div></div>
     <div class="fg"><label>Correspondence address</label><input id="ob-address" value="${esc(OB.address)}"></div>
@@ -1594,15 +1597,18 @@ function renderOnboard(){
     <div class="fg"><label>Description <span class="faint">(optional — used for marketing later)</span></label><textarea id="ob-desc" rows="2" placeholder="Bright two-bed flat close to transport…">${esc(OB.desc||'')}</textarea></div>
     <button class="btn" onclick="obAddAnotherProp()">＋ Save &amp; add another property</button>
     <div class="hint" style="color:var(--faint);margin-top:8px">Compliance docs (gas/EICR/EPC) upload in each property's compliance tab — same engine as the landlord app.</div>`;
-  if(s===5){ const rent=parseInt(OB.rent)||0; const isF=OB.service==='full';
-    body=`<div class="faint" style="font-size:12px;margin-bottom:12px">Pick the service level and set your fee — this becomes the instruction recorded in the management agreement.</div>
+  if(s===5){ const rent=parseInt(OB.rent)||0; const isF=OB.service==='full'; const isMulti=OB.agencyType==='multiple';
+    body=`<div class="faint" style="font-size:12px;margin-bottom:12px">Pick the agency type, service level and fee — this becomes the instruction recorded in the management agreement.</div>
+    <div class="fg"><label>Agency type</label><select id="ob-agtype" onchange="OB.agencyType=this.value;OB.feePct=(this.value==='multiple'?MULTI_FEE:DEF_FEE);OB.letWeeks=(this.value==='multiple'?MULTI_WEEKS:DEF_WEEKS);renderOnboard()">
+      <option value="sole" ${!isMulti?'selected':''}>Sole agency</option><option value="multiple" ${isMulti?'selected':''}>Multiple agency</option></select>
+      <div class="hint">${isMulti?'Landlord may instruct other agents at the same time — only whichever agent lets the property earns the fee, so the rate is higher to reflect that risk.':'Beacon is the only agent instructed for this property during the term — the standard, lower-fee arrangement.'}</div></div>
     <div class="fg"><label>Service level</label><select id="ob-service" onchange="OB.service=this.value;renderOnboard()">
       <option value="full" ${isF?'selected':''}>Full management</option><option value="letonly" ${!isF?'selected':''}>Let-only (one-off)</option></select></div>
     <div class="fg"><label>Your fee <span class="faint">(editable)</span></label>
-      <div class="feebox">${isF?`<input id="ob-fee" type="number" step="0.5" value="${OB.feePct}" oninput="_obFee()"> <span>% of monthly rent</span>`:`<input id="ob-weeks" type="number" step="0.5" value="${OB.letWeeks}" oninput="_obFee()"> <span>weeks' rent (one-off)</span>`}</div></div>
+      <div class="feebox">${isF?`<input id="ob-fee" type="number" step="0.5" value="${OB.feePct}" oninput="_obFee()"> <span>% of monthly rent</span>`:`<input id="ob-weeks" type="number" step="0.5" value="${OB.letWeeks}" oninput="_obFee()"> <span>weeks' rent (one-off)${isMulti?' ≈ 1 month':''}</span>`}</div></div>
     <div class="note" id="ob-feenote">${isF
-      ? `<b>Full management.</b> ${rent?'Your fee: <b>'+gbp(rent*OB.feePct/100)+'/mo</b>. ':''}Compliance, repairs, inspections, renewals. Tenant pays landlord directly (no client money).`
-      : `<b>Let-only.</b> ${rent?'Your fee: <b>'+gbp(rent/4.345*OB.letWeeks)+'</b> one-off. ':''}Find tenant, paperwork, hand over. No ongoing fee.`}</div>`;
+      ? `<b>Full management${isMulti?' · multiple agency':' · sole agency'}.</b> ${rent?'Your fee: <b>'+gbp(rent*OB.feePct/100)+'/mo</b>. ':''}Compliance, repairs, inspections, renewals. Tenant pays landlord directly (no client money).`
+      : `<b>Let-only${isMulti?' · multiple agency':' · sole agency'}.</b> ${rent?'Your fee: <b>'+gbp(rent/4.345*OB.letWeeks)+'</b> one-off. ':''}Find tenant, paperwork, hand over. No ongoing fee.`}</div>`;
   }
   if(s===6){ const isF=OB.service==='full';
     const outstanding=[];
@@ -1613,7 +1619,7 @@ function renderOnboard(){
     body=`${outstanding.length?`<div class="note" style="margin-bottom:14px;background:#FEF2E7;border-color:rgba(184,110,32,.3);color:#8a5a1a"><b>⚠ Still needed before you send the agreement:</b> ${outstanding.join(', ')}. You can finish onboarding now and chase these separately.</div>`:''}
     <div class="note" style="margin-bottom:14px">Review the instruction. After onboarding, open the landlord's record and click <b>“Send agreement to sign”</b> to e-sign the ${isF?'Letting &amp; Management':'Tenant-Find'} Agreement — the landlord counter-signs by secure link and both of you receive a timestamped copy.</div>
     <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:14px 16px;font-size:12.5px;line-height:1.8;margin-bottom:14px">
-      <b>${esc(OB.name||'Landlord')}</b> · ${SVC[OB.service].label}<br>
+      <b>${esc(OB.name||'Landlord')}</b> · ${(OB.agencyType==='multiple'?'Multiple agency':'Sole agency')} · ${SVC[OB.service].label}<br>
       Fee: <b>${isF?OB.feePct+'% of monthly rent':OB.letWeeks+" weeks' rent (one-off)"}</b><br>
       ${OB.addr?esc(OB.addr)+'<br>':''}Docs: ID ${OB.idDoc?'✓':'✗'} · Address ${OB.addrDoc?'✓':'✗'} · Sanctions ${OB.sanctions?'✓':'✗'} · Ownership ${OB.ownDoc?'✓':'✗'}${OB.isCompany?' · Company ✓':''}${OB.isMortgaged?' · Mortgage consent '+(OB.mortgageConsentDoc?'✓':'⚠'):''}${OB.isLeasehold?' · Freeholder consent '+(OB.freeholderConsentDoc?'✓':'⚠'):''}<br>
       Redress: ${S.agency.redress||'pending'} · Tenant pays landlord directly · no client money held</div>
@@ -1632,19 +1638,23 @@ function _obFee(){ const isF=OB.service==='full'; if(isF)OB.feePct=parseFloat(va
 
 // ── EDIT INSTRUCTION & FEE (per landlord) ──
 function editInstruction(id){ const l=L(id);
-  const body=`<div class="grid2" style="gap:10px"><div class="fg"><label>Landlord type</label><select id="ei-entity" onchange="document.getElementById('ei-joint-wrap').style.display=this.value==='joint'?'block':'none'">
+  const body=`<div class="grid2" style="gap:10px"><div class="fg"><label>Landlord type</label><select id="ei-entity" onchange="document.getElementById('ei-joint-wrap').style.display=this.value==='joint'?'block':'none';document.getElementById('ei-jointemail-wrap').style.display=this.value==='joint'?'block':'none'">
       <option value="individual" ${(l.entity||'individual')==='individual'?'selected':''}>Individual</option>
       <option value="joint" ${l.entity==='joint'?'selected':''}>Joint owners</option>
       <option value="company" ${l.entity==='company'?'selected':''}>Limited company</option></select></div>
-    <div class="fg" id="ei-joint-wrap" style="display:${l.entity==='joint'?'block':'none'}"><label>Second owner</label><input id="ei-joint" value="${esc(l.joint||'')}" placeholder="Joint owner"></div></div>
+    <div class="fg" id="ei-joint-wrap" style="display:${l.entity==='joint'?'block':'none'}"><label>Second owner</label><input id="ei-joint" value="${esc(l.joint||'')}" placeholder="Joint owner"></div>
+    <div class="fg" id="ei-jointemail-wrap" style="display:${l.entity==='joint'?'block':'none'}"><label>Second owner's email</label><input id="ei-jointemail" value="${esc(l.jointEmail||'')}" placeholder="name2@email.com"></div></div>
+    <div class="fg"><label>Agency type</label><select id="ei-agtype" onchange="const m=this.value==='multiple';document.getElementById('ei-fee-wrap').innerHTML=document.getElementById('ei-service').value==='full'?('<input id=\\'ei-fee\\' type=number step=0.5 value='+(m?MULTI_FEE:DEF_FEE)+'> % of monthly rent'):('<input id=\\'ei-weeks\\' type=number step=0.5 value='+(m?MULTI_WEEKS:DEF_WEEKS)+'> weeks rent (one-off)')">
+      <option value="sole" ${(l.agencyType||'sole')==='sole'?'selected':''}>Sole agency</option><option value="multiple" ${l.agencyType==='multiple'?'selected':''}>Multiple agency</option></select>
+      <div class="hint">Multiple agency lets the landlord instruct other agents too — only whoever lets it earns the fee, so it's charged at a higher rate.</div></div>
     <div class="fg"><label>Service level</label><select id="ei-service" onchange="document.getElementById('ei-fee-wrap').innerHTML=this.value==='full'?'<input id=\\'ei-fee\\' type=number step=0.5 value=${l.feePct!=null?l.feePct:DEF_FEE}> % of monthly rent':'<input id=\\'ei-weeks\\' type=number step=0.5 value=${l.letWeeks!=null?l.letWeeks:DEF_WEEKS}> weeks rent (one-off)'">
     <option value="full" ${l.service==='full'?'selected':''}>Full management</option><option value="letonly" ${l.service==='letonly'?'selected':''}>Let-only</option></select></div>
     <div class="fg"><label>Your fee (editable)</label><div class="feebox" id="ei-fee-wrap">${l.service==='full'?`<input id="ei-fee" type="number" step="0.5" value="${l.feePct!=null?l.feePct:DEF_FEE}"> % of monthly rent`:`<input id="ei-weeks" type="number" step="0.5" value="${l.letWeeks!=null?l.letWeeks:DEF_WEEKS}"> weeks' rent (one-off)`}</div></div>
     <div class="fg"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400"><input type="checkbox" id="ei-board" style="width:auto" ${l.boardOptOut?'checked':''}> Landlord has opted OUT of a To-Let board <span class="faint">(a board is permitted by default — free advertising + brand awareness)</span></label></div>`;
   modal('Edit instruction & fee', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveInstruction('${id}')">Save</button>`);
 }
-function saveInstruction(id){ const l=L(id); l.entity=val('ei-entity')||'individual'; l.joint=l.entity==='joint'?val('ei-joint'):''; l.boardOptOut=!!(document.getElementById('ei-board')&&document.getElementById('ei-board').checked); l.docs=Object.assign({},l.docs,{boardOptOut:l.boardOptOut}); l.service=val('ei-service'); if(l.service==='full')l.feePct=parseFloat(val('ei-fee'))||DEF_FEE; else l.letWeeks=parseFloat(val('ei-weeks'))||DEF_WEEKS;
-  l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:'Instruction updated · '+SVC[l.service].label+' · fee '+(l.service==='full'?l.feePct+'%':l.letWeeks+' wks')});
+function saveInstruction(id){ const l=L(id); l.entity=val('ei-entity')||'individual'; l.joint=l.entity==='joint'?val('ei-joint'):''; l.jointEmail=l.entity==='joint'?val('ei-jointemail'):''; l.agencyType=val('ei-agtype')||'sole'; l.boardOptOut=!!(document.getElementById('ei-board')&&document.getElementById('ei-board').checked); l.docs=Object.assign({},l.docs,{boardOptOut:l.boardOptOut}); l.service=val('ei-service'); if(l.service==='full')l.feePct=parseFloat(val('ei-fee'))||DEF_FEE; else l.letWeeks=parseFloat(val('ei-weeks'))||DEF_WEEKS;
+  l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:'Instruction updated · '+(l.agencyType==='multiple'?'Multiple':'Sole')+' agency · '+SVC[l.service].label+' · fee '+(l.service==='full'?l.feePct+'%':l.letWeeks+' wks')});
   save(); pushLandlord(l); closeModal(); render(); toast('✓ Instruction updated'); }
 
 // ── COMMS (keep in touch) ──
@@ -1757,33 +1767,51 @@ function agencyEmail(to,subject,html){
 function buildManagementAgreement(l, service){
   const a=S.agency; const props=S.properties.filter(p=>p.landlordId===l.id);
   const isFull=service==='full';
+  const isMulti=l.agencyType==='multiple';
   const title=isFull?'Letting &amp; Management Agreement':'Tenant-Find Agreement';
   const fmt=d=>new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
-  const propList=props.length?('<ul>'+props.map(p=>`<li>${esc(p.address)}${p.city?', '+esc(p.city):''} — ${gbp(p.rent)}/month${isFull?' · management fee '+propFee(p)+'%':''}</li>`).join('')+'</ul>'):'<p><em>No property currently listed. This agreement applies to properties subsequently instructed by the Landlord under these terms.</em></p>';
+  const propList=props.length?('<ul>'+props.map(p=>`<li>${esc(p.address)}${p.city?', '+esc(p.city):''}${p.postcode?' '+esc(p.postcode):''} — ${gbp(p.rent)}/month${isFull?' · management fee '+propFee(p)+'%':''}${p.councilTaxBand?' · Council Tax band '+esc(p.councilTaxBand):''}</li>`).join('')+'</ul>'):'<p><em>No property currently listed. This agreement applies to properties subsequently instructed by the Landlord under these terms.</em></p>';
+
+  const appointmentClause = isMulti
+    ? `<p><b>2. Appointment — multiple agency.</b> The Landlord appoints the Agent on a <b>multiple agency</b> basis. The Landlord is free to instruct other agents to market the same property(ies) simultaneously. A fee is payable to the Agent only where the Agent introduces the tenant with whom a tenancy is subsequently entered into, or where the Agent is otherwise the effective cause of the letting. If a tenancy is arranged through a different agent, no fee is payable to the Agent under this agreement. The Agent's fee is set higher than a sole agency instruction to reflect this risk (Clause 5).</p>`
+    : `<p><b>2. Appointment — sole agency.</b> The Landlord appoints the Agent on a <b>sole agency</b> basis for an initial term of <b>${esc(a.solePeriodWeeks||'12')} weeks</b> from the date of this agreement ("the Tie-In Period"), renewing thereafter until ended per Clause 10. During the Tie-In Period the Landlord will not instruct any other agent to market the property(ies). If the Landlord lets the property during the Tie-In Period — including to a tenant the Landlord finds themselves — the Agent's full fee remains payable if the Agent introduced that tenant or was the effective cause of the letting; the Landlord may otherwise let privately without a fee to the Agent where the Agent had no involvement. Switching to another agent during the Tie-In Period does not end the Landlord's fee liability to the Agent for a tenant the Agent already introduced.</p>`;
+
   const dutiesClause=isFull
-    ? `<p><b>3. Agent's duties (full management).</b> The Agent will: market the property and find suitable tenants; carry out Right to Rent and tenant referencing checks; prepare the tenancy agreement; register the deposit in a Government-authorised scheme; collect rent and remit it to the Landlord${a.paymentTerms?` within ${a.paymentTerms} days of receipt`:''}; arrange routine repairs and statutory compliance; conduct periodic inspections; and serve notices as instructed.</p>`
-    : `<p><b>3. Agent's duties (tenant-find).</b> The Agent will: market the property; find suitable tenants; carry out Right to Rent and referencing checks; prepare the tenancy agreement; and register the deposit. Ongoing management, rent collection and repairs remain the Landlord's responsibility.</p>`;
+    ? `<p><b>3. Agent's duties (full management).</b> The Agent will: prepare marketing particulars and advertise the property (Rightmove, Zoopla and the Agent's own channels); arrange and accompany viewings; carry out Right to Rent and tenant referencing checks (credit history, employer and previous-landlord references, affordability); prepare the tenancy agreement; protect the deposit in a Government-authorised scheme within 30 days of receipt and serve the prescribed information; collect rent monthly and remit the net amount to the Landlord${a.paymentTerms?` within ${a.paymentTerms} days of receipt`:''}; issue monthly rent statements; instruct routine repairs up to £${esc(a.repairLimit||'250')} without prior approval (higher value works require the Landlord's authorisation except genuine emergencies); arrange statutory compliance certificates where instructed; conduct property inspections at least every 6 months with a written report; and serve statutory notices as instructed by the Landlord.</p>`
+    : `<p><b>3. Agent's duties (tenant-find only).</b> The Agent will: prepare marketing particulars and advertise the property; arrange and accompany viewings; carry out Right to Rent and tenant referencing checks; prepare the tenancy agreement; and protect the deposit in a Government-authorised scheme. Once the tenancy commences, ongoing management, rent collection, repairs, inspections and compliance renewals are the Landlord's own responsibility and fall outside this agreement.</p>`;
+
   const feeClause=isFull
-    ? `<p><b>4. Management fee.</b> The Landlord shall pay the Agent a management commission equal to the percentage of gross monthly rent stated against each property above (default ${DEF_FEE}%), deducted from rent collected before remittance. Commission is charged for as long as each tenancy the Agent arranges or manages remains in place.</p>`
-    : `<p><b>4. Tenant-find fee.</b> The Landlord shall pay the Agent a one-off tenant-find fee equal to ${feeOf(l)} weeks' rent (calculated as the agreed monthly rent × 12 ÷ 52), payable on commencement of the tenancy the Agent introduces.</p>`;
+    ? `<p><b>5. Management fee.</b> The Landlord shall pay the Agent a management commission of <b>${propFee(props[0]||{})||(isMulti?MULTI_FEE:DEF_FEE)}% of gross monthly rent</b> (stated against each property above; ${isMulti?'the multiple-agency rate':'the sole-agency rate'}) plus VAT where applicable, deducted from rent collected before remittance to the Landlord. Commission is payable for as long as the tenancy the Agent arranged or manages remains in place, including any renewal, extension, or statutory periodic tenancy that follows it, and continues to be payable to the Agent even after this agreement ends if that original tenancy continues.</p>`
+    : `<p><b>5. Tenant-find fee.</b> The Landlord shall pay the Agent a one-off fee of <b>${feeOf(l)} weeks' rent</b>${isMulti?' (≈ 1 month, the multiple-agency rate)':' (the sole-agency rate)'} plus VAT where applicable, calculated as the agreed monthly rent × 12 ÷ 52, payable on commencement of the tenancy the Agent introduces. The same fee is payable again if that tenant renews or extends beyond an initial fixed term arranged by the Agent, and if a person introduced by the Agent takes a tenancy of the property within 6 months of an introduction even if the Agent did not conclude that tenancy.</p>`;
+
   const cmp = a.cmp && a.cmp!=='Not holding client money'
     ? `The Agent protects client money through ${esc(a.cmp)}${a.cmpNo?' (ref. '+esc(a.cmpNo)+')':''}.`
-    : `The Agent does not hold client money on account; rent is remitted directly to the Landlord.`;
-  const redress = a.redress ? `The Agent is a member of ${esc(a.redress)}${a.redressNo?' (ref. '+esc(a.redressNo)+')':''}, an approved redress scheme.` : `The Agent is a member of an approved property redress scheme.`;
+    : `The Agent does not hold client money on account; rent is remitted directly to the Landlord and the Agent's fee is invoiced separately.`;
+  const redress = a.redress ? `The Agent is a member of ${esc(a.redress)}${a.redressNo?' (ref. '+esc(a.redressNo)+')':''}, an approved redress scheme under the Redress Schemes for Lettings Agency Work (Requirement to Belong to a Scheme etc.) (England) Order 2014.` : `The Agent is a member of an approved property redress scheme.`;
+
   return `
     <h2 style="text-align:center;margin-top:0">${title}</h2>
     <p style="text-align:center;color:#7A8FA6;font-size:12px">Made under the laws of England &amp; Wales · ${fmt(new Date())}</p>
-    <p><b>1. Parties.</b> This agreement is between <b>${esc(a.name||'the Agent')}</b>${a.address?' of '+esc(a.address):''} ("the Agent") and <b>${esc(l.name)}</b>${l.address?' of '+esc(l.address):''} ("the Landlord").</p>
+
+    <p><b>1. Parties &amp; definitions.</b> This agreement is between <b>${esc(a.name||'the Agent')}</b>${a.address?' of '+esc(a.address):''} ("the Agent") and <b>${esc(l.name)}${l.entity==='joint'&&l.joint?' &amp; '+esc(l.joint):''}</b>${l.address?' of '+esc(l.address):''} ("the Landlord"${l.entity==='joint'?', jointly and severally liable':''}), together "the Parties". "The Property" means the property or properties listed in Clause 2. "Tenancy" means an assured shorthold tenancy or other tenancy of the Property arranged under this agreement.</p>
     <p><b>2. Property(ies).</b> This agreement covers:</p>
     ${propList}
+    ${appointmentClause}
     ${dutiesClause}
+    <p><b>4. Landlord's duties &amp; warranties.</b> The Landlord confirms they are the legal owner (or have the legal owner's authority) and are entitled to let the Property, that any mortgage lender's consent-to-let and any freeholder/superior landlord's consent have been obtained where required (the Landlord's own responsibility, not the Agent's), and that the Property is fit for habitation. The Landlord will keep in force, at their own cost: a valid Gas Safety Record (CP12) where gas appliances are present, an Electrical Installation Condition Report (EICR) renewed at least every 5 years, a valid Energy Performance Certificate rated E or above, and working smoke alarms on every storey plus a carbon monoxide alarm in any room with a fixed combustion appliance. The Landlord authorises the Agent to arrange or renew these where instructed, at the Landlord's cost, and to disclose all material information about the Property to prospective tenants as required by consumer protection law.</p>
     ${feeClause}
-    <p><b>5. Marketing &amp; To-Let board.</b> The Landlord authorises the Agent to advertise the property (including on property portals and the Agent's own channels) and, unless the Landlord opts out below, to erect one <b>${esc(a.name||'Agent')}</b> "To Let" / "Let By" board at the property during the marketing period and for a reasonable period after a let is agreed (typically 4–6 weeks), in accordance with the Town and Country Planning (Control of Advertisements) (England) Regulations 2007. Only one board will be displayed at any time and it will be removed within 14 days of the Agent being instructed to do so. Board opt-out: <b>${l.boardOptOut?'Landlord has opted OUT of a board':'Board permitted'}</b>.</p>
-    <p><b>6. Client money &amp; redress.</b> ${cmp} ${redress}</p>
-    <p><b>7. Landlord's obligations.</b> The Landlord confirms they are legally entitled to let the property and will keep in force: a valid Gas Safety certificate, an Electrical Installation Condition Report (EICR), a valid Energy Performance Certificate (rating E or above) and working smoke and carbon-monoxide alarms. The Landlord authorises the Agent to arrange these where instructed, at the Landlord's cost.</p>
-    <p><b>8. Term &amp; termination.</b> This agreement begins on the date of signature and continues until ended by either party giving one month's written notice, without prejudice to fees accrued or due on tenancies already arranged.</p>
-    <p><b>9. Data protection.</b> The Agent processes personal data as a data controller under UK GDPR${a.icoNo?' (ICO registration '+esc(a.icoNo)+')':''}, solely to provide the services in this agreement.</p>
-    <p><b>10. Governing law.</b> This agreement is governed by the law of England &amp; Wales.</p>
+    <p><b>6. VAT &amp; payment.</b> ${a.vatRegistered?'All fees are stated exclusive of VAT, which is charged at the prevailing rate.':'The Agent is not currently VAT-registered; no VAT is added to the fees above.'} Invoices are payable within ${esc(a.paymentTerms||14)} days of issue. The Agent may deduct its fee from rent collected before remittance for full management instructions; for tenant-find instructions the fee is invoiced separately and is not deducted from rent.</p>
+    <p><b>7. Marketing &amp; To-Let board.</b> The Landlord authorises the Agent to advertise the Property (including on property portals and the Agent's own channels) and, unless the Landlord opts out below, to erect one <b>${esc(a.name||'Agent')}</b> "To Let" / "Let By" board at the Property during the marketing period and for a reasonable period after a let is agreed (typically 4–6 weeks), in accordance with the Town and Country Planning (Control of Advertisements) (England) Regulations 2007. Only one board will be displayed at any time and it will be removed within 14 days of the Agent being instructed to do so. Board opt-out: <b>${l.boardOptOut?'Landlord has opted OUT of a board':'Board permitted'}</b>.</p>
+    <p><b>8. Client money &amp; redress.</b> ${cmp} ${redress}</p>
+    <p><b>9. Right to Rent, referencing &amp; anti-money-laundering.</b> The Agent will carry out Right to Rent checks on prospective tenants in accordance with the Immigration Act 2014, and standard referencing (credit history, employer and previous-landlord references, affordability assessment) before recommending a tenancy. The Agent carries out identity, address and sanctions-screening checks on the Landlord under the Money Laundering, Terrorist Financing and Transfer of Funds (Information on the Payer) Regulations 2017, and retains those records for 5 years.</p>
+    <p><b>10. Term &amp; termination.</b> ${isMulti?'This agreement may be ended by either party giving one month\'s written notice at any time.':`This agreement continues after the initial Tie-In Period (Clause 2) until ended by either party giving one month's written notice.`} Termination does not affect fees already accrued or due under Clause 5 on tenancies arranged before the notice takes effect, including on renewals of those tenancies as set out in Clause 5.</p>
+    <p><b>11. Complaints procedure.</b> Any complaint about the Agent's service should be made in writing to the Agent in the first instance, who will acknowledge it within 3 working days and provide a final response within 8 weeks. If unresolved, the Landlord may refer the complaint to ${a.redress?esc(a.redress):'the Agent\'s redress scheme'} free of charge.</p>
+    <p><b>12. Liability &amp; insurance.</b> The Agent will exercise reasonable skill and care in performing its duties but is not liable for matters outside its reasonable control, including tenant default, damage to the Property, or delays caused by third parties (contractors, referencing providers, courts). The Landlord is responsible for maintaining adequate buildings and landlord contents insurance, and for ensuring any such policy permits the Property to be let.</p>
+    <p><b>13. Data protection.</b> The Agent processes personal data as a data controller under UK GDPR${a.icoNo?' (ICO registration '+esc(a.icoNo)+')':''}, solely to provide the services in this agreement, and will not share it beyond what is necessary for the letting relationship (referencing providers, contractors, deposit schemes, HMRC where relevant).</p>
+    <p><b>14. Notices.</b> Any notice under this agreement must be in writing and sent to the postal or email address the recipient has provided, and is treated as received the next working day (post) or same day (email, if sent before 5pm on a working day).</p>
+    <p><b>15. Force majeure.</b> Neither party is liable for delay or failure to perform caused by circumstances beyond their reasonable control.</p>
+    <p><b>16. Entire agreement.</b> This document, together with any signed variation, is the entire agreement between the Parties regarding the Property and supersedes any prior discussion or representation.</p>
+    <p><b>17. Governing law.</b> This agreement is governed by the law of England &amp; Wales, and the Parties submit to the exclusive jurisdiction of its courts.</p>
     <p style="margin-top:16px">By signing below, both parties agree to be bound by the terms above. Electronic signatures are legally binding under the Electronic Communications Act 2000.</p>`;
 }
 
@@ -1797,6 +1825,7 @@ function openAgreement(id){
         <option value="letonly" ${service==='letonly'?'selected':''}>Tenant-find (let-only)</option>
       </select></div>
     <div class="fg"><label>Landlord's email — the secure signing link is sent here</label><input id="ag-email" value="${esc(l.email||'')}" placeholder="landlord@email.com"></div>
+    ${l.entity==='joint'&&l.jointEmail?`<div class="note" style="margin:-8px 0 4px">Joint owner <b>${esc(l.joint||'')}</b> will also be sent the signing link at <b>${esc(l.jointEmail)}</b>, captured during onboarding.</div>`:''}
     <div class="fg"><label>Agreement preview</label>
       <div id="ag-preview" style="max-height:220px;overflow-y:auto;border:1px solid #E4EAF1;border-radius:8px;padding:14px;font-size:12.5px;line-height:1.7;background:var(--off)">${buildManagementAgreement(l,service)}</div></div>
     <div class="fg"><label>Your name (signing for ${esc(S.agency.name||'the agency')})</label><input id="ag-agent-name" value="${esc(window._agentName||S.agency.name||'')}"></div>
@@ -1828,7 +1857,7 @@ async function sendAgreement(id){
   const row={ id:uid('ag'), agency_id:window._agencyId, landlord_id:l.id, token, service,
     document_html:buildManagementAgreement(l,service), agent_name:agentName, agent_email:window._agentEmail||'',
     agent_sig_png:_agSigPad.toDataURL('image/png'), agent_signed_at:new Date().toISOString(),
-    landlord_name:l.name, landlord_email:email, status:'sent' };
+    landlord_name:l.name, landlord_email:email, entity:l.entity||'individual', joint_name:l.entity==='joint'?(l.joint||''):'', joint_email:l.entity==='joint'?(l.jointEmail||''):'', status:'sent' };
   const { error }=await sb.from('agency_agreements').insert(row);
   if(error){ console.error(error); toast('⚠ Could not create agreement — retry',1); return; }
   l.email=email; l.agreement=false; l.status='pending'; l.comms=l.comms||[];
@@ -1837,6 +1866,7 @@ async function sendAgreement(id){
   S.agreements=S.agreements||[]; S.agreements.push(row);
   const link=new URL('agency-esign.html?t='+encodeURIComponent(token), location.href).href;
   await agencyEmail(email, 'Please sign your '+(service==='letonly'?'Tenant-Find':'Letting & Management')+' Agreement — '+(S.agency.name||'NexLet'), agreementEmailHtml(l,agentName,link,service));
+  if(l.entity==='joint'&&l.jointEmail) await agencyEmail(l.jointEmail, 'Please sign your '+(service==='letonly'?'Tenant-Find':'Letting & Management')+' Agreement — '+(S.agency.name||'NexLet'), agreementEmailHtml(l,agentName,link,service));
   closeModal(); render(); toast('✓ Agreement sent to '+l.name+' for signature');
 }
 
@@ -1888,12 +1918,14 @@ function signedCertHtml(a){
     <table style="width:100%;font-size:12.5px;border-collapse:collapse">
       <tr><td style="padding:6px 0;color:#7A8FA6">Agent</td><td style="padding:6px 0;font-weight:600">${esc(a.agent_name||'')}</td></tr>
       <tr><td style="padding:6px 0;color:#7A8FA6">Agent signed</td><td style="padding:6px 0">${fmt(a.agent_signed_at)}</td></tr>
-      <tr><td style="padding:6px 0;color:#7A8FA6">Landlord</td><td style="padding:6px 0;font-weight:600">${esc(a.landlord_name||'')}</td></tr>
+      <tr><td style="padding:6px 0;color:#7A8FA6">Landlord</td><td style="padding:6px 0;font-weight:600">${esc(a.landlord_name||'')}${a.joint_name?' &amp; '+esc(a.joint_name):''}</td></tr>
       <tr><td style="padding:6px 0;color:#7A8FA6">Landlord signed</td><td style="padding:6px 0">${fmt(a.landlord_signed_at)}</td></tr>
+      ${a.joint_name?`<tr><td style="padding:6px 0;color:#7A8FA6">Joint owner signed</td><td style="padding:6px 0">${fmt(a.joint_signed_at)}</td></tr>`:''}
     </table>
     <div style="display:flex;gap:24px;margin-top:14px;flex-wrap:wrap">
       ${a.agent_sig_png?`<div><div style="font-size:11px;color:#7A8FA6;margin-bottom:4px">Agent signature</div><img src="${a.agent_sig_png}" style="height:56px"></div>`:''}
       ${a.landlord_sig_png?`<div><div style="font-size:11px;color:#7A8FA6;margin-bottom:4px">Landlord signature</div><img src="${a.landlord_sig_png}" style="height:56px"></div>`:''}
+      ${a.joint_sig_png?`<div><div style="font-size:11px;color:#7A8FA6;margin-bottom:4px">Joint owner signature</div><img src="${a.joint_sig_png}" style="height:56px"></div>`:''}
     </div>
     <div style="font-size:11px;color:#7A8FA6;margin-top:14px">Electronic signatures applied under the Electronic Communications Act 2000.</div>
   </div>`;
