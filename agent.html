@@ -1412,7 +1412,7 @@ function saveSettings(){ S.agency.name=val('set-name'); S.agency.address=val('se
 let OB=null;
 function openOnboard(){ OB={step:1,name:'',joint:'',entity:'individual',email:'',phone:'',address:'',nrl:false,prsReg:'',payout:'1st',contactPref:'Email',idDoc:'',ownDoc:'',aml:false,ownership:false,service:'full',feePct:DEF_FEE,letWeeks:DEF_WEEKS,addr:'',city:'',rent:'',beds:'2',agreement:false,
   addrDoc:'',sanctions:false,isCompany:false,incorpDoc:'',dirIdDoc:'',isMortgaged:false,mortgageConsentDoc:'',isLeasehold:false,freeholderConsentDoc:''}; renderOnboard(); }
-function obSkipDocs(){ OB.skipDocs=true; obNext(); }
+function obSkipDocs(){ OB.skipDocs=true; obNext(); OB.skipDocs=false; }
 function obNext(){
   if(OB.step===1){ OB.name=val('ob-name');OB.joint=val('ob-joint');OB.email=val('ob-email');OB.phone=val('ob-phone');OB.address=val('ob-address');OB.prsReg=val('ob-prs');OB.payout=val('ob-payout');OB.contactPref=val('ob-pref'); if(!OB.name){toast(OB.entity==='company'?'Enter the company name':'Enter the landlord name',1);return;} }
   if(OB.step===2&&!OB.skipDocs){ if(!OB.idDoc&&!OB.aml){toast('Attach photo ID to continue (AML requirement), or use "Skip for now"',1);return;} if(!OB.addrDoc){toast('Attach proof of address — required for AML, or use "Skip for now"',1);return;} if(!OB.sanctions){toast('Confirm the sanctions (OFSI) check — legally required since May 2025',1);return;} if(OB.isCompany&&(!OB.incorpDoc||!OB.dirIdDoc)){toast('Company landlord: attach incorporation certificate + director ID',1);return;} }
@@ -1464,16 +1464,14 @@ function renderOnboard(){
     ${obDoc('addrDoc','Proof of current address <span class="faint">(utility bill / bank statement, under 3 months)</span>','utility_bill.pdf')}
     ${OB.isCompany?obDoc('incorpDoc','Certificate of incorporation','certificate_of_incorporation.pdf')+obDoc('dirIdDoc','Director / beneficial-owner ID','director_id.pdf'):''}
     <div class="chk ${OB.sanctions?'on':''}" onclick="OB.sanctions=!OB.sanctions;renderOnboard()"><div class="box">${OB.sanctions?'✓':''}</div><div><div style="font-weight:600;font-size:13px">Sanctions (OFSI) check completed</div><div class="faint" style="font-size:11px">Screened against the UK financial sanctions list — no match${OB.sanctions?' · '+fmtDate(today()):''}</div></div></div>
-    <div class="chk ${OB.aml?'on':''}" onclick="OB.aml=!OB.aml;renderOnboard()"><div class="box">${OB.aml?'✓':''}</div><div><div style="font-weight:600;font-size:13px">Identity &amp; AML check passed</div><div class="faint" style="font-size:11px">Auto-ticks once ID is attached — untick if checks are incomplete</div></div></div>
-    <div style="margin-top:10px;font-size:11.5px"><a href="javascript:void(0)" onclick="obSkipDocs()" style="color:var(--muted)">Don't have these yet? Skip for now, add before sending the agreement →</a></div>`;
+    <div class="chk ${OB.aml?'on':''}" onclick="OB.aml=!OB.aml;renderOnboard()"><div class="box">${OB.aml?'✓':''}</div><div><div style="font-weight:600;font-size:13px">Identity &amp; AML check passed</div><div class="faint" style="font-size:11px">Auto-ticks once ID is attached — untick if checks are incomplete</div></div></div>`;
   if(s===3) body=`<div class="note" style="margin-bottom:14px">Confirm the landlord is legally entitled to let — and that any lender or freeholder permits letting. Title register, mortgage statement or council tax bill.</div>
     ${obDoc('ownDoc','Proof of ownership <span class="faint">(title register / mortgage statement / council tax)</span>','title_register.pdf','OB.ownership=true;')}
     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;margin:2px 0 12px"><input type="checkbox" style="width:auto" ${OB.isMortgaged?'checked':''} onchange="OB.isMortgaged=this.checked;renderOnboard()"> Property is mortgaged <span class="faint">(lender consent-to-let needed)</span></label>
     ${OB.isMortgaged?obDoc('mortgageConsentDoc','Mortgage lender consent-to-let','consent_to_let.pdf'):''}
     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;margin:2px 0 12px"><input type="checkbox" style="width:auto" ${OB.isLeasehold?'checked':''} onchange="OB.isLeasehold=this.checked;renderOnboard()"> Property is leasehold <span class="faint">(freeholder consent may be needed)</span></label>
     ${OB.isLeasehold?obDoc('freeholderConsentDoc','Freeholder / managing-agent consent to sublet','freeholder_consent.pdf'):''}
-    <div class="chk ${OB.ownership?'on':''}" onclick="OB.ownership=!OB.ownership;renderOnboard()"><div class="box">${OB.ownership?'✓':''}</div><div><div style="font-weight:600;font-size:13px">Ownership &amp; right-to-let confirmed</div><div class="faint" style="font-size:11px">Auto-ticks once proof is attached</div></div></div>
-    <div style="margin-top:10px;font-size:11.5px"><a href="javascript:void(0)" onclick="obSkipDocs()" style="color:var(--muted)">Don't have this yet? Skip for now, add before sending the agreement →</a></div>`;
+    <div class="chk ${OB.ownership?'on':''}" onclick="OB.ownership=!OB.ownership;renderOnboard()"><div class="box">${OB.ownership?'✓':''}</div><div><div style="font-weight:600;font-size:13px">Ownership &amp; right-to-let confirmed</div><div class="faint" style="font-size:11px">Auto-ticks once proof is attached</div></div></div>`;
   if(s===4) body=`<div class="faint" style="font-size:12px;margin-bottom:12px">Add their first property (optional now — add more later from their record).</div>
     <div class="fg"><label>Address</label><input id="ob-addr" value="${esc(OB.addr)}" placeholder="e.g. 12 High Street"></div>
     <div class="grid3" style="gap:10px"><div class="fg"><label>Town/City</label><input id="ob-city" value="${esc(OB.city)}"></div>
@@ -1509,9 +1507,9 @@ function renderOnboard(){
     <div class="chk ${OB.agreement?'on':''}" onclick="OB.agreement=!OB.agreement;renderOnboard()"><div class="box">${OB.agreement?'✓':''}</div><div><div style="font-weight:600;font-size:13px">Agreement already signed offline</div><div class="faint" style="font-size:11px">Only tick if you already hold a wet-ink/PDF agreement. Otherwise leave unticked and e-sign from their record.</div></div></div>`;
   }
   const ft = s<6
-    ? `<button class="btn" onclick="obBack()">${s===1?'Cancel':'Back'}</button><button class="btn navy" onclick="obNext()">Next →</button>`
+    ? `<button class="btn" onclick="obBack()">${s===1?'Cancel':'Back'}</button>${(s===2||s===3)?`<button class="btn" onclick="obSkipDocs()" style="color:var(--muted)">Skip for now</button>`:''}<button class="btn navy" onclick="obNext()">Next →</button>`
     : `<button class="btn" onclick="obBack()">Back</button><button class="btn navy" onclick="obFinish()">Finish onboarding</button>`;
-  modal('Onboard a landlord', stepper+body, ft);
+  modal('Onboard a landlord', stepper+body, ft, true);
 }
 function _obFee(){ const isF=OB.service==='full'; if(isF)OB.feePct=parseFloat(val('ob-fee'))||0; else OB.letWeeks=parseFloat(val('ob-weeks'))||0;
   const rent=parseInt(OB.rent)||0; const el=document.getElementById('ob-feenote');
@@ -2614,7 +2612,7 @@ async function agentLogout(){
 }
 function esc(v){ return v==null?'':String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function val(id){ const e=document.getElementById(id); return e?e.value.trim():''; }
-function modal(title,body,ft){ document.getElementById('modal-root').innerHTML=`<div class="ov" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="modal-hd"><h3>${title}</h3><button class="x" onclick="closeModal()">×</button></div><div class="modal-bd">${body}</div><div class="modal-ft">${ft}</div></div></div>`; }
+function modal(title,body,ft,lock){ document.getElementById('modal-root').innerHTML=`<div class="ov" onclick="${lock?'':'if(event.target===this)closeModal()'}"><div class="modal"><div class="modal-hd"><h3>${title}</h3><button class="x" onclick="closeModal()">×</button></div><div class="modal-bd">${body}</div><div class="modal-ft">${ft}</div></div></div>`; }
 function closeModal(){ document.getElementById('modal-root').innerHTML=''; OB=null; RF=null; }
 let _tt; function toast(m,bad){ const t=document.getElementById('toast'); t.textContent=m; t.style.background=bad?'var(--red)':'var(--navy)'; t.classList.add('show'); clearTimeout(_tt); _tt=setTimeout(()=>t.classList.remove('show'),2600); }
 
