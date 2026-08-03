@@ -2225,6 +2225,10 @@ async function savePropToDB() {
     licence_expiry:  null,
     epc_rating:      null,
     epc_expiry:      null,
+    ownership_doc_type: document.getElementById('p-own-type')?.value || null,
+    ownership_doc_name: document.getElementById('p-own-name')?.value.trim() || null,
+    ownership_doc_date: document.getElementById('p-own-date')?.value || null,
+    ownership_verified_at: document.getElementById('p-own-type')?.value ? new Date().toISOString() : null,
     notes:           document.getElementById('p-notes')?.value.trim() || null,
     user_id:         currentUser.id,
     status:          'active',
@@ -3266,6 +3270,57 @@ function moAddProp(){
         </div>
         <div class="fg"><label>EPC expiry date</label><input type="date" id="p-epc-expiry"></div>
       </div>
+      <div style="background:var(--off);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin:14px 0">
+        <div style="font-size:12px;font-weight:600;margin-bottom:8px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/><path d="M6 8.5h4M6 11h4"/></svg> Proof of Ownership — AI Scanner</div>
+        <label id="p-own-scan-box" style="display:flex;align-items:center;gap:10px;padding:10px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--navy)'" onmouseout="this.style.borderColor='var(--border)'">
+          <span style="font-size:20px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/><path d="M6 8.5h4M6 11h4"/></svg></span>
+          <div><div style="font-size:12px;font-weight:600">Upload Land Registry title or mortgage statement</div><div style="font-size:11px;color:var(--muted)">PDF or image — AI will fill document type and registered owner</div></div>
+          <input type="file" accept="image/*,.pdf" style="display:none" onchange="scanPropOwnership(this)">
+        </label>
+      </div>
+      <div class="fg-row">
+        <div class="fg"><label>Ownership document type</label>
+          <select id="p-own-type">
+            <option value="">Not provided</option>
+            <option>Land Registry Title Register</option>
+            <option>Mortgage Statement</option>
+            <option>Completion Statement</option>
+            <option>Deed of Trust</option>
+          </select>
+        </div>
+        <div class="fg"><label>Registered owner name(s)</label><input type="text" id="p-own-name" placeholder="Name(s) as shown on document"></div>
+      </div>
+      <div class="fg"><label>Document date</label><input type="date" id="p-own-date" style="max-width:200px"></div>
+
+      ${D.userProfile?.id_verified_at ? `
+      <div style="background:var(--green-bg);border:1px solid rgba(0,168,122,0.25);border-radius:8px;padding:10px 14px;margin:14px 0;font-size:12px;color:var(--green-dark)">
+        ✓ Your identity was verified on ${new Date(D.userProfile.id_verified_at).toLocaleDateString('en-GB')} (${esc(D.userProfile.id_doc_type||'ID document')}) — no need to upload again.
+      </div>` : `
+      <div style="background:var(--off);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin:14px 0">
+        <div style="font-size:12px;font-weight:600;margin-bottom:8px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/><path d="M6 8.5h4M6 11h4"/></svg> Your Identity — AI Scanner <span style="color:var(--muted);font-weight:400">(one-time, covers all properties)</span></div>
+        <label id="p-id-scan-box" style="display:flex;align-items:center;gap:10px;padding:10px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--navy)'" onmouseout="this.style.borderColor='var(--border)'">
+          <span style="font-size:20px"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;vertical-align:-0.14em;display:inline-block;flex-shrink:0"><path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/><path d="M6 8.5h4M6 11h4"/></svg></span>
+          <div><div style="font-size:12px;font-weight:600">Upload passport or driving licence</div><div style="font-size:11px;color:var(--muted)">PDF or image — AI will fill document type, reference and expiry</div></div>
+          <input type="file" accept="image/*,.pdf" style="display:none" onchange="scanLandlordID(this)">
+        </label>
+      </div>
+      <div class="fg-row">
+        <div class="fg"><label>ID document type</label>
+          <select id="p-id-type">
+            <option value="">Not provided</option>
+            <option>Passport</option>
+            <option>Driving Licence</option>
+            <option>Biometric Residence Permit</option>
+            <option>National ID Card</option>
+          </select>
+        </div>
+        <div class="fg"><label>Reference number</label><input type="text" id="p-id-ref"></div>
+      </div>
+      <div class="fg-row">
+        <div class="fg"><label>Expiry date</label><input type="date" id="p-id-expiry"></div>
+        <div class="fg"><label>Issuing authority</label><input type="text" id="p-id-issuer" placeholder="e.g. HMPO, DVLA"></div>
+      </div>`}
+
       <div class="fg"><label>Landlord notes</label><textarea id="p-notes" placeholder="Internal notes — access codes, managing agent, special instructions…" style="min-height:60px"></textarea></div>
       <div style="background:var(--blue-bg);border:1px solid rgba(59,111,232,0.2);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--blue);margin-top:4px">
         ℹ️ After saving, you'll be guided to add the tenant, upload compliance documents (EPC, licence, Gas Safety, EICR) and set up insurance — one step at a time.
@@ -20517,6 +20572,86 @@ function filterCompliance(filter) {
 
 // ── POSTCODE LOOKUP (moAddProp + moEditProp) ──
 // lookupPostcode removed — replaced with getAddress.io (post-launch)
+// ── AI SCAN: PROOF OF OWNERSHIP (moAddProp Step 4) ──
+function scanPropOwnership(input) {
+  if (!input.files[0]) return;
+  const file = input.files[0];
+  const box = document.getElementById('p-own-scan-box');
+  if (box) box.innerHTML = `<span style="font-size:20px">⏳</span><div><div style="font-size:12px;font-weight:600;color:var(--muted)">Scanning document…</div><div class="scan-badge" style="margin-top:4px">✦ AI reading</div></div>`;
+  const reader = new FileReader();
+  reader.onload = async () => {
+    const b64 = reader.result.split(',')[1];
+    const isImg = file.type.startsWith('image/');
+    const prompt = 'UK proof of property ownership document (Land Registry title register, mortgage statement, completion statement, or deed of trust). Extract: document type, registered owner full name(s) as shown, property address if visible, document date (YYYY-MM-DD). Return JSON only, keys: doc_type, owner_name, address, date.';
+    const msgContent = isImg
+      ? [{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:prompt}]
+      : [{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},{type:'text',text:prompt}];
+    try {
+      const res = await aiScanFetch({model:'claude-sonnet-4-5',max_tokens:300,messages:[{role:'user',content:msgContent}]},{feature:'Document scan'});
+      const data = await res.json();
+      const parsed = JSON.parse((data.content?.[0]?.text||'{}').replace(/```json|```/g,'').trim());
+      if (parsed.owner_name) { const el=document.getElementById('p-own-name'); if(el) el.value=parsed.owner_name; }
+      if (parsed.date) { const el=document.getElementById('p-own-date'); if(el) el.value=parsed.date; }
+      if (parsed.doc_type) {
+        const dt = parsed.doc_type.toLowerCase();
+        const sel = document.getElementById('p-own-type');
+        const matchMap = { 'title register':'Land Registry Title Register', 'land registry':'Land Registry Title Register', mortgage:'Mortgage Statement', completion:'Completion Statement', trust:'Deed of Trust' };
+        for (const [key, val] of Object.entries(matchMap)) { if (dt.includes(key) && sel) { sel.value = val; break; } }
+      }
+      _scanBoxSuccess('p-own-scan-box', file, parsed);
+      toast('✓ Ownership document scanned — check fields below');
+    } catch(e) {
+      _scanBoxError('p-own-scan-box', file);
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+// ── AI SCAN: LANDLORD'S OWN ID (moAddProp Step 4, one-time) ──
+function scanLandlordID(input) {
+  if (!input.files[0]) return;
+  const file = input.files[0];
+  const box = document.getElementById('p-id-scan-box');
+  if (box) box.innerHTML = `<span style="font-size:20px">⏳</span><div><div style="font-size:12px;font-weight:600;color:var(--muted)">Scanning ID…</div><div class="scan-badge" style="margin-top:4px">✦ AI reading</div></div>`;
+  const reader = new FileReader();
+  reader.onload = async () => {
+    const b64 = reader.result.split(',')[1];
+    const isImg = file.type.startsWith('image/');
+    const prompt = 'This is a photo ID document (passport, driving licence, biometric residence permit, or national ID card). Extract: document type, reference/document number, expiry date (YYYY-MM-DD, null if none), issuing authority (e.g. HMPO, DVLA, UKVI, or issuing country), nationality if visible. Return JSON only, keys: doc_type, ref, expiry, issuing_authority, nationality.';
+    const msgContent = isImg
+      ? [{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:prompt}]
+      : [{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},{type:'text',text:prompt}];
+    try {
+      const res = await aiScanFetch({model:'claude-sonnet-4-5',max_tokens:300,messages:[{role:'user',content:msgContent}]},{feature:'ID document scan'});
+      const data = await res.json();
+      const parsed = JSON.parse((data.content?.[0]?.text||'{}').replace(/```json|```/g,'').trim());
+      const dt = (parsed.doc_type||'').toLowerCase();
+      const sel = document.getElementById('p-id-type');
+      if (sel) {
+        if (dt.includes('passport')) sel.value = 'Passport';
+        else if (dt.includes('driving')||dt.includes('licence')||dt.includes('license')) sel.value = 'Driving Licence';
+        else if (dt.includes('brp')||dt.includes('biometric')) sel.value = 'Biometric Residence Permit';
+        else if (dt.includes('national id')||dt.includes('identity card')) sel.value = 'National ID Card';
+      }
+      if (parsed.ref) { const el=document.getElementById('p-id-ref'); if(el) el.value=parsed.ref; }
+      if (parsed.expiry) { const el=document.getElementById('p-id-expiry'); if(el) el.value=parsed.expiry; }
+      if (parsed.issuing_authority) { const el=document.getElementById('p-id-issuer'); if(el) el.value=parsed.issuing_authority; }
+      _scanBoxSuccess('p-id-scan-box', file, parsed);
+      toast('✓ ID scanned — verifying…');
+      // Persist to user_profiles immediately — one-time, covers every property.
+      const patch = { id: currentUser.id, id_doc_type: sel?.value || parsed.doc_type || null, id_doc_ref: parsed.ref || null, id_doc_expiry: parsed.expiry || null, id_doc_issuer: parsed.issuing_authority || null, id_doc_nationality: parsed.nationality || null, id_verified_at: new Date().toISOString() };
+      try {
+        await sb.from('user_profiles').upsert(patch, { onConflict: 'id' });
+        D.userProfile = { ...(D.userProfile||{}), ...patch };
+        toast('✓ Identity verified — saved to your profile');
+      } catch(e2) { /* non-critical — fields stay filled for manual save */ }
+    } catch(e) {
+      _scanBoxError('p-id-scan-box', file);
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
 // ── AI SCAN: PROPERTY LICENCE (moAddProp Step 4) ──
 function scanPropLicence(input) {
   if (!input.files[0]) return;
