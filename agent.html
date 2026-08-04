@@ -1103,8 +1103,8 @@ function vPropertyDetail(){
     <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${label}</div><div class="faint" style="font-size:11.5px">${date?'Expires '+fmtDate(date):'No certificate on file'}</div></div>
     <span class="pill" style="background:${r.bg};color:${r.color}">${r.label}</span>
     <button class="btn sm" onclick="editCert('${p.id}','${key}')">${date?'Update':'Add'}</button></div>`;};
-  const declRow=(key,label,hint,date)=>{const r=declStatus(date);return `<div class="doc"><div class="di" style="background:${r.bg};color:${r.color}">⛨</div>
-    <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${label}</div><div class="faint" style="font-size:11.5px">${date?fmtDate(date)+' confirmed':hint}</div></div>
+  const declRow=(key,label,hint,date,doc)=>{const r=declStatus(date);return `<div class="doc"><div class="di" style="background:${r.bg};color:${r.color}">⛨</div>
+    <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${label}</div><div class="faint" style="font-size:11.5px">${date?fmtDate(date)+' confirmed'+(doc?' · '+esc(doc)+' on file':''):hint}</div></div>
     <span class="pill" style="background:${r.bg};color:${r.color}">${r.label}</span>
     ${key==='co'?`<a href="#" onclick="toggleCoNA('${p.id}');return false" style="font-size:11px;color:var(--blue);margin-right:8px;white-space:nowrap">N/A</a>`:''}
     <button class="btn sm" onclick="editCert('${p.id}','${key}')">${date?'Update':'Confirm'}</button></div>`;};
@@ -1126,8 +1126,8 @@ function vPropertyDetail(){
         ${certRow('eicr','EICR (every 5 years)',c.eicr)}
         ${certRow('epc','EPC'+(c.epcRating?' · rated '+c.epcRating:''),c.epc)}
         ${(c.epcRating==='D'||c.epcRating==='E')?`<div class="note warn" style="margin-top:6px">EPC rated ${c.epcRating} — legal to let now, but EPC C becomes the minimum on 1 Oct 2030. Flag to the landlord to plan works.</div>`:''}
-        ${declRow('smoke','Smoke alarms','Fit a working smoke alarm on every floor',c.smoke)}
-        ${c.coNA?`<div class="doc"><div class="di" style="background:var(--off);color:#94A3B8">⛨</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">CO alarm</div><div class="faint" style="font-size:11.5px">Marked not applicable — no fixed combustion appliance</div></div><span class="pill" style="background:var(--off);color:#94A3B8">N/A</span><a href="#" onclick="toggleCoNA('${p.id}');return false" style="font-size:11px;color:var(--blue)">Applies</a></div>`:declRow('co','CO alarm','Required in any room with a fixed combustion appliance (boiler cupboard, gas fire, log burner, etc.)',c.co)}
+        ${declRow('smoke','Smoke alarms','Fit a working smoke alarm on every floor',c.smoke,c.smokeDoc)}
+        ${c.coNA?`<div class="doc"><div class="di" style="background:var(--off);color:#94A3B8">⛨</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">CO alarm</div><div class="faint" style="font-size:11.5px">Marked not applicable — no fixed combustion appliance</div></div><span class="pill" style="background:var(--off);color:#94A3B8">N/A</span><a href="#" onclick="toggleCoNA('${p.id}');return false" style="font-size:11px;color:var(--blue)">Applies</a></div>`:declRow('co','CO alarm','Required in any room with a fixed combustion appliance (boiler cupboard, gas fire, log burner, etc.)',c.co,c.coDoc)}
         <div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;flex:1"><input type="checkbox" style="width:auto" ${c.hmoApplicable?'checked':''} onchange="toggleHmoApplicable('${p.id}',this.checked)"> HMO / selective-licensing property</label>
         </div>
@@ -1192,9 +1192,16 @@ function savePropFee(pid){ const p=P(pid); p.feePct=parseFloat(val('pf-fee')); i
 function editCert(pid,key){ const p=P(pid); const c=p.certs||(p.certs={}); const cur=c[key]||'';
   const label=CERT_LABELS[key]||key.toUpperCase();
   if(key==='smoke'||key==='co'){
-    const body=`<div class="note" style="margin-bottom:12px">${key==='smoke'?'Confirm a working smoke alarm is fitted on every floor.':'Confirm a CO alarm is fitted in every room with a fixed combustion appliance (boiler cupboard, gas fire, log burner, etc.).'} This is a declaration, not a scanned certificate — no need to re-confirm unless something changes.</div>
+    const existingFile=c[key+'Doc']||''; window._certFile=null;
+    const body=`<div class="note" style="margin-bottom:12px">${key==='smoke'?'Confirm a working smoke alarm is fitted on every floor.':'Confirm a CO alarm is fitted in every room with a fixed combustion appliance (boiler cupboard, gas fire, log burner, etc.).'} Attach a photo of the fitted alarm or a professional test certificate as proof before confirming.</div>
+      <div class="fg"><label>Proof — photo of the alarm, or a test certificate</label>
+        <label style="display:flex;align-items:center;gap:10px;padding:10px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer">
+          <span style="font-size:18px">📷</span><div style="font-size:12.5px;font-weight:600;flex:1">${existingFile?'Replace file':'Click to attach a photo or certificate'}</div>
+          <input type="file" accept="image/*,.pdf" style="display:none" onchange="ctAttachEvidence(this)">
+        </label>
+        <div id="ct-evid-status" style="margin-top:6px;font-size:11.5px">${existingFile?`<span style="color:var(--green)">✓ ${esc(existingFile)} on file</span>`:'<span class="faint">No evidence attached yet</span>'}</div></div>
       <div class="fg"><label>Confirmed on</label><input id="ct-date" type="date" value="${cur||today()}"></div>`;
-    modal('Confirm '+label,body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveCert('${pid}','${key}')">Confirm</button>`, true);
+    modal('Confirm '+label,body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" id="ct-confirm-btn" ${existingFile?'':'disabled'} onclick="saveCert('${pid}','${key}')">Confirm</button>`, true);
     return;
   }
   let body=`<div class="note" style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -1231,7 +1238,13 @@ async function aiScanCert(pid,key,input){
     } else { if(st)st.textContent='Could not read a date — please enter it manually.'; }
   }catch(e){ console.error(e); if(st)st.textContent='Could not read the file — enter the date manually.'; }
 }
-function saveCert(pid,key){ const p=P(pid); p.certs=p.certs||{}; p.certs[key]=val('ct-date'); if(key==='epc')p.certs.epcRating=val('ct-rating'); if(key==='hmo'){p.certs.hmoNo=val('ct-hmono');p.certs.hmoAuthority=val('ct-hmoauth');} save(); pushProperty(p); closeModal(); render(); toast('✓ '+(CERT_LABELS[key]||key.toUpperCase())+' updated'); }
+function ctAttachEvidence(input){ const f=input.files[0]; if(!f) return; window._certFile=f;
+  const st=document.getElementById('ct-evid-status'); if(st) st.innerHTML='<span style="color:var(--green)">✓ '+esc(f.name)+' attached</span>';
+  const btn=document.getElementById('ct-confirm-btn'); if(btn) btn.disabled=false;
+}
+function saveCert(pid,key){ const p=P(pid); p.certs=p.certs||{};
+  if(key==='smoke'||key==='co'){ if(!window._certFile&&!p.certs[key+'Doc']){toast('Attach a photo or certificate first',1);return;} if(window._certFile)p.certs[key+'Doc']=window._certFile.name; window._certFile=null; }
+  p.certs[key]=val('ct-date'); if(key==='epc')p.certs.epcRating=val('ct-rating'); if(key==='hmo'){p.certs.hmoNo=val('ct-hmono');p.certs.hmoAuthority=val('ct-hmoauth');} save(); pushProperty(p); closeModal(); render(); toast('✓ '+(CERT_LABELS[key]||key.toUpperCase())+' updated'); }
 function toggleCoNA(pid){ const p=P(pid); p.certs=p.certs||{}; p.certs.coNA=!p.certs.coNA; save(); pushProperty(p); render(); }
 function toggleHmoApplicable(pid,checked){ const p=P(pid); p.certs=p.certs||{}; p.certs.hmoApplicable=checked; save(); pushProperty(p); render(); }
 function tenantRecFor(pid){ return (S.tenants||[]).find(t=>t.propertyId===pid && t.status==='active'); }
@@ -1652,7 +1665,8 @@ function renderOnboard(){
   if(s===1) body=`<div class="fg"><label>Landlord type</label><select id="ob-entity" onchange="OB.name=val('ob-name');OB.joint=val('ob-joint');OB.entity=this.value;renderOnboard()">
       <option value="individual" ${OB.entity==='individual'?'selected':''}>Individual</option>
       <option value="joint" ${OB.entity==='joint'?'selected':''}>Joint owners</option>
-      <option value="company" ${OB.entity==='company'?'selected':''}>Limited company</option></select></div>
+      <option value="company" ${OB.entity==='company'?'selected':''}>Limited company</option></select>
+      <div class="hint">Check the title register — if there's more than one legal owner, select Joint owners so both are named and liable on the agreement.</div></div>
     <div class="fg"><label>${OB.entity==='company'?'Company name *':'Full name *'}</label><input id="ob-name" value="${esc(OB.name)}" placeholder="${OB.entity==='company'?'e.g. Acme Property Ltd':'Landlord\u2019s name'}"></div>
     ${OB.entity==='joint'?`<div class="fg"><label>Second owner's full name *</label><input id="ob-joint" value="${esc(OB.joint)}" placeholder="Joint owner"></div>
     <div class="fg"><label>Second owner's email *</label><input id="ob-jointemail" value="${esc(OB.jointEmail)}" placeholder="name2@email.com"></div>`:`<input type="hidden" id="ob-joint" value="${esc(OB.joint)}"><input type="hidden" id="ob-jointemail" value="${esc(OB.jointEmail)}">`}
@@ -1747,7 +1761,8 @@ function editInstruction(id){ const l=L(id);
   const body=`<div class="grid2" style="gap:10px"><div class="fg"><label>Landlord type</label><select id="ei-entity" onchange="document.getElementById('ei-joint-wrap').style.display=this.value==='joint'?'block':'none';document.getElementById('ei-jointemail-wrap').style.display=this.value==='joint'?'block':'none'">
       <option value="individual" ${(l.entity||'individual')==='individual'?'selected':''}>Individual</option>
       <option value="joint" ${l.entity==='joint'?'selected':''}>Joint owners</option>
-      <option value="company" ${l.entity==='company'?'selected':''}>Limited company</option></select></div>
+      <option value="company" ${l.entity==='company'?'selected':''}>Limited company</option></select>
+      <div class="hint">If there's more than one legal owner, select Joint owners.</div></div>
     <div class="fg" id="ei-joint-wrap" style="display:${l.entity==='joint'?'block':'none'}"><label>Second owner</label><input id="ei-joint" value="${esc(l.joint||'')}" placeholder="Joint owner"></div>
     <div class="fg" id="ei-jointemail-wrap" style="display:${l.entity==='joint'?'block':'none'}"><label>Second owner's email</label><input id="ei-jointemail" value="${esc(l.jointEmail||'')}" placeholder="name2@email.com"></div></div>
     <div class="fg"><label>Agency type</label><select id="ei-agtype" onchange="const m=this.value==='multiple';document.getElementById('ei-fee-wrap').innerHTML=document.getElementById('ei-service').value==='full'?('<input id=\\'ei-fee\\' type=number step=0.5 value='+(m?MULTI_FEE:DEF_FEE)+'> % of monthly rent'):('<input id=\\'ei-weeks\\' type=number step=0.5 value='+(m?MULTI_WEEKS:DEF_WEEKS)+'> weeks rent (one-off)')">
