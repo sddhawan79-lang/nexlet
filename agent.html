@@ -494,7 +494,7 @@ function openListing(id){
     <div class="fg"><label>EPC rating</label><select id="ls-epc">${['','A','B','C','D','E','F','G'].map(t=>`<option ${l.epc===t?'selected':''}>${t||'—'}</option>`).join('')}</select></div>
     <div class="fg"><label>Description</label><textarea id="ls-desc" rows="3" placeholder="Bright two-bed flat close to transport…">${esc(l.description||'')}</textarea></div>
     <div class="fg"><label>Key features (comma-separated)</label><input id="ls-feat" value="${esc((l.features||[]).join(', '))}" placeholder="Garden, Parking, Double glazing"></div>`;
-  modal(id?'Edit listing':'Create listing', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveListing('${l.id}')">Save listing</button>`);
+  modal(id?'Edit listing':'Create listing', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveListing('${l.id}')">Save listing</button>`, true);
   window._edLST=l;
 }
 function _listingFromProp(pid){ if(!pid)return; const p=P(pid); if(!p.id)return; const s=id=>document.getElementById(id); if(s('ls-addr'))s('ls-addr').value=p.address||''; if(s('ls-pc'))s('ls-pc').value=p.postcode||p.city||''; if(s('ls-rent'))s('ls-rent').value=p.rent||''; if(s('ls-beds'))s('ls-beds').value=p.beds||''; window._edLST.propertyId=pid; }
@@ -589,7 +589,7 @@ function openApplicant(id,listingId){
     <div class="grid2" style="gap:10px"><div class="fg"><label>Source</label><select id="ap-source">${SOURCES.map(s=>`<option ${a.source===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="fg"><label>Interested in</label><select id="ap-listing">${lOpts}</select></div></div>
     <div class="fg"><label>Note</label><textarea id="ap-note" rows="2">${esc(a.note||'')}</textarea></div>
     ${id?`<div class="fg"><label>Status</label><select id="ap-status">${Object.keys(APP_STATUS).map(k=>`<option value="${k}" ${a.status===k?'selected':''}>${APP_STATUS[k][0]}</option>`).join('')}</select></div>`:''}`;
-  modal(id?'Edit applicant':'New enquiry', body, `<button class="btn" onclick="closeModal()">Cancel</button>${id?`<button class="btn" style="color:var(--red)" onclick="archiveApplicant('${a.id}')">Archive</button>`:''}<button class="btn navy" onclick="saveApplicant('${a.id}')">Save</button>`);
+  modal(id?'Edit applicant':'New enquiry', body, `<button class="btn" onclick="closeModal()">Cancel</button>${id?`<button class="btn" style="color:var(--red)" onclick="archiveApplicant('${a.id}')">Archive</button>`:''}<button class="btn navy" onclick="saveApplicant('${a.id}')">Save</button>`, true);
   window._edAPP=a;
 }
 function saveApplicant(id){
@@ -606,7 +606,7 @@ function bookViewing(appId){
   const body=`<div class="note" style="margin-bottom:12px"><b>${esc(a.name)}</b>${a.listingId?' · '+esc(LST(a.listingId).address):''}</div>
     <div class="grid2" style="gap:10px"><div class="fg"><label>Date</label><input id="vw-date" type="date" value="${today()}"></div><div class="fg"><label>Time</label><input id="vw-time" type="time" value="17:30"></div></div>
     <div class="fg"><label>Note (access, meeting point…)</label><input id="vw-note"></div>`;
-  modal('Book viewing', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveViewing('${appId}')">Book viewing</button>`);
+  modal('Book viewing', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveViewing('${appId}')">Book viewing</button>`, true);
 }
 function saveViewing(appId){
   const a=(S.applicants||[]).find(x=>x.id===appId); if(!a)return;
@@ -619,7 +619,7 @@ function viewingDone(vid){
   const v=(S.viewings||[]).find(x=>x.id===vid); if(!v)return;
   const body=`<div class="fg"><label>Outcome</label><select id="vf-out"><option value="interested">Interested — wants to proceed</option><option value="maybe">Maybe / thinking</option><option value="no">Not interested</option><option value="noshow">No-show</option></select></div>
     <div class="fg"><label>Feedback</label><textarea id="vf-note" rows="2"></textarea></div>`;
-  modal('Viewing feedback', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveViewingFeedback('${vid}')">Save</button>`);
+  modal('Viewing feedback', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveViewingFeedback('${vid}')">Save</button>`, true);
 }
 function saveViewingFeedback(vid){
   const v=(S.viewings||[]).find(x=>x.id===vid); if(!v)return;
@@ -658,7 +658,7 @@ function recordOffer(appId){
   const body=`<div class="note" style="margin-bottom:12px"><b>${esc(a.name)}</b>${l.address?' · '+esc(l.address)+' (asking '+gbp(l.rent)+')':''}</div>
     <div class="grid2" style="gap:10px"><div class="fg"><label>Offer (£/mo)</label><input id="of-amt" type="number" value="${l.rent||''}"></div><div class="fg"><label>Move-in date</label><input id="of-move" type="date"></div></div>
     <div class="fg"><label>Note</label><input id="of-note" placeholder="e.g. 6-month break clause requested"></div>`;
-  modal('Record offer', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveOffer('${appId}')">Record offer</button>`);
+  modal('Record offer', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveOffer('${appId}')">Record offer</button>`, true);
 }
 function saveOffer(appId){
   const a=(S.applicants||[]).find(x=>x.id===appId); if(!a)return;
@@ -760,14 +760,14 @@ function openKey(id){
   const body=`<div class="fg"><label>Property</label><select id="k-prop">${propOpts}</select></div>
     <div class="grid2" style="gap:10px"><div class="fg"><label>Label</label><input id="k-label" value="${esc(k.label||'')}" placeholder="Front door + mailbox"></div><div class="fg"><label>Number of copies</label><input id="k-copies" type="number" value="${k.copies||1}"></div></div>
     <div class="fg"><label>Storage / hook ref</label><input id="k-store" value="${esc(k.store||'')}" placeholder="Cabinet A · hook 12"></div>`;
-  modal(id?'Edit key set':'Add key set',body,`<button class="btn" onclick="closeModal()">Cancel</button>${id?`<button class="btn" style="color:var(--red)" onclick="delKey('${k.id}')">Delete</button>`:''}<button class="btn navy" onclick="saveKey('${k.id}')">Save</button>`);
+  modal(id?'Edit key set':'Add key set',body,`<button class="btn" onclick="closeModal()">Cancel</button>${id?`<button class="btn" style="color:var(--red)" onclick="delKey('${k.id}')">Delete</button>`:''}<button class="btn navy" onclick="saveKey('${k.id}')">Save</button>`, true);
   window._edKEY=k;
 }
 function saveKey(id){ const k=window._edKEY||{id}; k.propertyId=val('k-prop'); k.label=val('k-label'); k.copies=parseInt(val('k-copies'))||1; k.store=val('k-store'); S.keys=S.keys||[]; if(!S.keys.find(x=>x.id===k.id))S.keys.push(k); save(); pushKey&&pushKey(k); closeModal(); render(); toast('✓ Saved'); }
 function delKey(id){ S.keys=(S.keys||[]).filter(k=>k.id!==id); save(); dropKey&&dropKey(id); closeModal(); render(); }
 function keyCheckOut(id){ const k=(S.keys||[]).find(x=>x.id===id); if(!k)return;
   const body=`<div class="grid2" style="gap:10px"><div class="fg"><label>Held by</label><input id="ko-holder" placeholder="Name / contractor"></div><div class="fg"><label>Due back</label><input id="ko-due" type="date"></div></div><div class="fg"><label>Reason</label><input id="ko-reason" placeholder="Viewing, contractor access…"></div>`;
-  modal('Sign out key',body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="doKeyOut('${id}')">Sign out</button>`);
+  modal('Sign out key',body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="doKeyOut('${id}')">Sign out</button>`, true);
 }
 function doKeyOut(id){ const k=(S.keys||[]).find(x=>x.id===id); if(!k)return; k.status='out'; k.holder=val('ko-holder'); k.dueBack=val('ko-due')||null; k.log=k.log||[]; k.log.push({t:new Date().toISOString(),ev:'out',holder:k.holder,reason:val('ko-reason')}); save(); pushKey&&pushKey(k); closeModal(); render(); toast('✓ Key signed out'); }
 function keyCheckIn(id){ const k=(S.keys||[]).find(x=>x.id===id); if(!k)return; k.status='in'; k.log=k.log||[]; k.log.push({t:new Date().toISOString(),ev:'in',holder:k.holder}); k.holder=''; k.dueBack=null; save(); pushKey&&pushKey(k); render(); toast('✓ Key checked in'); }
@@ -831,7 +831,7 @@ function payoutLandlord(lid,amount){
   const l=L(lid); const body=`<div class="note" style="margin-bottom:12px">Record a payout to <b>${esc(landlordName(l))}</b>. This reduces what you owe them and updates the client-account balance.</div>
     <div class="grid2" style="gap:10px"><div class="fg"><label>Amount (£)</label><input id="po-amt" type="number" value="${amount}"></div><div class="fg"><label>Date</label><input id="po-date" type="date" value="${today()}"></div></div>
     <div class="fg"><label>Reference</label><input id="po-ref" placeholder="Bank transfer ref"></div>`;
-  modal('Record payout',body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="doPayout('${lid}')">Record payout</button>`);
+  modal('Record payout',body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="doPayout('${lid}')">Record payout</button>`, true);
 }
 function doPayout(lid){ const po={id:uid('po'),landlordId:lid,amount:parseFloat(val('po-amt'))||0,date:val('po-date')||today(),ref:val('po-ref')}; S.payouts=S.payouts||[]; S.payouts.push(po); save(); pushPayout&&pushPayout(po); closeModal(); render(); toast('✓ Payout recorded'); }
 
@@ -888,8 +888,8 @@ function vLandlordDetail(){
   const rent=props.reduce((s,p)=>s+(p.rent||0),0);
   const sv=SVC[l.service]||SVC.full, st=STATUS[l.status]||STATUS.pending;
   const d=l.docs||{};
-  const docRow=(label,name,icon,col,date)=>`<div class="doc"><div class="di" style="background:${name?'var(--green-bg)':'var(--off)'};color:${name?'var(--green)':'var(--faint)'}">${icon}</div>
-    <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${label}</div><div class="faint" style="font-size:11.5px">${name?esc(name)+(date?' · verified '+fmtDate(date):''):'Not uploaded'}</div></div>
+  const docRow=(label,name,icon,col,date,expiry)=>`<div class="doc"><div class="di" style="background:${name?'var(--green-bg)':'var(--off)'};color:${name?'var(--green)':'var(--faint)'}">${icon}</div>
+    <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${label}</div><div class="faint" style="font-size:11.5px">${name?esc(name)+(date?' · verified '+fmtDate(date):''):'Not uploaded'}${expiry?` · <span style="color:${new Date(expiry)<new Date()?'var(--red)':'var(--muted)'}">expires ${fmtDate(expiry)}</span>`:''}</div></div>
     ${name?`<span class="pill" style="background:var(--green-bg);color:var(--green)">✓ On file</span>`:`<button class="btn sm" onclick="uploadDoc('${l.id}','${col}')">Upload</button>`}</div>`;
   return `
     <div class="back" onclick="go('landlords')">← All landlords</div>
@@ -925,7 +925,7 @@ function vLandlordDetail(){
           <div class="kv" style="border:none"><span class="k">Sanctions screen</span><span class="v">${d.sanctions?'✓ Clear '+(d.sanctionsDate?'('+fmtDate(d.sanctionsDate)+')':''):'<span style="color:var(--red)">Not yet run</span>'}</span></div>
         </div></div>
         <div class="panel"><div class="panel-hd"><h2>Document vault</h2></div><div class="panel-bd">
-          ${docRow('Photo ID (AML)',d.id,'🪪','id',d.idDate)}
+          ${docRow('Photo ID (AML)',d.id,'🪪','id',d.idDate,d.idExpiry)}
           ${docRow('Proof of address (AML)',d.address,'🏠','address',d.addressDate)}
           ${(d.isCompany||d.incorporation)?docRow('Certificate of incorporation',d.incorporation,'🏢','incorporation'):''}
           ${(d.isCompany||d.directorId)?docRow('Director / owner ID',d.directorId,'🪪','directorId'):''}
@@ -1090,19 +1090,19 @@ function _rentDayOpts(sel){ const ord=n=>n+(n%10===1&&n!==11?'st':n%10===2&&n!==
   out+=`<option ${sel==='Last working day'?'selected':''}>Last working day</option>`; return out; }
 function editRentDueDay(pid){ const p=P(pid);
   const body=`<div class="fg"><label>Rent due day</label><select id="rd-day">${_rentDayOpts(p.rentDueDay)}</select></div>`;
-  modal('Rent due day — '+esc(p.address), body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveRentDueDay('${pid}')">Save</button>`); }
+  modal('Rent due day — '+esc(p.address), body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveRentDueDay('${pid}')">Save</button>`, true); }
 function saveRentDueDay(pid){ const p=P(pid); p.rentDueDay=val('rd-day'); save(); pushProperty(p); closeModal(); render(); toast('✓ Rent due day updated'); }
 function editPropRent(pid){ const p=P(pid); const isLet=!!p.tenant;
   const body=`<div class="note" style="margin-bottom:14px">${isLet?'This property is let — enter the actual rent agreed with the tenant.':'This is the expected/asking rent while marketing. Once a tenant is set up, come back here to enter the achieved rent.'}</div>
     <div class="fg"><label>${isLet?'Achieved':'Expected'} rent (£/mo)</label><input id="pr-rent" type="number" value="${p.rent||''}"></div>`;
-  modal((isLet?'Achieved':'Expected')+' rent — '+esc(p.address), body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="savePropRent('${pid}')">Save</button>`); }
+  modal((isLet?'Achieved':'Expected')+' rent — '+esc(p.address), body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="savePropRent('${pid}')">Save</button>`, true); }
 function savePropRent(pid){ const p=P(pid); const r=parseInt(val('pr-rent')); if(isNaN(r)||r<0){toast('Enter a valid rent',1);return;} p.rent=r;
   const l=L(p.landlordId); l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:(p.tenant?'Achieved':'Expected')+' rent for '+p.address+' set to '+gbp(r)+'/mo'});
   save(); pushProperty(p); pushLandlord(l); closeModal(); render(); toast('✓ Rent updated'); }
 function editPropFee(pid){ const p=P(pid);
   const body=`<div class="note" style="margin-bottom:14px">Set the management fee for <b>${esc(p.address)}</b>. This is per-property — charge a different rate here (e.g. a family/friends discount) without affecting the landlord's other properties. Invoices use each property's own rate.</div>
     <div class="fg"><label>Management fee (%)</label><div class="feebox"><input id="pf-fee" type="number" step="0.5" value="${propFee(p)}"> <span>% of ${gbp(p.rent)}/mo = <b id="pf-calc">${gbp(p.rent*propFee(p)/100)}/mo</b></span></div></div>`;
-  modal('Property fee — '+esc(p.address), body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="savePropFee('${pid}')">Save fee</button>`);
+  modal('Property fee — '+esc(p.address), body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="savePropFee('${pid}')">Save fee</button>`, true);
   setTimeout(()=>{const i=document.getElementById('pf-fee');if(i)i.oninput=()=>{const c=document.getElementById('pf-calc');if(c)c.textContent=gbp(p.rent*(parseFloat(i.value)||0)/100)+'/mo';};},0);
 }
 function savePropFee(pid){ const p=P(pid); p.feePct=parseFloat(val('pf-fee')); if(isNaN(p.feePct))p.feePct=DEF_FEE;
@@ -1115,7 +1115,7 @@ function editCert(pid,key){ const p=P(pid); const c=p.certs||(p.certs={}); const
       <span id="ct-scan-status" class="faint" style="font-size:11.5px">Upload the certificate — AI reads the expiry date.</span></div>
     <div class="fg"><label>${label} expiry / valid-until date</label><input id="ct-date" type="date" value="${cur}"></div>`;
   if(key==='epc') body+=`<div class="fg"><label>EPC rating</label><select id="ct-rating">${['A','B','C','D','E','F','G'].map(x=>`<option ${c.epcRating===x?'selected':''}>${x}</option>`).join('')}</select></div>`;
-  modal('Update '+label,body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveCert('${pid}','${key}')">Save</button>`); }
+  modal('Update '+label,body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveCert('${pid}','${key}')">Save</button>`, true); }
 // Phase B — AI compliance cert scan. Reuses the shared ai-proxy (agent JWT).
 function _fileB64(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(',')[1]); r.onerror=rej; r.readAsDataURL(file); }); }
 async function aiScanCert(pid,key,input){
@@ -1151,7 +1151,7 @@ function setTenant(pid){ const p=P(pid); const t=p.tenant||{}; const rec=tenantR
   <div class="grid2" style="gap:10px"><div class="fg"><label>Tenancy start</label><input id="tn-start" type="date" value="${t.start||rec.start||''}"></div>
   <div class="fg"><label>Deposit held (£)</label><input id="tn-deposit" type="number" value="${esc(rec.deposit!=null?rec.deposit:'')}"></div></div>
   <div class="hint">Saving creates the tenancy record (for rent tracking, maintenance &amp; the tenant portal) and moves the let to Managed.</div>`;
-  modal('Set up tenant',body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveTenant('${pid}')">Save tenant</button>`); }
+  modal('Set up tenant',body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveTenant('${pid}')">Save tenant</button>`, true); }
 function saveTenant(pid){ const p=P(pid); const nm=val('tn-name'); if(!nm){toast('Enter tenant name',1);return;}
   p.tenant={name:nm,email:val('tn-email'),start:val('tn-start')};
   let tn=S.tenancies.find(t=>t.propertyId===pid); if(tn)tn.stage='managed'; else { tn={id:uid('t'),who:p.address,propertyId:pid,stage:'managed'}; S.tenancies.push(tn); }
@@ -1345,7 +1345,7 @@ function renderInvoice(){
       <div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);margin-top:6px;padding-top:6px"><b>${b.totalLabel}</b><b style="color:var(--navy)">${money2(vat?net*1.2:net)}</b></div>
     </div>
     <div class="hint">${b.kind==='remittance'?'A remittance statement records rent collected on the landlord\'s behalf, less your fee, paid to them. Needs a CMP scheme + client account when live.':'Number auto-assigns on create. Mark it Sent / Paid after.'}</div>`;
-  modal(b.kind==='remittance'?'Create remittance statement':'Create invoice', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="createInvoice()">${b.kind==='remittance'?'Create statement':'Create invoice'}</button>`);
+  modal(b.kind==='remittance'?'Create remittance statement':'Create invoice', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="createInvoice()">${b.kind==='remittance'?'Create statement':'Create invoice'}</button>`, true);
 }
 function createInvoice(){
   const b=_invBuild(); const props=S.properties.filter(p=>p.landlordId===IV.landlordId);
@@ -1651,7 +1651,7 @@ function editInstruction(id){ const l=L(id);
     <option value="full" ${l.service==='full'?'selected':''}>Full management</option><option value="letonly" ${l.service==='letonly'?'selected':''}>Let-only</option></select></div>
     <div class="fg"><label>Your fee (editable)</label><div class="feebox" id="ei-fee-wrap">${l.service==='full'?`<input id="ei-fee" type="number" step="0.5" value="${l.feePct!=null?l.feePct:DEF_FEE}"> % of monthly rent`:`<input id="ei-weeks" type="number" step="0.5" value="${l.letWeeks!=null?l.letWeeks:DEF_WEEKS}"> weeks' rent (one-off)`}</div></div>
     <div class="fg"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400"><input type="checkbox" id="ei-board" style="width:auto" ${l.boardOptOut?'checked':''}> Landlord has opted OUT of a To-Let board <span class="faint">(a board is permitted by default — free advertising + brand awareness)</span></label></div>`;
-  modal('Edit instruction & fee', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveInstruction('${id}')">Save</button>`);
+  modal('Edit instruction & fee', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveInstruction('${id}')">Save</button>`, true);
 }
 function saveInstruction(id){ const l=L(id); l.entity=val('ei-entity')||'individual'; l.joint=l.entity==='joint'?val('ei-joint'):''; l.jointEmail=l.entity==='joint'?val('ei-jointemail'):''; l.agencyType=val('ei-agtype')||'sole'; l.boardOptOut=!!(document.getElementById('ei-board')&&document.getElementById('ei-board').checked); l.docs=Object.assign({},l.docs,{boardOptOut:l.boardOptOut}); l.service=val('ei-service'); if(l.service==='full')l.feePct=parseFloat(val('ei-fee'))||DEF_FEE; else l.letWeeks=parseFloat(val('ei-weeks'))||DEF_WEEKS;
   l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:'Instruction updated · '+(l.agencyType==='multiple'?'Multiple':'Sole')+' agency · '+SVC[l.service].label+' · fee '+(l.service==='full'?l.feePct+'%':l.letWeeks+' wks')});
@@ -1660,20 +1660,51 @@ function saveInstruction(id){ const l=L(id); l.entity=val('ei-entity')||'individ
 // ── COMMS (keep in touch) ──
 function openComm(id){ const body=`<div class="fg"><label>Type</label><select id="cm-type"><option>Call</option><option>Email</option><option>WhatsApp</option><option>Meeting</option><option>Note</option></select></div>
   <div class="fg"><label>Note</label><textarea id="cm-note" rows="3" placeholder="What was discussed / actioned"></textarea></div>`;
-  modal('Log contact', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveComm('${id}')">Save</button>`); }
+  modal('Log contact', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveComm('${id}')">Save</button>`, true); }
 function saveComm(id){ const l=L(id); const note=val('cm-note'); if(!note){toast('Add a note',1);return;}
   l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:val('cm-type'),note}); save(); pushLandlord(l); closeModal(); render(); toast('✓ Contact logged'); }
 
 // ── DOC UPLOAD / PROPERTY ADD ──
 function uploadDoc(id,col){ const l=L(id);
   const label=col==='id'?'Photo ID (AML)':col==='ownership'?'Proof of ownership':'Signed agreement';
+  const cur=l.docs&&l.docs[col]; const curExp=(col==='id'&&l.docs&&l.docs.idExpiry)||'';
+  window._udFile=null;
   const body=`<div class="fg"><label>${label}</label>
     <label style="display:flex;align-items:center;gap:10px;padding:10px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer">
-      <span style="font-size:18px">📄</span><div style="font-size:12.5px;font-weight:600;flex:1">Click to attach a file</div>
-      <input type="file" accept="image/*,.pdf" style="display:none" onchange="saveUploadDoc('${id}','${col}',this)">
-    </label></div>`;
-  modal('Upload document', body, `<button class="btn" onclick="closeModal()">Cancel</button>`); }
-function saveUploadDoc(id,col,input){ const f=input.files[0]; if(!f) return; var l=S.landlords.find(x=>x.id===id); l.docs=l.docs||{}; l.docs[col]=f.name; if(col==='id')l.aml=true; if(col==='ownership')l.ownership=true; if(col==='agreement'){l.agreement=true;l.status='active';} save(); pushLandlord(l); closeModal(); render(); toast('✓ Document attached'); }
+      <span style="font-size:18px">📄</span><div style="font-size:12.5px;font-weight:600;flex:1">${cur?'Replace file':'Click to attach a file'}</div>
+      <input type="file" accept="image/*,.pdf" style="display:none" onchange="udAttach(this,'${col}')">
+    </label>
+    <div id="ud-status" style="margin-top:6px;font-size:11.5px">${cur?`<span style="color:var(--green)">✓ ${esc(cur)} on file</span>`:'<span class="faint">No file attached yet</span>'}</div></div>
+    ${col==='id'?`<div class="fg"><label>ID expiry date <span class="faint">(AI reads it from the file, or enter manually)</span></label><input id="ud-expiry" type="date" value="${curExp}"></div>`:''}`;
+  modal('Upload document', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveUploadDoc('${id}','${col}')">Save</button>`, true); }
+function udAttach(input,col){
+  const f=input.files[0]; if(!f) return; window._udFile=f;
+  const st=document.getElementById('ud-status');
+  if(st) st.innerHTML='<span style="color:var(--blue)">✦ '+esc(f.name)+' attached'+(col==='id'?' — reading expiry…':'')+'</span>';
+  if(col==='id') udScanExpiry(f);
+}
+async function udScanExpiry(file){
+  const st=document.getElementById('ud-status');
+  if(!window._sessionToken){ if(st)st.innerHTML='<span style="color:var(--green)">✓ '+esc(file.name)+' attached</span> — enter expiry manually.'; return; }
+  try{
+    const b64=await _fileB64(file); const isImg=(file.type||'').startsWith('image/');
+    const prompt='This is a UK photo ID (passport, driving licence, or BRP). Return ONLY JSON: {"expiry":"YYYY-MM-DD or null"}.';
+    const content=isImg?[{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:prompt}]:[{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},{type:'text',text:prompt}];
+    const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:100,messages:[{role:'user',content}]})});
+    const data=await res.json(); const txt=((data.content&&data.content[0]&&data.content[0].text)||'{}').replace(/```json|```/g,'').trim();
+    const parsed=JSON.parse(txt);
+    if(parsed&&parsed.expiry){ const el=document.getElementById('ud-expiry'); if(el) el.value=parsed.expiry;
+      if(st) st.innerHTML='<span style="color:var(--green)">✓ '+esc(file.name)+' attached · expiry '+esc(parsed.expiry)+' — review &amp; Save</span>';
+    } else if(st) st.innerHTML='<span style="color:var(--green)">✓ '+esc(file.name)+' attached</span> — enter expiry manually.';
+  }catch(e){ if(st) st.innerHTML='<span style="color:var(--green)">✓ '+esc(file.name)+' attached</span> — enter expiry manually.'; }
+}
+function saveUploadDoc(id,col){
+  const f=window._udFile; if(!f){ toast('Attach a file first',1); return; }
+  var l=S.landlords.find(x=>x.id===id); l.docs=l.docs||{}; l.docs[col]=f.name;
+  if(col==='id'){ l.aml=true; const exp=val('ud-expiry'); if(exp) l.docs.idExpiry=exp; }
+  if(col==='ownership')l.ownership=true; if(col==='agreement'){l.agreement=true;l.status='active';}
+  save(); pushLandlord(l); window._udFile=null; closeModal(); render(); toast('✓ Document attached');
+}
 function addProperty(id){ const l=L(id); const defFee=(l.feePct!=null?l.feePct:DEF_FEE);
   const body=`<div class="grid2" style="gap:10px"><div class="fg"><label>Address</label><input id="ap-addr" placeholder="e.g. 12 High Street"></div>
   <div class="fg"><label>Postcode</label><input id="ap-pc"></div></div>
@@ -1690,7 +1721,7 @@ function addProperty(id){ const l=L(id); const defFee=(l.feePct!=null?l.feePct:D
   <div class="fg"><label>Council Tax band <span class="faint">(required material info for listings)</span></label><select id="ap-ctax">${['','A','B','C','D','E','F','G','H'].map(t=>`<option>${t||'—'}</option>`).join('')}</select></div>
   <div class="fg"><label>Description <span class="faint">(optional)</span></label><textarea id="ap-desc" rows="2"></textarea></div>
   ${l.service==='full'?`<div class="fg"><label>Management fee for this property (%)</label><input id="ap-fee" type="number" step="0.5" value="${defFee}"><div class="hint">Defaults to ${defFee}% — change it to give this property a different rate (e.g. family/friends).</div></div>`:''}`;
-  modal('Add property', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveAddProperty('${id}')">Add</button>`); }
+  modal('Add property', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveAddProperty('${id}')">Add</button>`, true); }
 async function saveAddProperty(id){ var a=val('ap-addr'); if(!a){toast('Enter an address',1);return;} var fEl=document.getElementById('ap-fee');
   var chips=[...document.querySelectorAll('.ap-feat-chip:checked')].map(c=>c.value);
   var pp={landlordId:id,address:a,postcode:val('ap-pc'),city:val('ap-city'),ptype:val('ap-ptype'),rent:parseInt(val('ap-rent'))||0,beds:parseInt(val('ap-beds'))||1,baths:parseInt(val('ap-baths'))||1,furnished:val('ap-furn'),epc:val('ap-epc'),councilTaxBand:val('ap-ctax'),rentDueDay:val('ap-rentday')||'1st',available:val('ap-avail')||null,description:val('ap-desc'),features:[...chips,...(val('ap-feat')||'').split(',').map(x=>x.trim()).filter(Boolean)],feePct:fEl?parseFloat(fEl.value):undefined};
@@ -1733,7 +1764,7 @@ function renderReference(){
     </div>
     <div class="fg" style="margin-top:14px"><label>Overall outcome</label><select id="rf-status"><option value="none" ${RF.status==='none'?'selected':''}>Not decided</option><option value="green" ${RF.status==='green'?'selected':''}>● Pass — proceed</option><option value="amber" ${RF.status==='amber'?'selected':''}>● Caution — guarantor / conditions</option><option value="red" ${RF.status==='red'?'selected':''}>● Fail — decline</option></select></div>
     <div class="fg"><label>Notes</label><textarea id="rf-note" rows="2">${esc(RF.note)}</textarea></div>`;
-  modal('Tenant reference', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveReference()">Save reference</button>`);
+  modal('Tenant reference', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveReference()">Save reference</button>`, true);
 }
 function _affLive(){ const rent=P(RF.propertyId).rent||0; const need=rent*30; const inc=parseInt(val('rf-income'))||0; const el=document.getElementById('rf-aff'); if(el&&rent) el.innerHTML=`Affordability: income must be ≥ ${gbp(need)}/yr (30× rent). `+(inc?(inc>=need?'<b style="color:var(--green)">✓ Passes</b>':'<b style="color:var(--amber)">Below threshold</b>'):''); }
 function _credit(stateTo){ RF.applicant=val('rf-app'); RF.income=parseInt(val('rf-income'))||0; RF.note=val('rf-note'); RF.status=val('rf-status');
@@ -1836,7 +1867,7 @@ function openAgreement(id){
   modal('Send agreement for e-signature', body,
     `<button class="btn" onclick="closeModal()">Cancel</button>
      <button class="btn" onclick="markAgreementOffline('${id}')">Mark signed offline</button>
-     <button class="btn navy" onclick="sendAgreement('${id}')">Sign &amp; send to landlord</button>`);
+     <button class="btn navy" onclick="sendAgreement('${id}')">Sign &amp; send to landlord</button>`, true);
   setTimeout(()=>{
     const c=document.getElementById('ag-sig'); if(!c||!window.SignaturePad) return;
     const ratio=Math.max(window.devicePixelRatio||1,1);
@@ -2492,7 +2523,7 @@ function renderStatementPicker(){
     </div>
     ${ST.period==='half'?`<div class="fg"><label>Half</label><select onchange="ST.half=parseInt(this.value)"><option value="1" ${ST.half===1?'selected':''}>H1 · Jan–Jun</option><option value="2" ${ST.half===2?'selected':''}>H2 · Jul–Dec</option></select></div>`:''}
     <div class="hint">Aggregates every rent payment marked received in the period, per property, less your management fee.</div>`;
-  modal('Landlord statement', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="buildStatement()">Generate statement</button>`);
+  modal('Landlord statement', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="buildStatement()">Generate statement</button>`, true);
 }
 function buildStatement(){
   const l=L(ST.landlordId); if(!l.id){toast('Pick a landlord',1);return;}
@@ -2568,7 +2599,7 @@ function openJob(pid){
     <div class="fg"><label>Severity</label><select id="jb-sev"><option value="normal">Normal</option><option value="urgent">Urgent</option><option value="hazard">Hazard (H&S)</option></select></div></div>
     <div class="fg"><label>Description</label><textarea id="jb-desc" rows="3" placeholder="What's the issue?"></textarea></div>
     <div class="chk" onclick="this.classList.toggle('on');document.getElementById('jb-damp').checked=this.classList.contains('on')"><div class="box"><input id="jb-damp" type="checkbox" style="display:none"></div><div><div style="font-weight:600;font-size:12.5px">Damp &amp; mould report</div><div class="faint" style="font-size:11px">Triggers Awaab's Law investigate/fix timers automatically.</div></div></div>`;
-  modal('Log a maintenance job', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="createJob()">Log job</button>`);
+  modal('Log a maintenance job', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="createJob()">Log job</button>`, true);
 }
 function createJob(){
   const pid=val('jb-prop'); const p=P(pid);
@@ -2611,7 +2642,7 @@ function openInventory(){
   const ts=_activeTenants(); if(!ts.length){ toast('Set up a tenant first',1); return; }
   const opts=ts.map(t=>`<option value="${t.id}">${esc(t.name)} — ${esc((P(t.propertyId)||{}).address||'')}</option>`).join('');
   modal('New inventory', `<div class="fg"><label>Tenancy</label><select id="iv2-t">${opts}</select></div><div class="fg"><label>Deposit held (£)</label><input id="iv2-dep" type="number"></div>`,
-    `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="createInventory2()">Create</button>`);
+    `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="createInventory2()">Create</button>`, true);
 }
 function createInventory2(){
   const tid=val('iv2-t'); const t=(S.tenants||[]).find(x=>x.id===tid)||{};
