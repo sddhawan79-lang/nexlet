@@ -964,6 +964,7 @@ function vLandlordDetail(){
         if(a&&a.status==='declined') return `<button class="btn" onclick="openAgreement('${l.id}')" style="border-color:var(--red);color:var(--red)">✕ Declined · re-send agreement</button>`;
         return `<button class="btn navy" onclick="openAgreement('${l.id}')">✍️ Send agreement to sign</button>`;
       })()}
+      <button class="btn" onclick="editLandlordDetails('${l.id}')">Edit details</button>
       <button class="btn" onclick="editInstruction('${l.id}')">Edit instruction & fee</button>
       <button class="btn" onclick="openInvoiceFor('${l.id}')">£ Invoice</button>
     </div>
@@ -1756,6 +1757,24 @@ function _obFee(){ const isF=OB.service==='full'; if(isF)OB.feePct=parseFloat(va
   if(el) el.innerHTML=isF?`<b>Full management.</b> ${rent?'Your fee: <b>'+gbp(rent*OB.feePct/100)+'/mo</b>. ':''}Compliance, repairs, inspections, renewals. Tenant pays landlord directly (no client money).`
     :`<b>Let-only.</b> ${rent?'Your fee: <b>'+gbp(rent/4.345*OB.letWeeks)+'</b> one-off. ':''}Find tenant, paperwork, hand over. No ongoing fee.`; }
 
+// ── EDIT LANDLORD DETAILS (core profile — name, joint owner, contact, PRS, NRL) ──
+function editLandlordDetails(id){ const l=L(id);
+  const body=`<div class="fg"><label>${l.entity==='company'?'Company name':'Full name'}</label><input id="ld2-name" value="${esc(l.name||'')}"></div>
+    ${l.entity==='joint'?`<div class="grid2" style="gap:10px"><div class="fg"><label>Second owner</label><input id="ld2-joint" value="${esc(l.joint||'')}"></div><div class="fg"><label>Second owner's email</label><input id="ld2-jointemail" value="${esc(l.jointEmail||'')}"></div></div><div class="hint" style="margin:-6px 0 4px">To change landlord type or add/remove a joint owner, use Edit instruction &amp; fee.</div>`:''}
+    <div class="grid2" style="gap:10px"><div class="fg"><label>Email</label><input id="ld2-email" value="${esc(l.email||'')}"></div><div class="fg"><label>Phone</label><input id="ld2-phone" value="${esc(l.phone||'')}"></div></div>
+    <div class="fg"><label>Correspondence address</label><input id="ld2-address" value="${esc(l.address||'')}"></div>
+    <div class="grid2" style="gap:10px"><div class="fg"><label>PRS Database reg. no.</label><input id="ld2-prs" value="${esc(l.prsReg||'')}"></div>
+    <div class="fg"><label>Preferred contact</label><select id="ld2-pref"><option ${l.contactPref==='Email'?'selected':''}>Email</option><option ${l.contactPref==='Phone'?'selected':''}>Phone</option><option ${l.contactPref==='WhatsApp'?'selected':''}>WhatsApp</option></select></div></div>
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px"><input type="checkbox" id="ld2-nrl" style="width:auto" ${l.nrl?'checked':''}> Lives abroad (Non-Resident Landlord)</label>`;
+  modal('Edit landlord details', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveLandlordDetails('${id}')">Save</button>`, true);
+}
+function saveLandlordDetails(id){ const l=L(id); const nm=val('ld2-name'); if(!nm){toast('Enter a name',1);return;}
+  l.name=nm; if(l.entity==='joint'){ l.joint=val('ld2-joint'); l.jointEmail=val('ld2-jointemail'); }
+  l.email=val('ld2-email'); l.phone=val('ld2-phone'); l.address=val('ld2-address'); l.prsReg=val('ld2-prs'); l.contactPref=val('ld2-pref');
+  l.nrl=!!(document.getElementById('ld2-nrl')&&document.getElementById('ld2-nrl').checked);
+  l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:'Landlord details updated'});
+  save(); pushLandlord(l); closeModal(); render(); toast('✓ Details updated');
+}
 // ── EDIT INSTRUCTION & FEE (per landlord) ──
 function editInstruction(id){ const l=L(id);
   const body=`<div class="grid2" style="gap:10px"><div class="fg"><label>Landlord type</label><select id="ei-entity" onchange="document.getElementById('ei-joint-wrap').style.display=this.value==='joint'?'block':'none';document.getElementById('ei-jointemail-wrap').style.display=this.value==='joint'?'block':'none'">
