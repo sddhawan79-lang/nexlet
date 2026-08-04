@@ -381,7 +381,14 @@ function restoreView(){ const h=(location.hash||'').replace(/^#/,''); if(!h)retu
 function daysUntil(d){ if(!d) return null; return Math.round((new Date(d)-new Date())/864e5); }
 function certRAG(d){ if(!d) return {k:'missing',label:'Missing',bg:'var(--red-bg)',color:'var(--red)'}; const n=daysUntil(d); if(n<0) return {k:'expired',label:'Expired',bg:'var(--red-bg)',color:'var(--red)'}; if(n<30) return {k:'soon',label:n+'d left',bg:'var(--amber-bg)',color:'var(--amber)'}; return {k:'ok',label:'Valid',bg:'var(--green-bg)',color:'var(--green)'}; }
 function fmtDate(d){ if(!d) return '—'; return new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}); }
-function propCompliance(p){ const c=p.certs||{}; const items=[['gas','Gas Safety',c.gas],['eicr','EICR (Electrical)',c.eicr],['epc','EPC',c.epc]]; const done=items.filter(([k,l,d])=>{const r=certRAG(d);return r.k==='ok'||r.k==='soon';}).length; return {items,pct:Math.round(done/items.length*100)}; }
+const CERT_LABELS={gas:'Gas Safety (CP12)',eicr:'EICR (Electrical)',epc:'EPC',hmo:'HMO / Selective Licence',legionella:'Legionella Risk Assessment',smoke:'Smoke Alarms',co:'CO Alarm'};
+function declStatus(d){ return d?{k:'ok',label:'Confirmed',bg:'var(--green-bg)',color:'var(--green)'}:{k:'missing',label:'Missing',bg:'var(--amber-bg)',color:'var(--amber)'}; }
+function propCompliance(p){ const c=p.certs||{};
+  const items=[['gas','Gas Safety',c.gas,'exp'],['eicr','EICR (Electrical)',c.eicr,'exp'],['epc','EPC',c.epc,'exp'],['smoke','Smoke alarms',c.smoke,'decl']];
+  if(!c.coNA) items.push(['co','CO alarm',c.co,'decl']);
+  if(c.hmoApplicable) items.push(['hmo','HMO licence',c.hmo,'exp']);
+  const done=items.filter(([k,l,d,kind])=>{ const r=kind==='decl'?declStatus(d):certRAG(d); return r.k==='ok'||r.k==='soon'; }).length;
+  return {items,pct:Math.round(done/items.length*100)}; }
 
 function render(){
   document.getElementById('nav').innerHTML=NAV.map(n=>`<div class="nav ${n.k===view||(view==='landlord'&&n.k==='landlords')?'on':''}" onclick="go('${n.k}')"><span class="ic">${n.ic}</span>${n.t}</div>`).join('');
@@ -1096,6 +1103,11 @@ function vPropertyDetail(){
     <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${label}</div><div class="faint" style="font-size:11.5px">${date?'Expires '+fmtDate(date):'No certificate on file'}</div></div>
     <span class="pill" style="background:${r.bg};color:${r.color}">${r.label}</span>
     <button class="btn sm" onclick="editCert('${p.id}','${key}')">${date?'Update':'Add'}</button></div>`;};
+  const declRow=(key,label,hint,date)=>{const r=declStatus(date);return `<div class="doc"><div class="di" style="background:${r.bg};color:${r.color}">⛨</div>
+    <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${label}</div><div class="faint" style="font-size:11.5px">${date?fmtDate(date)+' confirmed':hint}</div></div>
+    <span class="pill" style="background:${r.bg};color:${r.color}">${r.label}</span>
+    ${key==='co'?`<a href="#" onclick="toggleCoNA('${p.id}');return false" style="font-size:11px;color:var(--blue);margin-right:8px;white-space:nowrap">N/A</a>`:''}
+    <button class="btn sm" onclick="editCert('${p.id}','${key}')">${date?'Update':'Confirm'}</button></div>`;};
   return `
     <div class="back" onclick="go('properties')">← All properties</div>
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">
@@ -1114,6 +1126,18 @@ function vPropertyDetail(){
         ${certRow('eicr','EICR (every 5 years)',c.eicr)}
         ${certRow('epc','EPC'+(c.epcRating?' · rated '+c.epcRating:''),c.epc)}
         ${(c.epcRating==='D'||c.epcRating==='E')?`<div class="note warn" style="margin-top:6px">EPC rated ${c.epcRating} — legal to let now, but EPC C becomes the minimum on 1 Oct 2030. Flag to the landlord to plan works.</div>`:''}
+        ${declRow('smoke','Smoke alarms','Fit a working smoke alarm on every floor',c.smoke)}
+        ${c.coNA?`<div class="doc"><div class="di" style="background:var(--off);color:#94A3B8">⛨</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">CO alarm</div><div class="faint" style="font-size:11.5px">Marked not applicable — no fixed combustion appliance</div></div><span class="pill" style="background:var(--off);color:#94A3B8">N/A</span><a href="#" onclick="toggleCoNA('${p.id}');return false" style="font-size:11px;color:var(--blue)">Applies</a></div>`:declRow('co','CO alarm','Required in any room with a fixed combustion appliance (boiler cupboard, gas fire, log burner, etc.)',c.co)}
+        <div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;flex:1"><input type="checkbox" style="width:auto" ${c.hmoApplicable?'checked':''} onchange="toggleHmoApplicable('${p.id}',this.checked)"> HMO / selective-licensing property</label>
+        </div>
+        ${c.hmoApplicable?certRow('hmo','HMO / selective licence'+(c.hmoNo?' · '+esc(c.hmoNo):''),c.hmo):''}
+        <div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
+          <div class="di" style="background:${certRAG(c.legionella).bg};color:${certRAG(c.legionella).color}">⛨</div>
+          <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Legionella risk assessment</div><div class="faint" style="font-size:11.5px">${c.legionella?'Reviewed '+fmtDate(c.legionella)+' · recommended every 2 yrs (1 yr for HMOs)':'No assessment on file — not a legal certificate, but a documented duty of care'}</div></div>
+          <span class="pill" style="background:${certRAG(c.legionella).bg};color:${certRAG(c.legionella).color}">${certRAG(c.legionella).label}</span>
+          <button class="btn sm" onclick="editCert('${p.id}','legionella')">${c.legionella?'Update':'Add'}</button>
+        </div>
       </div></div>
       <div class="panel"><div class="panel-hd"><h2>Tenancy</h2></div><div class="panel-bd">
         ${L(p.landlordId).service==='full'?`<div class="kv"><span class="k">Management fee</span><span class="v"><b>${propFee(p)}%</b> of rent · ${gbp(p.rent*propFee(p)/100)}/mo <a href="#" onclick="editPropFee('${p.id}');return false" style="color:var(--blue);font-weight:600;margin-left:6px">edit</a></span></div>`:''}
@@ -1166,12 +1190,20 @@ function savePropFee(pid){ const p=P(pid); p.feePct=parseFloat(val('pf-fee')); i
   const l=L(p.landlordId); l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:'Fee for '+p.address+' set to '+p.feePct+'%'});
   save(); pushProperty(p); pushLandlord(l); closeModal(); render(); toast('✓ Fee updated for this property'); }
 function editCert(pid,key){ const p=P(pid); const c=p.certs||(p.certs={}); const cur=c[key]||'';
-  const label={gas:'Gas Safety (CP12)',eicr:'EICR (Electrical)',epc:'EPC'}[key]||key.toUpperCase();
+  const label=CERT_LABELS[key]||key.toUpperCase();
+  if(key==='smoke'||key==='co'){
+    const body=`<div class="note" style="margin-bottom:12px">${key==='smoke'?'Confirm a working smoke alarm is fitted on every floor.':'Confirm a CO alarm is fitted in every room with a fixed combustion appliance (boiler cupboard, gas fire, log burner, etc.).'} This is a declaration, not a scanned certificate — no need to re-confirm unless something changes.</div>
+      <div class="fg"><label>Confirmed on</label><input id="ct-date" type="date" value="${cur||today()}"></div>`;
+    modal('Confirm '+label,body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveCert('${pid}','${key}')">Confirm</button>`, true);
+    return;
+  }
   let body=`<div class="note" style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <label class="btn navy sm" style="cursor:pointer;margin:0">✦ Scan ${label} with AI<input type="file" accept="application/pdf,image/*" style="display:none" onchange="aiScanCert('${pid}','${key}',this)"></label>
-      <span id="ct-scan-status" class="faint" style="font-size:11.5px">Upload the certificate — AI reads the expiry date.</span></div>
-    <div class="fg"><label>${label} expiry / valid-until date</label><input id="ct-date" type="date" value="${cur}"></div>`;
+      <span id="ct-scan-status" class="faint" style="font-size:11.5px">Upload the certificate — AI reads the expiry date.</span></div>`;
+  if(key==='hmo') body+=`<div class="grid2" style="gap:10px"><div class="fg"><label>Licence number</label><input id="ct-hmono" value="${esc(c.hmoNo||'')}"></div><div class="fg"><label>Issuing council</label><input id="ct-hmoauth" value="${esc(c.hmoAuthority||'')}"></div></div>`;
+  body+=`<div class="fg"><label>${label} expiry / valid-until date</label><input id="ct-date" type="date" value="${cur}"></div>`;
   if(key==='epc') body+=`<div class="fg"><label>EPC rating</label><select id="ct-rating">${['A','B','C','D','E','F','G'].map(x=>`<option ${c.epcRating===x?'selected':''}>${x}</option>`).join('')}</select></div>`;
+  if(key==='legionella') body+=`<div class="hint" style="margin-top:-4px">HSE-recommended review: every 2 years for a standard let, every year for an HMO or vulnerable tenants.</div>`;
   modal('Update '+label,body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveCert('${pid}','${key}')">Save</button>`, true); }
 // Phase B — AI compliance cert scan. Reuses the shared ai-proxy (agent JWT).
 function _fileB64(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(',')[1]); r.onerror=rej; r.readAsDataURL(file); }); }
@@ -1182,8 +1214,8 @@ async function aiScanCert(pid,key,input){
   if(st) st.innerHTML='<span style="color:var(--blue)">✦ Reading the certificate…</span>';
   try{
     const b64=await _fileB64(file); const isImg=(file.type||'').startsWith('image/');
-    const kind={gas:'Gas Safety Record (CP12)',eicr:'Electrical Installation Condition Report (EICR)',epc:'Energy Performance Certificate (EPC)'}[key]||'certificate';
-    const validity={gas:'1 year',eicr:'5 years',epc:'10 years'}[key]||'the standard period';
+    const kind={gas:'Gas Safety Record (CP12)',eicr:'Electrical Installation Condition Report (EICR)',epc:'Energy Performance Certificate (EPC)',hmo:'House in Multiple Occupation (HMO) or selective property licence',legionella:'Legionella Risk Assessment report'}[key]||'certificate';
+    const validity={gas:'1 year',eicr:'5 years',epc:'10 years',hmo:'5 years',legionella:'2 years'}[key]||'the standard period';
     const prompt=`This is a UK ${kind}. Return ONLY JSON, no prose: {"expiry":"YYYY-MM-DD"${key==='epc'?',"rating":"A|B|C|D|E|F|G"':''}}. "expiry" = the certificate's valid-until / next-inspection-due / expiry date. If only an inspection/issue date is shown, add ${validity} to it. If unreadable, use null.`;
     const content=isImg
       ? [{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:prompt}]
@@ -1199,7 +1231,9 @@ async function aiScanCert(pid,key,input){
     } else { if(st)st.textContent='Could not read a date — please enter it manually.'; }
   }catch(e){ console.error(e); if(st)st.textContent='Could not read the file — enter the date manually.'; }
 }
-function saveCert(pid,key){ const p=P(pid); p.certs=p.certs||{}; p.certs[key]=val('ct-date'); if(key==='epc')p.certs.epcRating=val('ct-rating'); save(); pushProperty(p); closeModal(); render(); toast('✓ '+key.toUpperCase()+' updated'); }
+function saveCert(pid,key){ const p=P(pid); p.certs=p.certs||{}; p.certs[key]=val('ct-date'); if(key==='epc')p.certs.epcRating=val('ct-rating'); if(key==='hmo'){p.certs.hmoNo=val('ct-hmono');p.certs.hmoAuthority=val('ct-hmoauth');} save(); pushProperty(p); closeModal(); render(); toast('✓ '+(CERT_LABELS[key]||key.toUpperCase())+' updated'); }
+function toggleCoNA(pid){ const p=P(pid); p.certs=p.certs||{}; p.certs.coNA=!p.certs.coNA; save(); pushProperty(p); render(); }
+function toggleHmoApplicable(pid,checked){ const p=P(pid); p.certs=p.certs||{}; p.certs.hmoApplicable=checked; save(); pushProperty(p); render(); }
 function tenantRecFor(pid){ return (S.tenants||[]).find(t=>t.propertyId===pid && t.status==='active'); }
 function _listingForProp(pid){ return (S.listings||[]).find(x=>x.propertyId===pid); }
 function propTenancyStatus(p){
