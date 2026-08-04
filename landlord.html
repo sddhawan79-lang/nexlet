@@ -4567,6 +4567,10 @@ function moTenant(pid) {
 
 // Open moTenant pre-set to co-tenant tab for a specific property
 function _moCoTenant(pid) {
+  // Clear any leftover draft first — drafts are only meant to resume an
+  // interrupted lead-tenant entry, not to be offered/reused when adding a
+  // co-tenant, which was causing stale name/email to leak into this form.
+  _clearTenantDraft();
   moTenant(pid);
   // Switch to co-tenant tab after modal opens
   setTimeout(() => toggleTenantType('co'), 80);
@@ -20707,8 +20711,15 @@ function scanPropEPC(input) {
       if (parsed.rating) {
         const r = parsed.rating.toUpperCase().charAt(0);
         const sel = document.getElementById('p-epc');
-        if (sel) { for (const opt of sel.options) { if (opt.value.startsWith(r)) { sel.value = opt.value; break;     }
-  }
+        if (sel) { for (const opt of sel.options) { if (opt.value.startsWith(r)) { sel.value = opt.value; break; } } }
+      }
+      _scanBoxSuccess('p-epc-scan-box', file, parsed);
+      toast('✓ EPC scanned — check fields below');
+    } catch(e) {
+      _scanBoxError('p-epc-scan-box', file);
+    }
+  };
+  reader.readAsDataURL(file);
 }
 
 // ── TRIAL STATE ──
@@ -20904,15 +20915,6 @@ async function sendTrialEmail(type) {
       })
     });
   } catch(e) { /* non-critical */ }
-}
-      }
-      _scanBoxSuccess('p-epc-scan-box', file, parsed);
-      toast('✓ EPC scanned — check fields below');
-    } catch(e) {
-      _scanBoxError('p-epc-scan-box', file);
-    }
-  };
-  reader.readAsDataURL(file);
 }
 
 // ── AI SCAN: DEPOSIT CERTIFICATE (moAddProp Step 5) ──
