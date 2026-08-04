@@ -214,6 +214,9 @@ const pushLandlord =l  =>_w(sb.from('agency_landlords').upsert(landlordToRow(l))
 const pushProperty =p  =>_w(sb.from('properties').upsert(propToRow(p)));
 const pushListing  =l  =>_w(sb.from('agency_listings').upsert({id:l.id,agency_id:window._agencyId,data:l,updated_at:new Date().toISOString()}));
 const pushApplicant=a  =>_w(sb.from('agency_applicants').upsert({id:a.id,agency_id:window._agencyId,data:a,updated_at:new Date().toISOString()}));
+const rowToLead=r=>({id:r.id,name:r.name||'',phone:r.phone||'',email:r.email||'',address:r.address||'',note:r.note||'',source:r.source||'Website',status:r.status||'new',createdAt:r.created_at||new Date().toISOString()});
+const leadToRow=x=>({id:x.id,agency_id:window._agencyId,name:x.name,phone:x.phone||null,email:x.email||null,address:x.address||null,note:x.note||null,source:x.source||'Website',status:x.status||'new'});
+const pushLandlordLead=x=>_w(sb.from('agency_landlord_leads').upsert(leadToRow(x)));
 const pushViewing  =v  =>_w(sb.from('agency_viewings').upsert({id:v.id,agency_id:window._agencyId,data:v,updated_at:new Date().toISOString()}));
 const pushOffer    =o  =>_w(sb.from('agency_offers').upsert({id:o.id,agency_id:window._agencyId,data:o,updated_at:new Date().toISOString()}));
 const pushKey      =k  =>_w(sb.from('agency_keys').upsert({id:k.id,agency_id:window._agencyId,data:k,updated_at:new Date().toISOString()}));
@@ -288,6 +291,8 @@ async function loadData(agency){
     ]);
     if(ky.data) S.keys=ky.data.map(r=>r.data);
     if(po.data) S.payouts=po.data.map(r=>r.data);
+    const ld=await sb.from('agency_landlord_leads').select('*').eq('agency_id',window._agencyId);
+    if(ld.data) S.landlordLeads=ld.data.map(rowToLead);
   }catch(e){ /* run sql-agency-lettings.sql to enable */ }
 }
 async function pollMessages(){
@@ -337,7 +342,8 @@ const SEED={
   offers:[],
   keys:[],
   payouts:[],
-  messages:[]
+  messages:[],
+  landlordLeads:[]
 };
 
 let S=load();
@@ -474,8 +480,9 @@ function listingCard(l){
 }
 function kpiCard(n,label,col){ return `<div class="panel" style="margin:0"><div class="panel-bd" style="text-align:center"><div style="font-family:var(--disp);font-size:30px;color:${col}">${n}</div><div class="faint" style="font-size:12px">${label}</div></div></div>`; }
 
-function openListing(id){
-  const l=id?LST(id):{id:uid('lst'),status:'draft',portals:{website:true},features:[]};
+function openListing(id,pid){
+  const l=id?LST(id):{id:uid('lst'),status:'draft',portals:{website:true},features:[],propertyId:pid||null};
+  if(!id&&pid){ const p=P(pid); if(p.id){ Object.assign(l,{address:p.address,postcode:p.postcode||p.city,rent:p.rent,beds:p.beds,baths:p.baths,ptype:p.ptype,furnished:p.furnished,epc:p.epc,description:p.description,features:p.features||[]}); } }
   const props=S.properties.filter(p=>!( S.listings||[]).some(x=>x.propertyId===p.id&&x.id!==l.id));
   const propOpts=`<option value="">— New / standalone —</option>`+props.map(p=>`<option value="${p.id}" ${l.propertyId===p.id?'selected':''}>${esc(p.address)}</option>`).join('');
   const body=`
@@ -673,8 +680,10 @@ function offerAction(oid,status){
     // hand off to Referencing: pre-seed a reference for this applicant + property
     const l=LST(o.listingId);
     S.references=S.references||[]; S.references.push({id:uid('r'),applicant:a.name,propertyId:l.propertyId||'',income:0,docs:{},creditState:'not_requested',status:'none',note:'From accepted offer — '+gbp(o.amount)+'/mo'});
-    if(l.id){ l.status='let'; pushListing&&pushListing(l); }
-    toast('✓ Accepted — applicant sent to Referencing');
+    if(l.id){ l.status='let'; pushListing&&pushListing(l);
+      if(l.propertyId) _commitTenant(l.propertyId,{name:a.name,email:a.email,start:o.moveIn||today()});
+    }
+    toast('✓ Accepted — applicant sent to Referencing'+(l.propertyId?' · tenancy created':''));
   } else { toast('Offer '+status); }
   save(); pushOffer&&pushOffer(o); render();
 }
@@ -843,6 +852,7 @@ function vDashboard(){
   S.properties.forEach(p=>{ if(L(p.landlordId).service==='full') fees+=p.rent*propFee(p)/100; });
   const managedRent=S.properties.filter(p=>L(p.landlordId).service==='full').reduce((s,p)=>s+(p.rent||0),0);
   const pending=S.landlords.filter(l=>!l.agreement).length;
+  const newLeads=(S.landlordLeads||[]).filter(x=>x.status==='new').length;
   return `
     <h1 class="pg">Good evening, Saurabh</h1>
     <div class="sub">Your managed portfolio at a glance</div>
@@ -852,6 +862,7 @@ function vDashboard(){
       <div class="kpi"><div class="l">Managed rent</div><div class="v">${gbp(managedRent)}<small>/mo</small></div><div class="s">tenant → landlord direct</div></div>
       <div class="kpi"><div class="l">Your fees /mo</div><div class="v" style="color:var(--green)">${gbp(fees)}</div><div class="s">from management %</div></div>
     </div>
+    ${newLeads?`<div class="note warn" style="margin-bottom:10px">📥 <b>${newLeads} new landlord enquir${newLeads>1?'ies':'y'}</b> came in — <a href="#" onclick="go('landlords');return false" style="color:inherit;text-decoration:underline">review &amp; onboard</a>.</div>`:''}
     ${pending?`<div class="note warn" style="margin-bottom:18px">⏳ <b>${pending} landlord${pending>1?'s':''}</b> awaiting a signed management agreement — you can market once it's signed, not before.</div>`:''}
     <div class="panel">
       <div class="panel-hd"><h2>Your landlords</h2><span class="faint" style="font-size:12px">Click a landlord to open their record</span></div>
@@ -877,9 +888,45 @@ function landlordRow(l){
 
 // ── LANDLORDS LIST ──
 function vLandlords(){
+  const leads=(S.landlordLeads||[]).filter(x=>x.status==='new'||x.status==='contacted');
   return `<h1 class="pg">Landlords</h1><div class="sub">Everyone you manage. Onboard new landlords with AML, ID & ownership proof, instruction terms and a signed management agreement.</div>
+    <div class="panel" style="margin-bottom:16px"><div class="panel-hd"><h2>Landlord enquiries</h2><span class="faint" style="font-size:12px">${leads.length} open · from your website contact form or logged by hand</span></div>
+      ${leads.length?leads.map(leadRow).join(''):`<div class="empty" style="padding:20px;text-align:center"><span class="faint" style="font-size:12.5px">No open enquiries.</span></div>`}
+      <div style="padding:12px 20px"><button class="btn sm" onclick="openLandlordLead()">＋ Log enquiry</button></div>
+    </div>
     <div class="panel">${S.landlords.length?S.landlords.map(landlordRow).join(''):`<div class="empty">No landlords yet. Click "Onboard a landlord" to start.</div>`}</div>`;
 }
+function leadRow(x){
+  return `<div class="row"><div class="av" style="background:var(--blue-bg);color:var(--blue)">${initials(x.name||'?')}</div>
+    <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:600;color:var(--navy)">${esc(x.name||'Unnamed')}</div>
+      <div class="faint" style="font-size:12px">${esc(x.address||x.note||'—')}${x.phone?' · '+esc(x.phone):''}${x.email?' · '+esc(x.email):''} · via ${esc(x.source||'Website')}</div></div>
+    <span class="pill" style="background:${x.status==='contacted'?'var(--blue-bg)':'var(--amber-bg)'};color:${x.status==='contacted'?'var(--blue)':'var(--amber)'}">${x.status==='contacted'?'Contacted':'New'}</span>
+    <div style="display:flex;gap:6px;flex-shrink:0"><button class="btn sm navy" onclick="convertLead('${x.id}')">Onboard</button><button class="btn sm" style="color:var(--red)" onclick="declineLead('${x.id}')">Decline</button></div>
+  </div>`;
+}
+function openLandlordLead(id){
+  const x=id?(S.landlordLeads||[]).find(l=>l.id===id):{id:uid('ld'),status:'new',source:'Phone'};
+  const body=`<div class="fg"><label>Name</label><input id="ld-name" value="${esc(x.name||'')}"></div>
+    <div class="grid2" style="gap:10px"><div class="fg"><label>Phone</label><input id="ld-phone" value="${esc(x.phone||'')}"></div><div class="fg"><label>Email</label><input id="ld-email" value="${esc(x.email||'')}"></div></div>
+    <div class="fg"><label>Property / area</label><input id="ld-addr" value="${esc(x.address||'')}" placeholder="e.g. 3-bed in Harrow"></div>
+    <div class="fg"><label>Note</label><textarea id="ld-note" rows="2">${esc(x.note||'')}</textarea></div>
+    <div class="fg"><label>Source</label><select id="ld-source">${['Website','Phone','Referral','Walk-in','Email'].map(s=>`<option ${x.source===s?'selected':''}>${s}</option>`).join('')}</select></div>`;
+  modal(id?'Edit enquiry':'Log landlord enquiry', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveLandlordLead('${x.id}')">Save</button>`, true);
+  window._edLEAD=x;
+}
+function saveLandlordLead(id){
+  const x=window._edLEAD||{id,status:'new'}; x.name=val('ld-name'); if(!x.name){toast('Enter a name',1);return;}
+  x.phone=val('ld-phone'); x.email=val('ld-email'); x.address=val('ld-addr'); x.note=val('ld-note'); x.source=val('ld-source');
+  x.createdAt=x.createdAt||new Date().toISOString();
+  S.landlordLeads=S.landlordLeads||[]; if(!S.landlordLeads.find(l=>l.id===x.id)) S.landlordLeads.push(x);
+  save(); pushLandlordLead&&pushLandlordLead(x); closeModal(); render(); toast('✓ Enquiry logged');
+}
+function convertLead(id){
+  const x=(S.landlordLeads||[]).find(l=>l.id===id); if(!x)return;
+  x.status='contacted'; save(); pushLandlordLead&&pushLandlordLead(x); render();
+  openOnboard(); OB.name=x.name||''; OB.email=x.email||''; OB.phone=x.phone||''; OB.address=x.address||''; renderOnboard();
+}
+function declineLead(id){ const x=(S.landlordLeads||[]).find(l=>l.id===id); if(!x)return; x.status='declined'; save(); pushLandlordLead&&pushLandlordLead(x); render(); toast('Enquiry declined'); }
 
 // ── LANDLORD DETAIL (CRM) ──
 function vLandlordDetail(){
@@ -1044,6 +1091,7 @@ function vProperties(){
 function vPropertyDetail(){
   const p=P(sel); if(!p.id) return vProperties();
   const l=L(p.landlordId); const comp=propCompliance(p); const c=p.certs||{};
+  const tstatus=propTenancyStatus(p); const lst=_listingForProp(p.id);
   const certRow=(key,label,date)=>{const r=certRAG(date);return `<div class="doc"><div class="di" style="background:${r.bg};color:${r.color}">⛨</div>
     <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${label}</div><div class="faint" style="font-size:11.5px">${date?'Expires '+fmtDate(date):'No certificate on file'}</div></div>
     <span class="pill" style="background:${r.bg};color:${r.color}">${r.label}</span>
@@ -1056,6 +1104,10 @@ function vPropertyDetail(){
         <div class="faint" style="font-size:13px">${esc(p.city||'')} · ${p.beds} bed · <b>${gbp(p.rent)}/mo</b> ${p.tenant?'achieved':'expected'} <a href="#" onclick="editPropRent('${p.id}');return false" style="color:var(--blue);font-size:12px;margin-left:2px">edit</a> · Managed for <a href="#" onclick="go('landlord','${l.id}');return false" style="color:var(--blue)">${esc(l.name||'—')}</a></div></div>
       <span class="pill" style="background:${comp.pct===100?'var(--green-bg)':'var(--amber-bg)'};color:${comp.pct===100?'var(--green)':'var(--amber)'}">Compliance ${comp.pct}%</span>
     </div>
+    ${tstatus==='unsigned'?`<div class="note warn" style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <div><b>⚠ Instruction not yet signed.</b> Prep compliance certs now if you like, but hold off on marketing or a tenancy until the landlord has signed.</div>
+      <button class="btn navy sm" onclick="openAgreement('${l.id}')">Send agreement to sign</button>
+    </div>`:''}
     <div class="grid2">
       <div class="panel"><div class="panel-hd"><h2>Compliance certificates</h2></div><div class="panel-bd">
         ${certRow('gas','Gas Safety (annual)',c.gas)}
@@ -1070,7 +1122,12 @@ function vPropertyDetail(){
           <div class="kv"><span class="k">Start date</span><span class="v">${fmtDate(p.tenant.start)}</span></div>
           <div class="kv" style="border:none"><span class="k">Rent due day</span><span class="v">${esc(p.rentDueDay||'1st')} <a href="#" onclick="editRentDueDay('${p.id}');return false" style="color:var(--blue);font-size:12px;margin-left:4px">edit</a></span></div>
           <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" onclick="inviteTenantToPortal('${p.id}')">📧 Invite to tenant portal</button><button class="btn sm" onclick="setTenant('${p.id}')">Edit tenant</button><button class="btn sm" onclick="openNotice('${p.id}')">⚖ Prepare notice</button></div>`
-          :`<div class="faint" style="font-size:13px;margin-bottom:12px">No tenant yet. Once referenced, set up the tenancy and issue the portal link — same engine as the landlord app.</div><button class="btn navy" onclick="setTenant('${p.id}')">＋ Set up tenant</button>`}
+          :lst?`<div class="faint" style="font-size:13px;margin-bottom:12px">Marketing in progress — ${_pill(LISTING_STATUS,lst.status)} · ${_listingApps(lst.id).length} enquir${_listingApps(lst.id).length===1?'y':'ies'} so far.</div><button class="btn sm navy" onclick="go('listing','${lst.id}')">Manage listing</button>`
+          :`<div class="faint" style="font-size:13px;margin-bottom:12px">No tenant yet.</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn navy" ${tstatus==='unsigned'?'disabled title="Send the agreement first"':''} onclick="startMarketingForProperty('${p.id}')">＋ Needs a tenant — start marketing</button>
+              <button class="btn" ${tstatus==='unsigned'?'disabled title="Send the agreement first"':''} onclick="setTenant('${p.id}')">Already has a tenant — record it</button>
+            </div>`}
       </div></div>
       ${(()=>{ const rec=tenantRecFor(p.id); return rec?msgPanel('tenant',rec.id):''; })()}
       ${propDocTrailPanel(p)}
@@ -1144,6 +1201,14 @@ async function aiScanCert(pid,key,input){
 }
 function saveCert(pid,key){ const p=P(pid); p.certs=p.certs||{}; p.certs[key]=val('ct-date'); if(key==='epc')p.certs.epcRating=val('ct-rating'); save(); pushProperty(p); closeModal(); render(); toast('✓ '+key.toUpperCase()+' updated'); }
 function tenantRecFor(pid){ return (S.tenants||[]).find(t=>t.propertyId===pid && t.status==='active'); }
+function _listingForProp(pid){ return (S.listings||[]).find(x=>x.propertyId===pid); }
+function propTenancyStatus(p){
+  const l=L(p.landlordId); if(!l.agreement) return 'unsigned';
+  if(p.tenant) return 'let';
+  const lst=_listingForProp(p.id); if(lst&&lst.status!=='let') return 'marketing';
+  return 'vacant';
+}
+function startMarketingForProperty(pid){ openListing(null,pid); }
 function setTenant(pid){ const p=P(pid); const t=p.tenant||{}; const rec=tenantRecFor(pid)||{};
   const body=`<div class="fg"><label>Tenant name</label><input id="tn-name" value="${esc(t.name||rec.name||'')}"></div>
   <div class="grid2" style="gap:10px"><div class="fg"><label>Email</label><input id="tn-email" value="${esc(t.email||rec.email||'')}"></div>
@@ -1152,13 +1217,19 @@ function setTenant(pid){ const p=P(pid); const t=p.tenant||{}; const rec=tenantR
   <div class="fg"><label>Deposit held (£)</label><input id="tn-deposit" type="number" value="${esc(rec.deposit!=null?rec.deposit:'')}"></div></div>
   <div class="hint">Saving creates the tenancy record (for rent tracking, maintenance &amp; the tenant portal) and moves the let to Managed.</div>`;
   modal('Set up tenant',body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveTenant('${pid}')">Save tenant</button>`, true); }
-function saveTenant(pid){ const p=P(pid); const nm=val('tn-name'); if(!nm){toast('Enter tenant name',1);return;}
-  p.tenant={name:nm,email:val('tn-email'),start:val('tn-start')};
+function _commitTenant(pid,info){
+  const p=P(pid); if(!p.id||!info.name) return null;
+  p.tenant={name:info.name,email:info.email||'',start:info.start||today()};
   let tn=S.tenancies.find(t=>t.propertyId===pid); if(tn)tn.stage='managed'; else { tn={id:uid('t'),who:p.address,propertyId:pid,stage:'managed'}; S.tenancies.push(tn); }
   let rec=tenantRecFor(pid); const isNew=!rec; if(isNew) rec={id:uid('tn'),status:'active'};
-  rec.propertyId=pid; rec.landlordId=p.landlordId; rec.name=nm; rec.email=val('tn-email'); rec.phone=val('tn-phone'); rec.start=val('tn-start'); rec.rent=p.rent||0; rec.deposit=val('tn-deposit')?parseFloat(val('tn-deposit')):rec.deposit;
+  rec.propertyId=pid; rec.landlordId=p.landlordId; rec.name=info.name; rec.email=info.email||''; rec.phone=info.phone||''; rec.start=info.start||today(); rec.rent=p.rent||0; rec.deposit=info.deposit!=null?info.deposit:rec.deposit;
   S.tenants=S.tenants||[]; if(isNew) S.tenants.push(rec);
-  save(); pushProperty(p); pushTenancy(tn); pushTenantRec(rec); closeModal(); render(); toast('✓ Tenant set up'); }
+  save(); pushProperty(p); pushTenancy(tn); pushTenantRec(rec);
+  return rec;
+}
+function saveTenant(pid){ const nm=val('tn-name'); if(!nm){toast('Enter tenant name',1);return;}
+  _commitTenant(pid,{name:nm,email:val('tn-email'),phone:val('tn-phone'),start:val('tn-start'),deposit:val('tn-deposit')?parseFloat(val('tn-deposit')):undefined});
+  closeModal(); render(); toast('✓ Tenant set up'); }
 function inviteTenantToPortal(pid){
   const p=P(pid); const rec=tenantRecFor(pid);
   if(!rec||!rec.email){ toast('Set up the tenant with an email first',1); return; }
