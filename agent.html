@@ -1757,10 +1757,15 @@ function _obFee(){ const isF=OB.service==='full'; if(isF)OB.feePct=parseFloat(va
   if(el) el.innerHTML=isF?`<b>Full management.</b> ${rent?'Your fee: <b>'+gbp(rent*OB.feePct/100)+'/mo</b>. ':''}Compliance, repairs, inspections, renewals. Tenant pays landlord directly (no client money).`
     :`<b>Let-only.</b> ${rent?'Your fee: <b>'+gbp(rent/4.345*OB.letWeeks)+'</b> one-off. ':''}Find tenant, paperwork, hand over. No ongoing fee.`; }
 
-// ── EDIT LANDLORD DETAILS (core profile — name, joint owner, contact, PRS, NRL) ──
 function editLandlordDetails(id){ const l=L(id);
-  const body=`<div class="fg"><label>${l.entity==='company'?'Company name':'Full name'}</label><input id="ld2-name" value="${esc(l.name||'')}"></div>
-    ${l.entity==='joint'?`<div class="grid2" style="gap:10px"><div class="fg"><label>Second owner</label><input id="ld2-joint" value="${esc(l.joint||'')}"></div><div class="fg"><label>Second owner's email</label><input id="ld2-jointemail" value="${esc(l.jointEmail||'')}"></div></div><div class="hint" style="margin:-6px 0 4px">To change landlord type or add/remove a joint owner, use Edit instruction &amp; fee.</div>`:''}
+  const body=`<div class="fg"><label>Landlord type</label><select id="ld2-entity" onchange="_ld2EntityChange(this.value)">
+      <option value="individual" ${(l.entity||'individual')==='individual'?'selected':''}>Individual</option>
+      <option value="joint" ${l.entity==='joint'?'selected':''}>Joint owners</option>
+      <option value="company" ${l.entity==='company'?'selected':''}>Limited company</option></select>
+      <div class="hint">Check the title register — if there's more than one legal owner, select Joint owners so both are named and liable on the agreement.</div></div>
+    <div class="fg"><label id="ld2-name-label">${l.entity==='company'?'Company name':'Full name'}</label><input id="ld2-name" value="${esc(l.name||'')}"></div>
+    <div class="fg" id="ld2-regno-wrap" style="display:${l.entity==='company'?'block':'none'}"><label>Company registration number</label><input id="ld2-regno" value="${esc(l.companyRegNo||'')}" placeholder="e.g. 12345678"></div>
+    <div class="grid2" id="ld2-joint-wrap" style="gap:10px;display:${l.entity==='joint'?'grid':'none'}"><div class="fg"><label>Second owner</label><input id="ld2-joint" value="${esc(l.joint||'')}"></div><div class="fg"><label>Second owner's email</label><input id="ld2-jointemail" value="${esc(l.jointEmail||'')}"></div></div>
     <div class="grid2" style="gap:10px"><div class="fg"><label>Email</label><input id="ld2-email" value="${esc(l.email||'')}"></div><div class="fg"><label>Phone</label><input id="ld2-phone" value="${esc(l.phone||'')}"></div></div>
     <div class="fg"><label>Correspondence address</label><input id="ld2-address" value="${esc(l.address||'')}"></div>
     <div class="grid2" style="gap:10px"><div class="fg"><label>PRS Database reg. no.</label><input id="ld2-prs" value="${esc(l.prsReg||'')}"></div>
@@ -1768,8 +1773,15 @@ function editLandlordDetails(id){ const l=L(id);
     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px"><input type="checkbox" id="ld2-nrl" style="width:auto" ${l.nrl?'checked':''}> Lives abroad (Non-Resident Landlord)</label>`;
   modal('Edit landlord details', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveLandlordDetails('${id}')">Save</button>`, true);
 }
+function _ld2EntityChange(v){
+  document.getElementById('ld2-name-label').textContent=v==='company'?'Company name':'Full name';
+  document.getElementById('ld2-regno-wrap').style.display=v==='company'?'block':'none';
+  document.getElementById('ld2-joint-wrap').style.display=v==='joint'?'grid':'none';
+}
 function saveLandlordDetails(id){ const l=L(id); const nm=val('ld2-name'); if(!nm){toast('Enter a name',1);return;}
-  l.name=nm; if(l.entity==='joint'){ l.joint=val('ld2-joint'); l.jointEmail=val('ld2-jointemail'); }
+  l.entity=val('ld2-entity')||'individual'; l.name=nm;
+  l.companyRegNo=l.entity==='company'?val('ld2-regno'):'';
+  l.joint=l.entity==='joint'?val('ld2-joint'):''; l.jointEmail=l.entity==='joint'?val('ld2-jointemail'):'';
   l.email=val('ld2-email'); l.phone=val('ld2-phone'); l.address=val('ld2-address'); l.prsReg=val('ld2-prs'); l.contactPref=val('ld2-pref');
   l.nrl=!!(document.getElementById('ld2-nrl')&&document.getElementById('ld2-nrl').checked);
   l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:'Landlord details updated'});
@@ -1777,14 +1789,7 @@ function saveLandlordDetails(id){ const l=L(id); const nm=val('ld2-name'); if(!n
 }
 // ── EDIT INSTRUCTION & FEE (per landlord) ──
 function editInstruction(id){ const l=L(id);
-  const body=`<div class="grid2" style="gap:10px"><div class="fg"><label>Landlord type</label><select id="ei-entity" onchange="document.getElementById('ei-joint-wrap').style.display=this.value==='joint'?'block':'none';document.getElementById('ei-jointemail-wrap').style.display=this.value==='joint'?'block':'none'">
-      <option value="individual" ${(l.entity||'individual')==='individual'?'selected':''}>Individual</option>
-      <option value="joint" ${l.entity==='joint'?'selected':''}>Joint owners</option>
-      <option value="company" ${l.entity==='company'?'selected':''}>Limited company</option></select>
-      <div class="hint">If there's more than one legal owner, select Joint owners.</div></div>
-    <div class="fg" id="ei-joint-wrap" style="display:${l.entity==='joint'?'block':'none'}"><label>Second owner</label><input id="ei-joint" value="${esc(l.joint||'')}" placeholder="Joint owner"></div>
-    <div class="fg" id="ei-jointemail-wrap" style="display:${l.entity==='joint'?'block':'none'}"><label>Second owner's email</label><input id="ei-jointemail" value="${esc(l.jointEmail||'')}" placeholder="name2@email.com"></div></div>
-    <div class="fg"><label>Agency type</label><select id="ei-agtype" onchange="const m=this.value==='multiple';document.getElementById('ei-fee-wrap').innerHTML=document.getElementById('ei-service').value==='full'?('<input id=\\'ei-fee\\' type=number step=0.5 value='+(m?MULTI_FEE:DEF_FEE)+'> % of monthly rent'):('<input id=\\'ei-weeks\\' type=number step=0.5 value='+(m?MULTI_WEEKS:DEF_WEEKS)+'> weeks rent (one-off)')">
+  const body=`<div class="fg"><label>Agency type</label><select id="ei-agtype" onchange="const m=this.value==='multiple';document.getElementById('ei-fee-wrap').innerHTML=document.getElementById('ei-service').value==='full'?('<input id=\\'ei-fee\\' type=number step=0.5 value='+(m?MULTI_FEE:DEF_FEE)+'> % of monthly rent'):('<input id=\\'ei-weeks\\' type=number step=0.5 value='+(m?MULTI_WEEKS:DEF_WEEKS)+'> weeks rent (one-off)')">
       <option value="sole" ${(l.agencyType||'sole')==='sole'?'selected':''}>Sole agency</option><option value="multiple" ${l.agencyType==='multiple'?'selected':''}>Multiple agency</option></select>
       <div class="hint">Multiple agency lets the landlord instruct other agents too — only whoever lets it earns the fee, so it's charged at a higher rate.</div></div>
     <div class="fg"><label>Service level</label><select id="ei-service" onchange="document.getElementById('ei-fee-wrap').innerHTML=this.value==='full'?'<input id=\\'ei-fee\\' type=number step=0.5 value=${l.feePct!=null?l.feePct:DEF_FEE}> % of monthly rent':'<input id=\\'ei-weeks\\' type=number step=0.5 value=${l.letWeeks!=null?l.letWeeks:DEF_WEEKS}> weeks rent (one-off)'">
@@ -1793,7 +1798,7 @@ function editInstruction(id){ const l=L(id);
     <div class="fg"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400"><input type="checkbox" id="ei-board" style="width:auto" ${l.boardOptOut?'checked':''}> Landlord has opted OUT of a To-Let board <span class="faint">(a board is permitted by default — free advertising + brand awareness)</span></label></div>`;
   modal('Edit instruction & fee', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveInstruction('${id}')">Save</button>`, true);
 }
-function saveInstruction(id){ const l=L(id); l.entity=val('ei-entity')||'individual'; l.joint=l.entity==='joint'?val('ei-joint'):''; l.jointEmail=l.entity==='joint'?val('ei-jointemail'):''; l.agencyType=val('ei-agtype')||'sole'; l.boardOptOut=!!(document.getElementById('ei-board')&&document.getElementById('ei-board').checked); l.docs=Object.assign({},l.docs,{boardOptOut:l.boardOptOut}); l.service=val('ei-service'); if(l.service==='full')l.feePct=parseFloat(val('ei-fee'))||DEF_FEE; else l.letWeeks=parseFloat(val('ei-weeks'))||DEF_WEEKS;
+function saveInstruction(id){ const l=L(id); l.agencyType=val('ei-agtype')||'sole'; l.boardOptOut=!!(document.getElementById('ei-board')&&document.getElementById('ei-board').checked); l.docs=Object.assign({},l.docs,{boardOptOut:l.boardOptOut}); l.service=val('ei-service'); if(l.service==='full')l.feePct=parseFloat(val('ei-fee'))||DEF_FEE; else l.letWeeks=parseFloat(val('ei-weeks'))||DEF_WEEKS;
   l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:'Instruction updated · '+(l.agencyType==='multiple'?'Multiple':'Sole')+' agency · '+SVC[l.service].label+' · fee '+(l.service==='full'?l.feePct+'%':l.letWeeks+' wks')});
   save(); pushLandlord(l); closeModal(); render(); toast('✓ Instruction updated'); }
 
