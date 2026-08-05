@@ -1159,7 +1159,8 @@ function vPropertyDetail(){
           <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Right to Rent check</div><div class="faint" style="font-size:11.5px">${rec&&rec.rtrCheckDate?'Checked '+fmtDate(rec.rtrCheckDate)+(rec.rtrResult?' · '+esc(rec.rtrResult):'')+(rec.rtrExpiry?' · expires '+fmtDate(rec.rtrExpiry):''):'Check before the tenancy starts'}</div></div>
           <span class="pill" style="background:${r.bg};color:${r.color}">${r.label}</span>
           ${rec&&rec.rtrDocUrl?`<button class="btn sm" onclick="viewDoc('${rec.rtrDocUrl}','Right to Rent evidence')">View</button>`:''}
-          <button class="btn sm" onclick="rtrWizard('${p.id}')">${rec&&rec.rtrCheckDate?'Update':'Check'}</button></div>`; })():''}
+          <button class="btn sm" onclick="rtrWizard('${p.id}')">${rec&&rec.rtrCheckDate?'Update':'Check'}</button></div>
+          <div class="faint" style="font-size:11px;padding:0 0 10px 30px;margin-top:-6px">Checked by an external referencing company instead of the GOV.UK wizard? <a href="#" onclick="rtrExternal('${p.id}');return false">Upload their report</a></div>`; })():''}
         ${p.tenant?declRow('htr','How to Rent guide','Give the tenant the current gov.uk “How to rent” guide on or before move-in',c.htr,null,null):''}
         ${p.tenant?(()=>{ const rec=tenantRecFor(p.id); if(!rec||!rec.deposit) return ''; const r=_depositRAG(rec); return `<div class="doc"><div class="di" style="background:${r.bg};color:${r.color}">⛨</div>
           <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Deposit protection</div><div class="faint" style="font-size:11.5px">${rec.depositCertName?esc(rec.depositCertName):'Must be protected within 30 days of receipt'}</div></div>
@@ -1167,7 +1168,7 @@ function vPropertyDetail(){
           ${rec.depositCertUrl?`<button class="btn sm" onclick="viewDoc('${rec.depositCertUrl}','Deposit certificate')">View</button>`:''}
           <button class="btn sm" onclick="setTenant('${p.id}')">Manage</button></div>`; })():''}
         <div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;flex:1"><input type="checkbox" style="width:auto" ${c.hmoApplicable?'checked':''} onchange="toggleHmoApplicable('${p.id}',this.checked)"> HMO / selective-licensing property</label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;flex:1"><input type="checkbox" style="width:auto" ${c.hmoApplicable?'checked':''} onchange="toggleHmoApplicable('${p.id}',this.checked)"> HMO / selective-licensing property <span class="faint" style="font-weight:400">(most properties don’t need this — only tick if it’s a licensed HMO or your council runs selective licensing in that area)</span></label>
         </div>
         ${c.hmoApplicable?certRow('hmo','HMO / selective licence'+(c.hmoNo?' · '+esc(c.hmoNo):''),c.hmo):''}
         <div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
@@ -1432,6 +1433,44 @@ async function _rtrWizSave(){
   rec.shareCode=w.code; rec.dob=w.dob; rec.rtrResult=w.result; rec.rtrExpiry=w.expiry; rec.rtrCheckDate=w.checkDate;
   if(window._certFile){ rec.rtrDocName=window._certFile.name; const ext=(window._certFile.name.split('.').pop()||'jpg'); const url=await _storageUpload(window._certFile,w.pid+'/rtr-'+Date.now()+'.'+ext,'tenant-documents'); if(url) rec.rtrDocUrl=url; window._certFile=null; }
   save(); pushTenantRec(rec); closeModal(); render(); toast('✓ Right to Rent check saved');
+}
+// ── RTR done by an external referencing company (not the GOV.UK wizard) — upload
+// their report, optionally AI-scan it, and mark the check satisfied directly.
+function rtrExternal(pid){ const rec=tenantRecFor(pid); if(!rec){ toast('Set up the tenant first',1); return; }
+  window._certFile=null; const existingFile=rec.rtrDocName||'';
+  const body=`<div class="note" style="margin-bottom:12px">Use this when the Right to Rent check was carried out by an external referencing company rather than the GOV.UK share-code wizard. Attach their report — AI can read it, or enter the date yourself — then mark it satisfied.</div>
+    <div class="fg"><label>Referencing company's report</label>
+      <label style="display:flex;align-items:center;gap:10px;padding:10px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer">
+        <span style="font-size:18px">📄</span><div style="font-size:12.5px;font-weight:600;flex:1">${existingFile?'Replace file':'Click to attach & scan with AI'}</div>
+        <input type="file" accept="image/*,.pdf" style="display:none" onchange="aiScanRtrExternal('${pid}',this)">
+      </label>
+      <div id="ct-evid-status" style="margin-top:6px;font-size:11.5px">${existingFile?`<span style="color:var(--green)">✓ ${esc(existingFile)} on file</span> ${rec.rtrDocUrl?`<a href="#" onclick="event.preventDefault();viewDoc('${rec.rtrDocUrl}','Right to Rent report')">View</a>`:''}`:'<span class="faint">No file attached yet</span>'}</div></div>
+    <div class="fg"><label>Checked on</label><input id="rtr-ext-date" type="date" value="${rec.rtrCheckDate||today()}"></div>`;
+  modal('Right to Rent — external check',body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveRtrExternal('${pid}')">Mark satisfied</button>`,true);
+}
+async function aiScanRtrExternal(pid,input){
+  const file=input.files&&input.files[0]; if(!file) return; window._certFile=file;
+  const st=document.getElementById('ct-evid-status');
+  if(st) st.innerHTML='<span style="color:var(--blue)">✦ '+esc(file.name)+' attached</span>';
+  if(!window._sessionToken){ if(st) st.innerHTML='<span style="color:var(--green)">✓ '+esc(file.name)+' attached</span> — enter the date manually.'; return; }
+  try{
+    const b64=await _fileB64(file); const isImg=(file.type||'').startsWith('image/');
+    const prompt='This is a UK Right to Rent referencing report from an external checking company. Return ONLY JSON, no prose: {"checkDate":"YYYY-MM-DD or null","satisfied":true|false}. "satisfied" = true if the report clears the tenant to rent.';
+    const content=isImg?[{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:prompt}]:[{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},{type:'text',text:prompt}];
+    const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:150,messages:[{role:'user',content}]})});
+    if(res.status===402){ if(st) st.innerHTML='<span style="color:var(--green)">✓ '+esc(file.name)+' attached</span> — AI allowance reached, enter date manually.'; return; }
+    const data=await res.json(); const txt=((data.content&&data.content[0]&&data.content[0].text)||'{}').replace(/```json|```/g,'').trim();
+    let parsed; try{ parsed=JSON.parse(txt); }catch(e){ parsed=null; }
+    if(parsed&&parsed.checkDate){ const el=document.getElementById('rtr-ext-date'); if(el) el.value=parsed.checkDate; }
+    if(st) st.innerHTML=`<span style="color:var(--green)">✓ ${esc(file.name)} attached</span>`+(parsed?(parsed.satisfied===false?' — ⚠ report may flag an issue, review before confirming':' — looks satisfactory, review & confirm'):' — review & confirm manually');
+  }catch(e){ if(st) st.innerHTML='<span style="color:var(--green)">✓ '+esc(file.name)+' attached</span> — enter the date manually.'; }
+}
+async function saveRtrExternal(pid){
+  const rec=tenantRecFor(pid); if(!rec) return;
+  const f=window._certFile;
+  rec.rtrCheckDate=val('rtr-ext-date')||today(); rec.rtrResult='Valid'; rec.shareCode=rec.shareCode||'External check';
+  if(f){ rec.rtrDocName=f.name; const ext=(f.name.split('.').pop()||'pdf'); const url=await _storageUpload(f,pid+'/rtr-'+Date.now()+'.'+ext,'tenant-documents'); if(url) rec.rtrDocUrl=url; }
+  window._certFile=null; save(); pushTenantRec(rec); closeModal(); render(); toast('✓ Right to Rent marked satisfied (external check)');
 }
 function _commitTenant(pid,info){
   const p=P(pid); if(!p.id||!info.name) return null;
