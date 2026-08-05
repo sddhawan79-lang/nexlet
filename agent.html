@@ -917,6 +917,11 @@ function vDashboard(){
     </div>
     ${newLeads?`<div class="note warn" style="margin-bottom:10px">📥 <b>${newLeads} new landlord enquir${newLeads>1?'ies':'y'}</b> came in — <a href="#" onclick="go('landlords');return false" style="color:inherit;text-decoration:underline">review &amp; onboard</a>.</div>`:''}
     ${pending?`<div class="note warn" style="margin-bottom:18px">⏳ <b>${pending} landlord${pending>1?'s':''}</b> awaiting a signed management agreement — you can market once it's signed, not before.</div>`:''}
+    ${(()=>{ const items=_notifications(); if(!items.length) return ''; const shown=items.slice(0,8);
+      return `<div class="panel" style="margin-bottom:18px"><div class="panel-hd"><h2>Needs attention</h2><span class="pill" style="background:${items.some(n=>n.sev==='red')?'var(--red-bg)':'var(--amber-bg)'};color:${items.some(n=>n.sev==='red')?'var(--red)':'var(--amber)'}">${items.length}</span></div>
+        ${shown.map(n=>`<div class="doc" style="padding:9px 0;cursor:pointer" onclick="${n.go}"><div class="di" style="background:${n.sev==='red'?'var(--red-bg)':'var(--amber-bg)'};color:${n.sev==='red'?'var(--red)':'var(--amber)'}">!</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${esc(n.label)}</div><div class="faint" style="font-size:11.5px">${esc(n.detail)}</div></div><span style="font-size:11px;color:var(--blue);font-weight:600">Action →</span></div>`).join('')}
+        ${items.length>8?`<div style="text-align:center;padding-top:6px"><a href="#" onclick="openNotifications();return false" style="font-size:12px;color:var(--blue)">View all ${items.length}</a></div>`:''}
+      </div>`; })()}
     <div class="panel">
       <div class="panel-hd"><h2>Your landlords</h2><span class="faint" style="font-size:12px">Click a landlord to open their record</span></div>
       ${S.landlords.map(landlordRow).join('')}
@@ -1158,6 +1163,18 @@ function _tenancyChecklist(p){
   const done=items.filter(i=>i.done).length;
   return {items,pct:Math.round(done/items.length*100)};
 }
+function _lastRentIncreaseDate(p){
+  const served=(S.notices||[]).filter(n=>n.propertyId===p.id&&n.kind==='section13'&&n.status==='served').map(n=>n.effective||n.served).filter(Boolean).sort();
+  return served.length?served[served.length-1]:(p.tenant&&p.tenant.start)||null;
+}
+function _rentIncreaseDue(p){
+  if(!p.tenant) return null;
+  const last=_lastRentIncreaseDate(p); if(!last) return null;
+  const nextEligible=new Date(last); nextEligible.setDate(nextEligible.getDate()+364); // 52 weeks
+  const days=Math.round((nextEligible-new Date())/864e5);
+  if(days>60) return null; // more than 2 months away — not yet worth flagging
+  return {nextEligible:nextEligible.toISOString().slice(0,10),days,overdue:days<0};
+}
 function _nextMidCheckDue(v){
   const t=(S.tenants||[]).find(x=>x.id===v.tenantId); const start=t&&t.start; if(!start) return null;
   const visitDates=[]; (v.rooms||[]).forEach(r=>{ (r.visits||[]).forEach(vi=>{ if(vi.date) visitDates.push(vi.date); }); });
@@ -1170,6 +1187,7 @@ function _notifications(){
   const out=[];
   S.properties.forEach(p=>{ _fullCertItems(p).forEach(it=>{ const r=_itemRag(it); if(it[3]==='exp'&&(r.k==='expired'||r.k==='soon')) out.push({sev:r.k==='expired'?'red':'amber',label:it[1]+' — '+(p.address||''),detail:r.label,go:`go('property','${p.id}')`}); }); });
   (S.inventories2||[]).forEach(v=>{ const due=_nextMidCheckDue(v); if(due&&(due.overdue||due.days<=14)){ const p=P(v.propertyId)||{}; out.push({sev:due.overdue?'red':'amber',label:'Mid-tenancy check — '+(p.address||''),detail:due.overdue?'Overdue since '+fmtDate(due.next):'Due '+fmtDate(due.next),go:`go('inventorydetail','${v.id}')`}); } });
+  S.properties.filter(p=>p.tenant).forEach(p=>{ const rd=_rentIncreaseDue(p); if(rd) out.push({sev:'amber',label:'Rent review — '+(p.address||''),detail:rd.overdue?'Eligible to increase since '+fmtDate(rd.nextEligible)+' — start the 2-month notice now':'Eligible to increase from '+fmtDate(rd.nextEligible)+' — start preparing now to give full notice',go:`openNotice('${p.id}')`}); });
   (_nextInvoiceReminders()||[]).forEach(r=>{ out.push({sev:r.days<0?'red':'amber',label:'Invoice — '+r.l.name,detail:r.days<0?'Overdue by '+(-r.days)+' days':'Due in '+r.days+' days',go:`go('invoices')`}); });
   S.properties.filter(p=>p.tenant).forEach(p=>{ const cl=_tenancyChecklist(p); const missing=cl.items.filter(i=>!i.done&&!i.warn); if(missing.length) out.push({sev:'red',label:'Tenancy setup — '+(p.address||''),detail:'Missing: '+missing.map(i=>i.label).join(', '),go:`go('property','${p.id}')`}); });
   return out.sort((a,b)=>(a.sev==='red'?0:1)-(b.sev==='red'?0:1));
@@ -2811,7 +2829,7 @@ async function sendWelcomeLetter(l){
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// POSSESSION & NOTICES (Phase C) — Section 8 (Form 3A) + Section 13 (Form 4).
+// POSSESSION & NOTICES (Phase C) — Section 8 (Form 3A) + Section 13 (Form 4A).
 // England, Housing Act 1988 Sch 2 as amended by the Renters' Rights Act 2025
 // (S21 abolished 1 May 2026). PREPARATION + GUIDANCE, cross-checked against the
 // live GOV.UK form — NOT legal advice. Hard compliance gate before serving.
@@ -2894,12 +2912,12 @@ function renderNotice(){
   const body=`
     <div class="note warn" style="margin-bottom:14px">\u26a0 Preparation & guidance only — <b>not legal advice</b>. Always download and cross-check the current prescribed form on <a href="${GOVUK_FORM3A}" target="_blank" style="color:var(--navy);font-weight:600">GOV.UK</a>. Serving the wrong ground or an invalid notice can incur penalties.</div>
     <div class="grid2" style="gap:10px">
-      <div class="fg"><label>Notice type</label><select onchange="NT.kind=this.value;renderNotice()"><option value="section8" ${isS8?'selected':''}>Section 8 — possession (Form 3A)</option><option value="section13" ${!isS8?'selected':''}>Section 13 — rent increase (Form 4)</option></select></div>
+      <div class="fg"><label>Notice type</label><select onchange="NT.kind=this.value;renderNotice()"><option value="section8" ${isS8?'selected':''}>Section 8 — possession (Form 3A)</option><option value="section13" ${!isS8?'selected':''}>Section 13 — rent increase (Form 4A)</option></select></div>
       <div class="fg"><label>Property / tenancy</label><select onchange="NT.propertyId=this.value;renderNotice()">${propOpts}</select></div>
     </div>
     ${isS8?`<div class="panel" style="margin:4px 0 14px"><div class="panel-hd" style="display:flex;justify-content:space-between;align-items:center"><h2 style="font-size:13.5px">Pre-service compliance gate</h2><span class="pill" style="background:${gateOk?'var(--green-bg)':'var(--red-bg)'};color:${gateOk?'var(--green)':'var(--red)'}">${gateOk?'\u2713 Ready to serve':'Incomplete'}</span></div><div class="panel-bd">${gateHtml}<div class="hint">All items must be satisfied — a court will refuse possession if any prerequisite was missed.</div></div></div>${s8Body}`:s13Body}`;
   const canGen=isS8?(gateOk&&NT.grounds.length):(NT.rentNew&&NT.effective);
-  modal(isS8?'New Section 8 notice (Form 3A)':'New Section 13 notice (Form 4)', body,
+  modal(isS8?'New Section 8 notice (Form 3A)':'New Section 13 notice (Form 4A)', body,
     `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" ${canGen?'':'disabled title="Complete the compliance gate and pick a ground"'} onclick="createNotice()">Generate notice</button>`);
 }
 function _ntToggle(c){ const i=NT.grounds.indexOf(c); if(i>=0)NT.grounds.splice(i,1); else NT.grounds.push(c); renderNotice(); }
@@ -2918,7 +2936,7 @@ function genNoticeDoc(n){
   const p=P(n.propertyId)||{}; const l=L(n.landlordId)||{}; const a=S.agency; const b=agencyBrand();
   const addr=esc(p.address||'')+(p.city?', '+esc(p.city):'');
   if(n.kind==='section13'){
-    return `<h2 style="text-align:center;margin-top:0">Notice of rent increase</h2><p style="text-align:center;color:#7A8FA6;font-size:12px">Section 13, Housing Act 1988 — Form 4 (to like effect) · ${_dstr(today())}</p>
+    return `<h2 style="text-align:center;margin-top:0">Notice of rent increase</h2><p style="text-align:center;color:#7A8FA6;font-size:12px">Section 13, Housing Act 1988 (as amended by the Renters' Rights Act 2025) — Form 4A · ${_dstr(today())}</p>
       <p><b>To the tenant(s):</b> ${esc(n.tenantName||'the tenant')}<br><b>Property:</b> ${addr}</p>
       <p>Your landlord/agent gives notice proposing a new rent for the above property.</p>
       <table style="width:100%;font-size:13px;border-collapse:collapse;margin:12px 0">
@@ -2940,7 +2958,9 @@ function genNoticeDoc(n){
     <p style="font-size:12px;color:#555">This notice is served under section 8 of the Housing Act 1988. After the date in section 5, the landlord may apply to the court for a possession order. You should read this notice carefully and seek advice (e.g. Citizens Advice, Shelter, or a solicitor).</p>
     <p style="margin-top:16px">Signed for and on behalf of the landlord: <b>${esc(b.agent||b.name)}</b>, ${esc(b.name)}${b.address?', '+esc(b.address):''}<br>Date served: ${_dstr(n.served)} · Method: to be recorded on the certificate of service</p>`;
 }
-function serveNotice(id){ const n=S.notices.find(x=>x.id===id); if(!n)return; n.status='served'; if(!n.served)n.served=today(); save(); pushNotice(n); render(); toast('\u2713 Marked as served — keep the certificate of service'); }
+function serveNotice(id){ const n=S.notices.find(x=>x.id===id); if(!n)return; n.status='served'; if(!n.served)n.served=today(); const p=P(n.propertyId)||{}; const l=L(n.landlordId||p.landlordId);
+  if(l&&l.id){ l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Notice',note:(n.kind==='section13'?'Section 13 rent increase notice':'Section 8 possession notice')+' marked as served — '+(p.address||'')}); pushLandlord(l); }
+  save(); pushNotice(n); render(); toast('\u2713 Marked as served — keep proof of service (post/email) for court.'); }
 function withdrawNotice(id){ const n=S.notices.find(x=>x.id===id); if(!n)return; n.status='withdrawn'; save(); pushNotice(n); render(); toast('Notice withdrawn'); }
 function _noticeRecipients(n){
   const p=P(n.propertyId)||{}; const t=p.tenant||{}; const rec=tenantRecFor(n.propertyId)||{};
@@ -2958,7 +2978,9 @@ async function emailNotice(id){
   const label=n.kind==='section13'?'Section 13 rent increase notice':'Section 8 possession notice';
   const html=`<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#1A2B45">${n.docHtml}</div>`;
   for(const r of recips){ await agencyEmail(r.email, label+' — '+esc(p.address||''), html); }
-  n.emailedTo=recips.map(r=>r.email); n.emailedAt=new Date().toISOString(); save(); pushNotice(n); render();
+  n.emailedTo=recips.map(r=>r.email); n.emailedAt=new Date().toISOString();
+  const l=L(n.landlordId||p.landlordId); if(l&&l.id){ l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Notice',note:label+' emailed to '+recips.map(r=>r.label+' ('+r.email+')').join(', ')+' — '+(p.address||'')}); pushLandlord(l); }
+  save(); pushNotice(n); render();
   toast('\u2713 Notice emailed to '+recips.map(r=>r.email).join(', '));
 }
 
@@ -2969,7 +2991,7 @@ function _courtRoute(n){ const rentOnly=n.grounds.length && n.grounds.every(c=>[
 function vNotices(){
   const ns=S.notices||[];
   const active=ns.filter(n=>n.status==='served').length;
-  return `<h1 class="pg">Possession &amp; Notices</h1><div class="sub">Section 8 (Form 3A) and Section 13 (Form 4), with a pre-service compliance gate and court next-steps. Preparation &amp; guidance — not legal advice.</div>
+  return `<h1 class="pg">Possession &amp; Notices</h1><div class="sub">Section 8 (Form 3A) and Section 13 (Form 4A), with a pre-service compliance gate and court next-steps. Preparation &amp; guidance — not legal advice.</div>
     <div class="grid4" style="margin-bottom:18px">
       <div class="kpi"><div class="l">Total notices</div><div class="v">${ns.length}</div></div>
       <div class="kpi"><div class="l">Served / live</div><div class="v" style="color:var(--amber)">${active}</div></div>
@@ -3118,7 +3140,7 @@ async function _rentReceivedSend(rid){
 function arrearsMonths(t){ const owed=tenantArrears(t.id); return t.rent?owed/t.rent:0; }
 function arrearsStep(t){
   const m=arrearsMonths(t);
-  if(m>=2) return {k:'s8',label:'Section 8 — Ground 8 (mandatory)',color:'var(--red)',bg:'var(--red-bg)',note:'Two or more months\u2019 rent is unpaid. Ground 8 is a mandatory possession ground — serve a Section 8 notice (min. 4 weeks). Grounds 10 & 11 (some/persistent arrears) can be added.'};
+  if(m>=3) return {k:'s8',label:'Section 8 — Ground 8 (mandatory)',color:'var(--red)',bg:'var(--red-bg)',note:'Three or more months\u2019 rent is unpaid (the Renters\u2019 Rights Act 2025 raised this from 2 months). Ground 8 is a mandatory possession ground — serve a Section 8 notice (min. 4 weeks). Grounds 10 & 11 (some/persistent arrears) can be added.'};
   if(m>=1) return {k:'formal',label:'Formal arrears letter (7-day)',color:'var(--amber)',bg:'var(--amber-bg)',note:'A month\u2019s rent is outstanding. Send a formal arrears letter giving 7 days to pay before further action, and keep it on file.'};
   if(m>0) return {k:'reminder',label:'Friendly reminder',color:'var(--blue)',bg:'var(--blue-bg)',note:'Rent is late. Send a courteous reminder — most arrears clear at this stage.'};
   return null;
@@ -3131,7 +3153,7 @@ function arrearsAction(tid){
     <div style="background:${step.bg};border:1px solid ${step.color};border-radius:10px;padding:13px 15px;margin-bottom:12px">
       <div style="font-weight:700;color:${step.color};font-size:13px;margin-bottom:4px">Recommended: ${step.label}</div>
       <div style="font-size:12.5px;line-height:1.6;color:var(--txt)">${step.note}</div></div>
-    <div class="hint" style="margin-bottom:10px">Full legal escalation ladder — reminder → 7-day formal letter → Section 8. Ground 8 needs ≥2 months' arrears both at service and at the hearing.</div>`;
+    <div class="hint" style="margin-bottom:10px">Full legal escalation ladder — reminder → 7-day formal letter → Section 8. Ground 8 needs ≥3 months' arrears both at service and at the hearing.</div>`;
   const actions = step.k==='s8'
     ? `<button class="btn" onclick="closeModal()">Close</button><button class="btn navy" onclick="closeModal();_arrearsLetter('${tid}');">Send arrears letter first</button><button class="btn" style="background:var(--red);color:#fff;border-color:var(--red)" onclick="closeModal();_startS8('${tid}')">Prepare Section 8 →</button>`
     : `<button class="btn" onclick="closeModal()">Close</button><button class="btn navy" onclick="closeModal();_arrearsLetter('${tid}')">Send ${step.k==='formal'?'formal arrears letter':'reminder'}</button>`;
@@ -3573,7 +3595,7 @@ const FEATURES=[
   {v:'properties',t:'Properties',d:'All properties across landlords.',kw:'property properties portfolio list address'},
   {v:'compliance',t:'Compliance',d:'Gas Safety, EICR, EPC — tree view by landlord → property, AI cert scan.',kw:'compliance certificate cert gas safety eicr epc expiry expiring scan ai scan upload certificate'},
   {v:'invoices',t:'Invoices',d:'Management fees (monthly/quarterly/annual), tenant-find, maintenance, rent remittance.',kw:'invoice invoicing billing fee money remittance rent collection client money cmp monthly quarterly maintenance bill'},
-  {v:'notices',t:'Possession & Notices',d:'Section 8 (Form 3A) and Section 13 (Form 4) with a pre-service compliance gate.',kw:'notice section 8 section 13 eviction possession court arrears rent increase form 3a form 4 evict'},
+  {v:'notices',t:'Possession & Notices',d:'Section 8 (Form 3A) and Section 13 (Form 4A) with a pre-service compliance gate.',kw:'notice section 8 section 13 eviction possession court arrears rent increase form 3a form 4 evict'},
   {v:'templates',t:'Letters & Templates',d:'Welcome letters, rent statements, arrears, renewals — AI-polished, e-signed & timestamped.',kw:'letter letters template templates welcome email ai polish esign e-sign send'},
   {v:'settings',t:'Agency Settings',d:'Agency name, redress scheme, CMP, VAT, ICO, branding.',kw:'settings agency name branding redress cmp vat ico'},
   {v:'rent',t:'Rent & Arrears',d:'Monthly rent due tracking, log payments, see who is in arrears.',kw:'rent arrears payment paid overdue late tenant money due'},
