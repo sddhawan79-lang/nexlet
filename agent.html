@@ -1146,6 +1146,10 @@ function vPropertyDetail(){
           <div class="kv"><span class="k">Email</span><span class="v">${esc(p.tenant.email||'—')}</span></div>
           ${p.tenant.occupants&&p.tenant.occupants.length?`<div class="kv"><span class="k">Also on tenancy</span><span class="v">${p.tenant.occupants.map(o=>esc(o.name)).join(', ')}</span></div>`:''}
           <div class="kv"><span class="k">Start date</span><span class="v">${fmtDate(p.tenant.start)}</span></div>
+          ${(()=>{ const rec=tenantRecFor(p.id); if(!rec) return ''; const g=rec.guarantor;
+            return `${g&&g.name?`<div class="kv"><span class="k">Guarantor</span><span class="v">${esc(g.name)}${g.email?' · '+esc(g.email):''}${g.phone?' · '+esc(g.phone):''}</span></div>`:''}
+            ${rec.depositCertName?`<div class="kv"><span class="k">Deposit certificate</span><span class="v">${esc(rec.depositCertName)} ${rec.depositCertUrl?`<a href="#" onclick="event.preventDefault();viewDoc('${rec.depositCertUrl}','Deposit certificate')">View</a>`:''}</span></div>`:''}
+            ${rec.refDocName?`<div class="kv"><span class="k">Reference report</span><span class="v">${esc(rec.refDocName)} ${rec.refDocUrl?`<a href="#" onclick="event.preventDefault();viewDoc('${rec.refDocUrl}','Reference report')">View</a>`:''}</span></div>`:''}`; })()}
           <div class="kv" style="border:none"><span class="k">Rent due day</span><span class="v">${esc(p.rentDueDay||'1st')} <a href="#" onclick="editRentDueDay('${p.id}');return false" style="color:var(--blue);font-size:12px;margin-left:4px">edit</a></span></div>
           <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" onclick="inviteTenantToPortal('${p.id}')">📧 Invite to tenant portal</button><button class="btn sm" onclick="setTenant('${p.id}')">Edit tenant</button><button class="btn sm" onclick="openNotice('${p.id}')">⚖ Prepare notice</button></div>`
           :lst?`<div class="faint" style="font-size:13px;margin-bottom:12px">Marketing in progress — ${_pill(LISTING_STATUS,lst.status)} · ${_listingApps(lst.id).length} enquir${_listingApps(lst.id).length===1?'y':'ies'} so far.</div><button class="btn sm navy" onclick="go('listing','${lst.id}')">Manage listing</button>`
@@ -1264,6 +1268,9 @@ function recordExistingTenant(pid){ const p=P(pid); if(propTenancyStatus(p)==='u
 function setTenant(pid){ const p=P(pid); const t=p.tenant||{}; const rec=tenantRecFor(pid)||{};
   const occ=(t.occupants||rec.occupants||[]);
   const occRows=occ.map(o=>_occRowHtml(o)).join('');
+  const g=rec.guarantor||{};
+  const hasG=!!(g.name||g.email||g.phone);
+  window._tnFiles={};
   const body=`<div class="fg"><label>Tenant name (lead)</label><input id="tn-name" value="${esc(t.name||rec.name||'')}"></div>
   <div class="grid2" style="gap:10px"><div class="fg"><label>Email</label><input id="tn-email" value="${esc(t.email||rec.email||'')}"></div>
   <div class="fg"><label>Phone</label><input id="tn-phone" value="${esc(rec.phone||'')}"></div></div>
@@ -1272,23 +1279,71 @@ function setTenant(pid){ const p=P(pid); const t=p.tenant||{}; const rec=tenantR
   <div class="fg"><label>Other adults on this tenancy (optional — e.g. joint tenants, family sharers)</label>
   <div id="tn-occupants">${occRows}</div>
   <button type="button" class="btn sm" onclick="tnAddOccupant()" style="margin-top:4px">+ Add another adult</button></div>
-  <div class="hint">Saving creates the tenancy record (for rent tracking, maintenance &amp; the tenant portal) and moves the let to Managed. All named adults appear on Section 8/13 notices.</div>`;
-  modal('Set up tenant',body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveTenant('${pid}')">Save tenant</button>`, true); }
-function _occRowHtml(o){ o=o||{}; return `<div class="grid2" style="gap:10px;margin-bottom:6px" data-occ-row><input placeholder="Full name" value="${esc(o.name||'')}"><div style="display:flex;gap:6px"><input placeholder="Phone (optional)" value="${esc(o.phone||'')}" style="flex:1"><button type="button" class="btn sm" onclick="this.closest('[data-occ-row]').remove()">✕</button></div></div>`; }
+  <div class="fg"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="tn-has-guarantor" ${hasG?'checked':''} onchange="document.getElementById('tn-guarantor-box').style.display=this.checked?'grid':'none'"> Has a guarantor</label>
+  <div id="tn-guarantor-box" class="grid2" style="gap:10px;display:${hasG?'grid':'none'};margin-top:6px">
+    <input id="tn-g-name" placeholder="Guarantor name" value="${esc(g.name||'')}" style="grid-column:1/-1">
+    <input id="tn-g-email" placeholder="Guarantor email" value="${esc(g.email||'')}">
+    <input id="tn-g-phone" placeholder="Guarantor phone" value="${esc(g.phone||'')}">
+  </div></div>
+  <div class="fg"><label>Deposit certificate <span class="faint">(custodial/insured scheme cert or Prescribed Information)</span></label>
+    <label style="display:flex;align-items:center;gap:10px;padding:10px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer">
+      <span style="font-size:18px">📄</span><div style="font-size:12.5px;font-weight:600;flex:1">${rec.depositCertName?'Replace file':'Click to attach'}</div>
+      <input type="file" accept="application/pdf,image/*" style="display:none" onchange="tnAttachFile(this,'deposit')">
+    </label>
+    <div id="tn-deposit-status" style="margin-top:6px;font-size:11.5px">${rec.depositCertName?`<span style="color:var(--green)">✓ ${esc(rec.depositCertName)} on file</span> ${rec.depositCertUrl?`<a href="#" onclick="event.preventDefault();viewDoc('${rec.depositCertUrl}','Deposit certificate')">View</a>`:''}`:'<span class="faint">No file attached yet</span>'}</div></div>
+  <div class="fg"><label>Reference report <span class="faint">(employer/previous-landlord reference or credit check)</span></label>
+    <label style="display:flex;align-items:center;gap:10px;padding:10px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer">
+      <span style="font-size:18px">📄</span><div style="font-size:12.5px;font-weight:600;flex:1">${rec.refDocName?'Replace file':'Click to attach'}</div>
+      <input type="file" accept="application/pdf,image/*" style="display:none" onchange="tnAttachFile(this,'ref')">
+    </label>
+    <div id="tn-ref-status" style="margin-top:6px;font-size:11.5px">${rec.refDocName?`<span style="color:var(--green)">✓ ${esc(rec.refDocName)} on file</span> ${rec.refDocUrl?`<a href="#" onclick="event.preventDefault();viewDoc('${rec.refDocUrl}','Reference report')">View</a>`:''}`:'<span class="faint">No file attached yet</span>'}</div></div>
+  <div class="hint">Saving creates the tenancy record (for rent tracking, maintenance &amp; the tenant portal) and moves the let to Managed. All named adults appear on Section 8/13 notices. Notices are still served by hand/post/email per the tenancy agreement — an email here is for the portal invite &amp; correspondence.</div>`;
+  modal('Set up tenant',body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" id="tn-save-btn" onclick="saveTenant('${pid}')">Save tenant</button>`, true); }
+function _occRowHtml(o){ o=o||{}; return `<div style="display:grid;grid-template-columns:1.3fr 1.3fr 1fr auto;gap:8px;margin-bottom:6px" data-occ-row><input placeholder="Full name" value="${esc(o.name||'')}"><input placeholder="Email (optional)" value="${esc(o.email||'')}"><input placeholder="Phone (optional)" value="${esc(o.phone||'')}"><button type="button" class="btn sm" onclick="this.closest('[data-occ-row]').remove()">✕</button></div>`; }
 function tnAddOccupant(){ const c=document.getElementById('tn-occupants'); if(!c) return; c.insertAdjacentHTML('beforeend',_occRowHtml({})); }
-function _readOccupants(){ return [...document.querySelectorAll('#tn-occupants [data-occ-row]')].map(r=>{ const inputs=r.querySelectorAll('input'); return {name:(inputs[0].value||'').trim(),phone:(inputs[1].value||'').trim()}; }).filter(o=>o.name); }
+function _readOccupants(){ return [...document.querySelectorAll('#tn-occupants [data-occ-row]')].map(r=>{ const inputs=r.querySelectorAll('input'); return {name:(inputs[0].value||'').trim(),email:(inputs[1].value||'').trim(),phone:(inputs[2].value||'').trim()}; }).filter(o=>o.name); }
+function tnAttachFile(input,kind){ const f=input.files[0]; if(!f) return; window._tnFiles=window._tnFiles||{}; window._tnFiles[kind]=f;
+  const st=document.getElementById('tn-'+kind+'-status'); if(st) st.innerHTML='<span style="color:var(--blue)">✦ '+esc(f.name)+' attached — will upload on Save</span>'; }
+async function _storageUpload(file,path){
+  if(!sb||!LIVE) return null;
+  try{
+    const{error:upErr}=await sb.storage.from('property-documents').upload(path,file,{contentType:file.type,upsert:true});
+    if(upErr){ console.error('storage upload failed',upErr); return null; }
+    const{data}=sb.storage.from('property-documents').getPublicUrl(path);
+    return (data&&data.publicUrl)||null;
+  }catch(e){ console.error('storage upload exception',e); return null; }
+}
+function viewDoc(url,label){
+  if(!url){ toast('No file attached',1); return; }
+  const isImg=/\.(jpe?g|png|gif|webp|bmp)$/i.test(url.split('?')[0]);
+  const body=isImg?`<div style="display:flex;justify-content:center;align-items:center;min-height:40vh;background:var(--off);border-radius:8px"><img src="${url}" style="max-width:100%;max-height:70vh;object-fit:contain;border-radius:6px"></div>`
+    :`<iframe src="${url}" style="width:100%;height:70vh;border:none;border-radius:8px;background:var(--off)"></iframe>`;
+  modal(esc(label||'Document'),body,`<button class="btn" onclick="closeModal()">Close</button><a href="${url}" target="_blank" class="btn navy">Open in new tab</a>`);
+}
 function _commitTenant(pid,info){
   const p=P(pid); if(!p.id||!info.name) return null;
   p.tenant={name:info.name,email:info.email||'',start:info.start||today(),occupants:info.occupants||[]};
   let tn=S.tenancies.find(t=>t.propertyId===pid); if(tn)tn.stage='managed'; else { tn={id:uid('t'),who:p.address,propertyId:pid,stage:'managed'}; S.tenancies.push(tn); }
   let rec=tenantRecFor(pid); const isNew=!rec; if(isNew) rec={id:uid('tn'),status:'active'};
   rec.propertyId=pid; rec.landlordId=p.landlordId; rec.name=info.name; rec.email=info.email||''; rec.phone=info.phone||''; rec.start=info.start||today(); rec.rent=p.rent||0; rec.deposit=info.deposit!=null?info.deposit:rec.deposit; rec.occupants=info.occupants||[];
+  if(info.guarantor) rec.guarantor=info.guarantor;
+  if(info.depositCertName){ rec.depositCertName=info.depositCertName; rec.depositCertUrl=info.depositCertUrl||rec.depositCertUrl; }
+  if(info.refDocName){ rec.refDocName=info.refDocName; rec.refDocUrl=info.refDocUrl||rec.refDocUrl; }
   S.tenants=S.tenants||[]; if(isNew) S.tenants.push(rec);
   save(); pushProperty(p); pushTenancy(tn); pushTenantRec(rec);
   return rec;
 }
-function saveTenant(pid){ const nm=val('tn-name'); if(!nm){toast('Enter tenant name',1);return;}
-  _commitTenant(pid,{name:nm,email:val('tn-email'),phone:val('tn-phone'),start:val('tn-start'),deposit:val('tn-deposit')?parseFloat(val('tn-deposit')):undefined,occupants:_readOccupants()});
+async function saveTenant(pid){ const nm=val('tn-name'); if(!nm){toast('Enter tenant name',1);return;}
+  const btn=document.getElementById('tn-save-btn'); if(btn){btn.disabled=true;btn.textContent='Saving…';}
+  const files=window._tnFiles||{};
+  const hasGuarantor=document.getElementById('tn-has-guarantor').checked;
+  const guarantor=hasGuarantor?{name:val('tn-g-name'),email:val('tn-g-email'),phone:val('tn-g-phone')}:null;
+  const rec=tenantRecFor(pid)||{};
+  const info={name:nm,email:val('tn-email'),phone:val('tn-phone'),start:val('tn-start'),deposit:val('tn-deposit')?parseFloat(val('tn-deposit')):undefined,occupants:_readOccupants(),guarantor};
+  if(files.deposit){ const ext=(files.deposit.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.deposit,'tenant-docs/'+pid+'/deposit-'+Date.now()+'.'+ext); info.depositCertName=files.deposit.name; info.depositCertUrl=url||rec.depositCertUrl; }
+  if(files.ref){ const ext=(files.ref.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.ref,'tenant-docs/'+pid+'/reference-'+Date.now()+'.'+ext); info.refDocName=files.ref.name; info.refDocUrl=url||rec.refDocUrl; }
+  _commitTenant(pid,info);
+  window._tnFiles={};
   closeModal(); render(); toast('✓ Tenant set up'); }
 function inviteTenantToPortal(pid){
   const p=P(pid); const rec=tenantRecFor(pid);
@@ -2433,10 +2488,10 @@ function renderNotice(){
 }
 function _ntToggle(c){ const i=NT.grounds.indexOf(c); if(i>=0)NT.grounds.splice(i,1); else NT.grounds.push(c); renderNotice(); }
 function createNotice(){
-  const p=_ntProp(); const l=L(p.landlordId)||{}; const t=p.tenant||{};
+  const p=_ntProp(); const l=L(p.landlordId)||{}; const t=p.tenant||{}; const rec=tenantRecFor(p.id)||{};
   const isS8=NT.kind==='section8';
   const expiry=isS8?_longestExpiry(NT.served,NT.grounds):NT.effective;
-  const tName=(t.name||'')+(t.occupants&&t.occupants.length?' and '+t.occupants.map(o=>o.name).join(', '):'');
+  const tName=(t.name||'')+(t.occupants&&t.occupants.length?' and '+t.occupants.map(o=>o.name).join(', '):'')+(rec.guarantor&&rec.guarantor.name?' (guarantor: '+rec.guarantor.name+')':'');
   const n={id:uid('nt'),landlordId:p.landlordId,propertyId:p.id,kind:NT.kind,grounds:NT.grounds.slice(),tenantName:tName,
     served:NT.served,expiry,rentCurrent:isS8?null:(+NT.rentCurrent||p.rent||0),rentNew:isS8?null:(+NT.rentNew||0),
     compliance:isS8?{...NT.gate,prsReg:NT.prsReg}:{},notes:NT.reasons||'',status:'draft',createdAt:new Date().toISOString()};
@@ -2471,6 +2526,25 @@ function genNoticeDoc(n){
 }
 function serveNotice(id){ const n=S.notices.find(x=>x.id===id); if(!n)return; n.status='served'; if(!n.served)n.served=today(); save(); pushNotice(n); render(); toast('\u2713 Marked as served — keep the certificate of service'); }
 function withdrawNotice(id){ const n=S.notices.find(x=>x.id===id); if(!n)return; n.status='withdrawn'; save(); pushNotice(n); render(); toast('Notice withdrawn'); }
+function _noticeRecipients(n){
+  const p=P(n.propertyId)||{}; const t=p.tenant||{}; const rec=tenantRecFor(n.propertyId)||{};
+  const out=[]; const seen=new Set();
+  const add=(email,label)=>{ email=(email||'').trim(); if(email&&!seen.has(email.toLowerCase())){ seen.add(email.toLowerCase()); out.push({email,label}); } };
+  add(t.email||rec.email,'tenant');
+  (t.occupants||rec.occupants||[]).forEach(o=>add(o.email,o.name||'occupant'));
+  if(rec.guarantor&&rec.guarantor.email) add(rec.guarantor.email,'guarantor');
+  return out;
+}
+async function emailNotice(id){
+  const n=S.notices.find(x=>x.id===id); if(!n) return; const p=P(n.propertyId)||{};
+  const recips=_noticeRecipients(n);
+  if(!recips.length){ toast('No email on file for the tenant, occupants or guarantor',1); return; }
+  const label=n.kind==='section13'?'Section 13 rent increase notice':'Section 8 possession notice';
+  const html=`<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#1A2B45">${n.docHtml}</div>`;
+  for(const r of recips){ await agencyEmail(r.email, label+' — '+esc(p.address||''), html); }
+  n.emailedTo=recips.map(r=>r.email); n.emailedAt=new Date().toISOString(); save(); pushNotice(n); render();
+  toast('\u2713 Notice emailed to '+recips.map(r=>r.email).join(', '));
+}
 
 function _courtRoute(n){ const rentOnly=n.grounds.length && n.grounds.every(c=>['8','10','11'].includes(c)); return rentOnly
   ? {name:'Possession Claim Online (PCOL)',note:'Rent-arrears-only claims can be started online.',url:'https://www.possessionclaim.gov.uk/pcol/'}
@@ -2501,11 +2575,13 @@ function vNoticeDetail(){
   return `<div class="back no-print" onclick="go('notices')">← All notices</div>
     <div class="no-print" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
       ${n.status==='draft'?`<button class="btn navy" onclick="serveNotice('${n.id}')">Mark as served</button>`:''}
+      ${_noticeRecipients(n).length?`<button class="btn" onclick="emailNotice('${n.id}')">\u2709 Email to tenant(s)${(P(n.propertyId).tenant&&P(n.propertyId).tenant.occupants&&P(n.propertyId).tenant.occupants.length)||(tenantRecFor(n.propertyId)&&tenantRecFor(n.propertyId).guarantor)?' & guarantor':''}</button>`:''}
       ${n.status!=='withdrawn'?`<button class="btn" onclick="withdrawNotice('${n.id}')">Withdraw</button>`:''}
       <button class="btn" onclick="window.print()">🖨 Print / PDF</button>
       <a class="btn" href="${GOVUK_FORM3A}" target="_blank">Official GOV.UK form ↗</a>
     </div>
     <div id="invoice-doc" class="panel" style="max-width:720px;margin:0 auto"><div style="padding:30px 34px;font-size:13px;line-height:1.7">${n.docHtml}</div></div>
+    ${n.emailedTo&&n.emailedTo.length?`<div class="hint no-print" style="max-width:720px;margin:10px auto 0">\u2713 Emailed to ${n.emailedTo.map(esc).join(', ')} on ${fmtDate(n.emailedAt)}</div>`:''}
     ${route?`<div class="panel no-print" style="max-width:720px;margin:16px auto 0"><div class="panel-hd"><h2>After the notice expires — court route</h2></div><div class="panel-bd">
       <div class="kv"><span class="k">Recommended route</span><span class="v">${esc(route.name)}</span></div>
       <div class="kv" style="border:none"><span class="k">Note</span><span class="v" style="max-width:60%;text-align:right">${esc(route.note)}</span></div>
