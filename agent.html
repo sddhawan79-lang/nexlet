@@ -242,8 +242,8 @@ const rowToRent=r=>({id:r.id,propertyId:r.property_id,tenantId:r.tenant_id,due:r
 const rentToRow=r=>({id:r.id,agency_id:window._agencyId,property_id:r.propertyId,tenant_id:r.tenantId,due_date:r.due,amount:r.amount||0,paid_date:r.paidDate||null,status:r.status||'due',notes:r.notes||''});
 const rowToJob=r=>({id:r.id,propertyId:r.property_id,tenantId:r.tenant_id,reportedBy:r.reported_by||'agent',category:r.category||'General',description:r.description||'',photos:r.photos||[],severity:r.severity||'normal',dampMould:!!r.damp_mould,status:r.status||'reported',createdAt:r.created_at});
 const jobToRow=j=>({id:j.id,agency_id:window._agencyId,property_id:j.propertyId,tenant_id:j.tenantId||null,reported_by:j.reportedBy||'agent',category:j.category||'General',description:j.description||'',photos:j.photos||[],severity:j.severity||'normal',damp_mould:!!j.dampMould,status:j.status||'reported',updated_at:new Date().toISOString()});
-const rowToInv2=r=>({id:r.id,propertyId:r.property_id,tenantId:r.tenant_id,rooms:r.rooms||[],depositHeld:r.deposit_held,totalDeduction:r.total_deduction||0,status:r.status||'draft'});
-const inv2ToRow=v=>({id:v.id,agency_id:window._agencyId,property_id:v.propertyId,tenant_id:v.tenantId||null,rooms:v.rooms||[],deposit_held:v.depositHeld,total_deduction:v.totalDeduction||0,status:v.status||'draft',updated_at:new Date().toISOString()});
+const rowToInv2=r=>({id:r.id,propertyId:r.property_id,tenantId:r.tenant_id,rooms:r.rooms||[],reports:r.reports||[],depositHeld:r.deposit_held,totalDeduction:r.total_deduction||0,status:r.status||'draft'});
+const inv2ToRow=v=>({id:v.id,agency_id:window._agencyId,property_id:v.propertyId,tenant_id:v.tenantId||null,rooms:v.rooms||[],reports:v.reports||[],deposit_held:v.depositHeld,total_deduction:v.totalDeduction||0,status:v.status||'draft',updated_at:new Date().toISOString()});
 const rowToNotice=r=>({id:r.id,landlordId:r.landlord_id,propertyId:r.property_id,kind:r.kind||'section8',grounds:r.grounds||[],tenantName:r.tenant_name||'',served:r.served_date||'',expiry:r.expiry_date||'',rentCurrent:r.rent_current,rentNew:r.rent_new,compliance:r.compliance||{},docHtml:r.doc_html||'',notes:r.notes||'',status:r.status||'draft',createdAt:r.created_at});
 const noticeToRow=n=>({id:n.id,agency_id:window._agencyId,landlord_id:n.landlordId,property_id:n.propertyId,kind:n.kind,grounds:n.grounds||[],tenant_name:n.tenantName||'',served_date:n.served||null,expiry_date:n.expiry||null,rent_current:n.rentCurrent,rent_new:n.rentNew,compliance:n.compliance||{},doc_html:n.docHtml||'',notes:n.notes||'',status:n.status||'draft'});
 const pushAgency   =() =>_w(sb.from('agencies').update(agencyToRow(S.agency)).eq('id',window._agencyId));
@@ -3131,7 +3131,7 @@ function vInventoryList(){
     <div class="panel">${list.length?list.map(v=>{ const p=P(v.propertyId)||{}; const t=(S.tenants||[]).find(x=>x.id===v.tenantId)||{};
       return `<div class="row" style="cursor:pointer" onclick="go('inventorydetail','${v.id}')"><div class="av">📋</div>
         <div style="flex:1"><div style="font-size:14px;font-weight:600;color:var(--navy)">${esc(p.address||'—')}</div><div class="faint" style="font-size:12px">${esc(t.name||'—')} · ${v.rooms.length} item${v.rooms.length===1?'':'s'}</div></div>
-        <span class="pill" style="background:${v.status==='complete'?'var(--green-bg)':'var(--off)'};color:${v.status==='complete'?'var(--green)':'#475569'}">${v.status==='complete'?'Complete':'Draft'}</span></div>`; }).join(''):'<div class="empty">No inventories yet. Create one for a tenancy to start recording move-in condition.</div>'}</div>`;
+        <span class="pill" style="background:${v.status==='complete'?'var(--green-bg)':v.status==='in-progress'?'var(--blue-bg)':'var(--off)'};color:${v.status==='complete'?'var(--green)':v.status==='in-progress'?'var(--blue)':'#475569'}">${v.status==='complete'?'Complete':v.status==='in-progress'?'In progress':'Draft'}</span></div>`; }).join(''):'<div class="empty">No inventories yet. Create one for a tenancy to start recording move-in condition.</div>'}</div>`;
 }
 function _ensureRoomShape(r){
   if(!r.checkin) r.checkin={photos:r.checkinPhoto?[r.checkinPhoto]:[],note:r.checkinNote||''};
@@ -3217,10 +3217,15 @@ function vInventoryDetail(){
       </div>
     </div></div>
     <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
-      <button class="btn navy" onclick="generateWearReport('${v.id}')">✦ Generate wear &amp; tear report</button>
-      ${v.wearReports&&v.wearReports.length?`<button class="btn" onclick="viewWearReports('${v.id}')">View reports (${v.wearReports.length})</button>`:''}
+      <button class="btn navy" ${_invHasCheckin(v)?'':'disabled title="Add check-in photos first"'} onclick="generateInvReport('${v.id}','movein')">✦ Move-in report</button>
+      <button class="btn navy" ${_invHasVisit(v)?'':'disabled title="Add mid-tenancy check photos first"'} onclick="generateInvReport('${v.id}','midterm')">✦ Mid-tenancy report</button>
+      <button class="btn navy" ${_invHasCheckout(v)?'':'disabled title="Add check-out photos first"'} onclick="generateInvReport('${v.id}','moveout')">✦ Move-out report</button>
+      ${v.reports&&v.reports.length?`<button class="btn" onclick="viewInvReports('${v.id}')">View reports (${v.reports.length})</button>`:''}
     </div>`;
 }
+function _invHasCheckin(v){ return v.rooms.some(r=>_ensureRoomShape(r).checkin.photos.length); }
+function _invHasVisit(v){ return v.rooms.some(r=>{ _ensureRoomShape(r); return r.checkin.photos.length&&r.visits.length&&r.visits[r.visits.length-1].photos.length; }); }
+function _invHasCheckout(v){ return v.rooms.some(r=>{ _ensureRoomShape(r); const lv=r.visits.length?r.visits[r.visits.length-1]:null; return r.checkin.photos.length&&((lv&&lv.photos.length)||r.checkout.photos.length); }); }
 function addRoom(vid){ const v=(S.inventories2||[]).find(x=>x.id===vid); const room=prompt('Room (e.g. Living room)'); if(!room)return; const item=prompt('Item (e.g. Carpet)')||'Item';
   v.rooms.push({room,item,checkin:{photos:[],note:''},checkout:{photos:[],note:''},visits:[],classification:'',charge:0,reasoning:''});
   window._invTabs=window._invTabs||{}; window._invTabs[vid]=v.rooms.length-1; pushInv2(v); render(); }
@@ -3251,50 +3256,90 @@ async function aiCompareItem(vid,i){
     v.totalDeduction=v.rooms.reduce((s,x)=>s+(x.charge||0),0); pushInv2(v); render(); toast('✓ AI comparison complete — review before finalising');
   }catch(e){ console.error('aiCompareItem exception',e); toast('Could not compare ('+(e.message||e)+')',1); }
 }
-async function generateWearReport(vid){
+async function generateInvReport(vid,type){
   const v=(S.inventories2||[]).find(x=>x.id===vid); if(!v) return;
   if(!window._sessionToken){ toast('AI report needs a live login',1); return; }
   const p=P(v.propertyId)||{}; const t=(S.tenants||[]).find(x=>x.id===v.tenantId)||{};
-  const eligible=v.rooms.map(_ensureRoomShape).filter(r=>{ const lv=r.visits.length?r.visits[r.visits.length-1]:null; return r.checkin.photos.length&&((lv&&lv.photos.length)||r.checkout.photos.length); });
-  if(!eligible.length){ toast('Add check-in and mid-tenancy/check-out photos to at least one room first',1); return; }
-  toast('✦ Generating wear & tear report — this can take a moment…');
+  v.rooms.forEach(_ensureRoomShape);
+  let eligible,stageLabel;
+  if(type==='movein'){ eligible=v.rooms.filter(r=>r.checkin.photos.length); stageLabel='move-in'; }
+  else if(type==='midterm'){ eligible=v.rooms.filter(r=>r.checkin.photos.length&&r.visits.length&&r.visits[r.visits.length-1].photos.length); stageLabel='mid-tenancy'; }
+  else { eligible=v.rooms.filter(r=>{ const lv=r.visits.length?r.visits[r.visits.length-1]:null; return r.checkin.photos.length&&((lv&&lv.photos.length)||r.checkout.photos.length); }); stageLabel='move-out'; }
+  if(!eligible.length){ toast(type==='movein'?'Add check-in photos to at least one room first':'Add photos for this stage to at least one room first',1); return; }
+  toast('✦ Generating '+stageLabel+' report — this can take a moment…');
   const results=[]; let quotaHit=false;
   for(const r of eligible){
     if(quotaHit) break;
-    const lv=r.visits.length?r.visits[r.visits.length-1]:null;
-    const toSet=(lv&&lv.photos.length)?lv:r.checkout; const toLabel=(lv&&lv.photos.length)?'mid-tenancy':'check-out';
     try{
       const b64=u=>u.split(',')[1]; const mt=u=>u.split(';')[0].split(':')[1];
-      const prompt=`UK tenancy deposit adjudicator. Compare CHECK-IN vs ${toLabel.toUpperCase()} photos for "${r.room} — ${r.item}". Notes: check-in "${r.checkin.note||'none'}", ${toLabel} "${toSet.note||'none'}". Return ONLY JSON: {"classification":"fair_wear|damage|cleaning","summary":"one sentence"}`;
-      const content=[...r.checkin.photos.map(u=>({type:'image',source:{type:'base64',media_type:mt(u),data:b64(u)}})),{type:'text',text:'CHECK-IN above.'},...toSet.photos.map(u=>({type:'image',source:{type:'base64',media_type:mt(u),data:b64(u)}})),{type:'text',text:toLabel.toUpperCase()+' above.\n\n'+prompt}];
-      const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:200,messages:[{role:'user',content}]})});
+      let content,promptTxt;
+      if(type==='movein'){
+        promptTxt=`UK letting agent move-in condition report. Describe the condition of "${r.room} — ${r.item}" from these check-in photos. Note: "${r.checkin.note||'none'}". Return ONLY JSON: {"summary":"one or two factual sentences describing condition, flagging any existing marks or wear so it's on record"}`;
+        content=[...r.checkin.photos.map(u=>({type:'image',source:{type:'base64',media_type:mt(u),data:b64(u)}})),{type:'text',text:promptTxt}];
+      } else {
+        const lv=r.visits.length?r.visits[r.visits.length-1]:null;
+        const toSet=type==='midterm'?lv:((lv&&lv.photos.length)?lv:r.checkout);
+        const cmpLabel=type==='midterm'?'mid-tenancy':((lv&&lv.photos.length)?'mid-tenancy':'check-out');
+        const chargeAsk=type==='moveout'?', "charge":number (apportioned £ the tenant should pay if damage/cleaning — never full replacement cost, never new-for-old)':'';
+        promptTxt=`UK tenancy deposit adjudicator. Compare CHECK-IN vs ${cmpLabel.toUpperCase()} photos for "${r.room} — ${r.item}". Notes: check-in "${r.checkin.note||'none'}", ${cmpLabel} "${toSet.note||'none'}". Classify as fair_wear|damage|cleaning. Return ONLY JSON: {"classification":"fair_wear|damage|cleaning","summary":"one sentence"${chargeAsk}}`;
+        content=[...r.checkin.photos.map(u=>({type:'image',source:{type:'base64',media_type:mt(u),data:b64(u)}})),{type:'text',text:'CHECK-IN above.'},...toSet.photos.map(u=>({type:'image',source:{type:'base64',media_type:mt(u),data:b64(u)}})),{type:'text',text:cmpLabel.toUpperCase()+' above.\n\n'+promptTxt}];
+      }
+      const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:220,messages:[{role:'user',content}]})});
       if(res.status===402){ quotaHit=true; toast('AI allowance reached partway through — report saved for the rooms already analysed',1); break; }
       const data=await res.json();
-      if(!res.ok){ console.error('generateWearReport error',res.status,data); results.push({room:r.room,item:r.item,classification:'fair_wear',summary:'AI error ('+res.status+') — review manually.'}); continue; }
+      if(!res.ok){ console.error('generateInvReport error',res.status,data); results.push({room:r.room,item:r.item,classification:type==='movein'?'baseline':'fair_wear',charge:0,summary:'AI error ('+res.status+') — review manually.'}); continue; }
       const txt=((data.content&&data.content[0]&&data.content[0].text)||'').replace(/```json|```/g,'').trim();
-      let parsed; try{ parsed=JSON.parse(txt); }catch(pe){ console.error('generateWearReport: bad JSON',txt); parsed=null; }
-      results.push({room:r.room,item:r.item,classification:(parsed&&parsed.classification)||'fair_wear',summary:(parsed&&parsed.summary)||'Could not read AI response — review manually.'});
-    }catch(e){ console.error('generateWearReport exception',e); results.push({room:r.room,item:r.item,classification:'fair_wear',summary:'Could not analyse ('+(e.message||e)+').'}); }
+      let parsed; try{ parsed=JSON.parse(txt); }catch(pe){ console.error('generateInvReport: bad JSON',txt); parsed=null; }
+      const entry={room:r.room,item:r.item,classification:type==='movein'?'baseline':((parsed&&parsed.classification)||'fair_wear'),summary:(parsed&&parsed.summary)||'Could not read AI response — review manually.',charge:type==='moveout'?(+((parsed&&parsed.charge))||0):0};
+      results.push(entry);
+      if(type==='moveout'){ r.classification=entry.classification; r.charge=entry.charge; r.reasoning=entry.summary; }
+    }catch(e){ console.error('generateInvReport exception',e); results.push({room:r.room,item:r.item,classification:'fair_wear',charge:0,summary:'Could not analyse ('+(e.message||e)+').'}); }
   }
   if(!results.length){ toast('AI report failed — check the console for details',1); return; }
-  const clsLabel={fair_wear:'Fair wear & tear',damage:'Damage',cleaning:'Cleaning needed'};
-  const html=`<h3 style="margin-top:0">Wear &amp; tear report — ${esc(p.address||'')}</h3><p style="font-size:12.5px;color:#7A8FA6">Tenant: ${esc(t.name||'—')} · ${fmtDate(today())}</p>
-    <table style="width:100%;font-size:12.5px;border-collapse:collapse">${results.map(x=>`<tr style="border-bottom:1px solid #E4EAF1"><td style="padding:6px 4px;font-weight:600">${esc(x.room)}</td><td style="padding:6px 4px">${esc(x.item)}</td><td style="padding:6px 4px">${clsLabel[x.classification]||x.classification}</td><td style="padding:6px 4px">${esc(x.summary)}</td></tr>`).join('')}</table>`;
-  v.wearReports=v.wearReports||[]; v.wearReports.unshift({id:uid('wr'),date:today(),html});
-  pushInv2(v); render(); toast('✓ Wear & tear report generated');
+  if(type==='moveout') v.totalDeduction=v.rooms.reduce((s,x)=>s+(x.charge||0),0);
+  v.reports=v.reports||[];
+  v.reports.unshift({id:uid('ir'),type,date:today(),results,totalDeduction:type==='moveout'?v.totalDeduction:0,depositHeld:v.depositHeld||0});
+  if(type==='movein'&&v.status==='draft') v.status='in-progress';
+  if(type==='moveout') v.status='complete';
+  pushInv2(v); render();
+  toast('✓ '+({movein:'Move-in',midterm:'Mid-tenancy',moveout:'Move-out'}[type])+' report generated');
 }
-function viewWearReports(vid){
-  const v=(S.inventories2||[]).find(x=>x.id===vid); if(!v||!v.wearReports||!v.wearReports.length) return;
-  const p=P(v.propertyId)||{}; const l=L(p.landlordId)||{};
-  const body=v.wearReports.map(r=>`<div class="note" style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b>${fmtDate(r.date)}</b><div style="display:flex;gap:6px">${l.email?`<button class="btn sm navy" onclick="emailWearReport('${vid}','${r.id}')">Send to landlord</button>`:''}${r.sentAt?`<span class="faint" style="font-size:11px;align-self:center">✓ sent ${fmtDate(r.sentAt)}</span>`:''}</div></div>${r.html}</div>`).join('');
-  modal('Wear & tear reports',body,`<button class="btn" onclick="closeModal()">Close</button>`);
+function _invReportHtml(r,p,t){
+  const clsLabel={fair_wear:'Fair wear & tear',damage:'Damage',cleaning:'Cleaning needed',baseline:'Noted'};
+  const typeTitle={movein:'Move-in condition report',midterm:'Mid-tenancy inspection report',moveout:'Move-out & deposit report'}[r.type];
+  const cols=r.type==='moveout'?['Room','Item','Assessment','Notes','Charge']:r.type==='midterm'?['Room','Item','Assessment']:['Room','Item','Notes'];
+  const rows=r.results.map(x=>{
+    const cells=r.type==='moveout'?[esc(x.room),esc(x.item),clsLabel[x.classification]||x.classification,esc(x.summary),x.charge?money2(x.charge):'—']
+      :r.type==='midterm'?[esc(x.room),esc(x.item),(clsLabel[x.classification]||x.classification)+' — '+esc(x.summary)]
+      :[esc(x.room),esc(x.item),esc(x.summary)];
+    return `<tr style="border-bottom:1px solid #E4EAF1">${cells.map(c=>`<td style="padding:6px 4px">${c}</td>`).join('')}</tr>`;
+  }).join('');
+  const foot=r.type==='moveout'?`<p style="font-size:12.5px;margin-top:10px"><b>Deposit held:</b> ${money2(r.depositHeld)} &nbsp; <b>Proposed deduction:</b> ${money2(r.totalDeduction)} &nbsp; <b>Return to tenant:</b> ${money2(Math.max(0,r.depositHeld-r.totalDeduction))}</p>`:'';
+  return `<h3 style="margin-top:0">${typeTitle} — ${esc(p.address||'')}</h3><p style="font-size:12.5px;color:#7A8FA6">Tenant: ${esc(t.name||'—')} · ${fmtDate(r.date)}</p>
+    <table style="width:100%;font-size:12.5px;border-collapse:collapse"><tr style="border-bottom:2px solid #1A2B45">${cols.map(c=>`<th style="text-align:left;padding:6px 4px;font-size:11px;color:#7A8FA6">${c}</th>`).join('')}</tr>${rows}</table>${foot}`;
 }
-function emailWearReport(vid,rid){
-  const v=(S.inventories2||[]).find(x=>x.id===vid); const r=(v.wearReports||[]).find(x=>x.id===rid); if(!r) return;
-  const p=P(v.propertyId)||{}; const l=L(p.landlordId)||{};
-  if(!l.email){ toast('No landlord email on file',1); return; }
-  agencyEmail(l.email,'Wear & tear report — '+(p.address||''),`<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#1A2B45">${r.html}</div>`);
-  r.sentAt=new Date().toISOString(); pushInv2(v); closeModal(); toast('✓ Report emailed to '+l.email);
+function viewInvReports(vid){
+  const v=(S.inventories2||[]).find(x=>x.id===vid); if(!v||!v.reports||!v.reports.length) return;
+  const p=P(v.propertyId)||{}; const l=L(p.landlordId)||{}; const t=(S.tenants||[]).find(x=>x.id===v.tenantId)||{};
+  const typeLabel={movein:'Move-in',midterm:'Mid-tenancy',moveout:'Move-out'};
+  const body=v.reports.map(r=>`<div class="note" style="margin-bottom:10px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px">
+      <b>${typeLabel[r.type]} · ${fmtDate(r.date)}</b>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        ${l.email?`<button class="btn sm ${r.sentLandlordAt?'':'navy'}" onclick="emailInvReport('${vid}','${r.id}','landlord')">${r.sentLandlordAt?'✓ Sent to landlord '+fmtDate(r.sentLandlordAt):'Send to landlord'}</button>`:''}
+        ${t.email?`<button class="btn sm ${r.sentTenantAt?'':'navy'}" onclick="emailInvReport('${vid}','${r.id}','tenant')">${r.sentTenantAt?'✓ Sent to tenant '+fmtDate(r.sentTenantAt):'Send to tenant'}</button>`:''}
+      </div></div>${_invReportHtml(r,p,t)}</div>`).join('');
+  modal('Inventory reports',body,`<button class="btn" onclick="closeModal()">Close</button>`);
+}
+function emailInvReport(vid,rid,recipient){
+  const v=(S.inventories2||[]).find(x=>x.id===vid); const r=(v.reports||[]).find(x=>x.id===rid); if(!r) return;
+  const p=P(v.propertyId)||{}; const l=L(p.landlordId)||{}; const t=(S.tenants||[]).find(x=>x.id===v.tenantId)||{};
+  const to=recipient==='landlord'?l.email:t.email;
+  if(!to){ toast('No '+recipient+' email on file',1); return; }
+  const typeTitle={movein:'Move-in condition report',midterm:'Mid-tenancy inspection report',moveout:'Move-out & deposit report'}[r.type];
+  agencyEmail(to,typeTitle+' — '+(p.address||''),`<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#1A2B45">${_invReportHtml(r,p,t)}</div>`);
+  if(recipient==='landlord') r.sentLandlordAt=new Date().toISOString(); else r.sentTenantAt=new Date().toISOString();
+  pushInv2(v); render(); toast('✓ Report emailed to '+to);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
