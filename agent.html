@@ -230,8 +230,8 @@ const pushTenantRec =t =>_w(sb.from('agency_tenants').upsert(tenantToRow(t)));
 const pushRent    =r  =>_w(sb.from('agency_rent_ledger').upsert(rentToRow(r)));
 const pushJob     =j  =>_w(sb.from('agency_maintenance').upsert(jobToRow(j)));
 const pushInv2    =v  =>_w(sb.from('agency_inventories').upsert(inv2ToRow(v)));
-const rowToTenant=r=>({id:r.id,propertyId:r.property_id,landlordId:r.landlord_id,userId:r.user_id,name:r.name||'',email:r.email||'',phone:r.phone||'',start:r.start_date||'',end:r.end_date||'',rent:r.rent||0,deposit:r.deposit,scheme:r.scheme||'',schemeRef:r.scheme_ref||'',status:r.status||'active',inviteToken:r.invite_token||'',invitedAt:r.invited_at||'',invited:!!r.invited_at,occupants:r.occupants||[],guarantor:r.guarantor||null,depositCertName:r.deposit_cert_name||'',depositCertUrl:r.deposit_cert_url||'',refDocName:r.ref_doc_name||'',refDocUrl:r.ref_doc_url||''});
-const tenantToRow=t=>({id:t.id,agency_id:window._agencyId,property_id:t.propertyId,landlord_id:t.landlordId,name:t.name,email:t.email||'',phone:t.phone||'',start_date:t.start||null,end_date:t.end||null,rent:t.rent||0,deposit:t.deposit,scheme:t.scheme||'',scheme_ref:t.schemeRef||'',status:t.status||'active',invite_token:t.inviteToken||null,invited_at:t.invitedAt||null,occupants:t.occupants||[],guarantor:t.guarantor||null,deposit_cert_name:t.depositCertName||'',deposit_cert_url:t.depositCertUrl||'',ref_doc_name:t.refDocName||'',ref_doc_url:t.refDocUrl||'',updated_at:new Date().toISOString()});
+const rowToTenant=r=>({id:r.id,propertyId:r.property_id,landlordId:r.landlord_id,userId:r.user_id,name:r.name||'',email:r.email||'',phone:r.phone||'',start:r.start_date||'',end:r.end_date||'',rent:r.rent||0,deposit:r.deposit,scheme:r.scheme||'',schemeRef:r.scheme_ref||'',status:r.status||'active',inviteToken:r.invite_token||'',invitedAt:r.invited_at||'',invited:!!r.invited_at,occupants:r.occupants||[],guarantor:r.guarantor||null,depositCertName:r.deposit_cert_name||'',depositCertUrl:r.deposit_cert_url||'',refDocName:r.ref_doc_name||'',refDocUrl:r.ref_doc_url||'',shareCode:r.share_code||'',dob:r.dob||'',rtrResult:r.rtr_result||'',rtrExpiry:r.rtr_expiry||'',rtrCheckDate:r.rtr_check_date||'',rtrDocName:r.rtr_doc_name||'',rtrDocUrl:r.rtr_doc_url||''});
+const tenantToRow=t=>({id:t.id,agency_id:window._agencyId,property_id:t.propertyId,landlord_id:t.landlordId,name:t.name,email:t.email||'',phone:t.phone||'',start_date:t.start||null,end_date:t.end||null,rent:t.rent||0,deposit:t.deposit,scheme:t.scheme||'',scheme_ref:t.schemeRef||'',status:t.status||'active',invite_token:t.inviteToken||null,invited_at:t.invitedAt||null,occupants:t.occupants||[],guarantor:t.guarantor||null,deposit_cert_name:t.depositCertName||'',deposit_cert_url:t.depositCertUrl||'',ref_doc_name:t.refDocName||'',ref_doc_url:t.refDocUrl||'',share_code:t.shareCode||'',dob:t.dob||null,rtr_result:t.rtrResult||'',rtr_expiry:t.rtrExpiry||null,rtr_check_date:t.rtrCheckDate||null,rtr_doc_name:t.rtrDocName||'',rtr_doc_url:t.rtrDocUrl||'',updated_at:new Date().toISOString()});
 const rowToMsg=r=>({id:r.id,landlordId:r.landlord_id,tenantId:r.tenant_id,propertyId:r.property_id,sender:r.sender||'agent',body:r.body||'',createdAt:r.created_at});
 const msgToRow=m=>({id:m.id,agency_id:window._agencyId,landlord_id:m.landlordId||null,tenant_id:m.tenantId||null,property_id:m.propertyId||null,sender:m.sender||'agent',body:m.body||''});
 const pushMessage=m=>_w(sb.from('agency_messages').insert(msgToRow(m)));
@@ -381,17 +381,35 @@ function restoreView(){ const h=(location.hash||'').replace(/^#/,''); if(!h)retu
 function daysUntil(d){ if(!d) return null; return Math.round((new Date(d)-new Date())/864e5); }
 function certRAG(d){ if(!d) return {k:'missing',label:'Missing',bg:'var(--red-bg)',color:'var(--red)'}; const n=daysUntil(d); if(n<0) return {k:'expired',label:'Expired',bg:'var(--red-bg)',color:'var(--red)'}; if(n<30) return {k:'soon',label:n+'d left',bg:'var(--amber-bg)',color:'var(--amber)'}; return {k:'ok',label:'Valid',bg:'var(--green-bg)',color:'var(--green)'}; }
 function fmtDate(d){ if(!d) return '—'; return new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}); }
-const CERT_LABELS={gas:'Gas Safety (CP12)',eicr:'EICR (Electrical)',epc:'EPC',hmo:'HMO / Selective Licence',legionella:'Legionella Risk Assessment',smoke:'Smoke Alarms',co:'CO Alarm'};
+const CERT_LABELS={gas:'Gas Safety (CP12)',eicr:'EICR (Electrical)',epc:'EPC',hmo:'HMO / Selective Licence',legionella:'Legionella Risk Assessment',smoke:'Smoke Alarms',co:'CO Alarm',rtr:'Right to Rent Check',htr:'How to Rent Guide'};
 function declStatus(d){ return d?{k:'ok',label:'Confirmed',bg:'var(--green-bg)',color:'var(--green)'}:{k:'missing',label:'Missing',bg:'var(--amber-bg)',color:'var(--amber)'}; }
-function _fullCertItems(p){ const c=p.certs||{};
+function _rtrRAG(rec){
+  if(!rec||!rec.rtrCheckDate) return {k:'missing',label:'Missing',bg:'var(--red-bg)',color:'var(--red)'};
+  if(rec.rtrResult==='Invalid') return {k:'expired',label:'Invalid',bg:'var(--red-bg)',color:'var(--red)'};
+  if(rec.rtrResult==='Time-limited'&&rec.rtrExpiry) return certRAG(rec.rtrExpiry);
+  return {k:'ok',label:'Confirmed',bg:'var(--green-bg)',color:'var(--green)'};
+}
+function _depositRAG(rec){
+  if(rec.depositCertName) return {k:'ok',label:'Protected',bg:'var(--green-bg)',color:'var(--green)'};
+  const days=rec.start?Math.round((new Date()-new Date(rec.start))/864e5):0;
+  if(days>30) return {k:'expired',label:'Overdue',bg:'var(--red-bg)',color:'var(--red)'};
+  return {k:'soon',label:'Due within 30 days',bg:'var(--amber-bg)',color:'var(--amber)'};
+}
+function _itemRag(item){ const kind=item[3], d=item[2], pre=item[4]; return pre||(kind==='decl'?declStatus(d):certRAG(d)); }
+function _fullCertItems(p){ const c=p.certs||{}; const rec=tenantRecFor(p.id);
   const items=[['gas','Gas Safety',c.gas,'exp'],['eicr','EICR (Electrical)',c.eicr,'exp'],['epc','EPC',c.epc,'exp'],['smoke','Smoke alarms',c.smoke,'decl'],['legionella','Legionella risk assessment',c.legionella,'exp']];
   if(!c.coNA) items.push(['co','CO alarm',c.co,'decl']);
+  if(p.tenant){
+    items.push(['rtr','Right to Rent check',null,'custom',_rtrRAG(rec)]);
+    items.push(['htr','How to Rent guide',c.htr,'decl']);
+    if(rec&&rec.deposit) items.push(['deposit','Deposit protection',null,'custom',_depositRAG(rec)]);
+  }
   if(c.hmoApplicable) items.push(['hmo','HMO licence',c.hmo,'exp']);
   return items;
 }
 function propCompliance(p){
   const items=_fullCertItems(p);
-  const done=items.filter(([k,l,d,kind])=>{ const r=kind==='decl'?declStatus(d):certRAG(d); return r.k==='ok'||r.k==='soon'; }).length;
+  const done=items.filter(it=>{ const r=_itemRag(it); return r.k==='ok'||r.k==='soon'; }).length;
   return {items,pct:Math.round(done/items.length*100)}; }
 
 function render(){
@@ -728,7 +746,8 @@ function vReports(){
   const invoiced=(S.invoices||[]).filter(i=>i.status==='paid').reduce((s,i)=>s+(invTotal?invTotal(i).gross:0),0);
   // Compliance calendar — certs expiring in next 90 days, soonest first
   const cal=[];
-  S.properties.forEach(p=>{ const c=p.certs||{}; [['Gas Safety',c.gas],['EICR',c.eicr],['EPC',c.epc]].forEach(([lab,d])=>{ if(d){ const n=daysUntil(d); if(n<=90) cal.push({p,lab,d,n}); } }); });
+  S.properties.forEach(p=>{ _fullCertItems(p).forEach(([k,lab,d,kind])=>{ if(kind==='exp'&&d){ const n=daysUntil(d); if(n<=90) cal.push({p,lab,d,n}); } });
+    const rec=tenantRecFor(p.id); if(rec&&rec.rtrResult==='Time-limited'&&rec.rtrExpiry){ const n=daysUntil(rec.rtrExpiry); if(n<=90) cal.push({p,lab:'Right to Rent (time-limited)',d:rec.rtrExpiry,n}); } });
   cal.sort((a,b)=>a.n-b.n);
   return `<h1 class="pg">Reports</h1><div class="sub">Portfolio health at a glance — arrears, fee income and the compliance calendar across every managed property.</div>
     <div class="grid4" style="margin-bottom:18px">
@@ -948,7 +967,7 @@ function vLandlordDetail(){
   const d=l.docs||{};
   const docRow=(label,name,icon,col,date,expiry)=>`<div class="doc"><div class="di" style="background:${name?'var(--green-bg)':'var(--off)'};color:${name?'var(--green)':'var(--faint)'}">${icon}</div>
     <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${label}</div><div class="faint" style="font-size:11.5px">${name?esc(name)+(date?' · verified '+fmtDate(date):''):'Not uploaded'}${expiry?` · <span style="color:${new Date(expiry)<new Date()?'var(--red)':'var(--muted)'}">expires ${fmtDate(expiry)}</span>`:''}</div></div>
-    ${name?`<span class="pill" style="background:var(--green-bg);color:var(--green)">✓ On file</span>`:`<button class="btn sm" onclick="uploadDoc('${l.id}','${col}')">Upload</button>`}</div>`;
+    ${name?`<span class="pill" style="background:var(--green-bg);color:var(--green)">✓ On file</span>${d[col+'Url']?`<button class="btn sm" onclick="viewDoc('${d[col+'Url']}','${esc(label)}')">View</button>`:''}`:`<button class="btn sm" onclick="uploadDoc('${l.id}','${col}')">Upload</button>`}</div>`;
   return `
     <div class="back" onclick="go('landlords')">← All landlords</div>
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px">
@@ -1110,10 +1129,11 @@ function vPropertyDetail(){
     <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${label}</div><div class="faint" style="font-size:11.5px">${date?'Expires '+fmtDate(date):'No certificate on file'}</div></div>
     <span class="pill" style="background:${r.bg};color:${r.color}">${r.label}</span>
     <button class="btn sm" onclick="editCert('${p.id}','${key}')">${date?'Update':'Add'}</button></div>`;};
-  const declRow=(key,label,hint,date,doc)=>{const r=declStatus(date);return `<div class="doc"><div class="di" style="background:${r.bg};color:${r.color}">⛨</div>
+  const declRow=(key,label,hint,date,doc,docUrl)=>{const r=declStatus(date);return `<div class="doc"><div class="di" style="background:${r.bg};color:${r.color}">⛨</div>
     <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${label}</div><div class="faint" style="font-size:11.5px">${date?fmtDate(date)+' confirmed'+(doc?' · '+esc(doc)+' on file':''):hint}</div></div>
     <span class="pill" style="background:${r.bg};color:${r.color}">${r.label}</span>
     ${key==='co'?`<a href="#" onclick="toggleCoNA('${p.id}');return false" style="font-size:11px;color:var(--blue);margin-right:8px;white-space:nowrap">N/A</a>`:''}
+    ${docUrl?`<button class="btn sm" onclick="viewDoc('${docUrl}','${label}')">View</button>`:''}
     <button class="btn sm" onclick="editCert('${p.id}','${key}')">${date?'Update':'Confirm'}</button></div>`;};
   return `
     <div class="back" onclick="go('properties')">← All properties</div>
@@ -1133,8 +1153,19 @@ function vPropertyDetail(){
         ${certRow('eicr','EICR (every 5 years)',c.eicr)}
         ${certRow('epc','EPC'+(c.epcRating?' · rated '+c.epcRating:''),c.epc)}
         ${(c.epcRating==='D'||c.epcRating==='E')?`<div class="note warn" style="margin-top:6px">EPC rated ${c.epcRating} — legal to let now, but EPC C becomes the minimum on 1 Oct 2030. Flag to the landlord to plan works.</div>`:''}
-        ${declRow('smoke','Smoke alarms','Fit a working smoke alarm on every floor',c.smoke,c.smokeDoc)}
-        ${c.coNA?`<div class="doc"><div class="di" style="background:var(--off);color:#94A3B8">⛨</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">CO alarm</div><div class="faint" style="font-size:11.5px">Marked not applicable — no fixed combustion appliance</div></div><span class="pill" style="background:var(--off);color:#94A3B8">N/A</span><a href="#" onclick="toggleCoNA('${p.id}');return false" style="font-size:11px;color:var(--blue)">Applies</a></div>`:declRow('co','CO alarm','Required in any room with a fixed combustion appliance (boiler cupboard, gas fire, log burner, etc.)',c.co,c.coDoc)}
+        ${declRow('smoke','Smoke alarms','Fit a working smoke alarm on every floor',c.smoke,c.smokeDoc,c.smokeDocUrl)}
+        ${c.coNA?`<div class="doc"><div class="di" style="background:var(--off);color:#94A3B8">⛨</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">CO alarm</div><div class="faint" style="font-size:11.5px">Marked not applicable — no fixed combustion appliance</div></div><span class="pill" style="background:var(--off);color:#94A3B8">N/A</span><a href="#" onclick="toggleCoNA('${p.id}');return false" style="font-size:11px;color:var(--blue)">Applies</a></div>`:declRow('co','CO alarm','Required in any room with a fixed combustion appliance (boiler cupboard, gas fire, log burner, etc.)',c.co,c.coDoc,c.coDocUrl)}
+        ${p.tenant?(()=>{ const rec=tenantRecFor(p.id); const r=_rtrRAG(rec); return `<div class="doc"><div class="di" style="background:${r.bg};color:${r.color}">⛨</div>
+          <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Right to Rent check</div><div class="faint" style="font-size:11.5px">${rec&&rec.rtrCheckDate?'Checked '+fmtDate(rec.rtrCheckDate)+(rec.rtrResult?' · '+esc(rec.rtrResult):'')+(rec.rtrExpiry?' · expires '+fmtDate(rec.rtrExpiry):''):'Check before the tenancy starts'}</div></div>
+          <span class="pill" style="background:${r.bg};color:${r.color}">${r.label}</span>
+          ${rec&&rec.rtrDocUrl?`<button class="btn sm" onclick="viewDoc('${rec.rtrDocUrl}','Right to Rent evidence')">View</button>`:''}
+          <button class="btn sm" onclick="rtrWizard('${p.id}')">${rec&&rec.rtrCheckDate?'Update':'Check'}</button></div>`; })():''}
+        ${p.tenant?declRow('htr','How to Rent guide','Give the tenant the current gov.uk “How to rent” guide on or before move-in',c.htr,null,null):''}
+        ${p.tenant?(()=>{ const rec=tenantRecFor(p.id); if(!rec||!rec.deposit) return ''; const r=_depositRAG(rec); return `<div class="doc"><div class="di" style="background:${r.bg};color:${r.color}">⛨</div>
+          <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Deposit protection</div><div class="faint" style="font-size:11.5px">${rec.depositCertName?esc(rec.depositCertName):'Must be protected within 30 days of receipt'}</div></div>
+          <span class="pill" style="background:${r.bg};color:${r.color}">${r.label}</span>
+          ${rec.depositCertUrl?`<button class="btn sm" onclick="viewDoc('${rec.depositCertUrl}','Deposit certificate')">View</button>`:''}
+          <button class="btn sm" onclick="setTenant('${p.id}')">Manage</button></div>`; })():''}
         <div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;flex:1"><input type="checkbox" style="width:auto" ${c.hmoApplicable?'checked':''} onchange="toggleHmoApplicable('${p.id}',this.checked)"> HMO / selective-licensing property</label>
         </div>
@@ -1207,15 +1238,22 @@ function editCert(pid,key){ const p=P(pid); const c=p.certs||(p.certs={}); const
   const label=CERT_LABELS[key]||key.toUpperCase();
   if(key==='smoke'||key==='co'){
     const existingFile=c[key+'Doc']||''; window._certFile=null;
-    const body=`<div class="note" style="margin-bottom:12px">${key==='smoke'?'Confirm a working smoke alarm is fitted on every floor.':'Confirm a CO alarm is fitted in every room with a fixed combustion appliance (boiler cupboard, gas fire, log burner, etc.).'} Attach a photo of the fitted alarm or a professional test certificate as proof before confirming.</div>
+    const desc={smoke:'Confirm a working smoke alarm is fitted on every floor.',co:'Confirm a CO alarm is fitted in every room with a fixed combustion appliance (boiler cupboard, gas fire, log burner, etc.).'}[key];
+    const body=`<div class="note" style="margin-bottom:12px">${desc} Attach a photo of the fitted alarm or a professional test certificate as proof before confirming.</div>
       <div class="fg"><label>Proof — photo of the alarm, or a test certificate</label>
         <label style="display:flex;align-items:center;gap:10px;padding:10px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer">
-          <span style="font-size:18px">📷</span><div style="font-size:12.5px;font-weight:600;flex:1">${existingFile?'Replace file':'Click to attach a photo or certificate'}</div>
+          <span style="font-size:18px">📷</span><div style="font-size:12.5px;font-weight:600;flex:1">${existingFile?'Replace file':'Click to attach'}</div>
           <input type="file" accept="image/*,.pdf" style="display:none" onchange="ctAttachEvidence(this)">
         </label>
-        <div id="ct-evid-status" style="margin-top:6px;font-size:11.5px">${existingFile?`<span style="color:var(--green)">✓ ${esc(existingFile)} on file</span>`:'<span class="faint">No evidence attached yet</span>'}</div></div>
+        <div id="ct-evid-status" style="margin-top:6px;font-size:11.5px">${existingFile?`<span style="color:var(--green)">✓ ${esc(existingFile)} on file</span> ${c[key+'DocUrl']?`<a href="#" onclick="event.preventDefault();viewDoc('${c[key+'DocUrl']}','${label}')">View</a>`:''}`:'<span class="faint">No evidence attached yet</span>'}</div></div>
       <div class="fg"><label>Confirmed on</label><input id="ct-date" type="date" value="${cur||today()}"></div>`;
     modal('Confirm '+label,body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" id="ct-confirm-btn" ${existingFile?'':'disabled'} onclick="saveCert('${pid}','${key}')">Confirm</button>`, true);
+    return;
+  }
+  if(key==='htr'){
+    const body=`<div class="note" style="margin-bottom:12px">Confirm the current \u201cHow to rent\u201d guide (gov.uk) was given to the tenant on or before the day the tenancy started \u2014 required for a valid Section 8/21 notice later.</div>
+      <div class="fg"><label>Provided on</label><input id="ct-date" type="date" value="${cur||today()}"></div>`;
+    modal('Confirm '+label,body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveCert('${pid}','${key}')">Confirm</button>`, true);
     return;
   }
   let body=`<div class="note" style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -1225,7 +1263,25 @@ function editCert(pid,key){ const p=P(pid); const c=p.certs||(p.certs={}); const
   body+=`<div class="fg"><label>${label} expiry / valid-until date</label><input id="ct-date" type="date" value="${cur}"></div>`;
   if(key==='epc') body+=`<div class="fg"><label>EPC rating</label><select id="ct-rating">${['A','B','C','D','E','F','G'].map(x=>`<option ${c.epcRating===x?'selected':''}>${x}</option>`).join('')}</select></div>`;
   if(key==='legionella') body+=`<div class="hint" style="margin-top:-4px">HSE-recommended review: every 2 years for a standard let, every year for an HMO or vulnerable tenants.</div>`;
+  body+=_otherDocsHtml(p,key);
   modal('Update '+label,body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveCert('${pid}','${key}')">Save</button>`, true); }
+function _otherDocsHtml(p,key){
+  const docs=(p.certs&&p.certs.otherDocs)||[];
+  const rows=docs.map((d,i)=>`<div class="doc" style="padding:8px 0"><div style="flex:1;font-size:12.5px">${esc(d.name)}${d.addedAt?' · added '+fmtDate(d.addedAt):''}</div>${d.url?`<button class="btn sm" onclick="viewDoc('${d.url}','${esc(d.name)}')">View</button>`:''}<button class="btn sm" onclick="odRemove('${p.id}',${i},'${key}')">Remove</button></div>`).join('');
+  return `<div class="fg" style="margin-top:4px"><label>Other documents on file <span class="faint">(e.g. an old contract inherited from a previous agent, or other historical paperwork)</span></label>
+    ${rows||'<div class="faint" style="font-size:12px;margin-bottom:6px">None added yet</div>'}
+    <label class="btn sm" style="cursor:pointer;display:inline-flex;margin-top:4px">+ Add document<input type="file" accept="application/pdf,image/*" style="display:none" onchange="odAttach('${p.id}','${key}',this)"></label>
+  </div>`;
+}
+async function odAttach(pid,key,input){
+  const f=input.files[0]; if(!f) return;
+  const p=P(pid); p.certs=p.certs||{}; p.certs.otherDocs=p.certs.otherDocs||[];
+  const ext=(f.name.split('.').pop()||'pdf');
+  const url=await _storageUpload(f,pid+'/other-'+Date.now()+'.'+ext,'property-documents');
+  p.certs.otherDocs.push({name:f.name,url:url||'',addedAt:today()});
+  save(); pushProperty(p); editCert(pid,key); toast('✓ Document added');
+}
+function odRemove(pid,idx,key){ const p=P(pid); p.certs=p.certs||{}; (p.certs.otherDocs||[]).splice(idx,1); save(); pushProperty(p); editCert(pid,key); }
 // Phase B — AI compliance cert scan. Reuses the shared ai-proxy (agent JWT).
 function _fileB64(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(',')[1]); r.onerror=rej; r.readAsDataURL(file); }); }
 async function aiScanCert(pid,key,input){
@@ -1258,8 +1314,10 @@ function ctAttachEvidence(input){ const f=input.files[0]; if(!f) return; window.
   const st=document.getElementById('ct-evid-status'); if(st) st.innerHTML='<span style="color:var(--green)">✓ '+esc(f.name)+' attached</span>';
   const btn=document.getElementById('ct-confirm-btn'); if(btn) btn.disabled=false;
 }
-function saveCert(pid,key){ const p=P(pid); p.certs=p.certs||{};
-  if(key==='smoke'||key==='co'){ if(!window._certFile&&!p.certs[key+'Doc']){toast('Attach a photo or certificate first',1);return;} if(window._certFile)p.certs[key+'Doc']=window._certFile.name; window._certFile=null; }
+async function saveCert(pid,key){ const p=P(pid); p.certs=p.certs||{};
+  if(key==='smoke'||key==='co'){ if(!window._certFile&&!p.certs[key+'Doc']){toast('Attach a photo or certificate first',1);return;}
+    if(window._certFile){ p.certs[key+'Doc']=window._certFile.name; const ext=(window._certFile.name.split('.').pop()||'jpg'); const url=await _storageUpload(window._certFile,pid+'/'+key+'-'+Date.now()+'.'+ext,'property-documents'); if(url) p.certs[key+'DocUrl']=url; }
+    window._certFile=null; }
   p.certs[key]=val('ct-date'); if(key==='epc')p.certs.epcRating=val('ct-rating'); if(key==='hmo'){p.certs.hmoNo=val('ct-hmono');p.certs.hmoAuthority=val('ct-hmoauth');} save(); pushProperty(p); closeModal(); render(); toast('✓ '+(CERT_LABELS[key]||key.toUpperCase())+' updated'); }
 function toggleCoNA(pid){ const p=P(pid); p.certs=p.certs||{}; p.certs.coNA=!p.certs.coNA; save(); pushProperty(p); render(); }
 function toggleHmoApplicable(pid,checked){ const p=P(pid); p.certs=p.certs||{}; p.certs.hmoApplicable=checked; save(); pushProperty(p); render(); }
@@ -1326,6 +1384,55 @@ function _docSlotHtml(kind,label,hint,name,url){
 }
 function tnAttachFile(input,kind){ const f=input.files[0]; if(!f) return; window._tnFiles=window._tnFiles||{}; window._tnFiles[kind]=f;
   const st=document.getElementById('tn-'+kind+'-status'); if(st) st.innerHTML='<span style="color:var(--blue)">✦ '+esc(f.name)+' attached — will upload on Save</span>'; }
+// ── Right to Rent wizard — 3 steps: enter details, check on GOV.UK, record & attach evidence.
+function rtrWizard(pid){ const rec=tenantRecFor(pid); if(!rec){ toast('Set up the tenant first',1); return; }
+  window._rtrWiz={pid,step:1,code:rec.shareCode||'',dob:rec.dob||'',result:rec.rtrResult||'',expiry:rec.rtrExpiry||'',checkDate:rec.rtrCheckDate||today()};
+  _rtrWizRender();
+}
+function _rtrWizStepBar(step){
+  const steps=['1. Enter details','2. Check on GOV.UK','3. Record & save'];
+  return `<div style="display:flex;border-radius:8px;overflow:hidden;border:1px solid var(--border);margin-bottom:14px">${steps.map((s,i)=>`<div style="flex:1;padding:8px 6px;text-align:center;font-size:11px;font-weight:600;background:${step===i+1?'var(--navy)':step>i+1?'var(--green-bg)':'var(--off)'};color:${step===i+1?'#fff':step>i+1?'var(--green)':'#94A3B8'}">${step>i+1?'✓ ':''}${s}</div>`).join('')}</div>`;
+}
+function _rtrWizRender(){
+  const w=window._rtrWiz; const rec=tenantRecFor(w.pid);
+  let body=_rtrWizStepBar(w.step);
+  if(w.step===1){
+    body+=`<div class="hint" style="margin-bottom:10px">Enter the tenant's share code (from the gov.uk "prove your right to rent" service) and date of birth.</div>
+      <div class="fg"><label>Share code</label><input id="rtr-code" value="${esc(w.code)}" placeholder="W-XXX-XXX-XXX" style="text-transform:uppercase;font-family:monospace"></div>
+      <div class="fg"><label>Date of birth</label><input id="rtr-dob" type="date" value="${w.dob}"></div>`;
+    modal('Right to Rent check — step 1 of 3',body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="_rtrWizNext()">Next</button>`,true);
+  } else if(w.step===2){
+    body+=`<div class="hint" style="margin-bottom:10px">Check the code on GOV.UK, then record the result here.</div>
+      <a class="btn navy sm" href="https://www.gov.uk/view-right-to-rent" target="_blank" style="margin-bottom:12px;display:inline-flex">Open GOV.UK checker ↗</a>
+      <div class="fg"><label>Result</label><select id="rtr-result" onchange="document.getElementById('rtr-expiry-wrap').style.display=this.value==='Time-limited'?'block':'none'">
+        <option value="">Select…</option><option ${w.result==='Valid'?'selected':''}>Valid</option><option ${w.result==='Time-limited'?'selected':''}>Time-limited</option><option ${w.result==='Invalid'?'selected':''}>Invalid</option></select></div>
+      <div id="rtr-expiry-wrap" style="display:${w.result==='Time-limited'?'block':'none'}"><div class="fg"><label>Right to rent expires</label><input id="rtr-expiry" type="date" value="${w.expiry}"></div></div>
+      <div class="fg"><label>Checked on</label><input id="rtr-checkdate" type="date" value="${w.checkDate}"></div>`;
+    modal('Right to Rent check — step 2 of 3',body,`<button class="btn" onclick="_rtrWizBack()">Back</button><button class="btn navy" onclick="_rtrWizNext()">Next</button>`,true);
+  } else {
+    const existingFile=(rec&&rec.rtrDocName)||''; window._certFile=null;
+    body+=`<div class="hint" style="margin-bottom:10px">Attach a screenshot of the GOV.UK result, or a copy of the passport/BRP/EUSS status — keep evidence for the tenancy plus 12 months.</div>
+      <label style="display:flex;align-items:center;gap:10px;padding:10px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer">
+        <span style="font-size:18px">📄</span><div style="font-size:12.5px;font-weight:600;flex:1">${existingFile?'Replace file':'Click to attach'}</div>
+        <input type="file" accept="image/*,.pdf" style="display:none" onchange="ctAttachEvidence(this)">
+      </label>
+      <div id="ct-evid-status" style="margin-top:6px;font-size:11.5px">${existingFile?`<span style="color:var(--green)">✓ ${esc(existingFile)} on file</span> ${rec.rtrDocUrl?`<a href="#" onclick="event.preventDefault();viewDoc('${rec.rtrDocUrl}','Right to Rent evidence')">View</a>`:''}`:'<span class="faint">No evidence attached yet</span>'}</div>`;
+    modal('Right to Rent check — step 3 of 3',body,`<button class="btn" onclick="_rtrWizBack()">Back</button><button class="btn navy" onclick="_rtrWizSave()">Save</button>`,true);
+  }
+}
+function _rtrWizNext(){
+  const w=window._rtrWiz;
+  if(w.step===1){ w.code=val('rtr-code'); w.dob=val('rtr-dob'); if(!w.code){toast('Enter the share code',1);return;} w.step=2; }
+  else if(w.step===2){ w.result=val('rtr-result'); if(!w.result){toast('Select a result',1);return;} w.expiry=w.result==='Time-limited'?val('rtr-expiry'):''; w.checkDate=val('rtr-checkdate')||today(); w.step=3; }
+  _rtrWizRender();
+}
+function _rtrWizBack(){ window._rtrWiz.step--; _rtrWizRender(); }
+async function _rtrWizSave(){
+  const w=window._rtrWiz; const rec=tenantRecFor(w.pid); if(!rec) return;
+  rec.shareCode=w.code; rec.dob=w.dob; rec.rtrResult=w.result; rec.rtrExpiry=w.expiry; rec.rtrCheckDate=w.checkDate;
+  if(window._certFile){ rec.rtrDocName=window._certFile.name; const ext=(window._certFile.name.split('.').pop()||'jpg'); const url=await _storageUpload(window._certFile,w.pid+'/rtr-'+Date.now()+'.'+ext,'tenant-documents'); if(url) rec.rtrDocUrl=url; window._certFile=null; }
+  save(); pushTenantRec(rec); closeModal(); render(); toast('✓ Right to Rent check saved');
+}
 function _commitTenant(pid,info){
   const p=P(pid); if(!p.id||!info.name) return null;
   p.tenant={name:info.name,email:info.email||'',start:info.start||today(),occupants:info.occupants||[]};
@@ -1915,9 +2022,11 @@ async function udScanExpiry(file){
     } else if(st) st.innerHTML='<span style="color:var(--green)">✓ '+esc(file.name)+' attached</span> — enter expiry manually.';
   }catch(e){ if(st) st.innerHTML='<span style="color:var(--green)">✓ '+esc(file.name)+' attached</span> — enter expiry manually.'; }
 }
-function saveUploadDoc(id,col){
+async function saveUploadDoc(id,col){
   const f=window._udFile; if(!f){ toast('Attach a file first',1); return; }
   var l=S.landlords.find(x=>x.id===id); l.docs=l.docs||{}; l.docs[col]=f.name;
+  const ext=(f.name.split('.').pop()||'pdf'); const url=await _storageUpload(f,id+'/'+col+'-'+Date.now()+'.'+ext,'property-documents');
+  if(url) l.docs[col+'Url']=url;
   if(col==='id'){ l.aml=true; const exp=val('ud-expiry'); if(exp) l.docs.idExpiry=exp; }
   if(col==='ownership')l.ownership=true; if(col==='agreement'){l.agreement=true;l.status='active';}
   save(); pushLandlord(l); window._udFile=null; closeModal(); render(); toast('✓ Document attached');
@@ -3004,24 +3113,24 @@ async function aiFinderRun(){
 // auto-expanded wherever something needs attention).
 // ═══════════════════════════════════════════════════════════════════════════
 function vCompliance(){
-  const items=[]; S.properties.forEach(p=>{ _fullCertItems(p).forEach(([k,lab,d,kind])=>items.push({k,lab,date:d,rag:kind==='decl'?declStatus(d):certRAG(d)})); });
+  const items=[]; S.properties.forEach(p=>{ _fullCertItems(p).forEach(it=>items.push({k:it[0],lab:it[1],date:it[2],rag:_itemRag(it)})); });
   const tot=items.length, ok=items.filter(x=>x.rag.k==='ok').length, soon=items.filter(x=>x.rag.k==='soon').length, bad=items.filter(x=>x.rag.k==='expired'||x.rag.k==='missing').length;
   const byLandlord=S.landlords.map(l=>{
     const props=S.properties.filter(p=>p.landlordId===l.id);
-    const certs=[]; props.forEach(p=>{ _fullCertItems(p).forEach(([k,lab,d,kind])=>certs.push((kind==='decl'?declStatus(d):certRAG(d)).k)); });
+    const certs=[]; props.forEach(p=>{ _fullCertItems(p).forEach(it=>certs.push(_itemRag(it).k)); });
     const issues=certs.filter(k=>k!=='ok').length;
     return {l,props,issues,total:certs.length};
   }).filter(x=>x.props.length);
   const rows=byLandlord.map(({l,props,issues,total})=>{
     const propHtml=props.map(p=>{
-      const items3=_fullCertItems(p).map(([k,lab,d,kind])=>[k,lab+(k==='epc'&&p.certs&&p.certs.epcRating?' · '+p.certs.epcRating:''),d,kind]);
-      const pIssues=items3.filter(([k,l,d,kind])=>(kind==='decl'?declStatus(d):certRAG(d)).k!=='ok').length;
-      const certHtml=items3.map(([k,lab,d,kind])=>{ const r=kind==='decl'?declStatus(d):certRAG(d); return `<div class="tree-leaf">
+      const items3=_fullCertItems(p).map(it=>[it[0],it[1]+(it[0]==='epc'&&p.certs&&p.certs.epcRating?' · '+p.certs.epcRating:''),it[2],it[3],it[4]]);
+      const pIssues=items3.filter(it=>_itemRag(it).k!=='ok').length;
+      const certHtml=items3.map(it=>{ const [k,lab,d,kind]=it; const r=_itemRag(it); const action=k==='rtr'?`rtrWizard('${p.id}')`:k==='deposit'?`setTenant('${p.id}')`:`editCert('${p.id}','${k}')`; return `<div class="tree-leaf">
           <span class="tree-dot" style="background:${r.color}"></span>
           <span style="flex:1;font-size:12.5px">${lab}</span>
-          <span class="faint" style="font-size:11.5px;margin-right:8px">${d?(kind==='decl'?'Confirmed '+fmtDate(d):fmtDate(d)):(kind==='decl'?'Not confirmed':'No certificate')}</span>
+          <span class="faint" style="font-size:11.5px;margin-right:8px">${kind==='custom'?r.label:d?(kind==='decl'?'Confirmed '+fmtDate(d):fmtDate(d)):(kind==='decl'?'Not confirmed':'No certificate')}</span>
           <span class="pill" style="background:${r.bg};color:${r.color}">${r.label}</span>
-          <button class="btn sm" onclick="editCert('${p.id}','${k}')">${d?'Update':'Add'}</button>
+          <button class="btn sm" onclick="${action}">${r.k==='ok'?'Update':k==='deposit'?'Manage':'Add'}</button>
         </div>`; }).join('');
       return `<details class="tree-node" ${pIssues?'open':''}>
         <summary><span class="tree-caret">▸</span><span class="tree-ic">⌂</span><span style="flex:1;font-weight:600;font-size:13px;color:var(--navy)">${esc(p.address)}${p.city?', '+esc(p.city):''}</span>${pIssues?`<span class="pill" style="background:var(--red-bg);color:var(--red)">${pIssues} to fix</span>`:`<span class="pill" style="background:var(--green-bg);color:var(--green)">All valid</span>`}</summary>
