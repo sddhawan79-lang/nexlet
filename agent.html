@@ -1346,9 +1346,26 @@ function editPropFee(pid){ const p=P(pid);
   modal('Property fee — '+esc(p.address), body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="savePropFee('${pid}')">Save fee</button>`, true);
   setTimeout(()=>{const i=document.getElementById('pf-fee');if(i)i.oninput=()=>{const c=document.getElementById('pf-calc');if(c)c.textContent=gbp(p.rent*(parseFloat(i.value)||0)/100)+'/mo';};},0);
 }
-function savePropFee(pid){ const p=P(pid); p.feePct=parseFloat(val('pf-fee')); if(isNaN(p.feePct))p.feePct=DEF_FEE;
+async function savePropFee(pid){ const p=P(pid); const oldFee=propFee(p); p.feePct=parseFloat(val('pf-fee')); if(isNaN(p.feePct))p.feePct=DEF_FEE;
   const l=L(p.landlordId); l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:'Fee for '+p.address+' set to '+p.feePct+'%'});
+  if(p.feePct!==oldFee) await _sendFeeChangeLetter(p,l,oldFee,p.feePct);
   save(); pushProperty(p); pushLandlord(l); closeModal(); render(); toast('✓ Fee updated for this property'); }
+async function _sendFeeChangeLetter(p,l,oldFee,newFee){
+  const b=agencyBrand();
+  const subject=`Management fee update — ${p.address}`;
+  const body=`<p>Dear ${esc(l.name)},</p>
+    <p>This letter confirms a change to the management fee for <b>${esc(p.address)}</b>, effective <b>${fmtDate(today())}</b>.</p>
+    <p><b>Previous fee:</b> ${oldFee}% of gross monthly rent<br><b>New fee:</b> ${newFee}% of gross monthly rent (${gbp(p.rent*newFee/100)}/mo at the current rent)</p>
+    <p>This fee will be applied to all future rent collections and management invoices for this property. All other terms of your management agreement remain unchanged.</p>
+    <p>Kind regards,<br>${esc(b.agent)}<br>${esc(b.name)}</p>`;
+  const html=letterWrap(subject,body);
+  if(LIVE){ const row={id:uid('lt'),agency_id:window._agencyId,landlord_id:l.id,property_id:p.id,type:'fee_change',subject,body_html:html,status:'sent'};
+    try{ await sb.from('agency_letters').insert(row); }catch(e){}
+    S.letters=S.letters||[]; S.letters.unshift({...row,created_at:new Date().toISOString()});
+  }
+  if(l.email) agencyEmail(l.email,subject,html);
+  l.comms.push({id:uid('c'),date:today(),type:'Letter',note:'Fee change letter sent & archived — '+oldFee+'% → '+newFee+'%'});
+}
 function editCert(pid,key){ const p=P(pid); const c=p.certs||(p.certs={}); const cur=c[key]||'';
   const label=CERT_LABELS[key]||key.toUpperCase();
   if(key==='smoke'||key==='co'){
