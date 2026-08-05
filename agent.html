@@ -1230,14 +1230,16 @@ async function aiScanCert(pid,key,input){
       : [{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},{type:'text',text:prompt}];
     const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:200,messages:[{role:'user',content}]})});
     if(res.status===402){ if(st)st.textContent='AI allowance reached — enter the date manually.'; return; }
-    const data=await res.json(); const txt=((data.content&&data.content[0]&&data.content[0].text)||'{}').replace(/```json|```/g,'').trim();
-    const parsed=JSON.parse(txt);
+    const data=await res.json();
+    if(!res.ok){ console.error('aiScanCert error',res.status,data); if(st)st.textContent='AI scan failed ('+res.status+': '+(data.error||data.message||'unknown')+') — enter the date manually.'; return; }
+    const txt=((data.content&&data.content[0]&&data.content[0].text)||'{}').replace(/```json|```/g,'').trim();
+    let parsed; try{ parsed=JSON.parse(txt); }catch(pe){ console.error('aiScanCert: bad JSON from model',txt); if(st)st.textContent='AI response unreadable — enter the date manually.'; return; }
     if(parsed && parsed.expiry){ const el=document.getElementById('ct-date'); if(el) el.value=parsed.expiry;
       if(key==='epc'&&parsed.rating){ const r=document.getElementById('ct-rating'); if(r) r.value=parsed.rating; }
       if(st) st.innerHTML='<span style="color:var(--green)">✓ Read '+esc(parsed.expiry)+(key==='epc'&&parsed.rating?' · rating '+esc(parsed.rating):'')+' — review & Save</span>';
       toast('✦ Certificate read — check the date & Save');
-    } else { if(st)st.textContent='Could not read a date — please enter it manually.'; }
-  }catch(e){ console.error(e); if(st)st.textContent='Could not read the file — enter the date manually.'; }
+    } else { if(st)st.textContent='AI could not find a date in this file — enter it manually.'; }
+  }catch(e){ console.error('aiScanCert exception',e); if(st)st.textContent='Could not read the file ('+(e.message||e)+') — enter the date manually.'; }
 }
 function ctAttachEvidence(input){ const f=input.files[0]; if(!f) return; window._certFile=f;
   const st=document.getElementById('ct-evid-status'); if(st) st.innerHTML='<span style="color:var(--green)">✓ '+esc(f.name)+' attached</span>';
