@@ -1265,6 +1265,9 @@ function vPropertyDetail(){
           <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Legionella risk assessment</div><div class="faint" style="font-size:11.5px">${c.legionella?'Reviewed '+fmtDate(c.legionella)+' · recommended every 2 yrs (1 yr for HMOs)':'No assessment on file — not a legal certificate, but a documented duty of care'}</div></div>
           <span class="pill" style="background:${certRAG(c.legionella).bg};color:${certRAG(c.legionella).color}">${certRAG(c.legionella).label}</span>
           <button class="btn sm" onclick="editCert('${p.id}','legionella')">${c.legionella?'Update':'Add'}</button>
+          <button class="btn sm" onclick="downloadLegionellaSheet('${p.id}')">📄 Printable assessment sheet</button>
+          <button class="btn sm" onclick="legionellaWizard('${p.id}')">🧪 Self-assess</button>
+          ${c.legionellaReportHtml?`<button class="btn sm" onclick="viewLegionellaReport('${p.id}')">View assessment</button>`:''}
         </div>
       </div></div>
       <div class="panel"><div class="panel-hd"><h2>Tenancy</h2></div><div class="panel-bd">
@@ -1562,6 +1565,151 @@ async function saveRtrExternal(pid){
   rec.rtrCheckDate=val('rtr-ext-date')||today(); rec.rtrResult='Valid'; rec.shareCode=rec.shareCode||'External check';
   if(f){ rec.rtrDocName=f.name; const ext=(f.name.split('.').pop()||'pdf'); const url=await _storageUpload(f,pid+'/rtr-'+Date.now()+'.'+ext,'tenant-documents'); if(url) rec.rtrDocUrl=url; }
   window._certFile=null; save(); pushTenantRec(rec); closeModal(); render(); toast('✓ Right to Rent marked satisfied (external check)');
+}
+// ── Legionella self-assessment wizard — HSE ACOP L8-based checklist a landlord/agent
+// can complete themselves for a standard domestic let (no water testing required by law).
+function legionellaWizard(pid){
+  const p=P(pid); const c=p.certs||(p.certs={});
+  window._legWiz={pid,step:1,system:c.legSystem||'combi',coldTemp:c.legColdTemp||'',hotTemp:c.legHotTemp||'',
+    deadLegs:c.legDeadLegs||'no',tankCondition:c.legTankCondition||'na',limescale:c.legLimescale||'no',
+    regularUse:c.legRegularUse||'yes',date:today()};
+  _legWizRender();
+}
+function _legWizStepBar(step){
+  const steps=['1. Water system','2. Temperatures','3. Visual checks & result'];
+  return `<div style="display:flex;border-radius:8px;overflow:hidden;border:1px solid var(--border);margin-bottom:14px">${steps.map((s,i)=>`<div style="flex:1;padding:8px 6px;text-align:center;font-size:11px;font-weight:600;background:${step===i+1?'var(--navy)':step>i+1?'var(--green-bg)':'var(--off)'};color:${step===i+1?'#fff':step>i+1?'var(--green)':'#94A3B8'}">${step>i+1?'✓ ':''}${s}</div>`).join('')}</div>`;
+}
+function _legWizRender(){
+  const w=window._legWiz; let body=_legWizStepBar(w.step);
+  if(w.step===1){
+    body+=`<div class="hint" style="margin-bottom:10px">A basic self-assessment is acceptable for a standard, low-risk domestic let (HSE guidance). If the property has a complex or shared water system, use a professional instead.</div>
+      <div class="fg"><label>Water heating system</label><select id="leg-system">
+        <option value="combi" ${w.system==='combi'?'selected':''}>Combi boiler — no stored water, heats on demand</option>
+        <option value="tank" ${w.system==='tank'?'selected':''}>Hot water cylinder / storage tank</option>
+        <option value="other" ${w.system==='other'?'selected':''}>Other / shared system (e.g. communal tank)</option>
+      </select></div>
+      <div class="fg"><label>Is the tank/cylinder cover intact and insulated? (if applicable)</label><select id="leg-tank">
+        <option value="na" ${w.tankCondition==='na'?'selected':''}>Not applicable — combi system</option>
+        <option value="yes" ${w.tankCondition==='yes'?'selected':''}>Yes — cover intact, well insulated</option>
+        <option value="no" ${w.tankCondition==='no'?'selected':''}>No — damaged, missing or poorly insulated</option>
+      </select></div>`;
+    modal('Legionella self-assessment — step 1 of 3',body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="_legWizNext()">Next</button>`,true);
+  } else if(w.step===2){
+    body+=`<div class="hint" style="margin-bottom:10px">Run each tap for a minute and take a temperature reading (a food/cooking thermometer is fine). Cold should stay below 20°C; hot should reach above 60°C within a minute at the outlet.</div>
+      <div class="fg"><label>Cold water temperature after running (°C)</label><input id="leg-cold" type="number" step="0.5" value="${esc(w.coldTemp)}" placeholder="e.g. 16"></div>
+      <div class="fg"><label>Hot water temperature after running (°C)</label><input id="leg-hot" type="number" step="0.5" value="${esc(w.hotTemp)}" placeholder="e.g. 62"></div>`;
+    modal('Legionella self-assessment — step 2 of 3',body,`<button class="btn" onclick="_legWizBack()">Back</button><button class="btn navy" onclick="_legWizNext()">Next</button>`,true);
+  } else {
+    body+=`<div class="hint" style="margin-bottom:10px">Walk the property and check for the following.</div>
+      <div class="fg"><label>Any little-used outlets, dead legs, or capped-off pipework (unused showers, outside taps used rarely)?</label><select id="leg-deadlegs">
+        <option value="no" ${w.deadLegs==='no'?'selected':''}>No</option><option value="yes" ${w.deadLegs==='yes'?'selected':''}>Yes</option></select></div>
+      <div class="fg"><label>Visible limescale, sediment or discolouration in showerheads/taps?</label><select id="leg-limescale">
+        <option value="no" ${w.limescale==='no'?'selected':''}>No</option><option value="yes" ${w.limescale==='yes'?'selected':''}>Yes</option></select></div>
+      <div class="fg"><label>Is the property in regular, continuous occupation (not left empty for long periods)?</label><select id="leg-regular">
+        <option value="yes" ${w.regularUse==='yes'?'selected':''}>Yes</option><option value="no" ${w.regularUse==='no'?'selected':''}>No — voids/long vacancies likely</option></select></div>
+      <div class="fg"><label>Assessment date</label><input id="leg-date" type="date" value="${w.date}"></div>`;
+    modal('Legionella self-assessment — step 3 of 3',body,`<button class="btn" onclick="_legWizBack()">Back</button><button class="btn navy" onclick="_legWizSave()">Generate & save</button>`,true);
+  }
+}
+function _legWizNext(){
+  const w=window._legWiz;
+  if(w.step===1){ w.system=val('leg-system'); w.tankCondition=val('leg-tank'); }
+  else if(w.step===2){ w.coldTemp=val('leg-cold'); w.hotTemp=val('leg-hot'); }
+  w.step++; _legWizRender();
+}
+function _legWizBack(){ window._legWiz.step--; _legWizRender(); }
+function _legRisk(w){
+  const flags=[];
+  const cold=parseFloat(w.coldTemp), hot=parseFloat(w.hotTemp);
+  if(!isNaN(cold)&&cold>=20) flags.push('Cold water reading ('+cold+'°C) is at or above 20°C — within the range Legionella can multiply.');
+  if(!isNaN(hot)&&hot<60) flags.push('Hot water reading ('+hot+'°C) is below 60°C — should reach above 60°C at the outlet within a minute.');
+  if(w.deadLegs==='yes') flags.push('Little-used outlets or dead legs identified — stagnant water increases risk.');
+  if(w.tankCondition==='no') flags.push('Tank/cylinder cover or insulation is damaged or missing.');
+  if(w.limescale==='yes') flags.push('Limescale/sediment visible in showerheads or taps — can harbour bacteria and increases aerosol risk.');
+  if(w.regularUse==='no') flags.push('Property has periods of low/no occupation — water can stagnate; flush all outlets before re-letting.');
+  const risk=flags.length===0?'Low':flags.length<=2?'Low–Medium':'Medium';
+  return {flags,risk};
+}
+function _legWizSave(){
+  const w=window._legWiz; w.deadLegs=val('leg-deadlegs'); w.limescale=val('leg-limescale'); w.regularUse=val('leg-regular'); w.date=val('leg-date')||today();
+  const p=P(w.pid); const c=p.certs||(p.certs={}); const {flags,risk}=_legRisk(w);
+  const systemLabel={combi:'Combi boiler (no stored water)',tank:'Hot water cylinder / storage tank',other:'Other / shared system'}[w.system];
+  const html=`<h3 style="margin-top:0">Legionella risk assessment — ${esc(p.address||'')}</h3>
+    <p style="font-size:12.5px;color:#7A8FA6">Self-assessment (HSE ACOP L8 domestic checklist) · ${fmtDate(w.date)}</p>
+    <div class="note" style="margin:10px 0"><b>Overall risk rating: ${risk}</b></div>
+    <table style="width:100%;font-size:12.5px;border-collapse:collapse;margin-bottom:10px">
+      <tr><td style="padding:4px 6px;font-weight:600">Water system</td><td style="padding:4px 6px">${esc(systemLabel)}</td></tr>
+      <tr><td style="padding:4px 6px;font-weight:600">Cold water temp</td><td style="padding:4px 6px">${esc(w.coldTemp||'—')}°C</td></tr>
+      <tr><td style="padding:4px 6px;font-weight:600">Hot water temp</td><td style="padding:4px 6px">${esc(w.hotTemp||'—')}°C</td></tr>
+      <tr><td style="padding:4px 6px;font-weight:600">Dead legs / little-used outlets</td><td style="padding:4px 6px">${w.deadLegs==='yes'?'Yes':'No'}</td></tr>
+      <tr><td style="padding:4px 6px;font-weight:600">Tank/cylinder condition</td><td style="padding:4px 6px">${w.tankCondition==='na'?'N/A':w.tankCondition==='yes'?'Good':'Poor'}</td></tr>
+      <tr><td style="padding:4px 6px;font-weight:600">Limescale/sediment visible</td><td style="padding:4px 6px">${w.limescale==='yes'?'Yes':'No'}</td></tr>
+      <tr><td style="padding:4px 6px;font-weight:600">Regular occupation</td><td style="padding:4px 6px">${w.regularUse==='yes'?'Yes':'No'}</td></tr>
+    </table>
+    ${flags.length?`<div style="font-size:12.5px;margin-bottom:8px"><b>Findings &amp; recommended actions:</b><ul style="margin:6px 0 0 18px;padding:0">${flags.map(f=>`<li style="margin-bottom:4px">${esc(f)}</li>`).join('')}</ul></div>`:`<div style="font-size:12.5px;color:var(--green)">No significant risk factors identified.</div>`}
+    <p style="font-size:11px;color:#94A3B8;margin-top:10px">No formal certificate is legally required for Legionella — this written record evidences the landlord's duty of care under the Health and Safety at Work Act 1974 / COSHH. Review every 2 years, or sooner if the water system or occupancy changes. If risk factors persist, arrange a professional assessment.</p>`;
+  c.legionella=w.date; c.legSystem=w.system; c.legColdTemp=w.coldTemp; c.legHotTemp=w.hotTemp; c.legDeadLegs=w.deadLegs; c.legTankCondition=w.tankCondition; c.legLimescale=w.limescale; c.legRegularUse=w.regularUse; c.legionellaReportHtml=html;
+  save(); pushProperty(p); closeModal(); render(); toast('✓ Self-assessment saved — '+risk+' risk');
+}
+function viewLegionellaReport(pid){ const p=P(pid); const c=p.certs||{}; if(!c.legionellaReportHtml) return;
+  modal('Legionella risk assessment',c.legionellaReportHtml,`<button class="btn" onclick="closeModal()">Close</button>`);
+}
+// ── Printable HSE-style Legionella risk assessment sheet — print, sign by hand,
+// scan, then upload via the "Update" button above (AI-scans it and marks it satisfied).
+function legionellaSheetHtml(pid){
+  const p=P(pid); const b=agencyBrand();
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Legionella Risk Assessment — ${esc(p.address||'')}</title>
+  <style>
+    body{font-family:Arial,sans-serif;color:#1A2332;max-width:720px;margin:30px auto;padding:0 20px;line-height:1.5}
+    h1{font-size:20px;margin-bottom:2px} h2{font-size:14px;margin:22px 0 8px;border-bottom:1px solid #ccc;padding-bottom:4px}
+    table{width:100%;border-collapse:collapse;margin-bottom:10px;font-size:13px}
+    td,th{border:1px solid #999;padding:6px 8px;text-align:left;vertical-align:top}
+    .fill{border-bottom:1px solid #333;display:inline-block;min-width:160px;height:16px}
+    .sig{margin-top:40px;display:flex;gap:40px}
+    .sig div{flex:1;border-top:1px solid #333;padding-top:4px;font-size:11px;color:#555}
+    @media print{ .no-print{display:none} }
+  </style></head><body>
+  <div class="no-print" style="text-align:right;margin-bottom:10px"><button onclick="window.print()" style="padding:8px 16px;font-size:13px;cursor:pointer">Print / Save as PDF</button></div>
+  <h1>Legionella Risk Assessment</h1>
+  <div style="font-size:12.5px;color:#555">Domestic rented property — based on HSE Approved Code of Practice L8 &amp; HSG274 Part 2 guidance</div>
+  <table>
+    <tr><th style="width:35%">Property address</th><td>${esc(p.address||'')}${p.postcode?', '+esc(p.postcode):''}</td></tr>
+    <tr><th>Assessed by</th><td><span class="fill"></span></td></tr>
+    <tr><th>Date of assessment</th><td><span class="fill" style="min-width:100px"></span></td></tr>
+    <tr><th>Managing agent</th><td>${esc(b.name)}</td></tr>
+  </table>
+  <h2>1. Water system description</h2>
+  <table>
+    <tr><td>Type of water heating</td><td>\u2610 Combi boiler (no stored water) &nbsp;&nbsp; \u2610 Hot water cylinder/tank &nbsp;&nbsp; \u2610 Other: <span class="fill"></span></td></tr>
+    <tr><td>Cold water storage tank present?</td><td>\u2610 Yes &nbsp; \u2610 No \u2014 if yes, condition of cover/insulation: <span class="fill"></span></td></tr>
+  </table>
+  <h2>2. Temperature checks</h2>
+  <div style="font-size:11.5px;color:#555;margin-bottom:6px">Run each outlet for 1 minute before reading. Cold should be below 20\u00b0C; hot should reach above 60\u00b0C.</div>
+  <table>
+    <tr><th>Outlet</th><th>Cold temp (\u00b0C)</th><th>Hot temp (\u00b0C)</th><th>Notes</th></tr>
+    <tr><td>Kitchen tap</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
+    <tr><td>Bathroom tap</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
+    <tr><td>Shower</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
+    <tr><td>Other:</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
+  </table>
+  <h2>3. Visual inspection checklist</h2>
+  <table>
+    <tr><td>Any little-used outlets, dead legs or capped pipework?</td><td>\u2610 Yes &nbsp; \u2610 No</td></tr>
+    <tr><td>Visible limescale/sediment in showerheads or taps?</td><td>\u2610 Yes &nbsp; \u2610 No</td></tr>
+    <tr><td>Property in regular, continuous occupation?</td><td>\u2610 Yes &nbsp; \u2610 No</td></tr>
+    <tr><td>Tank/cylinder cover intact and insulated (if applicable)?</td><td>\u2610 Yes &nbsp; \u2610 No &nbsp; \u2610 N/A</td></tr>
+  </table>
+  <h2>4. Findings &amp; actions required</h2>
+  <div style="border:1px solid #999;min-height:70px;padding:8px">&nbsp;</div>
+  <h2>5. Overall risk rating</h2>
+  <div>\u2610 Low &nbsp;&nbsp; \u2610 Low\u2013Medium &nbsp;&nbsp; \u2610 Medium &nbsp;&nbsp; \u2610 High \u2014 refer to a professional assessor</div>
+  <div style="font-size:11px;color:#777;margin-top:16px">No formal certificate is legally required for Legionella; this written record evidences the duty of care under the Health and Safety at Work Act 1974 and COSHH Regulations 2002. Review every 2 years, or sooner if the water system or occupancy changes.</div>
+  <div class="sig"><div>Signature</div><div>Date</div></div>
+  </body></html>`;
+}
+function downloadLegionellaSheet(pid){
+  const blob=new Blob([legionellaSheetHtml(pid)],{type:'text/html'});
+  window.open(URL.createObjectURL(blob),'_blank');
 }
 function _commitTenant(pid,info){
   const p=P(pid); if(!p.id||!info.name) return null;
