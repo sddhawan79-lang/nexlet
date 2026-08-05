@@ -175,7 +175,7 @@ function render(me, ag, props, agreements, letters, msgs){
 
   const propCards = props.length ? props.map(p=>{
     const c=p.certs||{}; const t=p.tenant||null;
-    const cert=(nm,d,extra)=>{const r=certRAG(d);return `<div class="cert"><div class="cn">${nm}</div><div class="cv"><span class="pill" style="background:${r.bg};color:${r.color}">${r.label}</span>${extra||''}</div></div>`;};
+    const cert=(nm,d,extra,docUrl)=>{const r=certRAG(d);return `<div class="cert"><div class="cn">${nm}</div><div class="cv"><span class="pill" style="background:${r.bg};color:${r.color}">${r.label}</span>${extra||''}</div>${docUrl?`<a href="${docUrl}" target="_blank" style="font-size:11px;color:var(--blue);display:inline-block;margin-top:4px">View document</a>`:''}</div>`;};
     return `<div class="prop">
       <div class="prop-top">
         <div><div class="prop-addr">${esc(p.address)}${p.city?', '+esc(p.city):''}</div>
@@ -183,9 +183,9 @@ function render(me, ag, props, agreements, letters, msgs){
         ${t?`<span class="pill" style="background:var(--green-bg);color:var(--green-dark)">Let</span>`:`<span class="pill" style="background:var(--off);color:var(--muted)">Available</span>`}
       </div>
       <div class="cert-row">
-        ${cert('Gas Safety',c.gas)}
-        ${cert('EICR (Electrical)',c.eicr)}
-        ${cert('EPC',c.epc,c.epcRating?` <span style="color:var(--muted);font-weight:500">· ${esc(c.epcRating)}</span>`:'')}
+        ${cert('Gas Safety',c.gas,'',c.gasDocUrl)}
+        ${cert('EICR (Electrical)',c.eicr,'',c.eicrDocUrl)}
+        ${cert('EPC',c.epc,c.epcRating?` <span style="color:var(--muted);font-weight:500">· ${esc(c.epcRating)}</span>`:'',c.epcDocUrl)}
       </div>
       ${t?`<div class="prop-meta" style="margin-top:10px">Tenant: <b style="color:var(--txt)">${esc(t.name)}</b>${t.start?' · from '+fmtDate(t.start):''}</div>`:''}
     </div>`;
