@@ -954,10 +954,12 @@ function vLandlordDetail(){
       <span class="pill" style="background:${sv.bg};color:${sv.color}">${sv.label}</span>
       <span class="pill" style="background:${st.bg};color:${st.color}">${st.label}</span>
     </div>
-    <div style="display:flex;gap:8px;margin:14px 0 18px">
+    <div style="display:flex;gap:8px;margin:14px 0 18px;flex-wrap:wrap">
       <button class="btn navy" onclick="openComm('${l.id}')">＋ Log contact</button>
       <button class="btn" onclick="go('llportal','${l.id}')">👁 View as landlord</button>
-      <button class="btn" onclick="inviteToPortal('${l.id}')">📧 Invite landlord to portal</button>
+      ${!l.agreement?`<button class="btn" disabled style="opacity:.45;cursor:not-allowed" title="Sign the agreement first — nothing to show them yet">📧 Invite landlord to portal</button>`
+        :!l.invitedAt?`<button class="btn navy" onclick="inviteToPortal('${l.id}')">📧 Invite landlord to portal — next step</button>`
+        :`<span class="faint" style="font-size:12.5px;align-self:center">✓ Portal invited ${fmtDate(l.invitedAt)}</span><button class="btn sm" onclick="inviteToPortal('${l.id}')">Resend invite</button>`}
       ${(()=>{ const a=agreementFor(l.id);
         if(l.agreement) return `<button class="btn" onclick="viewSignedAgreement('${l.id}')">✔ View signed agreement</button>`;
         if(a&&a.status==='sent') return `<button class="btn" onclick="openAgreement('${l.id}')" style="border-color:var(--amber);color:var(--amber)">⏳ Awaiting landlord signature · resend</button>`;
@@ -1151,7 +1153,9 @@ function vPropertyDetail(){
             ${rec.depositCertName?`<div class="kv"><span class="k">Deposit certificate</span><span class="v">${esc(rec.depositCertName)} ${rec.depositCertUrl?`<a href="#" onclick="event.preventDefault();viewDoc('${rec.depositCertUrl}','Deposit certificate')">View</a>`:''}</span></div>`:''}
             ${rec.refDocName?`<div class="kv"><span class="k">Reference report</span><span class="v">${esc(rec.refDocName)} ${rec.refDocUrl?`<a href="#" onclick="event.preventDefault();viewDoc('${rec.refDocUrl}','Reference report')">View</a>`:''}</span></div>`:''}`; })()}
           <div class="kv" style="border:none"><span class="k">Rent due day</span><span class="v">${esc(p.rentDueDay||'1st')} <a href="#" onclick="editRentDueDay('${p.id}');return false" style="color:var(--blue);font-size:12px;margin-left:4px">edit</a></span></div>
-          <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" onclick="inviteTenantToPortal('${p.id}')">📧 Invite to tenant portal</button><button class="btn sm" onclick="setTenant('${p.id}')">Edit tenant</button><button class="btn sm" onclick="openNotice('${p.id}')">⚖ Prepare notice</button></div>`
+          <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">${(()=>{ const rec=tenantRecFor(p.id);
+            return (rec&&rec.invited)?`<span class="faint" style="font-size:12.5px">✓ Portal invited ${fmtDate(rec.invitedAt)}</span><button class="btn sm" onclick="inviteTenantToPortal('${p.id}')">Resend</button>`
+              :`<button class="btn sm navy" onclick="inviteTenantToPortal('${p.id}')">📧 Invite to tenant portal — next step</button>`; })()}<button class="btn sm" onclick="setTenant('${p.id}')">Edit tenant</button><button class="btn sm" onclick="openNotice('${p.id}')">⚖ Prepare notice</button></div>`
           :lst?`<div class="faint" style="font-size:13px;margin-bottom:12px">Marketing in progress — ${_pill(LISTING_STATUS,lst.status)} · ${_listingApps(lst.id).length} enquir${_listingApps(lst.id).length===1?'y':'ies'} so far.</div><button class="btn sm navy" onclick="go('listing','${lst.id}')">Manage listing</button>`
           :`<div class="faint" style="font-size:13px;margin-bottom:12px">No tenant yet.</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -1268,8 +1272,7 @@ function recordExistingTenant(pid){ const p=P(pid); if(propTenancyStatus(p)==='u
 function setTenant(pid){ const p=P(pid); const t=p.tenant||{}; const rec=tenantRecFor(pid)||{};
   const occ=(t.occupants||rec.occupants||[]);
   const occRows=occ.map(o=>_occRowHtml(o)).join('');
-  const g=rec.guarantor||{};
-  const hasG=!!(g.name||g.email||g.phone);
+  const g=rec.guarantor||{}; const hasG=!!(g.name||g.email||g.phone);
   window._tnFiles={};
   const body=`<div class="fg"><label>Tenant name (lead)</label><input id="tn-name" value="${esc(t.name||rec.name||'')}"></div>
   <div class="grid2" style="gap:10px"><div class="fg"><label>Email</label><input id="tn-email" value="${esc(t.email||rec.email||'')}"></div>
@@ -1285,31 +1288,19 @@ function setTenant(pid){ const p=P(pid); const t=p.tenant||{}; const rec=tenantR
     <input id="tn-g-email" placeholder="Guarantor email" value="${esc(g.email||'')}">
     <input id="tn-g-phone" placeholder="Guarantor phone" value="${esc(g.phone||'')}">
   </div></div>
-  <div class="fg"><label>Deposit certificate <span class="faint">(custodial/insured scheme cert or Prescribed Information)</span></label>
-    <label style="display:flex;align-items:center;gap:10px;padding:10px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer">
-      <span style="font-size:18px">📄</span><div style="font-size:12.5px;font-weight:600;flex:1">${rec.depositCertName?'Replace file':'Click to attach'}</div>
-      <input type="file" accept="application/pdf,image/*" style="display:none" onchange="tnAttachFile(this,'deposit')">
-    </label>
-    <div id="tn-deposit-status" style="margin-top:6px;font-size:11.5px">${rec.depositCertName?`<span style="color:var(--green)">✓ ${esc(rec.depositCertName)} on file</span> ${rec.depositCertUrl?`<a href="#" onclick="event.preventDefault();viewDoc('${rec.depositCertUrl}','Deposit certificate')">View</a>`:''}`:'<span class="faint">No file attached yet</span>'}</div></div>
-  <div class="fg"><label>Reference report <span class="faint">(employer/previous-landlord reference or credit check)</span></label>
-    <label style="display:flex;align-items:center;gap:10px;padding:10px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer">
-      <span style="font-size:18px">📄</span><div style="font-size:12.5px;font-weight:600;flex:1">${rec.refDocName?'Replace file':'Click to attach'}</div>
-      <input type="file" accept="application/pdf,image/*" style="display:none" onchange="tnAttachFile(this,'ref')">
-    </label>
-    <div id="tn-ref-status" style="margin-top:6px;font-size:11.5px">${rec.refDocName?`<span style="color:var(--green)">✓ ${esc(rec.refDocName)} on file</span> ${rec.refDocUrl?`<a href="#" onclick="event.preventDefault();viewDoc('${rec.refDocUrl}','Reference report')">View</a>`:''}`:'<span class="faint">No file attached yet</span>'}</div></div>
-  <div class="hint">Saving creates the tenancy record (for rent tracking, maintenance &amp; the tenant portal) and moves the let to Managed. All named adults appear on Section 8/13 notices. Notices are still served by hand/post/email per the tenancy agreement — an email here is for the portal invite &amp; correspondence.</div>`;
+  ${_docSlotHtml('deposit','Deposit certificate','(custodial/insured scheme cert or Prescribed Information)',rec.depositCertName,rec.depositCertUrl)}
+  ${_docSlotHtml('ref','Reference report','(employer/previous-landlord reference or credit check)',rec.refDocName,rec.refDocUrl)}
+  <div class="hint">Saving creates the tenancy record (for rent tracking, maintenance &amp; the tenant portal) and moves the let to Managed. All named adults appear on Section 8/13 notices, and a named guarantor is copied on them too.</div>`;
   modal('Set up tenant',body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" id="tn-save-btn" onclick="saveTenant('${pid}')">Save tenant</button>`, true); }
 function _occRowHtml(o){ o=o||{}; return `<div style="display:grid;grid-template-columns:1.3fr 1.3fr 1fr auto;gap:8px;margin-bottom:6px" data-occ-row><input placeholder="Full name" value="${esc(o.name||'')}"><input placeholder="Email (optional)" value="${esc(o.email||'')}"><input placeholder="Phone (optional)" value="${esc(o.phone||'')}"><button type="button" class="btn sm" onclick="this.closest('[data-occ-row]').remove()">✕</button></div>`; }
 function tnAddOccupant(){ const c=document.getElementById('tn-occupants'); if(!c) return; c.insertAdjacentHTML('beforeend',_occRowHtml({})); }
 function _readOccupants(){ return [...document.querySelectorAll('#tn-occupants [data-occ-row]')].map(r=>{ const inputs=r.querySelectorAll('input'); return {name:(inputs[0].value||'').trim(),email:(inputs[1].value||'').trim(),phone:(inputs[2].value||'').trim()}; }).filter(o=>o.name); }
-function tnAttachFile(input,kind){ const f=input.files[0]; if(!f) return; window._tnFiles=window._tnFiles||{}; window._tnFiles[kind]=f;
-  const st=document.getElementById('tn-'+kind+'-status'); if(st) st.innerHTML='<span style="color:var(--blue)">✦ '+esc(f.name)+' attached — will upload on Save</span>'; }
-async function _storageUpload(file,path){
+async function _storageUpload(file,path,bucket){
   if(!sb||!LIVE) return null;
   try{
-    const{error:upErr}=await sb.storage.from('property-documents').upload(path,file,{contentType:file.type,upsert:true});
+    const{error:upErr}=await sb.storage.from(bucket||'property-documents').upload(path,file,{contentType:file.type,upsert:true});
     if(upErr){ console.error('storage upload failed',upErr); return null; }
-    const{data}=sb.storage.from('property-documents').getPublicUrl(path);
+    const{data}=sb.storage.from(bucket||'property-documents').getPublicUrl(path);
     return (data&&data.publicUrl)||null;
   }catch(e){ console.error('storage upload exception',e); return null; }
 }
@@ -1320,13 +1311,24 @@ function viewDoc(url,label){
     :`<iframe src="${url}" style="width:100%;height:70vh;border:none;border-radius:8px;background:var(--off)"></iframe>`;
   modal(esc(label||'Document'),body,`<button class="btn" onclick="closeModal()">Close</button><a href="${url}" target="_blank" class="btn navy">Open in new tab</a>`);
 }
+// ── Deposit certificate & reference report file slots, shared by the tenant modal.
+function _docSlotHtml(kind,label,hint,name,url){
+  return `<div class="fg"><label>${label} <span class="faint">${hint}</span></label>
+    <label style="display:flex;align-items:center;gap:10px;padding:10px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer">
+      <span style="font-size:18px">📄</span><div style="font-size:12.5px;font-weight:600;flex:1">${name?'Replace file':'Click to attach'}</div>
+      <input type="file" accept="application/pdf,image/*" style="display:none" onchange="tnAttachFile(this,'${kind}')">
+    </label>
+    <div id="tn-${kind}-status" style="margin-top:6px;font-size:11.5px">${name?`<span style="color:var(--green)">✓ ${esc(name)} on file</span> ${url?`<a href="#" onclick="event.preventDefault();viewDoc('${url}','${esc(label)}')">View</a>`:''}`:'<span class="faint">No file attached yet</span>'}</div></div>`;
+}
+function tnAttachFile(input,kind){ const f=input.files[0]; if(!f) return; window._tnFiles=window._tnFiles||{}; window._tnFiles[kind]=f;
+  const st=document.getElementById('tn-'+kind+'-status'); if(st) st.innerHTML='<span style="color:var(--blue)">✦ '+esc(f.name)+' attached — will upload on Save</span>'; }
 function _commitTenant(pid,info){
   const p=P(pid); if(!p.id||!info.name) return null;
   p.tenant={name:info.name,email:info.email||'',start:info.start||today(),occupants:info.occupants||[]};
   let tn=S.tenancies.find(t=>t.propertyId===pid); if(tn)tn.stage='managed'; else { tn={id:uid('t'),who:p.address,propertyId:pid,stage:'managed'}; S.tenancies.push(tn); }
   let rec=tenantRecFor(pid); const isNew=!rec; if(isNew) rec={id:uid('tn'),status:'active'};
   rec.propertyId=pid; rec.landlordId=p.landlordId; rec.name=info.name; rec.email=info.email||''; rec.phone=info.phone||''; rec.start=info.start||today(); rec.rent=p.rent||0; rec.deposit=info.deposit!=null?info.deposit:rec.deposit; rec.occupants=info.occupants||[];
-  if(info.guarantor) rec.guarantor=info.guarantor;
+  if(info.guarantor!==undefined) rec.guarantor=info.guarantor;
   if(info.depositCertName){ rec.depositCertName=info.depositCertName; rec.depositCertUrl=info.depositCertUrl||rec.depositCertUrl; }
   if(info.refDocName){ rec.refDocName=info.refDocName; rec.refDocUrl=info.refDocUrl||rec.refDocUrl; }
   S.tenants=S.tenants||[]; if(isNew) S.tenants.push(rec);
@@ -1340,8 +1342,8 @@ async function saveTenant(pid){ const nm=val('tn-name'); if(!nm){toast('Enter te
   const guarantor=hasGuarantor?{name:val('tn-g-name'),email:val('tn-g-email'),phone:val('tn-g-phone')}:null;
   const rec=tenantRecFor(pid)||{};
   const info={name:nm,email:val('tn-email'),phone:val('tn-phone'),start:val('tn-start'),deposit:val('tn-deposit')?parseFloat(val('tn-deposit')):undefined,occupants:_readOccupants(),guarantor};
-  if(files.deposit){ const ext=(files.deposit.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.deposit,'tenant-docs/'+pid+'/deposit-'+Date.now()+'.'+ext); info.depositCertName=files.deposit.name; info.depositCertUrl=url||rec.depositCertUrl; }
-  if(files.ref){ const ext=(files.ref.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.ref,'tenant-docs/'+pid+'/reference-'+Date.now()+'.'+ext); info.refDocName=files.ref.name; info.refDocUrl=url||rec.refDocUrl; }
+  if(files.deposit){ const ext=(files.deposit.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.deposit,pid+'/deposit-'+Date.now()+'.'+ext,'tenant-documents'); info.depositCertName=files.deposit.name; info.depositCertUrl=url||rec.depositCertUrl; }
+  if(files.ref){ const ext=(files.ref.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.ref,pid+'/reference-'+Date.now()+'.'+ext,'tenant-documents'); info.refDocName=files.ref.name; info.refDocUrl=url||rec.refDocUrl; }
   _commitTenant(pid,info);
   window._tnFiles={};
   closeModal(); render(); toast('✓ Tenant set up'); }
