@@ -369,10 +369,12 @@ const RAG={green:{label:'● Pass',bg:'var(--green-bg)',color:'var(--green)'},am
 const CREDIT={not_requested:{label:'Credit: not requested',bg:'var(--off)',color:'#94A3B8'},requested:{label:'Credit: requested',bg:'var(--blue-bg)',color:'var(--blue)'},in_progress:{label:'Credit: in progress',bg:'var(--amber-bg)',color:'var(--amber)'},complete:{label:'Credit: report attached',bg:'var(--green-bg)',color:'var(--green)'}};
 
 const NAV=[
-  {k:'dashboard',ic:'▦',t:'Agency Dashboard',grp:'Overview'},{k:'reports',ic:'◩',t:'Reports',grp:'Overview'},{k:'clientmoney',ic:'◐',t:'Client Money',grp:'Overview'},
-  {k:'landlords',ic:'⚇',t:'Landlords',grp:'Landlords & Deals'},{k:'marketing',ic:'🏷',t:'Marketing',grp:'Landlords & Deals'},{k:'applicants',ic:'◕',t:'Applicants & Viewings',grp:'Landlords & Deals'},{k:'offers',ic:'£',t:'Offers',grp:'Landlords & Deals'},{k:'pipeline',ic:'◫',t:'Tenancy Progression',grp:'Landlords & Deals'},{k:'referencing',ic:'◷',t:'Referencing',grp:'Landlords & Deals'},
-  {k:'properties',ic:'⌂',t:'Properties',grp:'Property & Tenancy'},{k:'compliance',ic:'⌘',t:'Compliance',grp:'Property & Tenancy'},{k:'rent',ic:'£',t:'Rent & Arrears',grp:'Property & Tenancy'},{k:'maintenance',ic:'🔧',t:'Maintenance',grp:'Property & Tenancy'},{k:'inventory2',ic:'📄',t:'Inventory & Check-out',grp:'Property & Tenancy'},{k:'notices',ic:'⚖',t:'Possession & Notices',grp:'Property & Tenancy'},{k:'keys',ic:'🔑',t:'Key Register',grp:'Property & Tenancy'},
-  {k:'invoices',ic:'£',t:'Invoices',grp:'Money & Docs'},{k:'templates',ic:'✉',t:'Letters & Templates',grp:'Money & Docs'},
+  {k:'dashboard',ic:'▦',t:'Agency Dashboard',grp:'Overview',pin:true},{k:'reports',ic:'◩',t:'Reports',grp:'Overview',pin:true},
+  {k:'landlords',ic:'⚇',t:'Landlords',grp:'Instruction'},{k:'properties',ic:'⌂',t:'Properties',grp:'Instruction'},
+  {k:'marketing',ic:'🏷',t:'Marketing',grp:'Marketing & Referencing'},{k:'applicants',ic:'◕',t:'Applicants & Viewings',grp:'Marketing & Referencing'},{k:'offers',ic:'£',t:'Offers',grp:'Marketing & Referencing'},{k:'referencing',ic:'◷',t:'Referencing',grp:'Marketing & Referencing'},{k:'pipeline',ic:'◫',t:'Tenancy Progression',grp:'Marketing & Referencing'},
+  {k:'compliance',ic:'⌘',t:'Compliance',grp:'Tenancy Management'},{k:'inventory2',ic:'📄',t:'Inventory & Check-out',grp:'Tenancy Management'},{k:'rent',ic:'£',t:'Rent & Arrears',grp:'Tenancy Management'},{k:'maintenance',ic:'🔧',t:'Maintenance',grp:'Tenancy Management'},{k:'keys',ic:'🔑',t:'Key Register',grp:'Tenancy Management'},
+  {k:'notices',ic:'⚖',t:'Possession & Notices',grp:'End of Tenancy'},
+  {k:'invoices',ic:'£',t:'Invoices',grp:'Money & Documents'},{k:'templates',ic:'✉',t:'Letters & Templates',grp:'Money & Documents'},{k:'clientmoney',ic:'◐',t:'Client Money',grp:'Money & Documents'},
   {k:'settings',ic:'⚙',t:'Agency Settings',grp:'Agency'}
 ];
 let view='dashboard', sel=null, llView=false;
@@ -417,15 +419,18 @@ function propCompliance(p){
   return {items,pct:Math.round(done/items.length*100)}; }
 
 function render(){
-  const activeGrp=(NAV.find(n=>n.k===view||(view==='landlord'&&n.k==='landlords'))||{}).grp;
+  const activeGrp=(NAV.find(n=>n.k===view||(view==='landlord'&&n.k==='landlords')||(view==='property'&&n.k==='properties'))||{}).grp;
   window._navOpen=window._navOpen||{}; if(activeGrp) window._navOpen[activeGrp]=true;
+  const pinned=NAV.filter(n=>n.pin), grouped=NAV.filter(n=>!n.pin);
   let lastGrp=null;
-  document.getElementById('nav').innerHTML=NAV.map(n=>{
+  const pinnedHtml=pinned.map(n=>`<div class="nav ${n.k===view?'on':''}" onclick="go('${n.k}')"><span class="ic">${n.ic}</span>${n.t}</div>`).join('');
+  const groupedHtml=grouped.map(n=>{
     let hdr='';
     if(n.grp!==lastGrp){ const open=!!window._navOpen[n.grp]; hdr=`<div class="nav-grp" onclick="_toggleNavGrp('${n.grp}')">${n.grp}<span style="float:right">${open?'▾':'▸'}</span></div>`; lastGrp=n.grp; }
     if(!window._navOpen[n.grp]) return hdr;
-    return hdr+`<div class="nav ${n.k===view||(view==='landlord'&&n.k==='landlords')?'on':''}" onclick="go('${n.k}')"><span class="ic">${n.ic}</span>${n.t}</div>`;
+    return hdr+`<div class="nav ${n.k===view||(view==='landlord'&&n.k==='landlords')||(view==='property'&&n.k==='properties')?'on':''}" onclick="go('${n.k}')"><span class="ic">${n.ic}</span>${n.t}</div>`;
   }).join('');
+  document.getElementById('nav').innerHTML=pinnedHtml+'<div style="border-top:1px solid rgba(255,255,255,.08);margin:6px 0 2px"></div>'+groupedHtml;
   const notifs=_notifications(); const badge=document.getElementById('notif-badge');
   if(badge){ if(notifs.length){ badge.style.display='block'; badge.textContent=notifs.length>9?'9+':notifs.length; } else badge.style.display='none'; }
   const sf=document.getElementById('scheme-foot');
@@ -1174,6 +1179,30 @@ function openNotifications(){
   const body=items.length?items.map(n=>`<div class="doc" style="padding:8px 0;cursor:pointer" onclick="closeModal();${n.go}"><div class="di" style="background:${n.sev==='red'?'var(--red-bg)':'var(--amber-bg)'};color:${n.sev==='red'?'var(--red)':'var(--amber)'}">!</div><div style="flex:1"><div style="font-size:12.5px;font-weight:600;color:var(--navy)">${esc(n.label)}</div><div class="faint" style="font-size:11.5px">${esc(n.detail)}</div></div></div>`).join(''):'<div class="empty" style="padding:24px;text-align:center"><span class="faint" style="font-size:12.5px">✓ Nothing needs attention.</span></div>';
   modal('Notifications',body,`<button class="btn" onclick="closeModal()">Close</button>`);
 }
+function _lifecycleStage(p){
+  const l=L(p.landlordId); const cl=_tenancyChecklist(p);
+  const labels=['Instruction','Marketing & Compliance','Tenant Found','Managed'];
+  let idx=0;
+  if(l.agreement) idx=1;
+  if(p.tenant) idx=2;
+  if(p.tenant&&cl.pct===100) idx=3;
+  return {idx,labels};
+}
+function lifecycleStepper(p){
+  const {idx,labels}=_lifecycleStage(p);
+  const steps=labels.map((lab,i)=>{ const state=i<idx?'done':i===idx?'current':'todo';
+    const color=state==='done'?'var(--green)':state==='current'?'var(--navy)':'#C7D2E0';
+    const bg=state==='done'?'var(--green-bg)':state==='current'?'var(--navy)':'var(--off)';
+    const fg=state==='current'?'#fff':color;
+    return `<div style="display:flex;align-items:center;flex:1;min-width:0">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:5px;flex-shrink:0">
+        <div style="width:26px;height:26px;border-radius:50%;background:${bg};color:${fg};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border:2px solid ${color}">${state==='done'?'✓':i+1}</div>
+        <div style="font-size:10.5px;font-weight:600;color:${state==='todo'?'#94A3B8':'var(--navy)'};white-space:nowrap">${lab}</div>
+      </div>
+      ${i<labels.length-1?`<div style="flex:1;height:2px;background:${i<idx?'var(--green)':'var(--border)'};margin:0 4px 18px"></div>`:''}
+    </div>`; }).join('');
+  return `<div class="panel" style="margin-bottom:14px"><div class="panel-bd" style="display:flex;padding:16px 20px 10px">${steps}</div></div>`;
+}
 function tenancyChecklistPanel(p){
   const cl=_tenancyChecklist(p);
   const rows=cl.items.map(i=>`<div class="doc" style="padding:7px 0"><div class="di" style="background:${i.done?'var(--green-bg)':i.warn?'var(--amber-bg)':'var(--red-bg)'};color:${i.done?'var(--green)':i.warn?'var(--amber)':'var(--red)'}">${i.done?'✓':'!'}</div><div style="flex:1;font-size:12.5px;font-weight:600;color:var(--navy)">${i.label}</div>${i.done?'<span class="faint" style="font-size:11.5px">Done</span>':`<button class="btn sm" onclick="${i.go}">Fix</button>`}</div>`).join('');
@@ -1205,6 +1234,7 @@ function vPropertyDetail(){
       <div><b>⚠ Instruction not yet signed.</b> Prep compliance certs now if you like, but hold off on marketing or a tenancy until the landlord has signed.</div>
       <button class="btn navy sm" onclick="openAgreement('${l.id}')">Send agreement to sign</button>
     </div>`:''}
+    ${lifecycleStepper(p)}
     ${tenancyChecklistPanel(p)}
     <div class="grid2">
       <div class="panel"><div class="panel-hd"><h2>Compliance certificates</h2></div><div class="panel-bd">
@@ -3211,11 +3241,15 @@ async function aiCompareItem(vid,i){
     const prompt=`You are a UK tenancy deposit-scheme adjudicator. Compare the CHECK-IN photos and the ${toLabel.toUpperCase()} photos of this item: "${r.room} — ${r.item}". Check-in note: "${r.checkin.note||'none'}". ${toLabel} note: "${toSet.note||'none'}". Tenancy length: ${months} months.\nClassify as exactly one of: fair_wear (normal deterioration from use — never chargeable), damage (tenant-caused, beyond fair wear), cleaning (below check-in cleanliness standard). If chargeable, apply apportionment — the tenant only pays the proportion of the item's remaining expected life, never full replacement cost (avoid betterment / new-for-old). Return ONLY JSON: {"classification":"fair_wear|damage|cleaning","charge":number,"reasoning":"one or two sentences, including any apportionment math"}`;
     const content=[...r.checkin.photos.map(u=>({type:'image',source:{type:'base64',media_type:mt(u),data:b64(u)}})),{type:'text',text:'CHECK-IN photos above.'},...toSet.photos.map(u=>({type:'image',source:{type:'base64',media_type:mt(u),data:b64(u)}})),{type:'text',text:toLabel.toUpperCase()+' photos above.\n\n'+prompt}];
     const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:300,messages:[{role:'user',content}]})});
-    const data=await res.json(); const txt=((data.content&&data.content[0]&&data.content[0].text)||'{}').replace(/```json|```/g,'').trim();
-    const parsed=JSON.parse(txt);
+    if(res.status===402){ toast('AI allowance reached — try again next month',1); return; }
+    const data=await res.json();
+    if(!res.ok){ console.error('aiCompareItem error',res.status,data); toast('AI compare failed ('+res.status+': '+(data.error||data.message||'unknown')+')',1); return; }
+    const txt=((data.content&&data.content[0]&&data.content[0].text)||'').replace(/```json|```/g,'').trim();
+    if(!txt){ console.error('aiCompareItem: empty response',data); toast('AI returned no result — try again',1); return; }
+    let parsed; try{ parsed=JSON.parse(txt); }catch(pe){ console.error('aiCompareItem: bad JSON',txt); toast('AI response unreadable — try again',1); return; }
     r.classification=parsed.classification||'fair_wear'; r.charge=+parsed.charge||0; r.reasoning=parsed.reasoning||'';
     v.totalDeduction=v.rooms.reduce((s,x)=>s+(x.charge||0),0); pushInv2(v); render(); toast('✓ AI comparison complete — review before finalising');
-  }catch(e){ console.error(e); toast('Could not compare — try again',1); }
+  }catch(e){ console.error('aiCompareItem exception',e); toast('Could not compare ('+(e.message||e)+')',1); }
 }
 async function generateWearReport(vid){
   const v=(S.inventories2||[]).find(x=>x.id===vid); if(!v) return;
@@ -3224,8 +3258,9 @@ async function generateWearReport(vid){
   const eligible=v.rooms.map(_ensureRoomShape).filter(r=>{ const lv=r.visits.length?r.visits[r.visits.length-1]:null; return r.checkin.photos.length&&((lv&&lv.photos.length)||r.checkout.photos.length); });
   if(!eligible.length){ toast('Add check-in and mid-tenancy/check-out photos to at least one room first',1); return; }
   toast('✦ Generating wear & tear report — this can take a moment…');
-  const results=[];
+  const results=[]; let quotaHit=false;
   for(const r of eligible){
+    if(quotaHit) break;
     const lv=r.visits.length?r.visits[r.visits.length-1]:null;
     const toSet=(lv&&lv.photos.length)?lv:r.checkout; const toLabel=(lv&&lv.photos.length)?'mid-tenancy':'check-out';
     try{
@@ -3233,11 +3268,15 @@ async function generateWearReport(vid){
       const prompt=`UK tenancy deposit adjudicator. Compare CHECK-IN vs ${toLabel.toUpperCase()} photos for "${r.room} — ${r.item}". Notes: check-in "${r.checkin.note||'none'}", ${toLabel} "${toSet.note||'none'}". Return ONLY JSON: {"classification":"fair_wear|damage|cleaning","summary":"one sentence"}`;
       const content=[...r.checkin.photos.map(u=>({type:'image',source:{type:'base64',media_type:mt(u),data:b64(u)}})),{type:'text',text:'CHECK-IN above.'},...toSet.photos.map(u=>({type:'image',source:{type:'base64',media_type:mt(u),data:b64(u)}})),{type:'text',text:toLabel.toUpperCase()+' above.\n\n'+prompt}];
       const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:200,messages:[{role:'user',content}]})});
-      const data=await res.json(); const txt=((data.content&&data.content[0]&&data.content[0].text)||'{}').replace(/```json|```/g,'').trim();
-      const parsed=JSON.parse(txt);
-      results.push({room:r.room,item:r.item,classification:parsed.classification||'fair_wear',summary:parsed.summary||''});
-    }catch(e){ results.push({room:r.room,item:r.item,classification:'fair_wear',summary:'Could not analyse automatically.'}); }
+      if(res.status===402){ quotaHit=true; toast('AI allowance reached partway through — report saved for the rooms already analysed',1); break; }
+      const data=await res.json();
+      if(!res.ok){ console.error('generateWearReport error',res.status,data); results.push({room:r.room,item:r.item,classification:'fair_wear',summary:'AI error ('+res.status+') — review manually.'}); continue; }
+      const txt=((data.content&&data.content[0]&&data.content[0].text)||'').replace(/```json|```/g,'').trim();
+      let parsed; try{ parsed=JSON.parse(txt); }catch(pe){ console.error('generateWearReport: bad JSON',txt); parsed=null; }
+      results.push({room:r.room,item:r.item,classification:(parsed&&parsed.classification)||'fair_wear',summary:(parsed&&parsed.summary)||'Could not read AI response — review manually.'});
+    }catch(e){ console.error('generateWearReport exception',e); results.push({room:r.room,item:r.item,classification:'fair_wear',summary:'Could not analyse ('+(e.message||e)+').'}); }
   }
+  if(!results.length){ toast('AI report failed — check the console for details',1); return; }
   const clsLabel={fair_wear:'Fair wear & tear',damage:'Damage',cleaning:'Cleaning needed'};
   const html=`<h3 style="margin-top:0">Wear &amp; tear report — ${esc(p.address||'')}</h3><p style="font-size:12.5px;color:#7A8FA6">Tenant: ${esc(t.name||'—')} · ${fmtDate(today())}</p>
     <table style="width:100%;font-size:12.5px;border-collapse:collapse">${results.map(x=>`<tr style="border-bottom:1px solid #E4EAF1"><td style="padding:6px 4px;font-weight:600">${esc(x.room)}</td><td style="padding:6px 4px">${esc(x.item)}</td><td style="padding:6px 4px">${clsLabel[x.classification]||x.classification}</td><td style="padding:6px 4px">${esc(x.summary)}</td></tr>`).join('')}</table>`;
