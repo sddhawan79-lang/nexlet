@@ -1144,6 +1144,7 @@ function vPropertyDetail(){
         ${L(p.landlordId).service==='full'?`<div class="kv"><span class="k">Management fee</span><span class="v"><b>${propFee(p)}%</b> of rent · ${gbp(p.rent*propFee(p)/100)}/mo <a href="#" onclick="editPropFee('${p.id}');return false" style="color:var(--blue);font-weight:600;margin-left:6px">edit</a></span></div>`:''}
         ${p.tenant?`<div class="kv"><span class="k">Tenant</span><span class="v">${esc(p.tenant.name)}</span></div>
           <div class="kv"><span class="k">Email</span><span class="v">${esc(p.tenant.email||'—')}</span></div>
+          ${p.tenant.occupants&&p.tenant.occupants.length?`<div class="kv"><span class="k">Also on tenancy</span><span class="v">${p.tenant.occupants.map(o=>esc(o.name)).join(', ')}</span></div>`:''}
           <div class="kv"><span class="k">Start date</span><span class="v">${fmtDate(p.tenant.start)}</span></div>
           <div class="kv" style="border:none"><span class="k">Rent due day</span><span class="v">${esc(p.rentDueDay||'1st')} <a href="#" onclick="editRentDueDay('${p.id}');return false" style="color:var(--blue);font-size:12px;margin-left:4px">edit</a></span></div>
           <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" onclick="inviteTenantToPortal('${p.id}')">📧 Invite to tenant portal</button><button class="btn sm" onclick="setTenant('${p.id}')">Edit tenant</button><button class="btn sm" onclick="openNotice('${p.id}')">⚖ Prepare notice</button></div>`
@@ -1261,25 +1262,33 @@ function propTenancyStatus(p){
 function startMarketingForProperty(pid){ const p=P(pid); if(propTenancyStatus(p)==='unsigned'){ toast('Send the agreement first — you can\'t market before the landlord signs',1); return; } openListing(null,pid); }
 function recordExistingTenant(pid){ const p=P(pid); if(propTenancyStatus(p)==='unsigned'){ toast('Send the agreement first — an instruction must be signed even for a sitting tenant',1); return; } setTenant(pid); }
 function setTenant(pid){ const p=P(pid); const t=p.tenant||{}; const rec=tenantRecFor(pid)||{};
-  const body=`<div class="fg"><label>Tenant name</label><input id="tn-name" value="${esc(t.name||rec.name||'')}"></div>
+  const occ=(t.occupants||rec.occupants||[]);
+  const occRows=occ.map(o=>_occRowHtml(o)).join('');
+  const body=`<div class="fg"><label>Tenant name (lead)</label><input id="tn-name" value="${esc(t.name||rec.name||'')}"></div>
   <div class="grid2" style="gap:10px"><div class="fg"><label>Email</label><input id="tn-email" value="${esc(t.email||rec.email||'')}"></div>
   <div class="fg"><label>Phone</label><input id="tn-phone" value="${esc(rec.phone||'')}"></div></div>
   <div class="grid2" style="gap:10px"><div class="fg"><label>Tenancy start</label><input id="tn-start" type="date" value="${t.start||rec.start||''}"></div>
   <div class="fg"><label>Deposit held (£)</label><input id="tn-deposit" type="number" value="${esc(rec.deposit!=null?rec.deposit:'')}"></div></div>
-  <div class="hint">Saving creates the tenancy record (for rent tracking, maintenance &amp; the tenant portal) and moves the let to Managed.</div>`;
+  <div class="fg"><label>Other adults on this tenancy (optional — e.g. joint tenants, family sharers)</label>
+  <div id="tn-occupants">${occRows}</div>
+  <button type="button" class="btn sm" onclick="tnAddOccupant()" style="margin-top:4px">+ Add another adult</button></div>
+  <div class="hint">Saving creates the tenancy record (for rent tracking, maintenance &amp; the tenant portal) and moves the let to Managed. All named adults appear on Section 8/13 notices.</div>`;
   modal('Set up tenant',body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveTenant('${pid}')">Save tenant</button>`, true); }
+function _occRowHtml(o){ o=o||{}; return `<div class="grid2" style="gap:10px;margin-bottom:6px" data-occ-row><input placeholder="Full name" value="${esc(o.name||'')}"><div style="display:flex;gap:6px"><input placeholder="Phone (optional)" value="${esc(o.phone||'')}" style="flex:1"><button type="button" class="btn sm" onclick="this.closest('[data-occ-row]').remove()">✕</button></div></div>`; }
+function tnAddOccupant(){ const c=document.getElementById('tn-occupants'); if(!c) return; c.insertAdjacentHTML('beforeend',_occRowHtml({})); }
+function _readOccupants(){ return [...document.querySelectorAll('#tn-occupants [data-occ-row]')].map(r=>{ const inputs=r.querySelectorAll('input'); return {name:(inputs[0].value||'').trim(),phone:(inputs[1].value||'').trim()}; }).filter(o=>o.name); }
 function _commitTenant(pid,info){
   const p=P(pid); if(!p.id||!info.name) return null;
-  p.tenant={name:info.name,email:info.email||'',start:info.start||today()};
+  p.tenant={name:info.name,email:info.email||'',start:info.start||today(),occupants:info.occupants||[]};
   let tn=S.tenancies.find(t=>t.propertyId===pid); if(tn)tn.stage='managed'; else { tn={id:uid('t'),who:p.address,propertyId:pid,stage:'managed'}; S.tenancies.push(tn); }
   let rec=tenantRecFor(pid); const isNew=!rec; if(isNew) rec={id:uid('tn'),status:'active'};
-  rec.propertyId=pid; rec.landlordId=p.landlordId; rec.name=info.name; rec.email=info.email||''; rec.phone=info.phone||''; rec.start=info.start||today(); rec.rent=p.rent||0; rec.deposit=info.deposit!=null?info.deposit:rec.deposit;
+  rec.propertyId=pid; rec.landlordId=p.landlordId; rec.name=info.name; rec.email=info.email||''; rec.phone=info.phone||''; rec.start=info.start||today(); rec.rent=p.rent||0; rec.deposit=info.deposit!=null?info.deposit:rec.deposit; rec.occupants=info.occupants||[];
   S.tenants=S.tenants||[]; if(isNew) S.tenants.push(rec);
   save(); pushProperty(p); pushTenancy(tn); pushTenantRec(rec);
   return rec;
 }
 function saveTenant(pid){ const nm=val('tn-name'); if(!nm){toast('Enter tenant name',1);return;}
-  _commitTenant(pid,{name:nm,email:val('tn-email'),phone:val('tn-phone'),start:val('tn-start'),deposit:val('tn-deposit')?parseFloat(val('tn-deposit')):undefined});
+  _commitTenant(pid,{name:nm,email:val('tn-email'),phone:val('tn-phone'),start:val('tn-start'),deposit:val('tn-deposit')?parseFloat(val('tn-deposit')):undefined,occupants:_readOccupants()});
   closeModal(); render(); toast('✓ Tenant set up'); }
 function inviteTenantToPortal(pid){
   const p=P(pid); const rec=tenantRecFor(pid);
@@ -2427,7 +2436,8 @@ function createNotice(){
   const p=_ntProp(); const l=L(p.landlordId)||{}; const t=p.tenant||{};
   const isS8=NT.kind==='section8';
   const expiry=isS8?_longestExpiry(NT.served,NT.grounds):NT.effective;
-  const n={id:uid('nt'),landlordId:p.landlordId,propertyId:p.id,kind:NT.kind,grounds:NT.grounds.slice(),tenantName:t.name||'',
+  const tName=(t.name||'')+(t.occupants&&t.occupants.length?' and '+t.occupants.map(o=>o.name).join(', '):'');
+  const n={id:uid('nt'),landlordId:p.landlordId,propertyId:p.id,kind:NT.kind,grounds:NT.grounds.slice(),tenantName:tName,
     served:NT.served,expiry,rentCurrent:isS8?null:(+NT.rentCurrent||p.rent||0),rentNew:isS8?null:(+NT.rentNew||0),
     compliance:isS8?{...NT.gate,prsReg:NT.prsReg}:{},notes:NT.reasons||'',status:'draft',createdAt:new Date().toISOString()};
   n.docHtml=genNoticeDoc(n);
