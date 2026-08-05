@@ -230,8 +230,8 @@ const pushTenantRec =t =>_w(sb.from('agency_tenants').upsert(tenantToRow(t)));
 const pushRent    =r  =>_w(sb.from('agency_rent_ledger').upsert(rentToRow(r)));
 const pushJob     =j  =>_w(sb.from('agency_maintenance').upsert(jobToRow(j)));
 const pushInv2    =v  =>_w(sb.from('agency_inventories').upsert(inv2ToRow(v)));
-const rowToTenant=r=>({id:r.id,propertyId:r.property_id,landlordId:r.landlord_id,userId:r.user_id,name:r.name||'',email:r.email||'',phone:r.phone||'',start:r.start_date||'',end:r.end_date||'',rent:r.rent||0,deposit:r.deposit,scheme:r.scheme||'',schemeRef:r.scheme_ref||'',status:r.status||'active',inviteToken:r.invite_token||'',invitedAt:r.invited_at||''});
-const tenantToRow=t=>({id:t.id,agency_id:window._agencyId,property_id:t.propertyId,landlord_id:t.landlordId,name:t.name,email:t.email||'',phone:t.phone||'',start_date:t.start||null,end_date:t.end||null,rent:t.rent||0,deposit:t.deposit,scheme:t.scheme||'',scheme_ref:t.schemeRef||'',status:t.status||'active',invite_token:t.inviteToken||null,invited_at:t.invitedAt||null,updated_at:new Date().toISOString()});
+const rowToTenant=r=>({id:r.id,propertyId:r.property_id,landlordId:r.landlord_id,userId:r.user_id,name:r.name||'',email:r.email||'',phone:r.phone||'',start:r.start_date||'',end:r.end_date||'',rent:r.rent||0,deposit:r.deposit,scheme:r.scheme||'',schemeRef:r.scheme_ref||'',status:r.status||'active',inviteToken:r.invite_token||'',invitedAt:r.invited_at||'',invited:!!r.invited_at,occupants:r.occupants||[],guarantor:r.guarantor||null,depositCertName:r.deposit_cert_name||'',depositCertUrl:r.deposit_cert_url||'',refDocName:r.ref_doc_name||'',refDocUrl:r.ref_doc_url||''});
+const tenantToRow=t=>({id:t.id,agency_id:window._agencyId,property_id:t.propertyId,landlord_id:t.landlordId,name:t.name,email:t.email||'',phone:t.phone||'',start_date:t.start||null,end_date:t.end||null,rent:t.rent||0,deposit:t.deposit,scheme:t.scheme||'',scheme_ref:t.schemeRef||'',status:t.status||'active',invite_token:t.inviteToken||null,invited_at:t.invitedAt||null,occupants:t.occupants||[],guarantor:t.guarantor||null,deposit_cert_name:t.depositCertName||'',deposit_cert_url:t.depositCertUrl||'',ref_doc_name:t.refDocName||'',ref_doc_url:t.refDocUrl||'',updated_at:new Date().toISOString()});
 const rowToMsg=r=>({id:r.id,landlordId:r.landlord_id,tenantId:r.tenant_id,propertyId:r.property_id,sender:r.sender||'agent',body:r.body||'',createdAt:r.created_at});
 const msgToRow=m=>({id:m.id,agency_id:window._agencyId,landlord_id:m.landlordId||null,tenant_id:m.tenantId||null,property_id:m.propertyId||null,sender:m.sender||'agent',body:m.body||''});
 const pushMessage=m=>_w(sb.from('agency_messages').insert(msgToRow(m)));
@@ -383,10 +383,14 @@ function certRAG(d){ if(!d) return {k:'missing',label:'Missing',bg:'var(--red-bg
 function fmtDate(d){ if(!d) return '—'; return new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}); }
 const CERT_LABELS={gas:'Gas Safety (CP12)',eicr:'EICR (Electrical)',epc:'EPC',hmo:'HMO / Selective Licence',legionella:'Legionella Risk Assessment',smoke:'Smoke Alarms',co:'CO Alarm'};
 function declStatus(d){ return d?{k:'ok',label:'Confirmed',bg:'var(--green-bg)',color:'var(--green)'}:{k:'missing',label:'Missing',bg:'var(--amber-bg)',color:'var(--amber)'}; }
-function propCompliance(p){ const c=p.certs||{};
-  const items=[['gas','Gas Safety',c.gas,'exp'],['eicr','EICR (Electrical)',c.eicr,'exp'],['epc','EPC',c.epc,'exp'],['smoke','Smoke alarms',c.smoke,'decl']];
+function _fullCertItems(p){ const c=p.certs||{};
+  const items=[['gas','Gas Safety',c.gas,'exp'],['eicr','EICR (Electrical)',c.eicr,'exp'],['epc','EPC',c.epc,'exp'],['smoke','Smoke alarms',c.smoke,'decl'],['legionella','Legionella risk assessment',c.legionella,'exp']];
   if(!c.coNA) items.push(['co','CO alarm',c.co,'decl']);
   if(c.hmoApplicable) items.push(['hmo','HMO licence',c.hmo,'exp']);
+  return items;
+}
+function propCompliance(p){
+  const items=_fullCertItems(p);
   const done=items.filter(([k,l,d,kind])=>{ const r=kind==='decl'?declStatus(d):certRAG(d); return r.k==='ok'||r.k==='soon'; }).length;
   return {items,pct:Math.round(done/items.length*100)}; }
 
@@ -3000,24 +3004,24 @@ async function aiFinderRun(){
 // auto-expanded wherever something needs attention).
 // ═══════════════════════════════════════════════════════════════════════════
 function vCompliance(){
-  const items=[]; S.properties.forEach(p=>{ const c=p.certs||{}; [['gas','Gas Safety'],['eicr','EICR (Electrical)'],['epc','EPC']].forEach(([k,lab])=>items.push({k,lab,date:c[k],rag:certRAG(c[k])})); });
+  const items=[]; S.properties.forEach(p=>{ _fullCertItems(p).forEach(([k,lab,d,kind])=>items.push({k,lab,date:d,rag:kind==='decl'?declStatus(d):certRAG(d)})); });
   const tot=items.length, ok=items.filter(x=>x.rag.k==='ok').length, soon=items.filter(x=>x.rag.k==='soon').length, bad=items.filter(x=>x.rag.k==='expired'||x.rag.k==='missing').length;
   const byLandlord=S.landlords.map(l=>{
     const props=S.properties.filter(p=>p.landlordId===l.id);
-    const certs=[]; props.forEach(p=>{ const c=p.certs||{}; [['gas','Gas Safety'],['eicr','EICR (Electrical)'],['epc','EPC']].forEach(([k,lab])=>certs.push(certRAG(c[k]).k)); });
+    const certs=[]; props.forEach(p=>{ _fullCertItems(p).forEach(([k,lab,d,kind])=>certs.push((kind==='decl'?declStatus(d):certRAG(d)).k)); });
     const issues=certs.filter(k=>k!=='ok').length;
     return {l,props,issues,total:certs.length};
   }).filter(x=>x.props.length);
   const rows=byLandlord.map(({l,props,issues,total})=>{
     const propHtml=props.map(p=>{
-      const c=p.certs||{}; const items3=[['gas','Gas Safety (annual)'],['eicr','EICR (every 5 yrs)'],['epc','EPC'+(c.epcRating?' · '+c.epcRating:'')]];
-      const pIssues=items3.filter(([k])=>certRAG(c[k]).k!=='ok').length;
-      const certHtml=items3.map(([k,lab])=>{ const r=certRAG(c[k]); return `<div class="tree-leaf">
+      const items3=_fullCertItems(p).map(([k,lab,d,kind])=>[k,lab+(k==='epc'&&p.certs&&p.certs.epcRating?' · '+p.certs.epcRating:''),d,kind]);
+      const pIssues=items3.filter(([k,l,d,kind])=>(kind==='decl'?declStatus(d):certRAG(d)).k!=='ok').length;
+      const certHtml=items3.map(([k,lab,d,kind])=>{ const r=kind==='decl'?declStatus(d):certRAG(d); return `<div class="tree-leaf">
           <span class="tree-dot" style="background:${r.color}"></span>
           <span style="flex:1;font-size:12.5px">${lab}</span>
-          <span class="faint" style="font-size:11.5px;margin-right:8px">${c[k]?fmtDate(c[k]):'No certificate'}</span>
+          <span class="faint" style="font-size:11.5px;margin-right:8px">${d?(kind==='decl'?'Confirmed '+fmtDate(d):fmtDate(d)):(kind==='decl'?'Not confirmed':'No certificate')}</span>
           <span class="pill" style="background:${r.bg};color:${r.color}">${r.label}</span>
-          <button class="btn sm" onclick="editCert('${p.id}','${k}')">${c[k]?'Update':'Add'}</button>
+          <button class="btn sm" onclick="editCert('${p.id}','${k}')">${d?'Update':'Add'}</button>
         </div>`; }).join('');
       return `<details class="tree-node" ${pIssues?'open':''}>
         <summary><span class="tree-caret">▸</span><span class="tree-ic">⌂</span><span style="flex:1;font-weight:600;font-size:13px;color:var(--navy)">${esc(p.address)}${p.city?', '+esc(p.city):''}</span>${pIssues?`<span class="pill" style="background:var(--red-bg);color:var(--red)">${pIssues} to fix</span>`:`<span class="pill" style="background:var(--green-bg);color:var(--green)">All valid</span>`}</summary>
