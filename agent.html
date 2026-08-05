@@ -31,6 +31,9 @@ body{font-family:var(--font);background:var(--bg);color:var(--txt)}
 .sb-foot{padding:12px 16px;border-top:1px solid rgba(255,255,255,.08);font-size:12px;color:rgba(255,255,255,.55)}
 .sb-user{display:flex;align-items:center;gap:9px}
 .sb-av{width:30px;height:30px;border-radius:50%;background:var(--orange);color:var(--navy);font-weight:700;display:flex;align-items:center;justify-content:center;font-size:12px}
+.nav-grp{padding:14px 18px 6px;font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:rgba(255,255,255,.35);cursor:pointer;user-select:none}
+.nav-grp:hover{color:rgba(255,255,255,.6)}
+.nav-grp:first-child{padding-top:8px}
 .main{flex:1;min-width:0}
 .topbar{background:#fff;border-bottom:1px solid var(--border);padding:0 30px;height:60px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:20}
 .tb-title{font-size:11px;font-weight:700;letter-spacing:.7px;color:var(--faint);text-transform:uppercase}
@@ -139,7 +142,7 @@ h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px
     </div>
   </aside>
   <main class="main">
-    <div class="topbar"><span class="tb-title" id="tb-title">Dashboard</span><div id="tb-actions"></div></div>
+    <div class="topbar"><span class="tb-title" id="tb-title">Dashboard</span><div style="display:flex;align-items:center;gap:10px"><button class="btn sm" id="notif-bell" onclick="openNotifications()" style="position:relative">🔔<span id="notif-badge" style="display:none;position:absolute;top:-5px;right:-5px;background:var(--red);color:#fff;font-size:9px;font-weight:700;border-radius:8px;padding:1px 5px;min-width:14px;text-align:center;line-height:1.4"></span></button><div id="tb-actions"></div></div></div>
     <div class="content" id="view"></div>
   </main>
   <button class="btn navy" onclick="openAiFinder()" title="Ask AI — where do I find…?" style="position:fixed;right:22px;bottom:22px;z-index:500;border-radius:100px;padding:12px 18px;box-shadow:0 8px 24px rgba(11,30,61,.28);display:flex;align-items:center;gap:7px">✦ Ask AI</button>
@@ -366,13 +369,14 @@ const RAG={green:{label:'● Pass',bg:'var(--green-bg)',color:'var(--green)'},am
 const CREDIT={not_requested:{label:'Credit: not requested',bg:'var(--off)',color:'#94A3B8'},requested:{label:'Credit: requested',bg:'var(--blue-bg)',color:'var(--blue)'},in_progress:{label:'Credit: in progress',bg:'var(--amber-bg)',color:'var(--amber)'},complete:{label:'Credit: report attached',bg:'var(--green-bg)',color:'var(--green)'}};
 
 const NAV=[
-  {k:'dashboard',ic:'▦',t:'Agency Dashboard'},{k:'landlords',ic:'⚇',t:'Landlords'},
-  {k:'marketing',ic:'🏷',t:'Marketing'},{k:'applicants',ic:'◕',t:'Applicants & Viewings'},{k:'offers',ic:'£',t:'Offers'},{k:'keys',ic:'🔑',t:'Key Register'},{k:'reports',ic:'◩',t:'Reports'},{k:'clientmoney',ic:'◐',t:'Client Money'},
-  {k:'pipeline',ic:'◫',t:'Tenancy Progression'},{k:'referencing',ic:'◷',t:'Referencing'},
-  {k:'properties',ic:'⌂',t:'Properties'},{k:'compliance',ic:'⌘',t:'Compliance'},{k:'rent',ic:'£',t:'Rent & Arrears'},{k:'maintenance',ic:'🔧',t:'Maintenance'},{k:'inventory2',ic:'📄',t:'Inventory & Check-out'},{k:'invoices',ic:'£',t:'Invoices'},
-  {k:'templates',ic:'✉',t:'Letters & Templates'},{k:'notices',ic:'⚖',t:'Possession & Notices'},{k:'settings',ic:'⚙',t:'Agency Settings'}
+  {k:'dashboard',ic:'▦',t:'Agency Dashboard',grp:'Overview'},{k:'reports',ic:'◩',t:'Reports',grp:'Overview'},{k:'clientmoney',ic:'◐',t:'Client Money',grp:'Overview'},
+  {k:'landlords',ic:'⚇',t:'Landlords',grp:'Landlords & Deals'},{k:'marketing',ic:'🏷',t:'Marketing',grp:'Landlords & Deals'},{k:'applicants',ic:'◕',t:'Applicants & Viewings',grp:'Landlords & Deals'},{k:'offers',ic:'£',t:'Offers',grp:'Landlords & Deals'},{k:'pipeline',ic:'◫',t:'Tenancy Progression',grp:'Landlords & Deals'},{k:'referencing',ic:'◷',t:'Referencing',grp:'Landlords & Deals'},
+  {k:'properties',ic:'⌂',t:'Properties',grp:'Property & Tenancy'},{k:'compliance',ic:'⌘',t:'Compliance',grp:'Property & Tenancy'},{k:'rent',ic:'£',t:'Rent & Arrears',grp:'Property & Tenancy'},{k:'maintenance',ic:'🔧',t:'Maintenance',grp:'Property & Tenancy'},{k:'inventory2',ic:'📄',t:'Inventory & Check-out',grp:'Property & Tenancy'},{k:'notices',ic:'⚖',t:'Possession & Notices',grp:'Property & Tenancy'},{k:'keys',ic:'🔑',t:'Key Register',grp:'Property & Tenancy'},
+  {k:'invoices',ic:'£',t:'Invoices',grp:'Money & Docs'},{k:'templates',ic:'✉',t:'Letters & Templates',grp:'Money & Docs'},
+  {k:'settings',ic:'⚙',t:'Agency Settings',grp:'Agency'}
 ];
 let view='dashboard', sel=null, llView=false;
+function _toggleNavGrp(g){ window._navOpen=window._navOpen||{}; window._navOpen[g]=!window._navOpen[g]; render(); }
 function go(v,id){ view=v; if(id!==undefined)sel=id; try{ history.replaceState(null,'','#'+v+(id!==undefined&&id!==null?('/'+id):'')); }catch(e){} window.scrollTo(0,0); render(); }
 // Restore the open page after a refresh (reads the URL hash written by go()).
 function restoreView(){ const h=(location.hash||'').replace(/^#/,''); if(!h)return; const parts=h.split('/'); if(parts[0]){ view=parts[0]; if(parts[1]!==undefined) sel=parts[1]; } }
@@ -413,7 +417,17 @@ function propCompliance(p){
   return {items,pct:Math.round(done/items.length*100)}; }
 
 function render(){
-  document.getElementById('nav').innerHTML=NAV.map(n=>`<div class="nav ${n.k===view||(view==='landlord'&&n.k==='landlords')?'on':''}" onclick="go('${n.k}')"><span class="ic">${n.ic}</span>${n.t}</div>`).join('');
+  const activeGrp=(NAV.find(n=>n.k===view||(view==='landlord'&&n.k==='landlords'))||{}).grp;
+  window._navOpen=window._navOpen||{}; if(activeGrp) window._navOpen[activeGrp]=true;
+  let lastGrp=null;
+  document.getElementById('nav').innerHTML=NAV.map(n=>{
+    let hdr='';
+    if(n.grp!==lastGrp){ const open=!!window._navOpen[n.grp]; hdr=`<div class="nav-grp" onclick="_toggleNavGrp('${n.grp}')">${n.grp}<span style="float:right">${open?'▾':'▸'}</span></div>`; lastGrp=n.grp; }
+    if(!window._navOpen[n.grp]) return hdr;
+    return hdr+`<div class="nav ${n.k===view||(view==='landlord'&&n.k==='landlords')?'on':''}" onclick="go('${n.k}')"><span class="ic">${n.ic}</span>${n.t}</div>`;
+  }).join('');
+  const notifs=_notifications(); const badge=document.getElementById('notif-badge');
+  if(badge){ if(notifs.length){ badge.style.display='block'; badge.textContent=notifs.length>9?'9+':notifs.length; } else badge.style.display='none'; }
   const sf=document.getElementById('scheme-foot');
   sf.innerHTML = S.agency.redress
     ? `<div style="font-size:11px;color:rgba(255,255,255,.6)">Redress scheme</div><div style="font-size:11.5px;color:var(--green);font-weight:700;margin-top:2px">✓ ${esc(S.agency.redress)}</div>`
@@ -1138,6 +1152,27 @@ function _tenancyChecklist(p){
   }
   const done=items.filter(i=>i.done).length;
   return {items,pct:Math.round(done/items.length*100)};
+}
+function _nextMidCheckDue(v){
+  const t=(S.tenants||[]).find(x=>x.id===v.tenantId); const start=t&&t.start; if(!start) return null;
+  const visitDates=[]; (v.rooms||[]).forEach(r=>{ (r.visits||[]).forEach(vi=>{ if(vi.date) visitDates.push(vi.date); }); });
+  const last=visitDates.length?visitDates.sort().pop():start;
+  const next=new Date(last); next.setMonth(next.getMonth()+6);
+  const days=Math.round((next-new Date())/864e5);
+  return {next:next.toISOString().slice(0,10),days,overdue:days<0};
+}
+function _notifications(){
+  const out=[];
+  S.properties.forEach(p=>{ _fullCertItems(p).forEach(it=>{ const r=_itemRag(it); if(it[3]==='exp'&&(r.k==='expired'||r.k==='soon')) out.push({sev:r.k==='expired'?'red':'amber',label:it[1]+' — '+(p.address||''),detail:r.label,go:`go('property','${p.id}')`}); }); });
+  (S.inventories2||[]).forEach(v=>{ const due=_nextMidCheckDue(v); if(due&&(due.overdue||due.days<=14)){ const p=P(v.propertyId)||{}; out.push({sev:due.overdue?'red':'amber',label:'Mid-tenancy check — '+(p.address||''),detail:due.overdue?'Overdue since '+fmtDate(due.next):'Due '+fmtDate(due.next),go:`go('inventorydetail','${v.id}')`}); } });
+  (_nextInvoiceReminders()||[]).forEach(r=>{ out.push({sev:r.days<0?'red':'amber',label:'Invoice — '+r.l.name,detail:r.days<0?'Overdue by '+(-r.days)+' days':'Due in '+r.days+' days',go:`go('invoices')`}); });
+  S.properties.filter(p=>p.tenant).forEach(p=>{ const cl=_tenancyChecklist(p); const missing=cl.items.filter(i=>!i.done&&!i.warn); if(missing.length) out.push({sev:'red',label:'Tenancy setup — '+(p.address||''),detail:'Missing: '+missing.map(i=>i.label).join(', '),go:`go('property','${p.id}')`}); });
+  return out.sort((a,b)=>(a.sev==='red'?0:1)-(b.sev==='red'?0:1));
+}
+function openNotifications(){
+  const items=_notifications();
+  const body=items.length?items.map(n=>`<div class="doc" style="padding:8px 0;cursor:pointer" onclick="closeModal();${n.go}"><div class="di" style="background:${n.sev==='red'?'var(--red-bg)':'var(--amber-bg)'};color:${n.sev==='red'?'var(--red)':'var(--amber)'}">!</div><div style="flex:1"><div style="font-size:12.5px;font-weight:600;color:var(--navy)">${esc(n.label)}</div><div class="faint" style="font-size:11.5px">${esc(n.detail)}</div></div></div>`).join(''):'<div class="empty" style="padding:24px;text-align:center"><span class="faint" style="font-size:12.5px">✓ Nothing needs attention.</span></div>';
+  modal('Notifications',body,`<button class="btn" onclick="closeModal()">Close</button>`);
 }
 function tenancyChecklistPanel(p){
   const cl=_tenancyChecklist(p);
@@ -3068,62 +3103,159 @@ function vInventoryList(){
         <div style="flex:1"><div style="font-size:14px;font-weight:600;color:var(--navy)">${esc(p.address||'—')}</div><div class="faint" style="font-size:12px">${esc(t.name||'—')} · ${v.rooms.length} item${v.rooms.length===1?'':'s'}</div></div>
         <span class="pill" style="background:${v.status==='complete'?'var(--green-bg)':'var(--off)'};color:${v.status==='complete'?'var(--green)':'#475569'}">${v.status==='complete'?'Complete':'Draft'}</span></div>`; }).join(''):'<div class="empty">No inventories yet. Create one for a tenancy to start recording move-in condition.</div>'}</div>`;
 }
+function _ensureRoomShape(r){
+  if(!r.checkin) r.checkin={photos:r.checkinPhoto?[r.checkinPhoto]:[],note:r.checkinNote||''};
+  if(!r.checkout) r.checkout={photos:r.checkoutPhoto?[r.checkoutPhoto]:[],note:r.checkoutNote||''};
+  if(!r.visits) r.visits=[];
+  return r;
+}
+function _invActiveTab(vid){ window._invTabs=window._invTabs||{}; return window._invTabs[vid]||0; }
+function _invSetTab(vid,i){ window._invTabs=window._invTabs||{}; window._invTabs[vid]=i; render(); }
+function _photoStrip(vid,i,stage,visitIdx,photos){
+  const thumbs=(photos||[]).map((u,pi)=>`<div style="position:relative;width:54px;height:54px;flex-shrink:0"><img src="${u}" style="width:100%;height:100%;object-fit:cover;border-radius:6px;cursor:pointer" onclick="viewDoc('${u}','Photo')"><button onclick="removeRoomPhoto('${vid}',${i},'${stage}',${visitIdx==null?'null':visitIdx},${pi})" style="position:absolute;top:-5px;right:-5px;width:16px;height:16px;border-radius:50%;background:var(--red);color:#fff;border:none;font-size:10px;line-height:16px;cursor:pointer;padding:0">✕</button></div>`).join('');
+  return `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px">${thumbs}
+    <label style="width:54px;height:54px;border:1.5px dashed var(--border);border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:18px;color:var(--faint)">＋<input type="file" accept="image/*" multiple style="display:none" onchange="addRoomPhotos('${vid}',${i},'${stage}',${visitIdx==null?'null':visitIdx},this)"></label>
+  </div>`;
+}
+async function addRoomPhotos(vid,i,stage,visitIdx,input){
+  const files=[...(input.files||[])]; if(!files.length) return;
+  const v=(S.inventories2||[]).find(x=>x.id===vid); const r=_ensureRoomShape(v.rooms[i]);
+  const target=stage==='visit'?r.visits[visitIdx]:r[stage];
+  for(const f of files){ const url=await _resizeImg(f,700); target.photos.push(url); }
+  pushInv2(v); render();
+}
+function removeRoomPhoto(vid,i,stage,visitIdx,pi){
+  const v=(S.inventories2||[]).find(x=>x.id===vid); const r=_ensureRoomShape(v.rooms[i]);
+  const target=stage==='visit'?r.visits[visitIdx]:r[stage];
+  target.photos.splice(pi,1); pushInv2(v); render();
+}
+function roomNoteField(vid,i,stage,visitIdx,value){
+  const v=(S.inventories2||[]).find(x=>x.id===vid); const r=_ensureRoomShape(v.rooms[i]);
+  const target=stage==='visit'?r.visits[visitIdx]:r[stage];
+  target.note=value; pushInv2(v);
+}
+function startMidCheck(vid){
+  const v=(S.inventories2||[]).find(x=>x.id===vid); if(!v) return;
+  const d=today();
+  v.rooms.forEach(r=>{ _ensureRoomShape(r); r.visits.push({date:d,photos:[],note:''}); });
+  pushInv2(v); render(); toast('✓ Mid-tenancy check started — add photos room by room');
+}
 function vInventoryDetail(){
   const v=(S.inventories2||[]).find(x=>x.id===sel); if(!v) return vInventoryList();
+  v.rooms.forEach(_ensureRoomShape);
   const p=P(v.propertyId)||{}; const t=(S.tenants||[]).find(x=>x.id===v.tenantId)||{};
   const total=v.rooms.reduce((s,r)=>s+(r.charge||0),0); const ret=Math.max(0,(v.depositHeld||0)-total);
+  const due=_nextMidCheckDue(v);
+  const activeIdx=Math.min(_invActiveTab(v.id),v.rooms.length-1);
+  const r=v.rooms[activeIdx]||{checkin:{photos:[],note:''},checkout:{photos:[],note:''},visits:[]};
+  const latestVisit=r.visits.length?r.visits[r.visits.length-1]:null;
   const clsColor={fair_wear:'var(--green)',damage:'var(--red)',cleaning:'var(--amber)'};
   const clsLabel={fair_wear:'Fair wear & tear',damage:'Tenant damage',cleaning:'Cleaning'};
-  const rows=v.rooms.map((r,i)=>`<div style="border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px">
-    <div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:8px">
-      <div><div class="faint" style="font-size:10.5px;text-transform:uppercase;letter-spacing:.4px">${esc(r.room)}</div><div style="font-weight:700;color:var(--navy);font-size:14px">${esc(r.item)}</div></div>
-      ${r.classification?`<div style="text-align:right"><span class="pill" style="background:${clsColor[r.classification]}22;color:${clsColor[r.classification]}">${clsLabel[r.classification]}</span><div style="font-weight:700;font-size:16px;color:${r.charge?'var(--red)':'var(--green)'};margin-top:4px">${money2(r.charge||0)}</div></div>`:''}
-    </div>
-    <div class="grid2" style="gap:10px;margin-bottom:8px">
-      <div><div class="faint" style="font-size:11px;margin-bottom:4px">Check-in</div>
-        ${r.checkinPhoto?`<img src="${r.checkinPhoto}" style="width:100%;border-radius:7px;max-height:110px;object-fit:cover">`:`<label class="btn sm" style="cursor:pointer">Upload photo<input type="file" accept="image/*" style="display:none" onchange="uploadRoomPhoto('${v.id}',${i},'checkinPhoto',this)"></label>`}
-        <input placeholder="Condition note" value="${esc(r.checkinNote||'')}" oninput="roomField('${v.id}',${i},'checkinNote',this.value)" style="margin-top:6px;font-size:12px;padding:6px 8px"></div>
-      <div><div class="faint" style="font-size:11px;margin-bottom:4px">Check-out</div>
-        ${r.checkoutPhoto?`<img src="${r.checkoutPhoto}" style="width:100%;border-radius:7px;max-height:110px;object-fit:cover">`:`<label class="btn sm" style="cursor:pointer">Upload photo<input type="file" accept="image/*" style="display:none" onchange="uploadRoomPhoto('${v.id}',${i},'checkoutPhoto',this)"></label>`}
-        <input placeholder="Condition note" value="${esc(r.checkoutNote||'')}" oninput="roomField('${v.id}',${i},'checkoutNote',this.value)" style="margin-top:6px;font-size:12px;padding:6px 8px"></div>
-    </div>
-    ${r.reasoning?`<div class="note" style="font-size:11.5px">${esc(r.reasoning)}</div>`:''}
-    <div style="display:flex;gap:8px;margin-top:8px">
-      <button class="btn sm" ${(!r.checkinPhoto||!r.checkoutPhoto)?'disabled title="Add both photos first"':''} onclick="aiCompareItem('${v.id}',${i})">✦ AI compare</button>
-      <button class="btn sm" onclick="removeRoom('${v.id}',${i})" style="color:var(--red)">Remove</button>
-    </div>
-  </div>`).join('');
+  const tabs=v.rooms.map((rm,i)=>`<button class="btn sm ${i===activeIdx?'navy':''}" onclick="_invSetTab('${v.id}',${i})" style="white-space:nowrap">${esc(rm.room)}</button>`).join('');
+  const colHtml=(label,stage,visitIdx,data)=>`<div style="flex:1;min-width:180px"><div class="faint" style="font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">${label}${data&&data.date?' · '+fmtDate(data.date):''}</div>
+    ${_photoStrip(v.id,activeIdx,stage,visitIdx,data?data.photos:[])}
+    <textarea placeholder="Condition note" rows="2" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;resize:vertical" oninput="roomNoteField('${v.id}',${activeIdx},'${stage}',${visitIdx==null?'null':visitIdx},this.value)">${esc(data?data.note||'':'')}</textarea></div>`;
+  const midCol=latestVisit
+    ? colHtml('Mid-tenancy'+(r.visits.length>1?' ('+r.visits.length+')':''),'visit',r.visits.length-1,latestVisit)
+    : `<div style="flex:1;min-width:180px;display:flex;align-items:center;justify-content:center"><button class="btn sm" onclick="startMidCheck('${v.id}')">+ Start mid-tenancy check</button></div>`;
   return `<div class="back" onclick="go('inventory2')">← All inventories</div>
     <h1 class="pg">${esc(p.address||'—')}</h1><div class="sub">${esc(t.name||'—')} · ${v.status==='complete'?'Complete':'Draft'}</div>
+    ${due?`<div class="note ${due.overdue?'warn':''}" style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <div>${due.overdue?'⚠ Mid-tenancy check overdue':'Next mid-tenancy check due'} — ${fmtDate(due.next)}${due.overdue?'':' ('+due.days+' days)'}</div>
+      <button class="btn sm navy" onclick="startMidCheck('${v.id}')">Start check now</button></div>`:''}
     <div class="grid4" style="margin-bottom:16px">
       <div class="kpi"><div class="l">Deposit held</div><div class="v">${money2(v.depositHeld||0)}</div></div>
       <div class="kpi"><div class="l">Proposed deduction</div><div class="v" style="color:var(--red)">${money2(total)}</div></div>
       <div class="kpi"><div class="l">Return to tenant</div><div class="v" style="color:var(--green)">${money2(ret)}</div></div>
-      <div class="kpi"><div class="l">Items logged</div><div class="v">${v.rooms.length}</div></div>
+      <div class="kpi"><div class="l">Rooms</div><div class="v">${v.rooms.length}</div></div>
     </div>
-    ${rows}
-    <div class="panel-bd" style="padding:0"><button class="btn" onclick="addRoom('${v.id}')">＋ Add room / item</button></div>`;
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${tabs}<button class="btn sm" onclick="addRoom('${v.id}')">＋ Room</button></div>
+    <div class="panel"><div class="panel-bd">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:12px">
+        <div><div class="faint" style="font-size:10.5px;text-transform:uppercase;letter-spacing:.4px">${esc(r.room||'')}</div><div style="font-weight:700;color:var(--navy);font-size:15px">${esc(r.item||'')}</div></div>
+        ${r.classification?`<div style="text-align:right"><span class="pill" style="background:${clsColor[r.classification]}22;color:${clsColor[r.classification]}">${clsLabel[r.classification]}</span><div style="font-weight:700;font-size:16px;color:${r.charge?'var(--red)':'var(--green)'};margin-top:4px">${money2(r.charge||0)}</div></div>`:''}
+      </div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap">
+        ${colHtml('Check-in','checkin',null,r.checkin)}
+        ${midCol}
+        ${colHtml('Check-out','checkout',null,r.checkout)}
+      </div>
+      ${r.reasoning?`<div class="note" style="font-size:11.5px;margin-top:10px">${esc(r.reasoning)}</div>`:''}
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn sm" ${(!r.checkin.photos.length||!((latestVisit&&latestVisit.photos.length)||r.checkout.photos.length))?'disabled title="Add check-in and mid-tenancy/check-out photos first"':''} onclick="aiCompareItem('${v.id}',${activeIdx})">✦ AI compare</button>
+        <button class="btn sm" onclick="removeRoom('${v.id}',${activeIdx})" style="color:var(--red)">Remove room</button>
+      </div>
+    </div></div>
+    <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
+      <button class="btn navy" onclick="generateWearReport('${v.id}')">✦ Generate wear &amp; tear report</button>
+      ${v.wearReports&&v.wearReports.length?`<button class="btn" onclick="viewWearReports('${v.id}')">View reports (${v.wearReports.length})</button>`:''}
+    </div>`;
 }
 function addRoom(vid){ const v=(S.inventories2||[]).find(x=>x.id===vid); const room=prompt('Room (e.g. Living room)'); if(!room)return; const item=prompt('Item (e.g. Carpet)')||'Item';
-  v.rooms.push({room,item,checkinNote:'',checkinPhoto:'',checkoutNote:'',checkoutPhoto:'',classification:'',charge:0,reasoning:''}); pushInv2(v); render(); }
-function removeRoom(vid,i){ const v=(S.inventories2||[]).find(x=>x.id===vid); v.rooms.splice(i,1); pushInv2(v); render(); }
-function roomField(vid,i,key,val){ const v=(S.inventories2||[]).find(x=>x.id===vid); v.rooms[i][key]=val; pushInv2(v); }
-async function uploadRoomPhoto(vid,i,key,input){ const file=input.files&&input.files[0]; if(!file)return; const v=(S.inventories2||[]).find(x=>x.id===vid);
-  const url=await _resizeImg(file,700); v.rooms[i][key]=url; pushInv2(v); render(); }
+  v.rooms.push({room,item,checkin:{photos:[],note:''},checkout:{photos:[],note:''},visits:[],classification:'',charge:0,reasoning:''});
+  window._invTabs=window._invTabs||{}; window._invTabs[vid]=v.rooms.length-1; pushInv2(v); render(); }
+function removeRoom(vid,i){ const v=(S.inventories2||[]).find(x=>x.id===vid); v.rooms.splice(i,1);
+  window._invTabs=window._invTabs||{}; if(window._invTabs[vid]>=v.rooms.length) window._invTabs[vid]=Math.max(0,v.rooms.length-1);
+  pushInv2(v); render(); }
 async function aiCompareItem(vid,i){
-  const v=(S.inventories2||[]).find(x=>x.id===vid); const r=v.rooms[i]; const t=(S.tenants||[]).find(x=>x.id===v.tenantId)||{};
+  const v=(S.inventories2||[]).find(x=>x.id===vid); const r=_ensureRoomShape(v.rooms[i]); const t=(S.tenants||[]).find(x=>x.id===v.tenantId)||{};
   if(!window._sessionToken){ toast('AI compare needs a live login',1); return; }
+  const latestVisit=r.visits.length?r.visits[r.visits.length-1]:null;
+  const toSet=(latestVisit&&latestVisit.photos.length)?latestVisit:r.checkout;
+  const toLabel=(latestVisit&&latestVisit.photos.length)?'mid-tenancy check':'check-out';
+  if(!r.checkin.photos.length||!toSet.photos.length){ toast('Add photos to both stages first',1); return; }
   toast('✦ Comparing photos…');
   const months=t.start?Math.max(1,Math.round((new Date()-new Date(t.start))/(1000*60*60*24*30))):12;
   try{
     const b64=u=>u.split(',')[1]; const mt=u=>u.split(';')[0].split(':')[1];
-    const prompt=`You are a UK tenancy deposit-scheme adjudicator. Compare the CHECK-IN and CHECK-OUT photos of this item: "${r.room} — ${r.item}". Check-in note: "${r.checkinNote||'none'}". Check-out note: "${r.checkoutNote||'none'}". Tenancy length: ${months} months.\nClassify as exactly one of: fair_wear (normal deterioration from use — never chargeable), damage (tenant-caused, beyond fair wear), cleaning (below check-in cleanliness standard). If chargeable, apply apportionment — the tenant only pays the proportion of the item's remaining expected life, never full replacement cost (avoid betterment / new-for-old). Return ONLY JSON: {"classification":"fair_wear|damage|cleaning","charge":number,"reasoning":"one or two sentences, including any apportionment math"}`;
-    const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:300,messages:[{role:'user',content:[{type:'image',source:{type:'base64',media_type:mt(r.checkinPhoto),data:b64(r.checkinPhoto)}},{type:'text',text:'CHECK-IN photo above.'},{type:'image',source:{type:'base64',media_type:mt(r.checkoutPhoto),data:b64(r.checkoutPhoto)}},{type:'text',text:'CHECK-OUT photo above.\n\n'+prompt}]}]})});
+    const prompt=`You are a UK tenancy deposit-scheme adjudicator. Compare the CHECK-IN photos and the ${toLabel.toUpperCase()} photos of this item: "${r.room} — ${r.item}". Check-in note: "${r.checkin.note||'none'}". ${toLabel} note: "${toSet.note||'none'}". Tenancy length: ${months} months.\nClassify as exactly one of: fair_wear (normal deterioration from use — never chargeable), damage (tenant-caused, beyond fair wear), cleaning (below check-in cleanliness standard). If chargeable, apply apportionment — the tenant only pays the proportion of the item's remaining expected life, never full replacement cost (avoid betterment / new-for-old). Return ONLY JSON: {"classification":"fair_wear|damage|cleaning","charge":number,"reasoning":"one or two sentences, including any apportionment math"}`;
+    const content=[...r.checkin.photos.map(u=>({type:'image',source:{type:'base64',media_type:mt(u),data:b64(u)}})),{type:'text',text:'CHECK-IN photos above.'},...toSet.photos.map(u=>({type:'image',source:{type:'base64',media_type:mt(u),data:b64(u)}})),{type:'text',text:toLabel.toUpperCase()+' photos above.\n\n'+prompt}];
+    const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:300,messages:[{role:'user',content}]})});
     const data=await res.json(); const txt=((data.content&&data.content[0]&&data.content[0].text)||'{}').replace(/```json|```/g,'').trim();
     const parsed=JSON.parse(txt);
     r.classification=parsed.classification||'fair_wear'; r.charge=+parsed.charge||0; r.reasoning=parsed.reasoning||'';
     v.totalDeduction=v.rooms.reduce((s,x)=>s+(x.charge||0),0); pushInv2(v); render(); toast('✓ AI comparison complete — review before finalising');
   }catch(e){ console.error(e); toast('Could not compare — try again',1); }
+}
+async function generateWearReport(vid){
+  const v=(S.inventories2||[]).find(x=>x.id===vid); if(!v) return;
+  if(!window._sessionToken){ toast('AI report needs a live login',1); return; }
+  const p=P(v.propertyId)||{}; const t=(S.tenants||[]).find(x=>x.id===v.tenantId)||{};
+  const eligible=v.rooms.map(_ensureRoomShape).filter(r=>{ const lv=r.visits.length?r.visits[r.visits.length-1]:null; return r.checkin.photos.length&&((lv&&lv.photos.length)||r.checkout.photos.length); });
+  if(!eligible.length){ toast('Add check-in and mid-tenancy/check-out photos to at least one room first',1); return; }
+  toast('✦ Generating wear & tear report — this can take a moment…');
+  const results=[];
+  for(const r of eligible){
+    const lv=r.visits.length?r.visits[r.visits.length-1]:null;
+    const toSet=(lv&&lv.photos.length)?lv:r.checkout; const toLabel=(lv&&lv.photos.length)?'mid-tenancy':'check-out';
+    try{
+      const b64=u=>u.split(',')[1]; const mt=u=>u.split(';')[0].split(':')[1];
+      const prompt=`UK tenancy deposit adjudicator. Compare CHECK-IN vs ${toLabel.toUpperCase()} photos for "${r.room} — ${r.item}". Notes: check-in "${r.checkin.note||'none'}", ${toLabel} "${toSet.note||'none'}". Return ONLY JSON: {"classification":"fair_wear|damage|cleaning","summary":"one sentence"}`;
+      const content=[...r.checkin.photos.map(u=>({type:'image',source:{type:'base64',media_type:mt(u),data:b64(u)}})),{type:'text',text:'CHECK-IN above.'},...toSet.photos.map(u=>({type:'image',source:{type:'base64',media_type:mt(u),data:b64(u)}})),{type:'text',text:toLabel.toUpperCase()+' above.\n\n'+prompt}];
+      const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:200,messages:[{role:'user',content}]})});
+      const data=await res.json(); const txt=((data.content&&data.content[0]&&data.content[0].text)||'{}').replace(/```json|```/g,'').trim();
+      const parsed=JSON.parse(txt);
+      results.push({room:r.room,item:r.item,classification:parsed.classification||'fair_wear',summary:parsed.summary||''});
+    }catch(e){ results.push({room:r.room,item:r.item,classification:'fair_wear',summary:'Could not analyse automatically.'}); }
+  }
+  const clsLabel={fair_wear:'Fair wear & tear',damage:'Damage',cleaning:'Cleaning needed'};
+  const html=`<h3 style="margin-top:0">Wear &amp; tear report — ${esc(p.address||'')}</h3><p style="font-size:12.5px;color:#7A8FA6">Tenant: ${esc(t.name||'—')} · ${fmtDate(today())}</p>
+    <table style="width:100%;font-size:12.5px;border-collapse:collapse">${results.map(x=>`<tr style="border-bottom:1px solid #E4EAF1"><td style="padding:6px 4px;font-weight:600">${esc(x.room)}</td><td style="padding:6px 4px">${esc(x.item)}</td><td style="padding:6px 4px">${clsLabel[x.classification]||x.classification}</td><td style="padding:6px 4px">${esc(x.summary)}</td></tr>`).join('')}</table>`;
+  v.wearReports=v.wearReports||[]; v.wearReports.unshift({id:uid('wr'),date:today(),html});
+  pushInv2(v); render(); toast('✓ Wear & tear report generated');
+}
+function viewWearReports(vid){
+  const v=(S.inventories2||[]).find(x=>x.id===vid); if(!v||!v.wearReports||!v.wearReports.length) return;
+  const p=P(v.propertyId)||{}; const l=L(p.landlordId)||{};
+  const body=v.wearReports.map(r=>`<div class="note" style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b>${fmtDate(r.date)}</b><div style="display:flex;gap:6px">${l.email?`<button class="btn sm navy" onclick="emailWearReport('${vid}','${r.id}')">Send to landlord</button>`:''}${r.sentAt?`<span class="faint" style="font-size:11px;align-self:center">✓ sent ${fmtDate(r.sentAt)}</span>`:''}</div></div>${r.html}</div>`).join('');
+  modal('Wear & tear reports',body,`<button class="btn" onclick="closeModal()">Close</button>`);
+}
+function emailWearReport(vid,rid){
+  const v=(S.inventories2||[]).find(x=>x.id===vid); const r=(v.wearReports||[]).find(x=>x.id===rid); if(!r) return;
+  const p=P(v.propertyId)||{}; const l=L(p.landlordId)||{};
+  if(!l.email){ toast('No landlord email on file',1); return; }
+  agencyEmail(l.email,'Wear & tear report — '+(p.address||''),`<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#1A2B45">${r.html}</div>`);
+  r.sentAt=new Date().toISOString(); pushInv2(v); closeModal(); toast('✓ Report emailed to '+l.email);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
