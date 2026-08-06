@@ -3068,12 +3068,15 @@ function _noticeRecipients(n){
   if(rec.guarantor&&rec.guarantor.email) add(rec.guarantor.email,'guarantor');
   return out;
 }
+async function noticeAttachOfficial(id,input){ const f=input.files&&input.files[0]; if(!f) return; const n=S.notices.find(x=>x.id===id); if(!n)return;
+  const ext=(f.name.split('.').pop()||'pdf'); const url=await _storageUpload(f,id+'-official-'+Date.now()+'.'+ext,'property-documents');
+  n.officialDoc={name:f.name,url:url||'',uploadedAt:today()}; save(); pushNotice(n); render(); toast('✓ Signed form attached'); }
 async function emailNotice(id){
   const n=S.notices.find(x=>x.id===id); if(!n) return; const p=P(n.propertyId)||{};
   const recips=_noticeRecipients(n);
   if(!recips.length){ toast('No email on file for the tenant, occupants or guarantor',1); return; }
   const label=n.kind==='section13'?'Section 13 rent increase notice':'Section 8 possession notice';
-  const html=`<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#1A2B45">${n.docHtml}</div>`;
+  const html=n.officialDoc?`<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#1A2B45"><p>Please find your ${label} attached/linked below.</p><p><a href="${n.officialDoc.url}">View the signed notice →</a></p><hr style="margin:20px 0;border:none;border-top:1px solid #ddd"><div style="font-size:12px;color:#7A8FA6">For reference, a summary of the notice:</div>${n.docHtml}</div>`:`<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#1A2B45">${n.docHtml}</div>`;
   for(const r of recips){ await agencyEmail(r.email, label+' — '+esc(p.address||''), html); }
   n.emailedTo=recips.map(r=>r.email); n.emailedAt=new Date().toISOString();
   const l=L(n.landlordId||p.landlordId); if(l&&l.id){ l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Notice',note:label+' emailed to '+recips.map(r=>r.label+' ('+r.email+')').join(', ')+' — '+(p.address||'')}); pushLandlord(l); }
@@ -3108,14 +3111,34 @@ function vNoticeDetail(){
   const n=(S.notices||[]).find(x=>x.id===sel); if(!n) return vNotices();
   const p=P(n.propertyId)||{}; const route=n.kind==='section8'?_courtRoute(n):null;
   return `<div class="back no-print" onclick="go('notices')">← All notices</div>
-    <div class="no-print" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+        <div class="no-print" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
       ${n.status==='draft'?`<button class="btn navy" onclick="serveNoticeModal('${n.id}')">Mark as served</button>`:''}
-      ${_noticeRecipients(n).length?`<button class="btn" onclick="emailNotice('${n.id}')">\u2709 Email to tenant(s)${(P(n.propertyId).tenant&&P(n.propertyId).tenant.occupants&&P(n.propertyId).tenant.occupants.length)||(tenantRecFor(n.propertyId)&&tenantRecFor(n.propertyId).guarantor)?' & guarantor':''}</button>`:''}
+      ${_noticeRecipients(n).length?`<button class="btn" onclick="emailNotice('${n.id}')">✉ Email to tenant(s)${(P(n.propertyId).tenant&&P(n.propertyId).tenant.occupants&&P(n.propertyId).tenant.occupants.length)||(tenantRecFor(n.propertyId)&&tenantRecFor(n.propertyId).guarantor)?' & guarantor':''}</button>`:''}
       ${n.status!=='withdrawn'?`<button class="btn" onclick="withdrawNotice('${n.id}')">Withdraw</button>`:''}
       ${n.status==='draft'?`<button class="btn" style="color:var(--red)" onclick="deleteNotice('${n.id}')">🗑 Delete draft</button>`:''}
       <button class="btn" onclick="window.print()">🖨 Print / PDF</button>
     </div>
-    ${(()=>{ const f=OFFICIAL_FORMS[n.kind]; if(!f||!f.file) return ''; return `<div class="hint no-print" style="max-width:720px;margin:0 auto 10px">This is the one notice to send — it already uses the current prescribed ${n.kind==='section13'?'Form 4A':'Form 3A'} wording, filled with this tenancy's details. Want to cross-check the blank <a href="${f.file}" target="_blank">official GOV.UK ${esc(f.label.split(' — ')[0])} ↗</a> it's based on? ${(f.guidance&&f.guidance.length)?f.guidance.map(g=>`<a href="${g.file}" target="_blank">${esc(g.label)} ↗</a>`).join(' · '):''}</div>`; })()}
+    <div class="panel no-print" style="max-width:720px;margin:0 auto 12px"><div class="panel-hd"><h2>Step 1 · Values for the official form</h2></div><div class="panel-bd">
+      <div class="kv"><span class="k">Landlord</span><span class="v">${esc((L(n.landlordId)||{}).name||'')}</span></div>
+      <div class="kv"><span class="k">Tenant(s)</span><span class="v">${esc(n.tenantName||'')}</span></div>
+      <div class="kv"><span class="k">Property address</span><span class="v" style="max-width:60%;text-align:right">${esc(p.address||'')}${p.postcode?', '+esc(p.postcode):''}</span></div>
+      ${n.kind==='section13'?`<div class="kv"><span class="k">Current rent</span><span class="v">${gbp(n.rentCurrent||0)}/mo</span></div>
+      <div class="kv"><span class="k">Proposed new rent</span><span class="v">${gbp(n.rentNew||0)}/mo</span></div>
+      <div class="kv"><span class="k">Date this notice is served</span><span class="v">${fmtDate(n.served)}</span></div>
+      <div class="kv" style="border:none"><span class="k">New rent starts from</span><span class="v">${fmtDate(n.expiry)}</span></div>`:`<div class="kv"><span class="k">Ground(s) relied on</span><span class="v">${esc(n.grounds.join(', '))}</span></div>
+      <div class="kv"><span class="k">Date this notice is served</span><span class="v">${fmtDate(n.served)}</span></div>
+      <div class="kv" style="border:none"><span class="k">Court proceedings not before</span><span class="v">${fmtDate(n.expiry)}</span></div>`}
+    </div></div>
+    <div class="panel no-print" style="max-width:720px;margin:0 auto 12px"><div class="panel-hd"><h2>Step 2 · Download, fill in &amp; sign</h2></div><div class="panel-bd">
+      ${(()=>{ const f=OFFICIAL_FORMS[n.kind]; if(!f||!f.file) return `<a class="btn navy" href="${GOVUK_FORM3A}" target="_blank">Official GOV.UK form ↗</a>`; return `<div class="hint" style="margin-bottom:8px"><b>${esc(f.label)}</b> is a prescribed statutory form — use the values above, fill it in on-screen (it has fillable fields) and sign it, rather than a letter or our own wording, which risks being ruled invalid if challenged.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn navy" href="${f.file}" target="_blank">📄 Download blank ${esc(f.label.split(' — ')[0])} ↗</a>${(f.guidance&&f.guidance.length)?f.guidance.map(g=>`<a class="btn sm" href="${g.file}" target="_blank">${esc(g.label)} ↗</a>`).join(''):''}</div>`; })()}
+    </div></div>
+    <div class="panel no-print" style="max-width:720px;margin:0 auto 12px"><div class="panel-hd"><h2>Step 3 · Attach the signed copy</h2></div><div class="panel-bd">
+      ${n.officialDoc?`<div class="doc"><div class="di" style="background:var(--green-bg);color:var(--green)">✓</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${esc(n.officialDoc.name)}</div><div class="faint" style="font-size:11.5px">Uploaded ${fmtDate(n.officialDoc.uploadedAt)} — this is what gets emailed/served</div></div><button class="btn sm" onclick="viewDoc('${n.officialDoc.url}','Signed official form')">View</button></div>`
+      :`<div class="note warn">Not attached yet — "Mark as served" and "Email" above will warn you until you do.</div>`}
+      <label class="btn sm" style="cursor:pointer;display:inline-flex;margin-top:8px">📎 ${n.officialDoc?'Replace file':'Attach signed PDF'}<input type="file" accept="application/pdf,image/*" style="display:none" onchange="noticeAttachOfficial('${n.id}',this)"></label>
+    </div></div>
+    <div class="hint no-print" style="max-width:720px;margin:0 auto 10px">The record below is the internal tracking copy Nexlet keeps (reminders, compliance history) — not a substitute for the signed form above.</div>
     <div id="invoice-doc" class="panel" style="max-width:720px;margin:0 auto"><div style="padding:30px 34px;font-size:13px;line-height:1.7">${n.docHtml}</div></div>
     ${n.emailedTo&&n.emailedTo.length?`<div class="hint no-print" style="max-width:720px;margin:10px auto 0">\u2713 Emailed to ${n.emailedTo.map(esc).join(', ')} on ${fmtDate(n.emailedAt)}</div>`:''}
     ${n.serviceProof?`<div class="panel no-print" style="max-width:720px;margin:16px auto 0"><div class="panel-hd"><h2>Proof of service</h2></div><div class="panel-bd">
