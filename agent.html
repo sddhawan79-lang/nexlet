@@ -384,7 +384,7 @@ function go(v,id){ view=v; if(id!==undefined)sel=id; try{ history.replaceState(n
 function restoreView(){ const h=(location.hash||'').replace(/^#/,''); if(!h)return; const parts=h.split('/'); if(parts[0]){ view=parts[0]; if(parts[1]!==undefined) sel=parts[1]; } }
 
 // ── COMPLIANCE RAG (same logic family as the landlord app) ──
-function daysUntil(d){ if(!d) return null; return Math.round((new Date(d)-new Date())/864e5); }
+function daysUntil(d){ if(!d) return null; const due=new Date(d); due.setHours(0,0,0,0); const now=new Date(); now.setHours(0,0,0,0); return Math.round((due-now)/864e5); }
 function certRAG(d){ if(!d) return {k:'missing',label:'Missing',bg:'var(--red-bg)',color:'var(--red)'}; const n=daysUntil(d); if(n<0) return {k:'expired',label:'Expired',bg:'var(--red-bg)',color:'var(--red)'}; if(n<30) return {k:'soon',label:n+'d left',bg:'var(--amber-bg)',color:'var(--amber)'}; return {k:'ok',label:'Valid',bg:'var(--green-bg)',color:'var(--green)'}; }
 function fmtDate(d){ if(!d) return '—'; return new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}); }
 const CERT_LABELS={gas:'Gas Safety (CP12)',eicr:'EICR (Electrical)',epc:'EPC',hmo:'HMO / Selective Licence',legionella:'Legionella Risk Assessment',smoke:'Smoke Alarms',co:'CO Alarm',rtr:'Right to Rent Check',htr:'How to Rent Guide',infosheet:'Renters’ Rights Act Information Sheet'};
@@ -2930,7 +2930,7 @@ const GROUNDS=[
   ['17',false,{amt:2,unit:'weeks'},'False statement','The tenancy was granted because of a false statement by the tenant.']
 ];
 function groundById(c){ return GROUNDS.find(g=>g[0]===c); }
-function _addPeriod(dateStr, per){ const d=dateStr?new Date(dateStr):new Date(); if(per.unit==='months'){ d.setMonth(d.getMonth()+per.amt); } else if(per.unit==='weeks'){ d.setDate(d.getDate()+per.amt*7); } else { d.setDate(d.getDate()+per.amt); } return d.toISOString().slice(0,10); }
+function _addPeriod(dateStr, per){ const d=dateStr?new Date(dateStr):new Date(); if(per.unit==='years'){ d.setFullYear(d.getFullYear()+per.amt); } else if(per.unit==='months'){ d.setMonth(d.getMonth()+per.amt); } else if(per.unit==='weeks'){ d.setDate(d.getDate()+per.amt*7); } else { d.setDate(d.getDate()+per.amt); } return d.toISOString().slice(0,10); }
 function _longestExpiry(served, codes){ let best=served||today(); codes.forEach(c=>{ const g=groundById(c); if(!g)return; const e=_addPeriod(served,g[2]); if(new Date(e)>new Date(best)) best=e; }); return best; }
 function _perLabel(per){ return per.amt===0?'Immediate (proceedings may begin at once)':per.amt+' '+per.unit; }
 
@@ -3007,7 +3007,7 @@ function genNoticeDoc(n){
   const p=P(n.propertyId)||{}; const l=L(n.landlordId)||{}; const a=S.agency; const b=agencyBrand();
   const addr=esc(p.address||'')+(p.city?', '+esc(p.city):'');
   if(n.kind==='section13'){
-    return `<h2 style="text-align:center;margin-top:0">Notice of rent increase</h2><p style="text-align:center;color:#7A8FA6;font-size:12px">Section 13, Housing Act 1988 (as amended by the Renters' Rights Act 2025) — Form 4A · ${_dstr(today())}</p>
+    return `<h2 style="text-align:center;margin-top:0;font-size:17px;font-weight:600;color:var(--navy)">Landlord’s notice proposing a new rent</h2><p style="text-align:center;color:#7A8FA6;font-size:12px">Section 13, Housing Act 1988 (as amended by the Renters' Rights Act 2025) — Form 4A · ${_dstr(today())}</p>
       <p><b>To the tenant(s):</b> ${esc(n.tenantName||'the tenant')}<br><b>Property:</b> ${addr}</p>
       <p>Your landlord/agent gives notice proposing a new rent for the above property.</p>
       <table style="width:100%;font-size:13px;border-collapse:collapse;margin:12px 0">
@@ -3018,7 +3018,7 @@ function genNoticeDoc(n){
       <p style="margin-top:16px">Signed for and on behalf of the landlord: <b>${esc(b.agent||b.name)}</b>, ${esc(b.name)}<br>Date: ${_dstr(today())}</p>`;
   }
   const grows=n.grounds.map(c=>{ const g=groundById(c); return g?`<tr style="border-bottom:1px solid #E4EAF1"><td style="padding:8px 8px 8px 0;font-weight:600;white-space:nowrap">Ground ${g[0]}</td><td style="padding:8px 0">${esc(g[3])} — ${esc(g[4])}</td></tr>`:''; }).join('');
-  return `<h2 style="text-align:center;margin-top:0">Notice seeking possession of a property let on an assured tenancy</h2>
+  return `<h2 style="text-align:center;margin-top:0;font-size:17px;font-weight:600;color:var(--navy)">Notice seeking possession of a property let on an assured tenancy</h2>
     <p style="text-align:center;color:#7A8FA6;font-size:12px">Section 8, Housing Act 1988 — Form 3A (to like effect) · Served ${_dstr(n.served)}</p>
     <p><b>1. To:</b> ${esc(n.tenantName||'the tenant(s)')}</p>
     <p><b>2. Your landlord/agent intends to seek possession of:</b> ${addr}</p>
