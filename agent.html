@@ -387,7 +387,7 @@ function restoreView(){ const h=(location.hash||'').replace(/^#/,''); if(!h)retu
 function daysUntil(d){ if(!d) return null; return Math.round((new Date(d)-new Date())/864e5); }
 function certRAG(d){ if(!d) return {k:'missing',label:'Missing',bg:'var(--red-bg)',color:'var(--red)'}; const n=daysUntil(d); if(n<0) return {k:'expired',label:'Expired',bg:'var(--red-bg)',color:'var(--red)'}; if(n<30) return {k:'soon',label:n+'d left',bg:'var(--amber-bg)',color:'var(--amber)'}; return {k:'ok',label:'Valid',bg:'var(--green-bg)',color:'var(--green)'}; }
 function fmtDate(d){ if(!d) return '—'; return new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}); }
-const CERT_LABELS={gas:'Gas Safety (CP12)',eicr:'EICR (Electrical)',epc:'EPC',hmo:'HMO / Selective Licence',legionella:'Legionella Risk Assessment',smoke:'Smoke Alarms',co:'CO Alarm',rtr:'Right to Rent Check',htr:'How to Rent Guide'};
+const CERT_LABELS={gas:'Gas Safety (CP12)',eicr:'EICR (Electrical)',epc:'EPC',hmo:'HMO / Selective Licence',legionella:'Legionella Risk Assessment',smoke:'Smoke Alarms',co:'CO Alarm',rtr:'Right to Rent Check',htr:'How to Rent Guide',infosheet:'Renters’ Rights Act Information Sheet'};
 function declStatus(d){ return d?{k:'ok',label:'Confirmed',bg:'var(--green-bg)',color:'var(--green)'}:{k:'missing',label:'Missing',bg:'var(--amber-bg)',color:'var(--amber)'}; }
 function _rtrRAG(rec){
   if(!rec||!rec.rtrCheckDate) return {k:'missing',label:'Missing',bg:'var(--red-bg)',color:'var(--red)'};
@@ -408,6 +408,7 @@ function _fullCertItems(p){ const c=p.certs||{}; const rec=tenantRecFor(p.id);
   if(p.tenant){
     items.push(['rtr','Right to Rent check',null,'custom',_rtrRAG(rec)]);
     items.push(['htr','How to Rent guide',c.htr,'decl']);
+    if(rec&&rec.start&&new Date(rec.start)<new Date('2026-05-01')) items.push(['infosheet','RRA Information Sheet (existing tenancy)',c.infosheet,'decl']);
     if(rec&&rec.deposit) items.push(['deposit','Deposit protection',null,'custom',_depositRAG(rec)]);
   }
   if(c.hmoApplicable) items.push(['hmo','HMO licence',c.hmo,'exp']);
@@ -1271,6 +1272,7 @@ function vPropertyDetail(){
           <button class="btn sm" onclick="rtrWizard('${p.id}')">${rec&&rec.rtrCheckDate?'Update':'Check'}</button></div>
           <div class="faint" style="font-size:11px;padding:0 0 10px 30px;margin-top:-6px">Checked by an external referencing company instead of the GOV.UK wizard? <a href="#" onclick="rtrExternal('${p.id}');return false">Upload their report</a></div>`; })():''}
         ${p.tenant?declRow('htr','How to Rent guide','Give the tenant the current gov.uk “How to rent” guide on or before move-in',c.htr,null,null):''}
+        ${(p.tenant&&tenantRecFor(p.id)&&tenantRecFor(p.id).start&&new Date(tenantRecFor(p.id).start)<new Date('2026-05-01'))?declRow('infosheet','RRA Information Sheet','Existing tenancy (started before 1 May 2026) — must be given the government Information Sheet explaining the Renters\u2019 Rights Act changes, by 31 May 2026',c.infosheet,null,null):''}
         ${p.tenant?(()=>{ const rec=tenantRecFor(p.id); if(!rec||!rec.deposit) return ''; const r=_depositRAG(rec); return `<div class="doc"><div class="di" style="background:${r.bg};color:${r.color}">⛨</div>
           <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Deposit protection</div><div class="faint" style="font-size:11.5px">${rec.depositCertName?esc(rec.depositCertName):'Must be protected within 30 days of receipt'}</div></div>
           <span class="pill" style="background:${r.bg};color:${r.color}">${r.label}</span>
@@ -1389,6 +1391,13 @@ function editCert(pid,key){ const p=P(pid); const c=p.certs||(p.certs={}); const
     modal('Confirm '+label,body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveCert('${pid}','${key}')">Confirm</button>`, true);
     return;
   }
+  if(key==='infosheet'){
+    const body=`<div class="note" style="margin-bottom:12px">Existing tenancies (started before 1 May 2026) converted automatically to assured periodic tenancies under the Renters\u2019 Rights Act \u2014 no new tenancy agreement is needed. But the tenant must be given the government\u2019s Information Sheet explaining the changes, by 31 May 2026 (a civil penalty of up to \u00a37,000 applies if missed \u2014 give it now if overdue).</div>
+      <a class="btn sm" href="https://assets.publishing.service.gov.uk/media/69bc04b8f7b1c24d8e23ce60/The_Renters__Rights_Act_Information_Sheet_2026.pdf" target="_blank" style="margin-bottom:12px;display:inline-block">\ud83d\udcc4 Download the Information Sheet (gov.uk)</a>
+      <div class="fg"><label>Given to tenant on</label><input id="ct-date" type="date" value="${cur||today()}"></div>`;
+    modal('Confirm '+label,body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveCert('${pid}','${key}')">Confirm</button>`, true);
+    return;
+  }
   let body=`<div class="note" style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <label class="btn navy sm" style="cursor:pointer;margin:0">✦ Scan ${label} with AI<input type="file" accept="application/pdf,image/*" style="display:none" onchange="aiScanCert('${pid}','${key}',this)"></label>
       <span id="ct-scan-status" class="faint" style="font-size:11.5px">Upload the certificate — AI reads the expiry date.</span></div>`;
@@ -1486,6 +1495,7 @@ function setTenant(pid){ const p=P(pid); const t=p.tenant||{}; const rec=tenantR
   </div></div>
   ${_docSlotHtml('deposit','Deposit certificate','(custodial/insured scheme cert or Prescribed Information)',rec.depositCertName,rec.depositCertUrl)}
   ${_docSlotHtml('ref','Reference report','(employer/previous-landlord reference or credit check)',rec.refDocName,rec.refDocUrl)}
+  ${_docSlotHtml('origcontract','Original signed tenancy agreement','(if this tenancy was already running when NexLet took over management — stays legally valid; no need to reissue, even after the 1 May 2026 conversion to a periodic tenancy)',rec.origContractName,rec.origContractUrl)}
   <div class="hint">Saving creates the tenancy record (for rent tracking, maintenance &amp; the tenant portal) and moves the let to Managed. All named adults appear on Section 8/13 notices, and a named guarantor is copied on them too.</div>`;
   modal('Set up tenant',body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" id="tn-save-btn" onclick="saveTenant('${pid}')">Save tenant</button>`, true); }
 function _occRowHtml(o){ o=o||{}; return `<div style="display:grid;grid-template-columns:1.3fr 1.3fr 1fr auto;gap:8px;margin-bottom:6px" data-occ-row><input placeholder="Full name" value="${esc(o.name||'')}"><input placeholder="Email (optional)" value="${esc(o.email||'')}"><input placeholder="Phone (optional)" value="${esc(o.phone||'')}"><button type="button" class="btn sm" onclick="this.closest('[data-occ-row]').remove()">✕</button></div>`; }
@@ -1759,6 +1769,7 @@ function _commitTenant(pid,info){
   if(info.guarantor!==undefined) rec.guarantor=info.guarantor;
   if(info.depositCertName){ rec.depositCertName=info.depositCertName; rec.depositCertUrl=info.depositCertUrl||rec.depositCertUrl; }
   if(info.refDocName){ rec.refDocName=info.refDocName; rec.refDocUrl=info.refDocUrl||rec.refDocUrl; }
+  if(info.origContractName){ rec.origContractName=info.origContractName; rec.origContractUrl=info.origContractUrl||rec.origContractUrl; }
   S.tenants=S.tenants||[]; if(isNew) S.tenants.push(rec);
   save(); pushProperty(p); pushTenancy(tn); pushTenantRec(rec);
   return rec;
@@ -1772,6 +1783,7 @@ async function saveTenant(pid){ const nm=val('tn-name'); if(!nm){toast('Enter te
   const info={name:nm,email:val('tn-email'),phone:val('tn-phone'),start:val('tn-start'),deposit:val('tn-deposit')?parseFloat(val('tn-deposit')):undefined,occupants:_readOccupants(),guarantor};
   if(files.deposit){ const ext=(files.deposit.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.deposit,pid+'/deposit-'+Date.now()+'.'+ext,'tenant-documents'); info.depositCertName=files.deposit.name; info.depositCertUrl=url||rec.depositCertUrl; }
   if(files.ref){ const ext=(files.ref.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.ref,pid+'/reference-'+Date.now()+'.'+ext,'tenant-documents'); info.refDocName=files.ref.name; info.refDocUrl=url||rec.refDocUrl; }
+  if(files.origcontract){ const ext=(files.origcontract.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.origcontract,pid+'/orig-contract-'+Date.now()+'.'+ext,'tenant-documents'); info.origContractName=files.origcontract.name; info.origContractUrl=url||rec.origContractUrl; }
   _commitTenant(pid,info);
   window._tnFiles={};
   closeModal(); render(); toast('✓ Tenant set up'); }
@@ -2882,6 +2894,14 @@ async function sendWelcomeLetter(l){
 // live GOV.UK form — NOT legal advice. Hard compliance gate before serving.
 // ═══════════════════════════════════════════════════════════════════════════
 const GOVUK_FORM3A='https://www.gov.uk/guidance/assured-tenancy-forms';
+// Official prescribed forms are PDF-only from GOV.UK with no fillable fields — we store the current
+// version as a project asset (so serving always uses the exact right one, offline) and generate a
+// merge-guide of our data alongside it for the agent to transcribe. Add more forms the same way:
+// copy the PDF into official-forms/, add an entry here keyed by notice kind.
+const OFFICIAL_FORMS={
+  section13:{file:'official-forms/Form_4A.pdf',label:'Form 4A — Landlord\u2019s notice proposing a new rent'},
+  section8:{file:'',label:'Form 3A — Notice seeking possession'}
+};
 // [code, mandatory?, {amt,unit}, label, summary]  — notice periods per ground.
 const GROUNDS=[
   ['1',true,{amt:4,unit:'months'},'Landlord or family to occupy','The landlord or a close family member wishes to live in the property. Not usable in the first 12 months of the tenancy.'],
@@ -3088,8 +3108,21 @@ function vNoticeDetail(){
       ${_noticeRecipients(n).length?`<button class="btn" onclick="emailNotice('${n.id}')">\u2709 Email to tenant(s)${(P(n.propertyId).tenant&&P(n.propertyId).tenant.occupants&&P(n.propertyId).tenant.occupants.length)||(tenantRecFor(n.propertyId)&&tenantRecFor(n.propertyId).guarantor)?' & guarantor':''}</button>`:''}
       ${n.status!=='withdrawn'?`<button class="btn" onclick="withdrawNotice('${n.id}')">Withdraw</button>`:''}
       <button class="btn" onclick="window.print()">🖨 Print / PDF</button>
-      <a class="btn" href="${GOVUK_FORM3A}" target="_blank">Official GOV.UK form ↗</a>
+      ${(()=>{ const f=OFFICIAL_FORMS[n.kind]; if(f&&f.file) return `<a class="btn navy" href="${f.file}" target="_blank">📄 Download official ${esc(f.label.split(' — ')[0])} →</a>`; return `<a class="btn" href="${GOVUK_FORM3A}" target="_blank">Official GOV.UK form ↗</a>`; })()}
     </div>
+    ${(()=>{ const f=OFFICIAL_FORMS[n.kind]; if(!f||!f.file) return ''; return `<div class="panel no-print" style="max-width:720px;margin:0 auto 16px"><div class="panel-hd"><h2>Fill-in guide for ${esc(f.label)}</h2></div><div class="panel-bd">
+      <div class="hint" style="margin-bottom:8px">GOV.UK publishes this as a flat PDF with no fillable fields — open it in Acrobat/Preview and type the values below into the matching boxes, or print and hand-write them. This keeps the exact current government wording intact while our system supplies the data.</div>
+      <div class="kv"><span class="k">Landlord</span><span class="v">${esc((L(n.landlordId)||{}).name||'')}</span></div>
+      <div class="kv"><span class="k">Tenant(s)</span><span class="v">${esc(n.tenantName||'')}</span></div>
+      <div class="kv"><span class="k">Property address</span><span class="v" style="max-width:60%;text-align:right">${esc(p.address||'')}${p.postcode?', '+esc(p.postcode):''}</span></div>
+      ${n.kind==='section13'?`<div class="kv"><span class="k">Current rent</span><span class="v">${gbp(n.rentCurrent||0)}/mo</span></div>
+      <div class="kv"><span class="k">Proposed new rent</span><span class="v">${gbp(n.rentNew||0)}/mo</span></div>
+      <div class="kv"><span class="k">Date this notice is served</span><span class="v">${fmtDate(n.served)}</span></div>
+      <div class="kv" style="border:none"><span class="k">New rent starts from</span><span class="v">${fmtDate(n.expiry)}</span></div>`:`<div class="kv"><span class="k">Ground(s) relied on</span><span class="v">${esc(n.grounds.join(', '))}</span></div>
+      <div class="kv"><span class="k">Date this notice is served</span><span class="v">${fmtDate(n.served)}</span></div>
+      <div class="kv" style="border:none"><span class="k">Court proceedings not before</span><span class="v">${fmtDate(n.expiry)}</span></div>`}
+      ${(f.guidance&&f.guidance.length)?`<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap">${f.guidance.map(g=>`<a class="btn sm" href="${g.file}" target="_blank">${esc(g.label)} \u2197</a>`).join('')}</div>`:''}
+    </div></div>`; })()}
     <div id="invoice-doc" class="panel" style="max-width:720px;margin:0 auto"><div style="padding:30px 34px;font-size:13px;line-height:1.7">${n.docHtml}</div></div>
     ${n.emailedTo&&n.emailedTo.length?`<div class="hint no-print" style="max-width:720px;margin:10px auto 0">\u2713 Emailed to ${n.emailedTo.map(esc).join(', ')} on ${fmtDate(n.emailedAt)}</div>`:''}
     ${n.serviceProof?`<div class="panel no-print" style="max-width:720px;margin:16px auto 0"><div class="panel-hd"><h2>Proof of service</h2></div><div class="panel-bd">
