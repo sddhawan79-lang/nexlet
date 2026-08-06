@@ -3054,6 +3054,11 @@ async function serveNotice(id){ const n=S.notices.find(x=>x.id===id); if(!n)retu
   if(l&&l.id){ l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Notice',note:(n.kind==='section13'?'Section 13 rent increase notice':'Section 8 possession notice')+' marked as served ('+(n.serviceProof?n.serviceProof.method:'method not recorded')+') — '+(p.address||'')}); pushLandlord(l); }
   save(); pushNotice(n); closeModal(); render(); toast('\u2713 Marked as served — proof of service saved'); }
 function withdrawNotice(id){ const n=S.notices.find(x=>x.id===id); if(!n)return; n.status='withdrawn'; save(); pushNotice(n); render(); toast('Notice withdrawn'); }
+function deleteNotice(id){ const n=S.notices.find(x=>x.id===id); if(!n)return;
+  if(!confirm('Delete this draft notice? This cannot be undone.')) return;
+  S.notices=S.notices.filter(x=>x.id!==id);
+  if(LIVE) sb.from('agency_notices').delete().eq('id',id).then(()=>{}).catch(e=>console.error(e));
+  save(); go('notices'); toast('Draft deleted'); }
 function _noticeRecipients(n){
   const p=P(n.propertyId)||{}; const t=p.tenant||{}; const rec=tenantRecFor(n.propertyId)||{};
   const out=[]; const seen=new Set();
@@ -3107,6 +3112,7 @@ function vNoticeDetail(){
       ${n.status==='draft'?`<button class="btn navy" onclick="serveNoticeModal('${n.id}')">Mark as served</button>`:''}
       ${_noticeRecipients(n).length?`<button class="btn" onclick="emailNotice('${n.id}')">\u2709 Email to tenant(s)${(P(n.propertyId).tenant&&P(n.propertyId).tenant.occupants&&P(n.propertyId).tenant.occupants.length)||(tenantRecFor(n.propertyId)&&tenantRecFor(n.propertyId).guarantor)?' & guarantor':''}</button>`:''}
       ${n.status!=='withdrawn'?`<button class="btn" onclick="withdrawNotice('${n.id}')">Withdraw</button>`:''}
+      ${n.status==='draft'?`<button class="btn" style="color:var(--red)" onclick="deleteNotice('${n.id}')">🗑 Delete draft</button>`:''}
       <button class="btn" onclick="window.print()">🖨 Print / PDF</button>
     </div>
     ${(()=>{ const f=OFFICIAL_FORMS[n.kind]; if(!f||!f.file) return ''; return `<div class="hint no-print" style="max-width:720px;margin:0 auto 10px">This is the one notice to send — it already uses the current prescribed ${n.kind==='section13'?'Form 4A':'Form 3A'} wording, filled with this tenancy's details. Want to cross-check the blank <a href="${f.file}" target="_blank">official GOV.UK ${esc(f.label.split(' — ')[0])} ↗</a> it's based on? ${(f.guidance&&f.guidance.length)?f.guidance.map(g=>`<a href="${g.file}" target="_blank">${esc(g.label)} ↗</a>`).join(' · '):''}</div>`; })()}
