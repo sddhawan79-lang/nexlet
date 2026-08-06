@@ -2051,6 +2051,13 @@ function vSettings(){
       <div class="hint" style="margin:-6px 0 14px;color:var(--faint)">CMP only required if you hold rent/deposits. You're tenant-pays-landlord-direct, so this stays off. ICO registration is required for handling personal data.</div>
       <div class="fg"><label>Withdrawal / abortive marketing fee (£)</label><input id="set-abortive" type="number" value="${a.abortiveFee||''}" placeholder="e.g. 150"></div>
       <div class="hint" style="margin:-6px 0 14px;color:var(--faint)">Charged if a landlord withdraws instruction (or lets privately/via another agent) after you've incurred marketing costs but before a tenancy starts. Added to the management agreement automatically when set above £0. Leave at £0 to disable.</div>
+      <div class="grid2" style="gap:10px">
+        <div class="fg"><label>Notice-serving fee (£)</label><input id="set-noticefee" type="number" value="${a.noticeFee||''}" placeholder="e.g. 60"></div>
+        <div class="fg"><label>Tenancy renewal fee (£)</label><input id="set-renewalfee" type="number" value="${a.renewalFee||''}" placeholder="e.g. 60"></div>
+        <div class="fg"><label>Arrears-chasing fee (£, after 1st letter)</label><input id="set-arrearsfee" type="number" value="${a.arrearsFee||''}" placeholder="e.g. 30"></div>
+        <div class="fg"><label>Lost key / lockout call-out fee (£)</label><input id="set-keyfee" type="number" value="${a.keyFee||''}" placeholder="e.g. 50"></div>
+      </div>
+      <div class="hint" style="margin:-6px 0 14px;color:var(--faint)">These ancillary fees are itemised in Clause 5b of the management agreement so they're contractually agreed upfront. Leave any at £0 to omit it from the contract. The notice-serving fee is charged automatically to the landlord each time you generate a Section 8 or Section 13 notice.</div>
       <div class="fg"><label>Tenant referencing partner</label><select id="set-ref">${partnerOpts}</select>
         <div class="hint">Powers the credit/Open-Banking checks. ~£15–25 per tenant, usually passed to the landlord. No FCA licence needed on your side — the partner is the regulated party.</div></div>
       <div class="inline2"><div class="fg"><label>VAT registered?</label><select id="set-vat"><option value="no" ${!a.vatRegistered?'selected':''}>No — under £90k threshold</option><option value="yes" ${a.vatRegistered?'selected':''}>Yes — charge 20% VAT</option></select></div>
@@ -2061,7 +2068,7 @@ function vSettings(){
       <div class="note" style="margin-top:16px"><b>AML Policy &amp; Risk Assessment</b> — required by HMRC once you register for Money Laundering Regulations supervision. <a href="AML Policy %26 Risk Assessment.dc.html" target="_blank">Open / print the template →</a></div>
     </div></div>`;
 }
-function saveSettings(){ S.agency.name=val('set-name'); S.agency.address=val('set-address'); S.agency.redress=val('set-redress'); S.agency.redressNo=val('set-redressno'); S.agency.cmp=val('set-cmp'); S.agency.icoNo=val('set-ico'); S.agency.refPartner=val('set-ref'); S.agency.vatRegistered=val('set-vat')==='yes'; S.agency.vatNumber=val('set-vatno'); S.agency.paymentTerms=parseInt(val('set-terms'))||14; S.agency.abortiveFee=parseFloat(val('set-abortive'))||0; save(); pushAgency(); render(); toast('✓ Settings saved'); }
+function saveSettings(){ S.agency.name=val('set-name'); S.agency.address=val('set-address'); S.agency.redress=val('set-redress'); S.agency.redressNo=val('set-redressno'); S.agency.cmp=val('set-cmp'); S.agency.icoNo=val('set-ico'); S.agency.refPartner=val('set-ref'); S.agency.vatRegistered=val('set-vat')==='yes'; S.agency.vatNumber=val('set-vatno'); S.agency.paymentTerms=parseInt(val('set-terms'))||14; S.agency.abortiveFee=parseFloat(val('set-abortive'))||0; S.agency.noticeFee=parseFloat(val('set-noticefee'))||0; S.agency.renewalFee=parseFloat(val('set-renewalfee'))||0; S.agency.arrearsFee=parseFloat(val('set-arrearsfee'))||0; S.agency.keyFee=parseFloat(val('set-keyfee'))||0; save(); pushAgency(); render(); toast('✓ Settings saved'); }
 
 // ── ONBOARDING WIZARD ──
 let OB=null;
@@ -2484,6 +2491,11 @@ function buildManagementAgreement(l, service){
     ? `<p><b>5. Management fee.</b> The Landlord shall pay the Agent a management commission of <b>${propFee(props[0]||{})||(isMulti?MULTI_FEE:DEF_FEE)}% of gross monthly rent</b> (stated against each property above; ${isMulti?'the multiple-agency rate':'the sole-agency rate'}) plus VAT where applicable, deducted from rent collected before remittance to the Landlord. Commission is payable for as long as the tenancy the Agent arranged or manages remains in place, including any renewal, extension, or statutory periodic tenancy that follows it, and continues to be payable to the Agent even after this agreement ends if that original tenancy continues.</p>`
     : `<p><b>5. Tenant-find fee.</b> The Landlord shall pay the Agent a one-off fee of <b>${feeOf(l)} weeks' rent</b>${isMulti?' (≈ 1 month, the multiple-agency rate)':' (the sole-agency rate)'} plus VAT where applicable, calculated as the agreed monthly rent × 12 ÷ 52, payable on commencement of the tenancy the Agent introduces. The same fee is payable again if that tenant renews or extends beyond an initial fixed term arranged by the Agent, and if a person introduced by the Agent takes a tenancy of the property within 6 months of an introduction even if the Agent did not conclude that tenancy.</p>`;
   const abortiveClause = (a.abortiveFee>0) ? `<p><b>5a. Withdrawal / abortive marketing fee.</b> If the Landlord withdraws instruction, or lets the Property privately or through another agent, after marketing has commenced but before a tenancy arranged by the Agent has started, the Landlord shall pay the Agent an abortive fee of <b>${gbp(a.abortiveFee)}</b> plus VAT where applicable, to cover marketing costs reasonably incurred (photography, portal listing fees, EPC where arranged by the Agent, and staff time). This fee is separate from and does not reduce any fee due under Clause 5.</p>` : '';
+  const ancillaryRows=[a.noticeFee>0?`<li>Drafting &amp; serving a statutory notice (Section 8 possession notice or Section 13 rent-increase notice): <b>${gbp(a.noticeFee)}</b> plus VAT where applicable, per notice.</li>`:'',
+    a.renewalFee>0?`<li>Arranging a tenancy renewal or extension with the sitting tenant: <b>${gbp(a.renewalFee)}</b> plus VAT where applicable.</li>`:'',
+    a.arrearsFee>0?`<li>Chasing rent arrears beyond the first reminder letter: <b>${gbp(a.arrearsFee)}</b> plus VAT where applicable, per additional letter/call escalation.</li>`:'',
+    a.keyFee>0?`<li>Lost key replacement or an out-of-hours lockout call-out: <b>${gbp(a.keyFee)}</b> plus VAT where applicable.</li>`:''].filter(Boolean);
+  const ancillaryClause = ancillaryRows.length ? `<p><b>5b. Ancillary fees.</b> The following additional services are charged to the Landlord only when they arise, at the rates below:</p><ul style="margin:4px 0 10px 20px;padding:0">${ancillaryRows.join('')}</ul>` : '';
 
   const cmp = a.cmp && a.cmp!=='Not holding client money'
     ? `The Agent protects client money through ${esc(a.cmp)}${a.cmpNo?' (ref. '+esc(a.cmpNo)+')':''}.`
@@ -2502,6 +2514,7 @@ function buildManagementAgreement(l, service){
     <p><b>4. Landlord's duties &amp; warranties.</b> The Landlord confirms they are the legal owner (or have the legal owner's authority) and are entitled to let the Property, that any mortgage lender's consent-to-let and any freeholder/superior landlord's consent have been obtained where required (the Landlord's own responsibility, not the Agent's), and that the Property is fit for habitation. The Landlord will keep in force, at their own cost: a valid Gas Safety Record (CP12) where gas appliances are present, an Electrical Installation Condition Report (EICR) renewed at least every 5 years, a valid Energy Performance Certificate rated E or above, and working smoke alarms on every storey plus a carbon monoxide alarm in any room with a fixed combustion appliance. The Landlord authorises the Agent to arrange or renew these where instructed, at the Landlord's cost, and to disclose all material information about the Property to prospective tenants as required by consumer protection law.</p>
     ${feeClause}
     ${abortiveClause}
+    ${ancillaryClause}
     <p><b>6. VAT &amp; payment.</b> ${a.vatRegistered?'All fees are stated exclusive of VAT, which is charged at the prevailing rate.':'The Agent is not currently VAT-registered; no VAT is added to the fees above.'} Invoices are payable within ${esc(a.paymentTerms||14)} days of issue. The Agent may deduct its fee from rent collected before remittance for full management instructions; for tenant-find instructions the fee is invoiced separately and is not deducted from rent.</p>
     <p><b>7. Marketing &amp; To-Let board.</b> The Landlord authorises the Agent to advertise the Property (including on property portals and the Agent's own channels) and, unless the Landlord opts out below, to erect one <b>${esc(a.name||'Agent')}</b> "To Let" / "Let By" board at the Property during the marketing period and for a reasonable period after a let is agreed (typically 4–6 weeks), in accordance with the Town and Country Planning (Control of Advertisements) (England) Regulations 2007. Only one board will be displayed at any time and it will be removed within 14 days of the Agent being instructed to do so. Board opt-out: <b>${l.boardOptOut?'Landlord has opted OUT of a board':'Board permitted'}</b>.</p>
     <p><b>8. Client money &amp; redress.</b> ${cmp} ${redress}</p>
@@ -2512,6 +2525,8 @@ function buildManagementAgreement(l, service){
     <p><b>13. Data protection.</b> The Agent processes personal data as a data controller under UK GDPR${a.icoNo?' (ICO registration '+esc(a.icoNo)+')':''}, solely to provide the services in this agreement, and will not share it beyond what is necessary for the letting relationship (referencing providers, contractors, deposit schemes, HMRC where relevant).</p>
     <p><b>14. Notices.</b> Any notice under this agreement must be in writing and sent to the postal or email address the recipient has provided, and is treated as received the next working day (post) or same day (email, if sent before 5pm on a working day).</p>
     <p><b>15. Force majeure.</b> Neither party is liable for delay or failure to perform caused by circumstances beyond their reasonable control.</p>
+    <p><b>15a. Client account interest.</b> ${cmp} Any interest earned on client money held by the Agent is retained by the Agent to offset banking and administration costs, unless otherwise agreed in writing.</p>
+    <p><b>15b. Assignment.</b> The Landlord may not assign this agreement without the Agent's written consent. If the Landlord sells the Property, this agreement ends on completion of the sale and the Agent will cooperate with a smooth handover to the new owner or their agent; any fees already due under Clause 5, 5a or 5b remain payable. The Agent may assign this agreement to a successor business that continues to provide the same services, on written notice to the Landlord.</p>
     <p><b>16. Entire agreement.</b> This document, together with any signed variation, is the entire agreement between the Parties regarding the Property and supersedes any prior discussion or representation.</p>
     <p><b>17. Governing law.</b> This agreement is governed by the law of England &amp; Wales, and the Parties submit to the exclusive jurisdiction of its courts.</p>
     <p style="margin-top:16px">By signing below, both parties agree to be bound by the terms above. Electronic signatures are legally binding under the Electronic Communications Act 2000.</p>`;
@@ -2962,7 +2977,11 @@ function createNotice(){
     served:NT.served,expiry,rentCurrent:isS8?null:(+NT.rentCurrent||p.rent||0),rentNew:isS8?null:(+NT.rentNew||0),
     compliance:isS8?{...NT.gate,prsReg:NT.prsReg}:{},notes:NT.reasons||'',status:'draft',createdAt:new Date().toISOString()};
   n.docHtml=genNoticeDoc(n);
-  S.notices=S.notices||[]; S.notices.unshift(n); save(); pushNotice(n); closeModal(); go('notice',n.id); toast('\u2713 Notice generated — review before serving');
+  S.notices=S.notices||[]; S.notices.unshift(n); _chargeNoticeFee(n,p,l); save(); pushNotice(n); closeModal(); go('notice',n.id); toast('\u2713 Notice generated — review before serving');
+}
+function _chargeNoticeFee(n,p,l){ const fee=(S.agency||{}).noticeFee||0; if(!fee||!l||!l.id) return;
+  l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:'Notice-serving fee of '+gbp(fee)+' charged for '+(n.kind==='section13'?'Section 13 rent-increase notice':'Section 8 possession notice')+' — '+(p.address||'')+' (per Clause 5b of the management agreement)'});
+  pushLandlord(l);
 }
 function genNoticeDoc(n){
   const p=P(n.propertyId)||{}; const l=L(n.landlordId)||{}; const a=S.agency; const b=agencyBrand();
