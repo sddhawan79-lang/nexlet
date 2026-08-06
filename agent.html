@@ -3005,29 +3005,64 @@ function _chargeNoticeFee(n,p,l){ const fee=(S.agency||{}).noticeFee||0; if(!fee
 }
 function genNoticeDoc(n){
   const p=P(n.propertyId)||{}; const l=L(n.landlordId)||{}; const a=S.agency; const b=agencyBrand();
-  const addr=esc(p.address||'')+(p.city?', '+esc(p.city):'');
+  const addr1=esc(p.address||''); const addr2=esc(p.city||''); const postcode=esc(p.postcode||'');
+  const box=(v)=>`<div style="border:1.3px solid #C7D2E0;background:#F7F9FC;border-radius:3px;padding:7px 10px;font-size:13px;min-height:16px">${v||'&nbsp;'}</div>`;
+  const qhead=(num,txt)=>`<div style="font-weight:700;color:#1A2B45;font-size:13.5px;margin:16px 0 6px">${num} ${esc(txt)}</div>`;
+  const govHeader=(formNo,title,statute)=>`
+    <div style="border-left:4px solid #1A2B45;padding-left:12px;margin-bottom:18px">
+      <div style="font-size:11px;color:#7A8FA6;letter-spacing:.4px">FORM ${formNo}</div>
+      <div style="font-size:19px;font-weight:700;color:#1A2B45;margin:2px 0 4px">${esc(title)}</div>
+      <div style="font-size:12px;color:#7A8FA6">${esc(statute)}</div>
+    </div>`;
+  const sigBlock=()=>`
+    ${qhead('','Signed')}
+    ${box(esc(b.agent||b.name))}
+    <div style="display:flex;gap:20px;margin-top:8px;font-size:12.5px">
+      <label><input type="checkbox" disabled ${l.entity!=='joint'?'checked':''}> Landlord</label>
+      <label><input type="checkbox" disabled checked> Landlord's Agent</label>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
+      <div><div class="faint" style="font-size:11px;margin-bottom:2px">Print name</div>${box(esc(b.agent||b.name))}</div>
+      <div><div class="faint" style="font-size:11px;margin-bottom:2px">Date</div>${box(_dstr(n.served||today()))}</div>
+    </div>
+    ${l.entity==='joint'?`<div style="margin-top:14px"><div class="faint" style="font-size:11px;margin-bottom:4px">Additional signature — joint landlord</div>${box(esc(l.joint||''))}</div>`:''}`;
   if(n.kind==='section13'){
-    return `<h2 style="text-align:center;margin-top:0;font-size:17px;font-weight:600;color:var(--navy)">Landlord’s notice proposing a new rent</h2><p style="text-align:center;color:#7A8FA6;font-size:12px">Section 13, Housing Act 1988 (as amended by the Renters' Rights Act 2025) — Form 4A · ${_dstr(today())}</p>
-      <p><b>To the tenant(s):</b> ${esc(n.tenantName||'the tenant')}<br><b>Property:</b> ${addr}</p>
-      <p>Your landlord/agent gives notice proposing a new rent for the above property.</p>
-      <table style="width:100%;font-size:13px;border-collapse:collapse;margin:12px 0">
-        <tr><td style="padding:6px 0">Current rent</td><td style="text-align:right;padding:6px 0"><b>${money2(n.rentCurrent)}/month</b></td></tr>
-        <tr><td style="padding:6px 0">Proposed new rent</td><td style="text-align:right;padding:6px 0"><b>${money2(n.rentNew)}/month</b></td></tr>
-        <tr><td style="padding:6px 0">Takes effect from</td><td style="text-align:right;padding:6px 0"><b>${_dstr(n.expiry)}</b></td></tr></table>
-      <p style="font-size:12.5px">If you do not agree, you may refer this notice to the First-tier Tribunal (Property Chamber) before the start date, and the Tribunal will decide the market rent. If you do not refer it, the new rent takes effect on the date above.</p>
-      <p style="margin-top:16px">Signed for and on behalf of the landlord: <b>${esc(b.agent||b.name)}</b>, ${esc(b.name)}<br>Date: ${_dstr(today())}</p>`;
+    return `${govHeader('4A','Landlord\u2019s notice proposing a new rent for assured tenancies in the private rented sector','Housing Act 1988 section 13(2), as amended by the Renters\u2019 Rights Act 2025')}
+      ${qhead('1.','The tenant(s) details')}
+      <div class="faint" style="font-size:11px;margin-bottom:2px">1.1 Name(s) of tenant(s)</div>${box(esc(n.tenantName||''))}
+      <div class="faint" style="font-size:11px;margin:8px 0 2px">1.2 Address of premises to which the tenancy relates</div>${box(addr1+(addr2?'<br>'+addr2:'')+(postcode?'<br>'+postcode:''))}
+      ${qhead('2.','Details of the landlord')}
+      <div class="faint" style="font-size:11px;margin-bottom:2px">2.1 Name</div>${box(esc(l.name||''))}
+      <div class="faint" style="font-size:11px;margin:8px 0 2px">2.2 Contact address</div>${box(esc(l.address||''))}
+      ${qhead('3.','Details of the agent (if applicable)')}
+      <div class="faint" style="font-size:11px;margin-bottom:2px">3.1 Name</div>${box(esc(b.agent||b.name||''))}
+      <div class="faint" style="font-size:11px;margin:8px 0 2px">3.2 Contact address</div>${box(esc(b.address||''))}
+      ${qhead('4.','The rent')}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><div class="faint" style="font-size:11px;margin-bottom:2px">4.1 Current rent</div>${box(money2(n.rentCurrent)+' / month')}</div>
+        <div><div class="faint" style="font-size:11px;margin-bottom:2px">4.2 The tenancy started on</div>${box(_dstr(p.tenant&&p.tenant.moveIn||''))}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
+        <div><div class="faint" style="font-size:11px;margin-bottom:2px">4.5 The landlord is proposing a new rent of</div>${box(money2(n.rentNew)+' / month')}</div>
+        <div><div class="faint" style="font-size:11px;margin-bottom:2px">4.6 The new rent will start on</div>${box(_dstr(n.expiry))}</div>
+      </div>
+      <p style="font-size:12.5px;margin-top:14px">If you do not agree, you may refer this notice to the First-tier Tribunal (Property Chamber) before the start date in 4.6, and the Tribunal will decide the market rent. If you do not refer it, the new rent takes effect on that date.</p>
+      ${sigBlock()}`;
   }
-  const grows=n.grounds.map(c=>{ const g=groundById(c); return g?`<tr style="border-bottom:1px solid #E4EAF1"><td style="padding:8px 8px 8px 0;font-weight:600;white-space:nowrap">Ground ${g[0]}</td><td style="padding:8px 0">${esc(g[3])} — ${esc(g[4])}</td></tr>`:''; }).join('');
-  return `<h2 style="text-align:center;margin-top:0;font-size:17px;font-weight:600;color:var(--navy)">Notice seeking possession of a property let on an assured tenancy</h2>
-    <p style="text-align:center;color:#7A8FA6;font-size:12px">Section 8, Housing Act 1988 — Form 3A (to like effect) · Served ${_dstr(n.served)}</p>
-    <p><b>1. To:</b> ${esc(n.tenantName||'the tenant(s)')}</p>
-    <p><b>2. Your landlord/agent intends to seek possession of:</b> ${addr}</p>
-    <p><b>3. Your landlord intends to seek possession on the following ground(s) in Schedule 2 to the Housing Act 1988:</b></p>
-    <table style="width:100%;font-size:12.5px;border-collapse:collapse;margin:6px 0 12px">${grows}</table>
-    <p><b>4. Particulars / reasons:</b> ${esc(n.notes||'As set out above.')}</p>
-    <p><b>5. The court proceedings will not begin until after:</b> <b style="color:#0B1E3D">${_dstr(n.expiry)}</b>. ${n.grounds.includes('14')?'(Ground 14 allows proceedings to begin immediately.)':''} Court proceedings cannot begin later than 12 months from the date this notice is served.</p>
-    <p style="font-size:12px;color:#555">This notice is served under section 8 of the Housing Act 1988. After the date in section 5, the landlord may apply to the court for a possession order. You should read this notice carefully and seek advice (e.g. Citizens Advice, Shelter, or a solicitor).</p>
-    <p style="margin-top:16px">Signed for and on behalf of the landlord: <b>${esc(b.agent||b.name)}</b>, ${esc(b.name)}${b.address?', '+esc(b.address):''}<br>Date served: ${_dstr(n.served)} · Method: to be recorded on the certificate of service</p>`;
+  const grows=n.grounds.map(c=>{ const g=groundById(c); return g?`<tr style="border-bottom:1px solid #E4EAF1"><td style="padding:8px 8px 8px 0;font-weight:600;white-space:nowrap;vertical-align:top">Ground ${g[0]}</td><td style="padding:8px 0">${esc(g[3])} — ${esc(g[4])}</td></tr>`:''; }).join('');
+  return `${govHeader('3A','Notice seeking possession of a property let on an assured tenancy','Housing Act 1988 section 8, Schedule 2')}
+    ${qhead('1.','To (tenant(s))')}
+    ${box(esc(n.tenantName||''))}
+    ${qhead('2.','Your landlord/agent intends to seek possession of')}
+    ${box(addr1+(addr2?'<br>'+addr2:'')+(postcode?'<br>'+postcode:''))}
+    ${qhead('3.','Your landlord intends to seek possession on the following ground(s) in Schedule 2 to the Housing Act 1988')}
+    <table style="width:100%;font-size:12.5px;border-collapse:collapse;margin:6px 0 4px">${grows}</table>
+    ${qhead('4.','Particulars / reasons')}
+    ${box(esc(n.notes||'As set out above.'))}
+    ${qhead('5.','The court proceedings will not begin until after')}
+    ${box('<b>'+_dstr(n.expiry)+'</b>'+(n.grounds.includes('14')?' (Ground 14 allows proceedings to begin immediately.)':''))}
+    <p style="font-size:12px;color:#555;margin-top:10px">Court proceedings cannot begin later than 12 months from the date this notice is served. You should read this notice carefully and seek advice (e.g. Citizens Advice, Shelter, or a solicitor).</p>
+    ${sigBlock()}`;
 }
 function serveNoticeModal(id){ const n=S.notices.find(x=>x.id===id); if(!n)return; window._serveProofFile=null;
   const body=`<div class="note" style="margin-bottom:12px">Record how this notice was served \u2014 courts expect proof (a certificate of posting, tracked-delivery receipt, or a copy of the sent email) alongside the notice itself.</div>
@@ -3138,7 +3173,7 @@ function vNoticeDetail(){
       :`<div class="note warn">Not attached yet — "Mark as served" and "Email" above will warn you until you do.</div>`}
       <label class="btn sm" style="cursor:pointer;display:inline-flex;margin-top:8px">📎 ${n.officialDoc?'Replace file':'Attach signed PDF'}<input type="file" accept="application/pdf,image/*" style="display:none" onchange="noticeAttachOfficial('${n.id}',this)"></label>
     </div></div>
-    <div class="hint no-print" style="max-width:720px;margin:0 auto 10px">The record below is the internal tracking copy Nexlet keeps (reminders, compliance history) — not a substitute for the signed form above.</div>
+    <div class="hint no-print" style="max-width:720px;margin:0 auto 10px">The record below is the internal tracking copy Nexlet keeps (reminders, compliance history), laid out to mirror the official form question-by-question so you can cross-check it against the signed PDF above — not a substitute for the signed form.</div>
     <div id="invoice-doc" class="panel" style="max-width:720px;margin:0 auto"><div style="padding:30px 34px;font-size:13px;line-height:1.7">${n.docHtml}</div></div>
     ${n.emailedTo&&n.emailedTo.length?`<div class="hint no-print" style="max-width:720px;margin:10px auto 0">\u2713 Emailed to ${n.emailedTo.map(esc).join(', ')} on ${fmtDate(n.emailedAt)}</div>`:''}
     ${n.serviceProof?`<div class="panel no-print" style="max-width:720px;margin:16px auto 0"><div class="panel-hd"><h2>Proof of service</h2></div><div class="panel-bd">
