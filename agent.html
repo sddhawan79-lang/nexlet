@@ -3108,21 +3108,8 @@ function vNoticeDetail(){
       ${_noticeRecipients(n).length?`<button class="btn" onclick="emailNotice('${n.id}')">\u2709 Email to tenant(s)${(P(n.propertyId).tenant&&P(n.propertyId).tenant.occupants&&P(n.propertyId).tenant.occupants.length)||(tenantRecFor(n.propertyId)&&tenantRecFor(n.propertyId).guarantor)?' & guarantor':''}</button>`:''}
       ${n.status!=='withdrawn'?`<button class="btn" onclick="withdrawNotice('${n.id}')">Withdraw</button>`:''}
       <button class="btn" onclick="window.print()">🖨 Print / PDF</button>
-      ${(()=>{ const f=OFFICIAL_FORMS[n.kind]; if(f&&f.file) return `<a class="btn navy" href="${f.file}" target="_blank">📄 Download official ${esc(f.label.split(' — ')[0])} →</a>`; return `<a class="btn" href="${GOVUK_FORM3A}" target="_blank">Official GOV.UK form ↗</a>`; })()}
     </div>
-    ${(()=>{ const f=OFFICIAL_FORMS[n.kind]; if(!f||!f.file) return ''; return `<div class="panel no-print" style="max-width:720px;margin:0 auto 16px"><div class="panel-hd"><h2>Fill-in guide for ${esc(f.label)}</h2></div><div class="panel-bd">
-      <div class="hint" style="margin-bottom:8px">GOV.UK publishes this as a flat PDF with no fillable fields — open it in Acrobat/Preview and type the values below into the matching boxes, or print and hand-write them. This keeps the exact current government wording intact while our system supplies the data.</div>
-      <div class="kv"><span class="k">Landlord</span><span class="v">${esc((L(n.landlordId)||{}).name||'')}</span></div>
-      <div class="kv"><span class="k">Tenant(s)</span><span class="v">${esc(n.tenantName||'')}</span></div>
-      <div class="kv"><span class="k">Property address</span><span class="v" style="max-width:60%;text-align:right">${esc(p.address||'')}${p.postcode?', '+esc(p.postcode):''}</span></div>
-      ${n.kind==='section13'?`<div class="kv"><span class="k">Current rent</span><span class="v">${gbp(n.rentCurrent||0)}/mo</span></div>
-      <div class="kv"><span class="k">Proposed new rent</span><span class="v">${gbp(n.rentNew||0)}/mo</span></div>
-      <div class="kv"><span class="k">Date this notice is served</span><span class="v">${fmtDate(n.served)}</span></div>
-      <div class="kv" style="border:none"><span class="k">New rent starts from</span><span class="v">${fmtDate(n.expiry)}</span></div>`:`<div class="kv"><span class="k">Ground(s) relied on</span><span class="v">${esc(n.grounds.join(', '))}</span></div>
-      <div class="kv"><span class="k">Date this notice is served</span><span class="v">${fmtDate(n.served)}</span></div>
-      <div class="kv" style="border:none"><span class="k">Court proceedings not before</span><span class="v">${fmtDate(n.expiry)}</span></div>`}
-      ${(f.guidance&&f.guidance.length)?`<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap">${f.guidance.map(g=>`<a class="btn sm" href="${g.file}" target="_blank">${esc(g.label)} \u2197</a>`).join('')}</div>`:''}
-    </div></div>`; })()}
+    ${(()=>{ const f=OFFICIAL_FORMS[n.kind]; if(!f||!f.file) return ''; return `<div class="hint no-print" style="max-width:720px;margin:0 auto 10px">This is the one notice to send — it already uses the current prescribed ${n.kind==='section13'?'Form 4A':'Form 3A'} wording, filled with this tenancy's details. Want to cross-check the blank <a href="${f.file}" target="_blank">official GOV.UK ${esc(f.label.split(' — ')[0])} ↗</a> it's based on? ${(f.guidance&&f.guidance.length)?f.guidance.map(g=>`<a href="${g.file}" target="_blank">${esc(g.label)} ↗</a>`).join(' · '):''}</div>`; })()}
     <div id="invoice-doc" class="panel" style="max-width:720px;margin:0 auto"><div style="padding:30px 34px;font-size:13px;line-height:1.7">${n.docHtml}</div></div>
     ${n.emailedTo&&n.emailedTo.length?`<div class="hint no-print" style="max-width:720px;margin:10px auto 0">\u2713 Emailed to ${n.emailedTo.map(esc).join(', ')} on ${fmtDate(n.emailedAt)}</div>`:''}
     ${n.serviceProof?`<div class="panel no-print" style="max-width:720px;margin:16px auto 0"><div class="panel-hd"><h2>Proof of service</h2></div><div class="panel-bd">
