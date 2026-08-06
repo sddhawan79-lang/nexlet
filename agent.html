@@ -37,7 +37,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--txt)}
 .main{flex:1;min-width:0}
 .topbar{background:#fff;border-bottom:1px solid var(--border);padding:0 30px;height:60px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:20}
 .tb-title{font-size:11px;font-weight:700;letter-spacing:.7px;color:var(--faint);text-transform:uppercase}
-.content{padding:26px 30px;max-width:1120px}
+.content{padding:26px 30px 90px;max-width:1120px}
 h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px;font-weight:400}
 .sub{font-size:13px;color:var(--muted);margin-bottom:20px}
 .btn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border);background:#fff;color:#475569;border-radius:9px;padding:9px 15px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:all .12s}
@@ -1012,7 +1012,7 @@ function vLandlordDetail(){
         :!l.invitedAt?`<button class="btn navy" onclick="inviteToPortal('${l.id}')">📧 Invite landlord to portal — next step</button>`
         :`<span class="faint" style="font-size:12.5px;align-self:center">✓ Portal invited ${fmtDate(l.invitedAt)}</span><button class="btn sm" onclick="inviteToPortal('${l.id}')">Resend invite</button>`}
       ${(()=>{ const a=agreementFor(l.id);
-        if(l.agreement) return `<button class="btn" onclick="viewSignedAgreement('${l.id}')">✔ View signed agreement</button>`;
+        if(l.agreement) return `<button class="btn" onclick="viewSignedAgreement('${l.id}')">✔ View signed agreement</button><button class="btn sm" onclick="openAgreement('${l.id}')" title="Issue a new agreement to sign — e.g. renewal or amended terms">Send new agreement</button>`;
         if(a&&a.status==='sent') return `<button class="btn" onclick="openAgreement('${l.id}')" style="border-color:var(--amber);color:var(--amber)">⏳ Awaiting landlord signature · resend</button>`;
         if(a&&a.status==='declined') return `<button class="btn" onclick="openAgreement('${l.id}')" style="border-color:var(--red);color:var(--red)">✕ Declined · re-send agreement</button>`;
         return `<button class="btn navy" onclick="openAgreement('${l.id}')">✍️ Send agreement to sign</button>`;
@@ -1260,6 +1260,7 @@ function vPropertyDetail(){
         ${certRow('gas','Gas Safety (annual)',c.gas,c.gasDocUrl)}
         ${certRow('eicr','EICR (every 5 years)',c.eicr,c.eicrDocUrl)}
         ${certRow('epc','EPC'+(c.epcRating?' · rated '+c.epcRating:''),c.epc,c.epcDocUrl)}
+        ${(c.epcRating==='F'||c.epcRating==='G')?`<div class="note" style="margin-top:6px;background:var(--red-bg);border-color:rgba(200,50,50,.25);color:var(--red)">⚠ EPC rated ${c.epcRating} — below the legal minimum (E). This property cannot lawfully be let unless a valid MEES exemption is registered on the PRS Exemptions Register. Do not market or renew a tenancy until this is resolved.</div>`:''}
         ${(c.epcRating==='D'||c.epcRating==='E')?`<div class="note warn" style="margin-top:6px">EPC rated ${c.epcRating} — legal to let now, but EPC C becomes the minimum on 1 Oct 2030. Flag to the landlord to plan works.</div>`:''}
         ${declRow('smoke','Smoke alarms','Fit a working smoke alarm on every floor',c.smoke,c.smokeDoc,c.smokeDocUrl)}
         ${c.coNA?`<div class="doc"><div class="di" style="background:var(--off);color:#94A3B8">⛨</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">CO alarm</div><div class="faint" style="font-size:11.5px">Marked not applicable — no fixed combustion appliance</div></div><span class="pill" style="background:var(--off);color:#94A3B8">N/A</span><a href="#" onclick="toggleCoNA('${p.id}');return false" style="font-size:11px;color:var(--blue)">Applies</a></div>`:declRow('co','CO alarm','Required in any room with a fixed combustion appliance (boiler cupboard, gas fire, log burner, etc.)',c.co,c.coDoc,c.coDocUrl)}
@@ -1281,7 +1282,7 @@ function vPropertyDetail(){
         ${c.hmoApplicable?certRow('hmo','HMO / selective licence'+(c.hmoNo?' · '+esc(c.hmoNo):''),c.hmo,c.hmoDocUrl):''}
         <div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
           <div class="di" style="background:${certRAG(c.legionella).bg};color:${certRAG(c.legionella).color}">⛨</div>
-          <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Legionella risk assessment</div><div class="faint" style="font-size:11.5px">${c.legionella?'Reviewed '+fmtDate(c.legionella)+' · recommended every 2 yrs (1 yr for HMOs)':'No assessment on file — not a legal certificate, but a documented duty of care'}</div></div>
+          <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Legionella risk assessment</div><div class="faint" style="font-size:11.5px">${c.legionella?'Reviewed '+fmtDate(c.legReviewedDate||c.legionella)+' · next due '+fmtDate(c.legionella)+' (every 2 yrs, 1 yr for HMOs)':'No assessment on file — not a legal certificate, but a documented duty of care'}</div></div>
           <span class="pill" style="background:${certRAG(c.legionella).bg};color:${certRAG(c.legionella).color}">${certRAG(c.legionella).label}</span>
           ${c.legionellaDocUrl?`<button class="btn sm" onclick="viewDoc('${c.legionellaDocUrl}','Legionella risk assessment')">View</button>`:''}
           <button class="btn sm" onclick="editCert('${p.id}','legionella')">${c.legionella?'Update':'Add'}</button>
@@ -1686,7 +1687,7 @@ function _legWizSave(){
     </table>
     ${flags.length?`<div style="font-size:12.5px;margin-bottom:8px"><b>Findings &amp; recommended actions:</b><ul style="margin:6px 0 0 18px;padding:0">${flags.map(f=>`<li style="margin-bottom:4px">${esc(f)}</li>`).join('')}</ul></div>`:`<div style="font-size:12.5px;color:var(--green)">No significant risk factors identified.</div>`}
     <p style="font-size:11px;color:#94A3B8;margin-top:10px">No formal certificate is legally required for Legionella — this written record evidences the landlord's duty of care under the Health and Safety at Work Act 1974 / COSHH. Review every 2 years, or sooner if the water system or occupancy changes. If risk factors persist, arrange a professional assessment.</p>`;
-  c.legionella=w.date; c.legSystem=w.system; c.legColdTemp=w.coldTemp; c.legHotTemp=w.hotTemp; c.legDeadLegs=w.deadLegs; c.legTankCondition=w.tankCondition; c.legLimescale=w.limescale; c.legRegularUse=w.regularUse; c.legionellaReportHtml=html;
+  c.legionella=_addPeriod(w.date,{amt:(p.certs.hmoApplicable?1:2),unit:'years'}); c.legReviewedDate=w.date; c.legSystem=w.system; c.legColdTemp=w.coldTemp; c.legHotTemp=w.hotTemp; c.legDeadLegs=w.deadLegs; c.legTankCondition=w.tankCondition; c.legLimescale=w.limescale; c.legRegularUse=w.regularUse; c.legionellaReportHtml=html;
   save(); pushProperty(p); closeModal(); render(); toast('✓ Self-assessment saved — '+risk+' risk');
 }
 function viewLegionellaReport(pid){ const p=P(pid); const c=p.certs||{}; if(!c.legionellaReportHtml) return;
@@ -2452,10 +2453,15 @@ let _agSigPad=null;
 
 function agreementFor(lid){ return (S.agreements||[]).filter(a=>a.landlord_id===lid).sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0))[0]; }
 
-function agencyEmail(to,subject,html){
+async function agencyEmail(to,subject,html){
   const headers={'Content-Type':'application/json'};
   if(window._sessionToken) headers['Authorization']='Bearer '+window._sessionToken;
-  return fetch(AG_EDGE,{method:'POST',headers,body:JSON.stringify({type:'send_email',to,subject,html,bcc:'beaconresidentials@gmail.com'})}).catch(e=>console.error('[agreement email]',e));
+  try{
+    const res=await fetch(AG_EDGE,{method:'POST',headers,body:JSON.stringify({type:'send_email',to,subject,html,bcc:'beaconresidentials@gmail.com'})});
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok){ console.error('[agencyEmail] failed',res.status,data); return {ok:false,error:data.error||data.message||('HTTP '+res.status)}; }
+    return {ok:true};
+  }catch(e){ console.error('[agencyEmail] exception',e); return {ok:false,error:e.message||String(e)}; }
 }
 
 function buildManagementAgreement(l, service){
@@ -2561,9 +2567,15 @@ async function sendAgreement(id){
   pushLandlord(l);
   S.agreements=S.agreements||[]; S.agreements.push(row);
   const link=new URL('agency-esign.html?t='+encodeURIComponent(token), location.href).href;
-  await agencyEmail(email, 'Please sign your '+(service==='letonly'?'Tenant-Find':'Letting & Management')+' Agreement — '+(S.agency.name||'NexLet'), agreementEmailHtml(l,agentName,link,service));
-  if(l.entity==='joint'&&l.jointEmail) await agencyEmail(l.jointEmail, 'Please sign your '+(service==='letonly'?'Tenant-Find':'Letting & Management')+' Agreement — '+(S.agency.name||'NexLet'), agreementEmailHtml(l,agentName,link,service));
-  closeModal(); render(); toast('✓ Agreement sent to '+l.name+' for signature');
+  const r1=await agencyEmail(email, 'Please sign your '+(service==='letonly'?'Tenant-Find':'Letting & Management')+' Agreement — '+(S.agency.name||'NexLet'), agreementEmailHtml(l,agentName,link,service));
+  let r2=null;
+  if(l.entity==='joint'&&l.jointEmail) r2=await agencyEmail(l.jointEmail, 'Please sign your '+(service==='letonly'?'Tenant-Find':'Letting & Management')+' Agreement — '+(S.agency.name||'NexLet'), agreementEmailHtml(l,agentName,link,service));
+  const sentList=[email+(r1.ok?' ✓':' ✗ FAILED')]; if(r2) sentList.push(l.jointEmail+(r2.ok?' ✓':' ✗ FAILED'));
+  l.comms.push({id:uid('c'),date:today(),type:'Note',note:'Signing link emailed to: '+sentList.join(', ')}); pushLandlord(l);
+  closeModal(); render();
+  const allOk=r1.ok&&(!r2||r2.ok);
+  if(allOk) toast('✓ Agreement sent to '+sentList.map(s=>s.replace(' ✓','')).join(' & '));
+  else toast('⚠ Send failed for: '+sentList.filter(s=>s.includes('FAILED')).join(', ')+' — check email address and retry',1);
 }
 
 function agreementEmailHtml(l,agentName,link,service){
@@ -2896,14 +2908,14 @@ const GATE_ITEMS=[
   ['epc','Valid EPC (band E or above) served','A current EPC has been given to the tenant.'],
   ['infosheet','Information Sheet served','The prescribed tenant Information Sheet has been provided.']
 ];
-function _gateAuto(p){ const c=(p&&p.certs)||{}; const ok=d=>{ if(!d)return false; return new Date(d)>=new Date(); }; return { gas:ok(c.gas), eicr:ok(c.eicr), epc:ok(c.epc) }; }
+function _gateAuto(p){ const c=(p&&p.certs)||{}; const ok=d=>{ if(!d)return false; return new Date(d)>=new Date(); }; const rec=tenantRecFor(p&&p.id); return { gas:ok(c.gas), eicr:ok(c.eicr), epc:ok(c.epc), deposit:!!(rec&&rec.depositCertName), howtorent:!!c.htr }; }
 
 let NT=null;
 function openNotice(pid){
   const props=S.properties.filter(p=>p.tenant||true);
   const p= pid?P(pid): (S.properties.find(x=>x.tenant)||S.properties[0]||{});
   const auto=_gateAuto(p);
-  NT={kind:'section8',propertyId:p.id||'',grounds:[],served:today(),gate:{deposit:false,howtorent:false,infosheet:false,gas:auto.gas,eicr:auto.eicr,epc:auto.epc},prsReg:false,rentNew:'',effective:_addPeriod(today(),{amt:2,unit:'months'}),reasons:''};
+  NT={kind:'section8',propertyId:p.id||'',grounds:[],served:today(),gate:{deposit:auto.deposit,howtorent:auto.howtorent,infosheet:false,gas:auto.gas,eicr:auto.eicr,epc:auto.epc},prsReg:false,rentNew:'',effective:_addPeriod(today(),{amt:2,unit:'months'}),reasons:''};
   renderNotice();
 }
 function _ntProp(){ return P(NT.propertyId)||{}; }
@@ -2914,7 +2926,7 @@ function renderNotice(){
   const propOpts=S.properties.map(x=>`<option value="${x.id}" ${x.id===NT.propertyId?'selected':''}>${esc(x.address)}${x.tenant?' — '+esc(x.tenant.name):' (no tenant)'}</option>`).join('');
   const isS8=NT.kind==='section8';
   const prsNeeded=NT.grounds.some(c=>['1','1A','1B','6'].includes(c));
-  const gateHtml=GATE_ITEMS.map(([k,lab,note])=>{ const on=NT.gate[k]; const autod=(k==='gas'||k==='eicr'||k==='epc'); return `<div class="chk ${on?'on':''}" onclick="NT.gate['${k}']=!NT.gate['${k}'];renderNotice()"><div class="box">${on?'\u2713':''}</div><div><div style="font-weight:600;font-size:12.5px">${lab}${autod&&auto[k]?' <span class="faint" style="font-weight:400">\u00b7 cert valid on file</span>':''}</div><div class="faint" style="font-size:11px">${note}</div></div></div>`; }).join('')
+  const gateHtml=GATE_ITEMS.map(([k,lab,note])=>{ const on=NT.gate[k]; const autod=(k==='gas'||k==='eicr'||k==='epc'||k==='deposit'||k==='howtorent'); return `<div class="chk ${on?'on':''}" onclick="NT.gate['${k}']=!NT.gate['${k}'];renderNotice()"><div class="box">${on?'\u2713':''}</div><div><div style="font-weight:600;font-size:12.5px">${lab}${autod&&auto[k]?' <span class="faint" style="font-weight:400">\u00b7 confirmed in Compliance</span>':''}</div><div class="faint" style="font-size:11px">${note}</div></div></div>`; }).join('')
     + (prsNeeded?`<div class="chk ${NT.prsReg?'on':''}" onclick="NT.prsReg=!NT.prsReg;renderNotice()"><div class="box">${NT.prsReg?'\u2713':''}</div><div><div style="font-weight:600;font-size:12.5px">PRS Database registration active</div><div class="faint" style="font-size:11px">Required for grounds 1, 1A, 1B and 6 (from Sept 2026).</div></div></div>`:'');
   const groundsHtml=GROUNDS.map(g=>{ const on=NT.grounds.includes(g[0]); return `<label style="display:flex;gap:9px;align-items:flex-start;padding:8px 10px;border:1px solid ${on?'var(--navy)':'var(--border)'};border-radius:9px;margin-bottom:6px;cursor:pointer;background:${on?'var(--off)':'#fff'}"><input type="checkbox" ${on?'checked':''} onchange="_ntToggle('${g[0]}')" style="width:auto;margin-top:2px"><div><div style="font-size:12.5px;font-weight:600;color:var(--navy)">Ground ${g[0]} · <span style="color:${g[1]?'var(--green)':'var(--amber)'}">${g[1]?'Mandatory':'Discretionary'}</span> · ${_perLabel(g[2])}</div><div style="font-size:12px;font-weight:600">${esc(g[3])}</div><div class="faint" style="font-size:11px;line-height:1.5">${esc(g[4])}</div></div></label>`; }).join('');
   const expiry=isS8?_longestExpiry(NT.served,NT.grounds):NT.effective;
@@ -2978,9 +2990,30 @@ function genNoticeDoc(n){
     <p style="font-size:12px;color:#555">This notice is served under section 8 of the Housing Act 1988. After the date in section 5, the landlord may apply to the court for a possession order. You should read this notice carefully and seek advice (e.g. Citizens Advice, Shelter, or a solicitor).</p>
     <p style="margin-top:16px">Signed for and on behalf of the landlord: <b>${esc(b.agent||b.name)}</b>, ${esc(b.name)}${b.address?', '+esc(b.address):''}<br>Date served: ${_dstr(n.served)} · Method: to be recorded on the certificate of service</p>`;
 }
-function serveNotice(id){ const n=S.notices.find(x=>x.id===id); if(!n)return; n.status='served'; if(!n.served)n.served=today(); const p=P(n.propertyId)||{}; const l=L(n.landlordId||p.landlordId);
-  if(l&&l.id){ l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Notice',note:(n.kind==='section13'?'Section 13 rent increase notice':'Section 8 possession notice')+' marked as served — '+(p.address||'')}); pushLandlord(l); }
-  save(); pushNotice(n); render(); toast('\u2713 Marked as served — keep proof of service (post/email) for court.'); }
+function serveNoticeModal(id){ const n=S.notices.find(x=>x.id===id); if(!n)return; window._serveProofFile=null;
+  const body=`<div class="note" style="margin-bottom:12px">Record how this notice was served \u2014 courts expect proof (a certificate of posting, tracked-delivery receipt, or a copy of the sent email) alongside the notice itself.</div>
+    <div class="fg"><label>Method of service</label><select id="sv-method">
+      <option>First-class post</option><option>Recorded / Special delivery</option><option>Hand delivered</option><option>Emailed to tenant</option><option>Process server</option></select></div>
+    <div class="fg"><label>Date served</label><input id="sv-date" type="date" value="${today()}"></div>
+    <div class="fg"><label>Evidence \u2014 certificate of posting, tracking receipt, or email screenshot</label>
+      <label style="display:flex;align-items:center;gap:10px;padding:10px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer">
+        <span style="font-size:18px">\ud83d\udcce</span><div id="sv-file-label" style="font-size:12.5px;font-weight:600;flex:1">Click to attach (optional but recommended)</div>
+        <input type="file" accept="image/*,.pdf" style="display:none" onchange="window._serveProofFile=this.files[0];document.getElementById('sv-file-label').textContent=this.files[0].name">
+      </label></div>
+    <div class="fg"><label>Notes</label><textarea id="sv-notes" rows="2" placeholder="e.g. posted by [name] at [branch], or sent to tenant's registered email"></textarea></div>`;
+  modal('Mark notice as served',body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="serveNotice('${id}')">Confirm served</button>`,true);
+}
+async function serveNotice(id){ const n=S.notices.find(x=>x.id===id); if(!n)return;
+  const method=document.getElementById('sv-method'); const dt=document.getElementById('sv-date');
+  n.status='served'; n.served=dt?dt.value:(n.served||today());
+  const p=P(n.propertyId)||{}; const l=L(n.landlordId||p.landlordId);
+  if(method){ let docUrl='';
+    if(window._serveProofFile){ const ext=(window._serveProofFile.name.split('.').pop()||'jpg'); docUrl=await _storageUpload(window._serveProofFile,p.id+'/service-proof-'+Date.now()+'.'+ext,'property-documents')||''; }
+    n.serviceProof={method:method.value,date:n.served,notes:(document.getElementById('sv-notes')||{}).value||'',docUrl};
+    window._serveProofFile=null;
+  }
+  if(l&&l.id){ l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Notice',note:(n.kind==='section13'?'Section 13 rent increase notice':'Section 8 possession notice')+' marked as served ('+(n.serviceProof?n.serviceProof.method:'method not recorded')+') — '+(p.address||'')}); pushLandlord(l); }
+  save(); pushNotice(n); closeModal(); render(); toast('\u2713 Marked as served — proof of service saved'); }
 function withdrawNotice(id){ const n=S.notices.find(x=>x.id===id); if(!n)return; n.status='withdrawn'; save(); pushNotice(n); render(); toast('Notice withdrawn'); }
 function _noticeRecipients(n){
   const p=P(n.propertyId)||{}; const t=p.tenant||{}; const rec=tenantRecFor(n.propertyId)||{};
@@ -3032,7 +3065,7 @@ function vNoticeDetail(){
   const p=P(n.propertyId)||{}; const route=n.kind==='section8'?_courtRoute(n):null;
   return `<div class="back no-print" onclick="go('notices')">← All notices</div>
     <div class="no-print" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-      ${n.status==='draft'?`<button class="btn navy" onclick="serveNotice('${n.id}')">Mark as served</button>`:''}
+      ${n.status==='draft'?`<button class="btn navy" onclick="serveNoticeModal('${n.id}')">Mark as served</button>`:''}
       ${_noticeRecipients(n).length?`<button class="btn" onclick="emailNotice('${n.id}')">\u2709 Email to tenant(s)${(P(n.propertyId).tenant&&P(n.propertyId).tenant.occupants&&P(n.propertyId).tenant.occupants.length)||(tenantRecFor(n.propertyId)&&tenantRecFor(n.propertyId).guarantor)?' & guarantor':''}</button>`:''}
       ${n.status!=='withdrawn'?`<button class="btn" onclick="withdrawNotice('${n.id}')">Withdraw</button>`:''}
       <button class="btn" onclick="window.print()">🖨 Print / PDF</button>
@@ -3040,6 +3073,12 @@ function vNoticeDetail(){
     </div>
     <div id="invoice-doc" class="panel" style="max-width:720px;margin:0 auto"><div style="padding:30px 34px;font-size:13px;line-height:1.7">${n.docHtml}</div></div>
     ${n.emailedTo&&n.emailedTo.length?`<div class="hint no-print" style="max-width:720px;margin:10px auto 0">\u2713 Emailed to ${n.emailedTo.map(esc).join(', ')} on ${fmtDate(n.emailedAt)}</div>`:''}
+    ${n.serviceProof?`<div class="panel no-print" style="max-width:720px;margin:16px auto 0"><div class="panel-hd"><h2>Proof of service</h2></div><div class="panel-bd">
+      <div class="kv"><span class="k">Method</span><span class="v">${esc(n.serviceProof.method)}</span></div>
+      <div class="kv"><span class="k">Date served</span><span class="v">${fmtDate(n.serviceProof.date)}</span></div>
+      ${n.serviceProof.notes?`<div class="kv"><span class="k">Notes</span><span class="v" style="max-width:60%;text-align:right">${esc(n.serviceProof.notes)}</span></div>`:''}
+      ${n.serviceProof.docUrl?`<button class="btn sm" style="margin-top:8px" onclick="viewDoc('${n.serviceProof.docUrl}','Proof of service')">View evidence</button>`:'<div class="hint">No evidence file attached \u2014 add a certificate of posting, tracked delivery receipt, or email screenshot for court.</div>'}
+    </div></div>`:''}
     ${route?`<div class="panel no-print" style="max-width:720px;margin:16px auto 0"><div class="panel-hd"><h2>After the notice expires — court route</h2></div><div class="panel-bd">
       <div class="kv"><span class="k">Recommended route</span><span class="v">${esc(route.name)}</span></div>
       <div class="kv" style="border:none"><span class="k">Note</span><span class="v" style="max-width:60%;text-align:right">${esc(route.note)}</span></div>
