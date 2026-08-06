@@ -6176,6 +6176,110 @@ Full audit surfaced two real leaks — both fixed:
   advice" wording for generated notices, PI insurance) — outcome pending, not NexLet's
   code to fix.
 
+## 8. Agent portal (`agent.html`) — inventory reports, compliance completeness, legal/regulatory fixes, real data-loss bugs (this session)
+- **Inventory & Check-out rebuilt** from a single final "wear & tear" comparison into three
+  report stages matching the self-serve tool: **move-in** (AI describes condition from
+  check-in photos alone, no comparison), **mid-tenancy** (check-in vs latest visit,
+  informational, no charges), **move-out** (check-in vs check-out, full deposit-deduction
+  breakdown with AI-apportioned charges). Each report can be emailed to **landlord and/or
+  tenant independently**, tracked per-recipient with sent timestamps. Report documents
+  redesigned to match the self-serve "Check-out Comparison" format: navy header with
+  property/tenant/dates, deposit money-summary cards, fair-wear/damage/cleaning legend,
+  side-by-side check-in/stage photo thumbnails per room, "Check-in vs Now" notes, an
+  apportionment-math callout box for chargeable items, and a "how these figures were
+  calculated" footer. Reports are now actually **persisted** (`v.reports` array) — this
+  was a real bug: the old single wear-report (`wearReports`) was never included in the
+  Supabase row mappers, so it was lost on reload. **SQL:** `inventory-reports-migration.sql`
+  (`alter table agency_inventories add column reports jsonb default '[]'`).
+- **Compliance list completed** against gov.uk research: added **Right to Rent check**
+  and **How to Rent guide** as tracked tenancy-time declaration items (only appear once a
+  tenant is set up) — both are legally mandatory and missing either can invalidate a later
+  Section 8 notice. Right to Rent supports both the GOV.UK share-code wizard
+  (`rtrWizard`) and an **external-referencing-company path** (`rtrExternal`/
+  `aiScanRtrExternal`) that AI-scans their report and marks it satisfied directly.
+- **Legionella** (researched: legal duty to assess/control risk under Health & Safety at
+  Work Act 1974 / COSHH — no certificate scheme required, unlike Gas/EICR/EPC): added a
+  **3-step self-assessment wizard** (`legionellaWizard`) — water system type, temperature
+  readings, visual checklist (dead legs, tank condition, limescale, occupancy) — scores a
+  risk rating and saves a written record satisfying the duty of care; and a **printable
+  HSE-style blank assessment sheet** (`downloadLegionellaSheet`) to print, hand-fill, sign,
+  scan and upload via the existing cert-upload flow (which then AI-scans it and marks it
+  compliant, same as any other certificate).
+- **"Other documents on file" archive** added to every cert modal (Gas/EICR/EPC/HMO/
+  Legionella) — for historical paperwork like an old contract inherited when NexLet took
+  over management. Stored under `certs.otherDocs`, no migration needed.
+- **Real bug — compliance certificate files were never saved.** For Gas Safety, EICR,
+  EPC, HMO and Legionella, `aiScanCert` only ever read the expiry date off the uploaded
+  file via AI — the file itself was never uploaded to storage (only the smoke/CO alarm
+  declarations had a working upload path). Fixed: `aiScanCert`/`saveCert` now upload and
+  store the file for every cert type; added "View" buttons on the agent's property page
+  and "View document" links on `landlord-portal.html`'s cert cards, pointing at the same
+  files.
+- **Real bug — joint landlord's email was never persisted.** `rowToLandlord`/
+  `landlordToRow` never mapped `jointEmail` at all, so it was silently dropped on every
+  save/reload even though the onboarding/edit forms captured it — this is why a joint
+  owner (Karishma) never received a management-agreement signing link addressed to her.
+  Fixed both mappers. **SQL:** `joint-email-migration.sql` (`alter table agency_landlords
+  add column joint_email text`). Existing joint landlords need their second owner's
+  email re-entered once (Edit landlord) since it was never actually stored.
+- **`agencyEmail()` hardened** to check the real HTTP response and return `{ok, error}`
+  instead of a fire-and-forget fetch. `sendAgreement` now awaits both the primary and
+  joint-owner sends, logs an explicit comms entry ("Signing link emailed to: a@x.com ✓,
+  b@x.com ✓/✗ FAILED") visible in that landlord's Documents trail, and the confirmation
+  toast lists both recipients and flags any failure by name. Every outbound email is also
+  BCC'd to the agency's own inbox for an independent, always-available send record.
+- **Renters' Rights Act 2025 compliance pass** (Act took effect 1 May 2026, confirmed live
+  against gov.uk): renamed **Form 4 → Form 4A** everywhere in Possession & Notices (Form 4
+  is now social-housing-only; private lettings must use 4A) — notice-type dropdown, modal
+  titles, generated notice document, dashboard/feature copy. Fixed a real inconsistency:
+  **Ground 8 mandatory-arrears threshold raised from 2 to 3 months** by the same Act — the
+  `GROUNDS` list text already said 3 months but `arrearsStep()`'s escalation logic still
+  triggered Section 8 at 2 months; now consistent at 3 months everywhere (arrears ladder,
+  hint text, KPI copy). The 2-month rent-increase notice period and 52-week gap between
+  increases were already correct.
+- **Proactive rent-increase flagging** — new `_lastRentIncreaseDate()`/
+  `_rentIncreaseDue()` surface a notification ~2 months before each tenancy's 52-week
+  rent-review eligibility is reached (using the last served Section 13, or tenancy start if
+  none yet), so there's enough runway to serve a full 2-month notice on time instead of
+  late.
+- **Dashboard "Needs attention" panel** — the existing `_notifications()` feed (expiring
+  certs, rent-increase-due, mid-tenancy checks, invoice reminders, incomplete tenancy
+  setup) is now also surfaced inline on the Dashboard (not just the notification bell),
+  with severity colour, an "Action →" deep link per item, a count badge, and "View all"
+  when there are more than 8.
+- **Tenant welcome letter** added (`sendTenantWelcomeLetter`/`tenantWelcomeLetterHtml`) —
+  separate from the portal-invite email; introduces the agency (handles both a brand-new
+  tenancy and an inherited/managed-takeover tenancy), gives the named point of contact,
+  and explains how to log a maintenance issue. Button sits next to "Invite to tenant
+  portal" on the property page, tracked with a sent timestamp + resend.
+- **Withdrawal / abortive marketing fee** — new Clause 5a in the management agreement
+  template, charged if a landlord withdraws instruction or lets privately/via another
+  agent after marketing has started but before a tenancy begins. Configurable in Settings
+  ("Withdrawal / abortive marketing fee (£)", defaults to **£250**; 0 disables and hides
+  the clause). **SQL:** `abortive-fee-migration.sql` (`alter table agencies add column
+  abortive_fee numeric default 0`).
+- **Fee-change letter** — changing a property's management fee now auto-generates a
+  signed letter to the landlord (old % → new %), emails it, and archives it in their
+  Documents trail via `agency_letters`, in addition to the fee already updating
+  automatically as before.
+- **AML/ID verification reviewed & clarified** — sanctions screening is a real, live check
+  against the UK Sanctions List via the `sanctions-check` edge function. ID/AML
+  "verification" is manual document collection + visual review, not an automated
+  third-party identity-verification API — confirmed sufficient because the agency's rent
+  levels sit well under HMRC's ~€10,000/month mandatory AML-supervision threshold for
+  letting agents; current level is good-practice due diligence, not a legal requirement
+  gap.
+- **CSS fix** — `.doc` row (used for every cert/document row) had no `flex-wrap`, so
+  properties with several action buttons (e.g. Legionella's Update/Printable
+  sheet/Self-assess/View assessment) overflowed and got visually clipped. Added
+  `flex-wrap:wrap`.
+- **Reviewed, not changed:** the onboarding → marketing workflow was checked end-to-end
+  for two real scenarios (new landlord + new vacant property vs. 4 properties already
+  under management) and confirmed already correct — onboarding (Details → Identity/AML →
+  Ownership → Property → Fee → Agreement) branches post-onboarding into either "Needs a
+  tenant — start marketing" or "Already has a tenant — record it", and marketing is
+  already gated on a signed agreement.
+
 ## Still open after this session
 - **Live smoke-test** (real Stripe subscribe → feature unlock → add-on → cancel →
   read-only) — not yet run at time of writing; Stripe dashboard setup (webhook, secrets,
