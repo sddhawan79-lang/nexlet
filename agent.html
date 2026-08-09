@@ -1519,12 +1519,28 @@ async function _storageUpload(file,path,bucket){
     return (data&&data.publicUrl)||null;
   }catch(e){ console.error('storage upload exception',e); return null; }
 }
-function viewDoc(url,label){
+async function _signedUrlFor(url){
+  const m=url.match(/\/object\/public\/([^/]+)\/(.+)$/);
+  if(!m) return url;
+  const [,bucket,path]=m;
+  try{
+    const headers={'Content-Type':'application/json'};
+    if(window._sessionToken) headers['Authorization']='Bearer '+window._sessionToken;
+    const res=await fetch(SIGN_EDGE,{method:'POST',headers,body:JSON.stringify({bucket,path:decodeURIComponent(path)})});
+    const data=await res.json().catch(()=>({}));
+    if(res.ok&&data.signedUrl) return data.signedUrl;
+    console.error('sign-doc failed',data); return null;
+  }catch(e){ console.error('sign-doc exception',e); return null; }
+}
+async function viewDoc(url,label){
   if(!url){ toast('No file attached',1); return; }
-  const isImg=/\.(jpe?g|png|gif|webp|bmp)$/i.test(url.split('?')[0]);
-  const body=isImg?`<div style="display:flex;justify-content:center;align-items:center;min-height:40vh;background:var(--off);border-radius:8px"><img src="${url}" style="max-width:100%;max-height:70vh;object-fit:contain;border-radius:6px"></div>`
-    :`<iframe src="${url}" style="width:100%;height:70vh;border:none;border-radius:8px;background:var(--off)"></iframe>`;
-  modal(esc(label||'Document'),body,`<button class="btn" onclick="closeModal()">Close</button><a href="${url}" target="_blank" class="btn navy">Open in new tab</a>`);
+  toast('Opening document…');
+  const signed=await _signedUrlFor(url);
+  if(!signed){ toast('⚠ Could not open file — the storage bucket/permissions may need checking',1); return; }
+  const isImg=/\.(jpe?g|png|gif|webp|bmp)$/i.test(signed.split('?')[0]);
+  const body=isImg?`<div style="display:flex;justify-content:center;align-items:center;min-height:40vh;background:var(--off);border-radius:8px"><img src="${signed}" style="max-width:100%;max-height:70vh;object-fit:contain;border-radius:6px"></div>`
+    :`<iframe src="${signed}" style="width:100%;height:70vh;border:none;border-radius:8px;background:var(--off)"></iframe>`;
+  modal(esc(label||'Document'),body,`<button class="btn" onclick="closeModal()">Close</button><a href="${signed}" target="_blank" class="btn navy">Open in new tab</a>`);
 }
 // ── Deposit certificate & reference report file slots, shared by the tenant modal.
 function _docSlotHtml(kind,label,hint,name,url){
@@ -2531,6 +2547,7 @@ function saveReference(){
 // Talks ONLY to agency_agreements — never esign_requests / the tenancy flow.
 // ═══════════════════════════════════════════════════════════════════════════
 const AG_EDGE='https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy';
+const SIGN_EDGE='https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/sign-doc';
 let _agSigPad=null;
 
 function agreementFor(lid){ return (S.agreements||[]).filter(a=>a.landlord_id===lid).sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0))[0]; }
