@@ -1304,6 +1304,11 @@ function vPropertyDetail(){
         ${(()=>{ const rec=tenantRecFor(p.id); if(!rec) return '';
           return `${rec.refDocName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">📄</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Reference report</div><div class="faint" style="font-size:11.5px">${esc(rec.refDocName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.refDocUrl?`<button class="btn sm" onclick="viewDoc('${rec.refDocUrl}','Reference report')">View</button>`:''}</div>`:''}
           ${rec.origContractName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">📄</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Original tenancy agreement</div><div class="faint" style="font-size:11.5px">${esc(rec.origContractName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.origContractUrl?`<button class="btn sm" onclick="viewDoc('${rec.origContractUrl}','Original tenancy agreement')">View</button>`:''}</div>`:''}`; })()}
+        <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
+          <div style="font-size:11px;font-weight:700;letter-spacing:.4px;color:var(--faint);text-transform:uppercase;margin-bottom:8px">Advisory — not legally required</div>
+          ${advisoryDocRow(p,'pat','PAT testing (appliances)','No blanket legal requirement in England — evidence of duty of care if the landlord has it done')}
+          ${advisoryDocRow(p,'pest','Pest control treatment','Landlord-arranged treatment record, if any — evidences the property was handed over pest-free')}
+        </div>
       </div></div>
       <div class="panel"><div class="panel-hd"><h2>Tenancy</h2></div><div class="panel-bd">
         ${L(p.landlordId).service==='full'?`<div class="kv"><span class="k">Management fee</span><span class="v"><b>${propFee(p)}%</b> of rent · ${gbp(p.rent*propFee(p)/100)}/mo <a href="#" onclick="editPropFee('${p.id}');return false" style="color:var(--blue);font-weight:600;margin-left:6px">edit</a></span></div>`:''}
@@ -1435,6 +1440,18 @@ async function odAttach(pid,key,input){
   save(); pushProperty(p); editCert(pid,key); toast('✓ Document added');
 }
 function odRemove(pid,idx,key){ const p=P(pid); p.certs=p.certs||{}; (p.certs.otherDocs||[]).splice(idx,1); save(); pushProperty(p); editCert(pid,key); }
+// Optional advisory documents (PAT testing, pest control) — not legally mandated, don't count toward compliance %.
+function advisoryDocRow(p,key,label,hint){ const c=p.certs||{}; const name=c[key+'DocName'], url=c[key+'DocUrl'];
+  return `<div class="doc"><div class="di" style="background:${name?'var(--green-bg)':'var(--off)'};color:${name?'var(--green)':'#94A3B8'}">⛨</div>
+    <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${label}</div><div class="faint" style="font-size:11.5px">${name?esc(name):hint}</div></div>
+    <span class="pill" style="background:${name?'var(--green-bg)':'var(--off)'};color:${name?'var(--green)':'#94A3B8'}">${name?'On file':'Optional'}</span>
+    ${url?`<button class="btn sm" onclick="viewDoc('${url}','${esc(label)}')">View</button>`:''}
+    <label class="btn sm" style="cursor:pointer">${name?'Replace':'Upload'}<input type="file" accept="application/pdf,image/*" style="display:none" onchange="advDocAttach('${p.id}','${key}',this)"></label>
+  </div>`; }
+async function advDocAttach(pid,key,input){ const f=input.files[0]; if(!f) return; const p=P(pid); p.certs=p.certs||{};
+  const ext=(f.name.split('.').pop()||'pdf'); const url=await _storageUpload(f,pid+'/'+key+'-'+Date.now()+'.'+ext,'property-documents');
+  if(!url){ toast('⚠ Upload failed — check your connection and try again',1); return; }
+  p.certs[key+'DocName']=f.name; p.certs[key+'DocUrl']=url; save(); pushProperty(p); render(); toast('✓ Document added'); }
 // Phase B — AI compliance cert scan. Reuses the shared ai-proxy (agent JWT).
 function _fileB64(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(',')[1]); r.onerror=rej; r.readAsDataURL(file); }); }
 async function aiScanCert(pid,key,input){
@@ -2846,6 +2863,7 @@ const TEMPLATES=[
       <p>Welcome to ${esc(b.name)} — thank you for instructing us to manage your property. We're delighted to be looking after your ${l.service==='letonly'?'letting':'property management'} and will act with care, transparency and full compliance at every step.</p>
       <p>Here's what happens next: we complete your compliance checks, prepare marketing (or begin management), and keep you updated throughout. Your dedicated point of contact is ${esc(b.agent)}, reachable at ${esc(b.email)}.</p>
       <p>You can expect clear monthly statements, prompt handling of maintenance, and proactive reminders before any certificate expires. We hold ${b.redress?('membership of '+esc(b.redress)):'approved redress-scheme membership'} for your protection.</p>
+      <p>Two optional items worth knowing about: PAT testing of appliances and pest control treatment aren't legally required for standard lets, but if you already have them done, we're happy to keep the records on file alongside your other certificates — just let us know.</p>
       <p>If you have any questions at all, simply reply to this email. We look forward to a long and successful working relationship.</p>
       <p>Kind regards,<br>${esc(b.agent)}<br>${esc(b.name)}</p>`})},
   {key:'rent_statement',group:'Statements & requests',title:'Monthly rent statement / remittance',icon:'💷',ai:false,needProp:true,
