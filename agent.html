@@ -234,8 +234,8 @@ const pushTenantRec =t =>_w(sb.from('agency_tenants').upsert(tenantToRow(t)));
 const pushRent    =r  =>_w(sb.from('agency_rent_ledger').upsert(rentToRow(r)));
 const pushJob     =j  =>_w(sb.from('agency_maintenance').upsert(jobToRow(j)));
 const pushInv2    =v  =>_w(sb.from('agency_inventories').upsert(inv2ToRow(v)));
-const rowToTenant=r=>({id:r.id,propertyId:r.property_id,landlordId:r.landlord_id,userId:r.user_id,name:r.name||'',email:r.email||'',phone:r.phone||'',start:r.start_date||'',end:r.end_date||'',rent:r.rent||0,deposit:r.deposit,scheme:r.scheme||'',schemeRef:r.scheme_ref||'',status:r.status||'active',inviteToken:r.invite_token||'',invitedAt:r.invited_at||'',invited:!!r.invited_at,occupants:r.occupants||[],guarantor:r.guarantor||null,depositCertName:r.deposit_cert_name||'',depositCertUrl:r.deposit_cert_url||'',depositCertExpiry:r.deposit_cert_expiry||'',refDocName:r.ref_doc_name||'',refDocUrl:r.ref_doc_url||'',shareCode:r.share_code||'',dob:r.dob||'',rtrResult:r.rtr_result||'',rtrExpiry:r.rtr_expiry||'',rtrCheckDate:r.rtr_check_date||'',rtrDocName:r.rtr_doc_name||'',rtrDocUrl:r.rtr_doc_url||'',origContractName:r.orig_contract_name||'',origContractUrl:r.orig_contract_url||'',forwardingAddress:r.forwarding_address||'',finalMeters:r.final_meters||null,endNotes:r.end_notes||'',checkoutPackSentAt:r.checkout_pack_sent_at||''});
-const tenantToRow=t=>({id:t.id,agency_id:window._agencyId,property_id:t.propertyId,landlord_id:t.landlordId,name:t.name,email:t.email||'',phone:t.phone||'',start_date:t.start||null,end_date:t.end||null,rent:t.rent||0,deposit:t.deposit,scheme:t.scheme||'',scheme_ref:t.schemeRef||'',status:t.status||'active',invite_token:t.inviteToken||null,invited_at:t.invitedAt||null,occupants:t.occupants||[],guarantor:t.guarantor||null,deposit_cert_name:t.depositCertName||'',deposit_cert_url:t.depositCertUrl||'',deposit_cert_expiry:t.depositCertExpiry||null,ref_doc_name:t.refDocName||'',ref_doc_url:t.refDocUrl||'',share_code:t.shareCode||'',dob:t.dob||null,rtr_result:t.rtrResult||'',rtr_expiry:t.rtrExpiry||null,rtr_check_date:t.rtrCheckDate||null,rtr_doc_name:t.rtrDocName||'',rtr_doc_url:t.rtrDocUrl||'',orig_contract_name:t.origContractName||'',orig_contract_url:t.origContractUrl||'',forwarding_address:t.forwardingAddress||'',final_meters:t.finalMeters||null,end_notes:t.endNotes||'',checkout_pack_sent_at:t.checkoutPackSentAt||null,updated_at:new Date().toISOString()});
+const rowToTenant=r=>({id:r.id,propertyId:r.property_id,landlordId:r.landlord_id,userId:r.user_id,name:r.name||'',email:r.email||'',phone:r.phone||'',start:r.start_date||'',end:r.end_date||'',rent:r.rent||0,deposit:r.deposit,scheme:r.scheme||'',schemeRef:r.scheme_ref||'',status:r.status||'active',inviteToken:r.invite_token||'',invitedAt:r.invited_at||'',invited:!!r.invited_at,occupants:r.occupants||[],guarantor:r.guarantor||null,depositCertName:r.deposit_cert_name||'',depositCertUrl:r.deposit_cert_url||'',depositCertExpiry:r.deposit_cert_expiry||'',refDocName:r.ref_doc_name||'',refDocUrl:r.ref_doc_url||'',shareCode:r.share_code||'',dob:r.dob||'',rtrResult:r.rtr_result||'',rtrExpiry:r.rtr_expiry||'',rtrCheckDate:r.rtr_check_date||'',rtrDocName:r.rtr_doc_name||'',rtrDocUrl:r.rtr_doc_url||'',origContractName:r.orig_contract_name||'',origContractUrl:r.orig_contract_url||'',id1DocName:r.id1_doc_name||'',id1DocUrl:r.id1_doc_url||'',id2DocName:r.id2_doc_name||'',id2DocUrl:r.id2_doc_url||'',addressProofName:r.address_proof_name||'',addressProofUrl:r.address_proof_url||'',forwardingAddress:r.forwarding_address||'',finalMeters:r.final_meters||null,endNotes:r.end_notes||'',checkoutPackSentAt:r.checkout_pack_sent_at||''});
+const tenantToRow=t=>({id:t.id,agency_id:window._agencyId,property_id:t.propertyId,landlord_id:t.landlordId,name:t.name,email:t.email||'',phone:t.phone||'',start_date:t.start||null,end_date:t.end||null,rent:t.rent||0,deposit:t.deposit,scheme:t.scheme||'',scheme_ref:t.schemeRef||'',status:t.status||'active',invite_token:t.inviteToken||null,invited_at:t.invitedAt||null,occupants:t.occupants||[],guarantor:t.guarantor||null,deposit_cert_name:t.depositCertName||'',deposit_cert_url:t.depositCertUrl||'',deposit_cert_expiry:t.depositCertExpiry||null,ref_doc_name:t.refDocName||'',ref_doc_url:t.refDocUrl||'',share_code:t.shareCode||'',dob:t.dob||null,rtr_result:t.rtrResult||'',rtr_expiry:t.rtrExpiry||null,rtr_check_date:t.rtrCheckDate||null,rtr_doc_name:t.rtrDocName||'',rtr_doc_url:t.rtrDocUrl||'',orig_contract_name:t.origContractName||'',orig_contract_url:t.origContractUrl||'',id1_doc_name:t.id1DocName||'',id1_doc_url:t.id1DocUrl||'',id2_doc_name:t.id2DocName||'',id2_doc_url:t.id2DocUrl||'',address_proof_name:t.addressProofName||'',address_proof_url:t.addressProofUrl||'',forwarding_address:t.forwardingAddress||'',final_meters:t.finalMeters||null,end_notes:t.endNotes||'',checkout_pack_sent_at:t.checkoutPackSentAt||null,updated_at:new Date().toISOString()});
 const rowToMsg=r=>({id:r.id,landlordId:r.landlord_id,tenantId:r.tenant_id,propertyId:r.property_id,sender:r.sender||'agent',body:r.body||'',createdAt:r.created_at});
 const msgToRow=m=>({id:m.id,agency_id:window._agencyId,landlord_id:m.landlordId||null,tenant_id:m.tenantId||null,property_id:m.propertyId||null,sender:m.sender||'agent',body:m.body||''});
 const pushMessage=m=>_w(sb.from('agency_messages').insert(msgToRow(m)));
@@ -1304,7 +1304,10 @@ function vPropertyDetail(){
         </div>
         ${(()=>{ const rec=tenantRecFor(p.id); if(!rec) return '';
           return `${rec.refDocName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">📄</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Reference report</div><div class="faint" style="font-size:11.5px">${esc(rec.refDocName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.refDocUrl?`<button class="btn sm" onclick="viewDoc('${rec.refDocUrl}','Reference report')">View</button>`:''}</div>`:''}
-          ${rec.origContractName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">📄</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Original tenancy agreement</div><div class="faint" style="font-size:11.5px">${esc(rec.origContractName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.origContractUrl?`<button class="btn sm" onclick="viewDoc('${rec.origContractUrl}','Original tenancy agreement')">View</button>`:''}</div>`:''}`; })()}
+          ${rec.origContractName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">📄</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Original tenancy agreement</div><div class="faint" style="font-size:11.5px">${esc(rec.origContractName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.origContractUrl?`<button class="btn sm" onclick="viewDoc('${rec.origContractUrl}','Original tenancy agreement')">View</button>`:''}</div>`:''}
+          ${rec.id1DocName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">🪪</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Photo ID — 1 of 2</div><div class="faint" style="font-size:11.5px">${esc(rec.id1DocName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.id1DocUrl?`<button class="btn sm" onclick="viewDoc('${rec.id1DocUrl}','Photo ID')">View</button>`:''}</div>`:''}
+          ${rec.id2DocName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">🪪</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Photo ID — 2 of 2</div><div class="faint" style="font-size:11.5px">${esc(rec.id2DocName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.id2DocUrl?`<button class="btn sm" onclick="viewDoc('${rec.id2DocUrl}','Photo ID')">View</button>`:''}</div>`:''}
+          ${rec.addressProofName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">🏠</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Proof of address</div><div class="faint" style="font-size:11.5px">${esc(rec.addressProofName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.addressProofUrl?`<button class="btn sm" onclick="viewDoc('${rec.addressProofUrl}','Proof of address')">View</button>`:''}</div>`:''}`; })()}
         <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
           <div style="font-size:11px;font-weight:700;letter-spacing:.4px;color:var(--faint);text-transform:uppercase;margin-bottom:8px">Advisory — not legally required</div>
           ${advisoryDocRow(p,'pat','PAT testing (appliances)','No blanket legal requirement in England — evidence of duty of care if the landlord has it done')}
@@ -1531,6 +1534,10 @@ function setTenant(pid){ const p=P(pid); const t=p.tenant||{}; const rec=tenantR
   <div id="tn-deposit-scan-status" class="faint" style="font-size:11px;margin-top:-8px"></div>
   ${_docSlotHtml('ref','Reference report','(employer/previous-landlord reference or credit check)',rec.refDocName,rec.refDocUrl)}
   ${_docSlotHtml('origcontract','Original signed tenancy agreement','(if this tenancy was already running when NexLet took over management — stays legally valid; no need to reissue, even after the 1 May 2026 conversion to a periodic tenancy)',rec.origContractName,rec.origContractUrl)}
+  <div style="font-size:11px;font-weight:700;letter-spacing:.4px;color:var(--faint);text-transform:uppercase;margin:14px 0 8px">Identity &amp; address (safeguarding — optional but recommended)</div>
+  ${_docSlotHtml('id1','Photo ID — 1 of 2','(passport or driving licence)',rec.id1DocName,rec.id1DocUrl)}
+  ${_docSlotHtml('id2','Photo ID — 2 of 2','(a second form: passport, driving licence, or national ID card)',rec.id2DocName,rec.id2DocUrl)}
+  ${_docSlotHtml('addressproof','Proof of address','(utility bill, council tax bill, or bank statement — dated within the last 3 months)',rec.addressProofName,rec.addressProofUrl)}
   <div class="hint">Saving creates the tenancy record (for rent tracking, maintenance &amp; the tenant portal) and moves the let to Managed. All named adults appear on Section 8/13 notices, and a named guarantor is copied on them too.</div>`;
   modal('Set up tenant',body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" id="tn-save-btn" onclick="saveTenant('${pid}')">Save tenant</button>`, true); }
 function _occRowHtml(o){ o=o||{}; return `<div style="display:grid;grid-template-columns:1.3fr 1.3fr 1fr auto;gap:8px;margin-bottom:6px" data-occ-row><input placeholder="Full name" value="${esc(o.name||'')}"><input placeholder="Email (optional)" value="${esc(o.email||'')}"><input placeholder="Phone (optional)" value="${esc(o.phone||'')}"><button type="button" class="btn sm" onclick="this.closest('[data-occ-row]').remove()">✕</button></div>`; }
@@ -1852,6 +1859,9 @@ function _commitTenant(pid,info){
   if(info.depositCertName){ rec.depositCertName=info.depositCertName; rec.depositCertUrl=info.depositCertUrl||rec.depositCertUrl; }
   if(info.refDocName){ rec.refDocName=info.refDocName; rec.refDocUrl=info.refDocUrl||rec.refDocUrl; }
   if(info.origContractName){ rec.origContractName=info.origContractName; rec.origContractUrl=info.origContractUrl||rec.origContractUrl; }
+  if(info.id1DocName){ rec.id1DocName=info.id1DocName; rec.id1DocUrl=info.id1DocUrl||rec.id1DocUrl; }
+  if(info.id2DocName){ rec.id2DocName=info.id2DocName; rec.id2DocUrl=info.id2DocUrl||rec.id2DocUrl; }
+  if(info.addressProofName){ rec.addressProofName=info.addressProofName; rec.addressProofUrl=info.addressProofUrl||rec.addressProofUrl; }
   S.tenants=S.tenants||[]; if(isNew) S.tenants.push(rec);
   save(); pushProperty(p); pushTenancy(tn); pushTenantRec(rec);
   return rec;
@@ -1867,6 +1877,9 @@ async function saveTenant(pid){ const nm=val('tn-name'); if(!nm){toast('Enter te
   if(files.deposit){ const ext=(files.deposit.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.deposit,pid+'/deposit-'+Date.now()+'.'+ext,'tenant-documents'); if(url){ info.depositCertName=files.deposit.name; info.depositCertUrl=url; } else failed.push('deposit certificate'); }
   if(files.ref){ const ext=(files.ref.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.ref,pid+'/reference-'+Date.now()+'.'+ext,'tenant-documents'); if(url){ info.refDocName=files.ref.name; info.refDocUrl=url; } else failed.push('reference report'); }
   if(files.origcontract){ const ext=(files.origcontract.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.origcontract,pid+'/orig-contract-'+Date.now()+'.'+ext,'tenant-documents'); if(url){ info.origContractName=files.origcontract.name; info.origContractUrl=url; } else failed.push('original contract'); }
+  if(files.id1){ const ext=(files.id1.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.id1,pid+'/id1-'+Date.now()+'.'+ext,'tenant-documents'); if(url){ info.id1DocName=files.id1.name; info.id1DocUrl=url; } else failed.push('ID document 1'); }
+  if(files.id2){ const ext=(files.id2.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.id2,pid+'/id2-'+Date.now()+'.'+ext,'tenant-documents'); if(url){ info.id2DocName=files.id2.name; info.id2DocUrl=url; } else failed.push('ID document 2'); }
+  if(files.addressproof){ const ext=(files.addressproof.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.addressproof,pid+'/address-proof-'+Date.now()+'.'+ext,'tenant-documents'); if(url){ info.addressProofName=files.addressproof.name; info.addressProofUrl=url; } else failed.push('proof of address'); }
   _commitTenant(pid,info);
   window._tnFiles={};
   closeModal(); render();
@@ -3622,7 +3635,15 @@ function vMaintenance(){
 // ═══════════════════════════════════════════════════════════════════════════
 function _resizeImg(file,maxW){ return new Promise((res)=>{ const img=new Image(); const fr=new FileReader();
   fr.onload=()=>{ img.onload=()=>{ const scale=Math.min(1,maxW/img.width); const c=document.createElement('canvas'); c.width=img.width*scale; c.height=img.height*scale;
-    c.getContext('2d').drawImage(img,0,0,c.width,c.height); res(c.toDataURL('image/jpeg',0.72)); }; img.src=fr.result; }; fr.readAsDataURL(file); }); }
+    c.getContext('2d').drawImage(img,0,0,c.width,c.height); c.toBlob(b=>res(b),'image/jpeg',0.72); }; img.src=fr.result; }; fr.readAsDataURL(file); }); }
+// Fetches a photo (storage URL, or a legacy inline data: URL from before storage upload) as base64 for the AI proxy.
+async function _urlToB64(url){
+  if(url.startsWith('data:')){ return {b64:url.split(',')[1], mime:url.split(';')[0].split(':')[1]}; }
+  const res=await fetch(url); const blob=await res.blob();
+  const b64=await new Promise(r=>{ const fr=new FileReader(); fr.onload=()=>r(String(fr.result).split(',')[1]); fr.readAsDataURL(blob); });
+  return {b64, mime:blob.type||'image/jpeg'};
+}
+async function _imgPart(u){ const {b64,mime}=await _urlToB64(u); return {type:'image',source:{type:'base64',media_type:mime,data:b64}}; }
 function openInventory(){
   const ts=_activeTenants(); if(!ts.length){ toast('Set up a tenant first',1); return; }
   const opts=ts.map(t=>`<option value="${t.id}">${esc(t.name)} — ${esc((P(t.propertyId)||{}).address||'')}</option>`).join('');
@@ -3671,8 +3692,14 @@ async function addRoomPhotos(vid,i,stage,visitIdx,input){
   const files=[...(input.files||[])]; if(!files.length) return;
   const v=(S.inventories2||[]).find(x=>x.id===vid); const r=_ensureRoomShape(v.rooms[i]);
   const target=stage==='visit'?r.visits[visitIdx]:r[stage];
-  for(const f of files){ const url=await _resizeImg(f,700); target.photos.push(url); }
+  let failed=0;
+  for(const f of files){
+    const blob=await _resizeImg(f,700);
+    const url=await _storageUpload(blob,vid+'/'+Date.now()+'-'+Math.random().toString(36).slice(2,7)+'.jpg','property-documents');
+    if(url) target.photos.push(url); else failed++;
+  }
   pushInv2(v); render();
+  if(failed) toast('⚠ '+failed+' photo'+(failed>1?'s':'')+' failed to upload — check your connection and try again',1);
 }
 function removeRoomPhoto(vid,i,stage,visitIdx,pi){
   const v=(S.inventories2||[]).find(x=>x.id===vid); const r=_ensureRoomShape(v.rooms[i]);
@@ -3762,9 +3789,10 @@ async function aiCompareItem(vid,i){
   toast('✦ Comparing photos…');
   const months=t.start?Math.max(1,Math.round((new Date()-new Date(t.start))/(1000*60*60*24*30))):12;
   try{
-    const b64=u=>u.split(',')[1]; const mt=u=>u.split(';')[0].split(':')[1];
     const prompt=`You are a UK tenancy deposit-scheme adjudicator. Compare the CHECK-IN photos and the ${toLabel.toUpperCase()} photos of this item: "${r.room} — ${r.item}". Check-in note: "${r.checkin.note||'none'}". ${toLabel} note: "${toSet.note||'none'}". Tenancy length: ${months} months.\nClassify as exactly one of: fair_wear (normal deterioration from use — never chargeable), damage (tenant-caused, beyond fair wear), cleaning (below check-in cleanliness standard). If chargeable, apply apportionment — the tenant only pays the proportion of the item's remaining expected life, never full replacement cost (avoid betterment / new-for-old). Return ONLY JSON: {"classification":"fair_wear|damage|cleaning","charge":number,"reasoning":"one or two sentences, including any apportionment math"}`;
-    const content=[...r.checkin.photos.map(u=>({type:'image',source:{type:'base64',media_type:mt(u),data:b64(u)}})),{type:'text',text:'CHECK-IN photos above.'},...toSet.photos.map(u=>({type:'image',source:{type:'base64',media_type:mt(u),data:b64(u)}})),{type:'text',text:toLabel.toUpperCase()+' photos above.\n\n'+prompt}];
+    const checkinParts=await Promise.all(r.checkin.photos.map(_imgPart));
+    const stageParts=await Promise.all(toSet.photos.map(_imgPart));
+    const content=[...checkinParts,{type:'text',text:'CHECK-IN photos above.'},...stageParts,{type:'text',text:toLabel.toUpperCase()+' photos above.\n\n'+prompt}];
     const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:300,messages:[{role:'user',content}]})});
     if(res.status===402){ toast('AI allowance reached — try again next month',1); return; }
     const data=await res.json();
@@ -3794,15 +3822,14 @@ async function generateInvReport(vid,type){
     const toSet=type==='movein'?null:(type==='midterm'?lv:((lv&&lv.photos.length)?lv:r.checkout));
     const cmpLabel=type==='midterm'?'mid-tenancy':((lv&&lv.photos.length)?'mid-tenancy':'check-out');
     try{
-      const b64=u=>u.split(',')[1]; const mt=u=>u.split(';')[0].split(':')[1];
       let content,promptTxt;
       if(type==='movein'){
         promptTxt=`UK letting agent move-in condition report, written as evidence for a future deposit dispute. Describe the condition of "${r.room} — ${r.item}" from these ${r.checkin.photos.length} check-in photo(s). Note: "${r.checkin.note||'none'}". Be specific and factual — name the material/colour/finish where visible, and explicitly record any existing marks, wear, damage or cleanliness issues visible in the photos (so the tenant is not later charged for them). Avoid vague filler like "good condition" or "as expected" with no detail — an adjudicator needs a description precise enough to compare against the check-out. Return ONLY JSON: {"summary":"one or two sentences, specific and evidential"}`;
-        content=[...r.checkin.photos.map(u=>({type:'image',source:{type:'base64',media_type:mt(u),data:b64(u)}})),{type:'text',text:promptTxt}];
+        content=[...(await Promise.all(r.checkin.photos.map(_imgPart))),{type:'text',text:promptTxt}];
       } else {
         const chargeAsk=type==='moveout'?', "charge":number (apportioned £ the tenant should pay if damage/cleaning — never full replacement cost, never new-for-old)':'';
         promptTxt=`UK tenancy deposit adjudicator, writing evidence for a possible dispute. Compare CHECK-IN vs ${cmpLabel.toUpperCase()} photos for "${r.room} — ${r.item}". Notes: check-in "${r.checkin.note||'none'}", ${cmpLabel} "${toSet.note||'none'}". Classify as fair_wear|damage|cleaning. Name the SPECIFIC change observed (not "some wear" or "looks worse") — what changed, where, and how that goes beyond (or stays within) fair wear and tear for the tenancy length. ${type==='moveout'?'If chargeable, show the apportionment maths explicitly: repair/replacement cost, the item\'s expected life, its age at check-in, and the resulting proportion charged — never claim full replacement (betterment).':''} Return ONLY JSON: {"classification":"fair_wear|damage|cleaning","summary":"one to three specific, factual sentences an adjudicator could act on"${chargeAsk}}`;
-        content=[...r.checkin.photos.map(u=>({type:'image',source:{type:'base64',media_type:mt(u),data:b64(u)}})),{type:'text',text:'CHECK-IN above.'},...toSet.photos.map(u=>({type:'image',source:{type:'base64',media_type:mt(u),data:b64(u)}})),{type:'text',text:cmpLabel.toUpperCase()+' above.\n\n'+promptTxt}];
+        content=[...(await Promise.all(r.checkin.photos.map(_imgPart))),{type:'text',text:'CHECK-IN above.'},...(await Promise.all(toSet.photos.map(_imgPart))),{type:'text',text:cmpLabel.toUpperCase()+' above.\n\n'+promptTxt}];
       }
       const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:280,messages:[{role:'user',content}]})});
       if(res.status===402){ quotaHit=true; toast('AI allowance reached partway through — report saved for the rooms already analysed',1); break; }
