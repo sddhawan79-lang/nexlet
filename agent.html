@@ -1509,7 +1509,7 @@ function setTenant(pid){ const p=P(pid); const t=p.tenant||{}; const rec=tenantR
     <input id="tn-g-phone" placeholder="Guarantor phone" value="${esc(g.phone||'')}">
   </div></div>
   ${_docSlotHtml('deposit','Deposit certificate','(custodial/insured scheme cert or Prescribed Information)',rec.depositCertName,rec.depositCertUrl,'aiScanDeposit')}
-  <div class="fg" style="margin-top:-8px"><label>Protection covers tenancy until <span class="faint">(the "ending on or after" date on the cert — AI reads this automatically, or enter it)</span></label><input id="tn-deposit-expiry" type="date" value="${rec.depositCertExpiry||''}"></div>
+  <div class="fg" style="margin-top:-8px"><label>Protection covers tenancy until <span class="faint">(only for a fixed-term cert with an "ending on or after" date — leave blank for a periodic tenancy, no re-protection needed on renewal or rent increase)</span></label><div style="display:flex;gap:8px;align-items:center"><input id="tn-deposit-expiry" type="date" value="${rec.depositCertExpiry||''}" style="flex:1"><a href="#" onclick="event.preventDefault();document.getElementById('tn-deposit-expiry').value=''">Clear</a></div></div>
   <div id="tn-deposit-scan-status" class="faint" style="font-size:11px;margin-top:-8px"></div>
   ${_docSlotHtml('ref','Reference report','(employer/previous-landlord reference or credit check)',rec.refDocName,rec.refDocUrl)}
   ${_docSlotHtml('origcontract','Original signed tenancy agreement','(if this tenancy was already running when NexLet took over management — stays legally valid; no need to reissue, even after the 1 May 2026 conversion to a periodic tenancy)',rec.origContractName,rec.origContractUrl)}
