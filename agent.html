@@ -1463,9 +1463,13 @@ function ctAttachEvidence(input){ const f=input.files[0]; if(!f) return; window.
 }
 async function saveCert(pid,key){ const p=P(pid); p.certs=p.certs||{};
   if(key==='smoke'||key==='co'){ if(!window._certFile&&!p.certs[key+'Doc']){toast('Attach a photo or certificate first',1);return;}
-    if(window._certFile){ p.certs[key+'Doc']=window._certFile.name; const ext=(window._certFile.name.split('.').pop()||'jpg'); const url=await _storageUpload(window._certFile,pid+'/'+key+'-'+Date.now()+'.'+ext,'property-documents'); if(url) p.certs[key+'DocUrl']=url; }
+    if(window._certFile){ const ext=(window._certFile.name.split('.').pop()||'jpg'); const url=await _storageUpload(window._certFile,pid+'/'+key+'-'+Date.now()+'.'+ext,'property-documents');
+      if(!url){ toast('⚠ File upload failed — check your connection and try again (not saved)',1); return; }
+      p.certs[key+'Doc']=window._certFile.name; p.certs[key+'DocUrl']=url; }
     window._certFile=null; }
-  else if(window._certFile){ p.certs[key+'Doc']=window._certFile.name; const ext=(window._certFile.name.split('.').pop()||'pdf'); const url=await _storageUpload(window._certFile,pid+'/'+key+'-'+Date.now()+'.'+ext,'property-documents'); if(url) p.certs[key+'DocUrl']=url; window._certFile=null; }
+  else if(window._certFile){ const ext=(window._certFile.name.split('.').pop()||'pdf'); const url=await _storageUpload(window._certFile,pid+'/'+key+'-'+Date.now()+'.'+ext,'property-documents');
+    if(!url){ toast('⚠ File upload failed — check your connection and try again (not saved)',1); return; }
+    p.certs[key+'Doc']=window._certFile.name; p.certs[key+'DocUrl']=url; window._certFile=null; }
   p.certs[key]=val('ct-date'); if(key==='epc')p.certs.epcRating=val('ct-rating'); if(key==='hmo'){p.certs.hmoNo=val('ct-hmono');p.certs.hmoAuthority=val('ct-hmoauth');} save(); pushProperty(p); closeModal(); render(); toast('✓ '+(CERT_LABELS[key]||key.toUpperCase())+' updated'); }
 function toggleCoNA(pid){ const p=P(pid); p.certs=p.certs||{}; p.certs.coNA=!p.certs.coNA; save(); pushProperty(p); render(); }
 function toggleHmoApplicable(pid,checked){ const p=P(pid); p.certs=p.certs||{}; p.certs.hmoApplicable=checked; save(); pushProperty(p); render(); }
@@ -1793,12 +1797,15 @@ async function saveTenant(pid){ const nm=val('tn-name'); if(!nm){toast('Enter te
   const guarantor=hasGuarantor?{name:val('tn-g-name'),email:val('tn-g-email'),phone:val('tn-g-phone')}:null;
   const rec=tenantRecFor(pid)||{};
   const info={name:nm,email:val('tn-email'),phone:val('tn-phone'),start:val('tn-start'),deposit:val('tn-deposit')?parseFloat(val('tn-deposit')):undefined,occupants:_readOccupants(),guarantor};
-  if(files.deposit){ const ext=(files.deposit.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.deposit,pid+'/deposit-'+Date.now()+'.'+ext,'tenant-documents'); info.depositCertName=files.deposit.name; info.depositCertUrl=url||rec.depositCertUrl; }
-  if(files.ref){ const ext=(files.ref.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.ref,pid+'/reference-'+Date.now()+'.'+ext,'tenant-documents'); info.refDocName=files.ref.name; info.refDocUrl=url||rec.refDocUrl; }
-  if(files.origcontract){ const ext=(files.origcontract.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.origcontract,pid+'/orig-contract-'+Date.now()+'.'+ext,'tenant-documents'); info.origContractName=files.origcontract.name; info.origContractUrl=url||rec.origContractUrl; }
+  const failed=[];
+  if(files.deposit){ const ext=(files.deposit.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.deposit,pid+'/deposit-'+Date.now()+'.'+ext,'tenant-documents'); if(url){ info.depositCertName=files.deposit.name; info.depositCertUrl=url; } else failed.push('deposit certificate'); }
+  if(files.ref){ const ext=(files.ref.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.ref,pid+'/reference-'+Date.now()+'.'+ext,'tenant-documents'); if(url){ info.refDocName=files.ref.name; info.refDocUrl=url; } else failed.push('reference report'); }
+  if(files.origcontract){ const ext=(files.origcontract.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.origcontract,pid+'/orig-contract-'+Date.now()+'.'+ext,'tenant-documents'); if(url){ info.origContractName=files.origcontract.name; info.origContractUrl=url; } else failed.push('original contract'); }
   _commitTenant(pid,info);
   window._tnFiles={};
-  closeModal(); render(); toast('✓ Tenant set up'); }
+  closeModal(); render();
+  if(failed.length) toast('⚠ Saved, but file upload failed for: '+failed.join(', ')+' — re-attach and save again',1);
+  else toast('✓ Tenant set up'); }
 function tenantWelcomeLetterHtml(rec,p){ const b=agencyBrand();
   return `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#1A2B45">
     <div style="background:#0B1E3D;padding:20px 24px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:20px;font-weight:700">${esc(b.name)}</span></div>
