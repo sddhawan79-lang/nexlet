@@ -233,8 +233,8 @@ const pushTenantRec =t =>_w(sb.from('agency_tenants').upsert(tenantToRow(t)));
 const pushRent    =r  =>_w(sb.from('agency_rent_ledger').upsert(rentToRow(r)));
 const pushJob     =j  =>_w(sb.from('agency_maintenance').upsert(jobToRow(j)));
 const pushInv2    =v  =>_w(sb.from('agency_inventories').upsert(inv2ToRow(v)));
-const rowToTenant=r=>({id:r.id,propertyId:r.property_id,landlordId:r.landlord_id,userId:r.user_id,name:r.name||'',email:r.email||'',phone:r.phone||'',start:r.start_date||'',end:r.end_date||'',rent:r.rent||0,deposit:r.deposit,scheme:r.scheme||'',schemeRef:r.scheme_ref||'',status:r.status||'active',inviteToken:r.invite_token||'',invitedAt:r.invited_at||'',invited:!!r.invited_at,occupants:r.occupants||[],guarantor:r.guarantor||null,depositCertName:r.deposit_cert_name||'',depositCertUrl:r.deposit_cert_url||'',refDocName:r.ref_doc_name||'',refDocUrl:r.ref_doc_url||'',shareCode:r.share_code||'',dob:r.dob||'',rtrResult:r.rtr_result||'',rtrExpiry:r.rtr_expiry||'',rtrCheckDate:r.rtr_check_date||'',rtrDocName:r.rtr_doc_name||'',rtrDocUrl:r.rtr_doc_url||''});
-const tenantToRow=t=>({id:t.id,agency_id:window._agencyId,property_id:t.propertyId,landlord_id:t.landlordId,name:t.name,email:t.email||'',phone:t.phone||'',start_date:t.start||null,end_date:t.end||null,rent:t.rent||0,deposit:t.deposit,scheme:t.scheme||'',scheme_ref:t.schemeRef||'',status:t.status||'active',invite_token:t.inviteToken||null,invited_at:t.invitedAt||null,occupants:t.occupants||[],guarantor:t.guarantor||null,deposit_cert_name:t.depositCertName||'',deposit_cert_url:t.depositCertUrl||'',ref_doc_name:t.refDocName||'',ref_doc_url:t.refDocUrl||'',share_code:t.shareCode||'',dob:t.dob||null,rtr_result:t.rtrResult||'',rtr_expiry:t.rtrExpiry||null,rtr_check_date:t.rtrCheckDate||null,rtr_doc_name:t.rtrDocName||'',rtr_doc_url:t.rtrDocUrl||'',updated_at:new Date().toISOString()});
+const rowToTenant=r=>({id:r.id,propertyId:r.property_id,landlordId:r.landlord_id,userId:r.user_id,name:r.name||'',email:r.email||'',phone:r.phone||'',start:r.start_date||'',end:r.end_date||'',rent:r.rent||0,deposit:r.deposit,scheme:r.scheme||'',schemeRef:r.scheme_ref||'',status:r.status||'active',inviteToken:r.invite_token||'',invitedAt:r.invited_at||'',invited:!!r.invited_at,occupants:r.occupants||[],guarantor:r.guarantor||null,depositCertName:r.deposit_cert_name||'',depositCertUrl:r.deposit_cert_url||'',refDocName:r.ref_doc_name||'',refDocUrl:r.ref_doc_url||'',shareCode:r.share_code||'',dob:r.dob||'',rtrResult:r.rtr_result||'',rtrExpiry:r.rtr_expiry||'',rtrCheckDate:r.rtr_check_date||'',rtrDocName:r.rtr_doc_name||'',rtrDocUrl:r.rtr_doc_url||'',origContractName:r.orig_contract_name||'',origContractUrl:r.orig_contract_url||'',forwardingAddress:r.forwarding_address||'',finalMeters:r.final_meters||null,endNotes:r.end_notes||'',checkoutPackSentAt:r.checkout_pack_sent_at||''});
+const tenantToRow=t=>({id:t.id,agency_id:window._agencyId,property_id:t.propertyId,landlord_id:t.landlordId,name:t.name,email:t.email||'',phone:t.phone||'',start_date:t.start||null,end_date:t.end||null,rent:t.rent||0,deposit:t.deposit,scheme:t.scheme||'',scheme_ref:t.schemeRef||'',status:t.status||'active',invite_token:t.inviteToken||null,invited_at:t.invitedAt||null,occupants:t.occupants||[],guarantor:t.guarantor||null,deposit_cert_name:t.depositCertName||'',deposit_cert_url:t.depositCertUrl||'',ref_doc_name:t.refDocName||'',ref_doc_url:t.refDocUrl||'',share_code:t.shareCode||'',dob:t.dob||null,rtr_result:t.rtrResult||'',rtr_expiry:t.rtrExpiry||null,rtr_check_date:t.rtrCheckDate||null,rtr_doc_name:t.rtrDocName||'',rtr_doc_url:t.rtrDocUrl||'',orig_contract_name:t.origContractName||'',orig_contract_url:t.origContractUrl||'',forwarding_address:t.forwardingAddress||'',final_meters:t.finalMeters||null,end_notes:t.endNotes||'',checkout_pack_sent_at:t.checkoutPackSentAt||null,updated_at:new Date().toISOString()});
 const rowToMsg=r=>({id:r.id,landlordId:r.landlord_id,tenantId:r.tenant_id,propertyId:r.property_id,sender:r.sender||'agent',body:r.body||'',createdAt:r.created_at});
 const msgToRow=m=>({id:m.id,agency_id:window._agencyId,landlord_id:m.landlordId||null,tenant_id:m.tenantId||null,property_id:m.propertyId||null,sender:m.sender||'agent',body:m.body||''});
 const pushMessage=m=>_w(sb.from('agency_messages').insert(msgToRow(m)));
@@ -1308,7 +1308,7 @@ function vPropertyDetail(){
             return (rec&&rec.invited)?`<span class="faint" style="font-size:12.5px">✓ Portal invited ${fmtDate(rec.invitedAt)}</span><button class="btn sm" onclick="inviteTenantToPortal('${p.id}')">Resend</button>`
               :`<button class="btn sm navy" onclick="inviteTenantToPortal('${p.id}')">📧 Invite to tenant portal — next step</button>`; })()}${(()=>{ const rec=tenantRecFor(p.id);
             return rec&&rec.welcomeSentAt?`<span class="faint" style="font-size:12.5px">✓ Welcome letter sent ${fmtDate(rec.welcomeSentAt)}</span><button class="btn sm" onclick="sendTenantWelcomeLetter('${p.id}')">Resend</button>`
-              :`<button class="btn sm" onclick="sendTenantWelcomeLetter('${p.id}')">👋 Send welcome letter</button>`; })()}<button class="btn sm" onclick="setTenant('${p.id}')">Edit tenant</button><button class="btn sm" onclick="openNotice('${p.id}')">⚖ Prepare notice</button></div>`
+              :`<button class="btn sm" onclick="sendTenantWelcomeLetter('${p.id}')">👋 Send welcome letter</button>`; })()}<button class="btn sm" onclick="setTenant('${p.id}')">Edit tenant</button><button class="btn sm" onclick="openNotice('${p.id}')">⚖ Prepare notice</button><button class="btn sm" onclick="sendCheckoutPack('${p.id}')">📦 Send checkout pack</button><button class="btn sm" style="color:var(--red)" onclick="endTenancy('${p.id}')">End tenancy</button></div>`
           :lst?`<div class="faint" style="font-size:13px;margin-bottom:12px">Marketing in progress — ${_pill(LISTING_STATUS,lst.status)} · ${_listingApps(lst.id).length} enquir${_listingApps(lst.id).length===1?'y':'ies'} so far.</div><button class="btn sm navy" onclick="go('listing','${lst.id}')">Manage listing</button>`
           :`<div class="faint" style="font-size:13px;margin-bottom:12px">No tenant yet.</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -1318,6 +1318,7 @@ function vPropertyDetail(){
       </div></div>
       ${(()=>{ const rec=tenantRecFor(p.id); return rec?msgPanel('tenant',rec.id):''; })()}
       ${propDocTrailPanel(p)}
+      ${pastTenanciesPanel(p)}
     </div>`;
 }
 // Tenant-facing document trail for one property — notices served, all archived (never deleted).
@@ -3882,5 +3883,6 @@ let _tt; function toast(m,bad){ const t=document.getElementById('toast'); t.text
 
 boot();
 </script>
+<script src="agent-eot.js"></script>
 </body>
 </html>
