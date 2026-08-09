@@ -183,8 +183,8 @@ let LIVE=false;                 // set true only after the auth gateway passes
 window._agencyId=null;          // every LIVE query is scoped to this agency
 
 // ── row ⇄ in-memory-object mappers (snake_case DB ⇄ camelCase S) ──
-const rowToAgency=r=>({name:r.name||'',address:r.address||'',redress:r.redress_scheme||'',redressNo:r.redress_no||'',cmp:r.cmp_scheme||'Not holding client money',cmpNo:r.cmp_no||'',refPartner:r.ref_partner||'',icoNo:r.ico_no||'',vatRegistered:!!r.vat_registered,vatNumber:r.vat_number||'',invoiceSeq:r.invoice_seq||0,paymentTerms:r.payment_terms||14,abortiveFee:r.abortive_fee??250,noticeFee:r.notice_fee??75,renewalFee:r.renewal_fee??60,arrearsFee:r.arrears_fee??30,keyFee:r.key_fee??60,insuranceFee:r.insurance_fee??50,disputeFee:r.dispute_fee??75});
-const agencyToRow=a=>({name:a.name,address:a.address,redress_scheme:a.redress,redress_no:a.redressNo,cmp_scheme:a.cmp,cmp_no:a.cmpNo,ref_partner:a.refPartner,ico_no:a.icoNo,vat_registered:!!a.vatRegistered,vat_number:a.vatNumber,invoice_seq:a.invoiceSeq||0,payment_terms:a.paymentTerms||14,abortive_fee:a.abortiveFee||0,notice_fee:a.noticeFee||0,renewal_fee:a.renewalFee||0,arrears_fee:a.arrearsFee||0,key_fee:a.keyFee||0,insurance_fee:a.insuranceFee||0,dispute_fee:a.disputeFee||0,updated_at:new Date().toISOString()});
+const rowToAgency=r=>({name:r.name||'',address:r.address||'',redress:r.redress_scheme||'',redressNo:r.redress_no||'',cmp:r.cmp_scheme||'Not holding client money',cmpNo:r.cmp_no||'',refPartner:r.ref_partner||'',icoNo:r.ico_no||'',vatRegistered:!!r.vat_registered,vatNumber:r.vat_number||'',invoiceSeq:r.invoice_seq||0,paymentTerms:r.payment_terms||14,abortiveFee:r.abortive_fee??250,noticeFee:r.notice_fee??75,renewalFee:r.renewal_fee??60,arrearsFee:r.arrears_fee??30,keyFee:r.key_fee??60,insuranceFee:r.insurance_fee??50,disputeFee:r.dispute_fee??75,invMoveinFee:r.inv_movein_fee??75,invMoveoutFee:r.inv_moveout_fee??65});
+const agencyToRow=a=>({name:a.name,address:a.address,redress_scheme:a.redress,redress_no:a.redressNo,cmp_scheme:a.cmp,cmp_no:a.cmpNo,ref_partner:a.refPartner,ico_no:a.icoNo,vat_registered:!!a.vatRegistered,vat_number:a.vatNumber,invoice_seq:a.invoiceSeq||0,payment_terms:a.paymentTerms||14,abortive_fee:a.abortiveFee||0,notice_fee:a.noticeFee||0,renewal_fee:a.renewalFee||0,arrears_fee:a.arrearsFee||0,key_fee:a.keyFee||0,insurance_fee:a.insuranceFee||0,dispute_fee:a.disputeFee||0,inv_movein_fee:a.invMoveinFee||0,inv_moveout_fee:a.invMoveoutFee||0,updated_at:new Date().toISOString()});
 const rowToLandlord=r=>({id:r.id,name:r.name||'',joint:r.joint||'',jointEmail:r.joint_email||'',entity:r.entity||'individual',boardOptOut:!!(r.docs&&r.docs.boardOptOut),email:r.email||'',phone:r.phone||'',address:r.address||'',nrl:!!r.nrl,prsReg:r.prs_reg||'',payout:r.payout||'',contactPref:r.contact_pref||'Email',aml:!!r.aml_verified,ownership:!!r.ownership_verified,service:r.service||'full',feePct:r.fee_pct,letWeeks:r.let_weeks,agreement:!!r.agreement_signed,status:r.status||'pending',docs:r.docs||{},comms:r.comms||[],inviteToken:r.invite_token||'',invitedAt:r.invited_at||''});
 const landlordToRow=l=>({id:l.id,agency_id:window._agencyId,name:l.name,joint:l.joint||null,joint_email:l.jointEmail||null,entity:l.entity||'individual',email:l.email,phone:l.phone,address:l.address,nrl:!!l.nrl,prs_reg:l.prsReg,payout:l.payout,contact_pref:l.contactPref,aml_verified:!!l.aml,ownership_verified:!!l.ownership,service:l.service,fee_pct:l.feePct,let_weeks:l.letWeeks,agreement_signed:!!l.agreement,status:l.status,docs:l.docs||{},comms:l.comms||[],invite_token:l.inviteToken||null,invited_at:l.invitedAt||null,updated_at:new Date().toISOString()});
 // Bill-to / statement name — a company landlord shows the company name; joint owners
@@ -2014,7 +2014,7 @@ function openInvoiceFor(id){
   const l=L(id)||{};
   const docType = l.service==='letonly' ? 'tenantfind' : 'management';
   const anchor=_landlordAnchorMonth(id);
-  IV={landlordId:id,docType,freq:'quarterly',y:new Date().getFullYear(),anchor,idx:_defaultIdx('quarterly',anchor),items:[{desc:'',amount:''}],otherDeduct:'',otherDesc:'',status:'draft'};
+  IV={landlordId:id,docType,freq:'quarterly',y:new Date().getFullYear(),anchor,idx:_defaultIdx('quarterly',anchor),items:[{desc:'',amount:''}],otherDeduct:'',otherDesc:'',ancFee:'noticeFee',ancQty:1,ancPropertyId:'',status:'draft'};
   renderInvoice();
 }
 // Next-invoice reminders — flags full-management landlords whose last management
@@ -2030,6 +2030,7 @@ function _nextInvoiceReminders(){
   });
   return out;
 }
+const ANC_FEES=[['noticeFee','Notice-serving'],['renewalFee','Tenancy renewal'],['arrearsFee','Arrears-chasing'],['keyFee','Lost key / lockout call-out'],['insuranceFee','Insurance-claim admin'],['disputeFee','Deposit dispute admin'],['invMoveinFee','Move-in inventory & check-in'],['invMoveoutFee','Move-out & check-out']];
 // Build the current document from IV → {lines, title, totalLabel, period, kind, vat}
 function _invBuild(){
   const l=L(IV.landlordId)||{}; const props=S.properties.filter(p=>p.landlordId===IV.landlordId);
@@ -2037,6 +2038,12 @@ function _invBuild(){
   if(IV.docType==='tenantfind'){
     const net=Math.round(rent/4.345*feeOf(l)*100)/100;
     return {lines:[{desc:`Tenant-find fee · ${props.map(p=>p.address).join(', ')||'—'} · ${feeOf(l)} weeks' rent (one-off)`,net}],title:'INVOICE',totalLabel:'Total due',period:{label:'One-off',from:today(),to:today()},kind:'invoice',vat:!!S.agency.vatRegistered};
+  }
+  if(IV.docType==='ancillary'){
+    const fee=(S.agency||{})[IV.ancFee]||0; const qty=Math.max(1,parseInt(IV.ancQty)||1); const net=Math.round(fee*qty*100)/100;
+    const label=(ANC_FEES.find(x=>x[0]===IV.ancFee)||[])[1]||'Ancillary fee';
+    const prop=props.find(p=>p.id===IV.ancPropertyId);
+    return {lines:[{desc:`${label} fee${prop?' · '+prop.address:''}${qty>1?' × '+qty:''} (Clause 5b)`,net}],title:'INVOICE',totalLabel:'Total due',period:{label:'One-off',from:today(),to:today()},kind:'invoice',vat:!!S.agency.vatRegistered};
   }
   if(IV.docType==='maintenance'){
     const lines=(IV.items||[]).filter(x=>x.desc||x.amount).map(x=>({desc:'Works / disbursement · '+(x.desc||'—'),net:Math.round((+x.amount||0)*100)/100}));
@@ -2060,7 +2067,7 @@ function _invBuild(){
 function renderInvoice(){
   const l=L(IV.landlordId)||{};
   const llOpts=S.landlords.map(x=>`<option value="${x.id}" ${x.id===IV.landlordId?'selected':''}>${esc(landlordName(x))} — ${(SVC[x.service]||SVC.full).label}</option>`).join('');
-  const DOCS=[['management','Management fee'],['remittance','Rent remittance (collect & pay out)'],['tenantfind','Tenant-find (one-off)'],['maintenance','Maintenance / disbursement']];
+  const DOCS=[['management','Management fee'],['remittance','Rent remittance (collect & pay out)'],['tenantfind','Tenant-find (one-off)'],['maintenance','Maintenance / disbursement'],['ancillary','Ancillary fee (Clause 5b)']];
   const b=_invBuild();
   const net=b.lines.reduce((s,x)=>s+x.net,0);
   const showPeriod = IV.docType==='management'||IV.docType==='remittance';
@@ -2081,13 +2088,19 @@ function renderInvoice(){
   const remitBlock = IV.docType==='remittance' ? `
     <div class="grid2" style="gap:10px"><div class="fg"><label>Other deduction (£, optional)</label><input type="number" value="${esc(IV.otherDeduct)}" onchange="IV.otherDeduct=this.value;renderInvoice()"></div>
     <div class="fg"><label>Deduction note</label><input value="${esc(IV.otherDesc)}" oninput="IV.otherDesc=this.value" placeholder="e.g. gas cert"></div></div>` : '';
+  const ancillaryBlock = IV.docType==='ancillary' ? `
+    <div class="grid2" style="gap:10px">
+      <div class="fg"><label>Fee type</label><select onchange="IV.ancFee=this.value;renderInvoice()">${ANC_FEES.map(([k,lbl])=>`<option value="${k}" ${IV.ancFee===k?'selected':''}>${lbl} — ${gbp((S.agency||{})[k]||0)}</option>`).join('')}</select></div>
+      <div class="fg"><label>Property (optional)</label><select onchange="IV.ancPropertyId=this.value;renderInvoice()"><option value="">—</option>${props.map(p=>`<option value="${p.id}" ${IV.ancPropertyId===p.id?'selected':''}>${esc(p.address)}</option>`).join('')}</select></div>
+      <div class="fg"><label>Quantity</label><input type="number" min="1" value="${IV.ancQty||1}" onchange="IV.ancQty=this.value;renderInvoice()"></div>
+    </div>` : '';
   const vat=b.vat;
   const body=`
     <div class="grid2" style="gap:10px">
       <div class="fg"><label>${b.kind==='remittance'?'Landlord (pay out to)':'Bill to (landlord)'}</label><select onchange="IV.landlordId=this.value;renderInvoice()">${llOpts}</select></div>
       <div class="fg"><label>Document type</label><select onchange="IV.docType=this.value;renderInvoice()">${DOCS.map(([v,t])=>`<option value="${v}" ${IV.docType===v?'selected':''}>${t}</option>`).join('')}</select></div>
     </div>
-    ${periodBlock}${maintBlock}${remitBlock}
+    ${periodBlock}${maintBlock}${remitBlock}${ancillaryBlock}
     <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:14px;font-size:12.5px;line-height:1.7;margin:6px 0">
       ${b.lines.map(x=>`<div style="display:flex;justify-content:space-between;gap:10px"><span>${esc(x.desc)}</span><b style="white-space:nowrap;${x.net<0?'color:var(--red)':''}">${money2(x.net)}</b></div>`).join('')}
       <div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);margin-top:6px;padding-top:6px"><span class="faint">${vat?'Net':(b.kind==='remittance'?'Subtotal':'Net')}</span><b>${money2(net)}</b></div>
@@ -2197,7 +2210,10 @@ function vSettings(){
         <div class="fg"><label>Lost key / lockout call-out fee (£)</label><input id="set-keyfee" type="number" value="${a.keyFee||''}" placeholder="e.g. 50"></div>
         <div class="fg"><label>Insurance-claim admin fee (£, per claim)</label><input id="set-insurancefee" type="number" value="${a.insuranceFee||''}" placeholder="e.g. 60"></div>
         <div class="fg"><label>Deposit dispute admin fee (£, per dispute)</label><input id="set-disputefee" type="number" value="${a.disputeFee||''}" placeholder="e.g. 75"></div>
+        <div class="fg"><label>Move-in inventory &amp; check-in report (£)</label><input id="set-invmoveinfee" type="number" value="${a.invMoveinFee||''}" placeholder="e.g. 75"></div>
+        <div class="fg"><label>Move-out &amp; check-out report (£)</label><input id="set-invmoveoutfee" type="number" value="${a.invMoveoutFee||''}" placeholder="e.g. 65"></div>
       </div>
+      <div class="hint" style="margin:-6px 0 14px;color:var(--faint)">Independent AIIC clerks typically charge £110–120 for a move-in inventory/check-in and £95–100 for a move-out check-out. These defaults price the agency's photo + AI-assisted report at roughly 65% of that market rate.</div>
       <div class="hint" style="margin:-6px 0 14px;color:var(--faint)">These ancillary fees are itemised in Clause 5b of the management agreement so they're contractually agreed upfront. Leave any at £0 to omit it from the contract. The notice-serving fee is charged automatically to the landlord each time you generate a Section 8 or Section 13 notice.</div>
       <div class="fg"><label>Tenant referencing partner</label><select id="set-ref">${partnerOpts}</select>
         <div class="hint">Powers the credit/Open-Banking checks. ~£15–25 per tenant, usually passed to the landlord. No FCA licence needed on your side — the partner is the regulated party.</div></div>
@@ -2209,7 +2225,7 @@ function vSettings(){
       <div class="note" style="margin-top:16px"><b>AML Policy &amp; Risk Assessment</b> — required by HMRC once you register for Money Laundering Regulations supervision. <a href="AML Policy %26 Risk Assessment.dc.html" target="_blank">Open / print the template →</a></div>
     </div></div>`;
 }
-function saveSettings(){ S.agency.name=val('set-name'); S.agency.address=val('set-address'); S.agency.redress=val('set-redress'); S.agency.redressNo=val('set-redressno'); S.agency.cmp=val('set-cmp'); S.agency.icoNo=val('set-ico'); S.agency.refPartner=val('set-ref'); S.agency.vatRegistered=val('set-vat')==='yes'; S.agency.vatNumber=val('set-vatno'); S.agency.paymentTerms=parseInt(val('set-terms'))||14; S.agency.abortiveFee=parseFloat(val('set-abortive'))||0; S.agency.noticeFee=parseFloat(val('set-noticefee'))||0; S.agency.renewalFee=parseFloat(val('set-renewalfee'))||0; S.agency.arrearsFee=parseFloat(val('set-arrearsfee'))||0; S.agency.keyFee=parseFloat(val('set-keyfee'))||0; S.agency.insuranceFee=parseFloat(val('set-insurancefee'))||0; S.agency.disputeFee=parseFloat(val('set-disputefee'))||0; save(); pushAgency(); render(); toast('✓ Settings saved'); }
+function saveSettings(){ S.agency.name=val('set-name'); S.agency.address=val('set-address'); S.agency.redress=val('set-redress'); S.agency.redressNo=val('set-redressno'); S.agency.cmp=val('set-cmp'); S.agency.icoNo=val('set-ico'); S.agency.refPartner=val('set-ref'); S.agency.vatRegistered=val('set-vat')==='yes'; S.agency.vatNumber=val('set-vatno'); S.agency.paymentTerms=parseInt(val('set-terms'))||14; S.agency.abortiveFee=parseFloat(val('set-abortive'))||0; S.agency.noticeFee=parseFloat(val('set-noticefee'))||0; S.agency.renewalFee=parseFloat(val('set-renewalfee'))||0; S.agency.arrearsFee=parseFloat(val('set-arrearsfee'))||0; S.agency.keyFee=parseFloat(val('set-keyfee'))||0; S.agency.insuranceFee=parseFloat(val('set-insurancefee'))||0; S.agency.disputeFee=parseFloat(val('set-disputefee'))||0; S.agency.invMoveinFee=parseFloat(val('set-invmoveinfee'))||0; S.agency.invMoveoutFee=parseFloat(val('set-invmoveoutfee'))||0; save(); pushAgency(); render(); toast('✓ Settings saved'); }
 
 // ── ONBOARDING WIZARD ──
 let OB=null;
@@ -2638,7 +2654,9 @@ function buildManagementAgreement(l, service){
     a.arrearsFee>0?`<li>Chasing rent arrears beyond the first reminder letter: <b>${gbp(a.arrearsFee)}</b> plus VAT where applicable, per additional letter/call escalation.</li>`:'',
     a.keyFee>0?`<li>Lost key replacement or an out-of-hours lockout call-out: <b>${gbp(a.keyFee)}</b> plus VAT where applicable.</li>`:'',
     a.insuranceFee>0?`<li>Administering a landlord insurance claim (liaising with the insurer, providing evidence and records) on the Landlord's behalf: <b>${gbp(a.insuranceFee)}</b> plus VAT where applicable, per claim.</li>`:'',
-    a.disputeFee>0?`<li>Preparing evidence and representations for a deposit protection scheme dispute (adjudication) on the Landlord's behalf: <b>${gbp(a.disputeFee)}</b> plus VAT where applicable, per dispute.</li>`:''].filter(Boolean);
+    a.disputeFee>0?`<li>Preparing evidence and representations for a deposit protection scheme dispute (adjudication) on the Landlord's behalf: <b>${gbp(a.disputeFee)}</b> plus VAT where applicable, per dispute.</li>`:'',
+    a.invMoveinFee>0?`<li>Move-in inventory &amp; check-in report (photographic condition record, room by room): <b>${gbp(a.invMoveinFee)}</b> plus VAT where applicable, per tenancy.</li>`:'',
+    a.invMoveoutFee>0?`<li>Move-out &amp; check-out report (compared against the move-in record, for deposit purposes): <b>${gbp(a.invMoveoutFee)}</b> plus VAT where applicable, per tenancy.</li>`:''].filter(Boolean);
   const ancillaryClause = ancillaryRows.length ? `<p><b>5b. Ancillary fees.</b> The following additional services are charged to the Landlord only when they arise, at the rates below:</p><ul style="margin:4px 0 10px 20px;padding:0">${ancillaryRows.join('')}</ul>` : '';
 
   const cmp = a.cmp && a.cmp!=='Not holding client money'
@@ -2864,6 +2882,7 @@ const TEMPLATES=[
       <p>Welcome to ${esc(b.name)} — thank you for instructing us to manage your property. We're delighted to be looking after your ${l.service==='letonly'?'letting':'property management'} and will act with care, transparency and full compliance at every step.</p>
       <p>Here's what happens next: we complete your compliance checks, prepare marketing (or begin management), and keep you updated throughout. Your dedicated point of contact is ${esc(b.agent)}, reachable at ${esc(b.email)}.</p>
       <p>You can expect clear monthly statements, prompt handling of maintenance, and proactive reminders before any certificate expires. We hold ${b.redress?('membership of '+esc(b.redress)):'approved redress-scheme membership'} for your protection.</p>
+      <p>One thing to flag now so it's never a surprise later: move-in and move-out inventory reports are billed separately from your management fee (set out in Clause 5b), at roughly 65% of what an independent inventory clerk would charge — we run them in-house with photographic evidence and AI-assisted condition comparison.</p>
       <p>Two optional items worth knowing about: PAT testing of appliances and pest control treatment aren't legally required for standard lets, but if you already have them done, we're happy to keep the records on file alongside your other certificates — just let us know.</p>
       <p>If you have any questions at all, simply reply to this email. We look forward to a long and successful working relationship.</p>
       <p>Kind regards,<br>${esc(b.agent)}<br>${esc(b.name)}</p>`})},
@@ -3610,10 +3629,16 @@ function openInventory(){
   modal('New inventory', `<div class="fg"><label>Tenancy</label><select id="iv2-t">${opts}</select></div><div class="fg"><label>Deposit held (£)</label><input id="iv2-dep" type="number"></div>`,
     `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="createInventory2()">Create</button>`, true);
 }
+function _chargeInvFee(kind,p,l){ const fee=kind==='movein'?(S.agency||{}).invMoveinFee:(S.agency||{}).invMoveoutFee; if(!fee||!l||!l.id) return;
+  l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:(kind==='movein'?'Move-in inventory & check-in':'Move-out & check-out')+' report fee of '+gbp(fee)+' charged — '+(p.address||'')+' (per Clause 5b of the management agreement)'});
+  pushLandlord(l);
+}
 function createInventory2(){
   const tid=val('iv2-t'); const t=(S.tenants||[]).find(x=>x.id===tid)||{};
   const v={id:uid('iv2'),propertyId:t.propertyId,tenantId:tid,rooms:[],depositHeld:parseFloat(val('iv2-dep'))||t.deposit||0,totalDeduction:0,status:'draft'};
-  S.inventories2=S.inventories2||[]; S.inventories2.unshift(v); pushInv2(v); closeModal(); go('inventorydetail',v.id); toast('✓ Inventory created — add rooms');
+  S.inventories2=S.inventories2||[]; S.inventories2.unshift(v); pushInv2(v);
+  const p=P(v.propertyId)||{}; _chargeInvFee('movein',p,L(p.landlordId));
+  closeModal(); go('inventorydetail',v.id); toast('✓ Inventory created — add rooms');
 }
 function vInventoryList(){
   const list=S.inventories2||[];
@@ -3632,11 +3657,16 @@ function _ensureRoomShape(r){
 function _invActiveTab(vid){ window._invTabs=window._invTabs||{}; return window._invTabs[vid]||0; }
 function _invSetTab(vid,i){ window._invTabs=window._invTabs||{}; window._invTabs[vid]=i; render(); }
 function _photoStrip(vid,i,stage,visitIdx,photos){
-  const thumbs=(photos||[]).map((u,pi)=>`<div style="position:relative;width:54px;height:54px;flex-shrink:0"><img src="${u}" style="width:100%;height:100%;object-fit:cover;border-radius:6px;cursor:pointer" onclick="viewDoc('${u}','Photo')"><button onclick="removeRoomPhoto('${vid}',${i},'${stage}',${visitIdx==null?'null':visitIdx},${pi})" style="position:absolute;top:-5px;right:-5px;width:16px;height:16px;border-radius:50%;background:var(--red);color:#fff;border:none;font-size:10px;line-height:16px;cursor:pointer;padding:0">✕</button></div>`).join('');
-  return `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px">${thumbs}
+  const key=vid+'|'+i+'|'+stage+'|'+visitIdx; window._invPhotoExpand=window._invPhotoExpand||{};
+  const list=photos||[]; const LIMIT=8; const expanded=window._invPhotoExpand[key]||list.length<=LIMIT;
+  const shown=expanded?list:list.slice(0,LIMIT);
+  const thumbs=shown.map((u,pi)=>`<div style="position:relative;width:54px;height:54px;flex-shrink:0"><img src="${u}" style="width:100%;height:100%;object-fit:cover;border-radius:6px;cursor:pointer" onclick="viewDoc('${u}','Photo')"><button onclick="removeRoomPhoto('${vid}',${i},'${stage}',${visitIdx==null?'null':visitIdx},${pi})" style="position:absolute;top:-5px;right:-5px;width:16px;height:16px;border-radius:50%;background:var(--red);color:#fff;border:none;font-size:10px;line-height:16px;cursor:pointer;padding:0">✕</button></div>`).join('');
+  const toggleBtn=list.length>LIMIT?`<button onclick="_invToggleExpand('${key}')" style="width:54px;height:54px;border:1.5px dashed var(--border);border-radius:6px;background:var(--off);color:var(--muted);font-size:10.5px;font-weight:700;cursor:pointer;flex-shrink:0;line-height:1.2">${expanded?'Show less':'+'+(list.length-LIMIT)+' more'}</button>`:'';
+  return `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px">${thumbs}${toggleBtn}
     <label style="width:54px;height:54px;border:1.5px dashed var(--border);border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:18px;color:var(--faint)">＋<input type="file" accept="image/*" multiple style="display:none" onchange="addRoomPhotos('${vid}',${i},'${stage}',${visitIdx==null?'null':visitIdx},this)"></label>
   </div>`;
 }
+function _invToggleExpand(key){ window._invPhotoExpand=window._invPhotoExpand||{}; window._invPhotoExpand[key]=!window._invPhotoExpand[key]; render(); }
 async function addRoomPhotos(vid,i,stage,visitIdx,input){
   const files=[...(input.files||[])]; if(!files.length) return;
   const v=(S.inventories2||[]).find(x=>x.id===vid); const r=_ensureRoomShape(v.rooms[i]);
@@ -3767,11 +3797,11 @@ async function generateInvReport(vid,type){
       const b64=u=>u.split(',')[1]; const mt=u=>u.split(';')[0].split(':')[1];
       let content,promptTxt;
       if(type==='movein'){
-        promptTxt=`UK letting agent move-in condition report. Describe the condition of "${r.room} — ${r.item}" from these check-in photos. Note: "${r.checkin.note||'none'}". Return ONLY JSON: {"summary":"one or two factual sentences describing condition, flagging any existing marks or wear so it's on record"}`;
+        promptTxt=`UK letting agent move-in condition report, written as evidence for a future deposit dispute. Describe the condition of "${r.room} — ${r.item}" from these ${r.checkin.photos.length} check-in photo(s). Note: "${r.checkin.note||'none'}". Be specific and factual — name the material/colour/finish where visible, and explicitly record any existing marks, wear, damage or cleanliness issues visible in the photos (so the tenant is not later charged for them). Avoid vague filler like "good condition" or "as expected" with no detail — an adjudicator needs a description precise enough to compare against the check-out. Return ONLY JSON: {"summary":"one or two sentences, specific and evidential"}`;
         content=[...r.checkin.photos.map(u=>({type:'image',source:{type:'base64',media_type:mt(u),data:b64(u)}})),{type:'text',text:promptTxt}];
       } else {
         const chargeAsk=type==='moveout'?', "charge":number (apportioned £ the tenant should pay if damage/cleaning — never full replacement cost, never new-for-old)':'';
-        promptTxt=`UK tenancy deposit adjudicator. Compare CHECK-IN vs ${cmpLabel.toUpperCase()} photos for "${r.room} — ${r.item}". Notes: check-in "${r.checkin.note||'none'}", ${cmpLabel} "${toSet.note||'none'}". Classify as fair_wear|damage|cleaning. ${type==='moveout'?'If chargeable, explain the apportionment maths (replacement/repair cost, item expected life, age at check-in, proportion charged) in the summary.':''} Return ONLY JSON: {"classification":"fair_wear|damage|cleaning","summary":"one to three sentences"${chargeAsk}}`;
+        promptTxt=`UK tenancy deposit adjudicator, writing evidence for a possible dispute. Compare CHECK-IN vs ${cmpLabel.toUpperCase()} photos for "${r.room} — ${r.item}". Notes: check-in "${r.checkin.note||'none'}", ${cmpLabel} "${toSet.note||'none'}". Classify as fair_wear|damage|cleaning. Name the SPECIFIC change observed (not "some wear" or "looks worse") — what changed, where, and how that goes beyond (or stays within) fair wear and tear for the tenancy length. ${type==='moveout'?'If chargeable, show the apportionment maths explicitly: repair/replacement cost, the item\'s expected life, its age at check-in, and the resulting proportion charged — never claim full replacement (betterment).':''} Return ONLY JSON: {"classification":"fair_wear|damage|cleaning","summary":"one to three specific, factual sentences an adjudicator could act on"${chargeAsk}}`;
         content=[...r.checkin.photos.map(u=>({type:'image',source:{type:'base64',media_type:mt(u),data:b64(u)}})),{type:'text',text:'CHECK-IN above.'},...toSet.photos.map(u=>({type:'image',source:{type:'base64',media_type:mt(u),data:b64(u)}})),{type:'text',text:cmpLabel.toUpperCase()+' above.\n\n'+promptTxt}];
       }
       const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:280,messages:[{role:'user',content}]})});
@@ -3790,7 +3820,7 @@ async function generateInvReport(vid,type){
   v.reports=v.reports||[];
   v.reports.unshift({id:uid('ir'),type,date:today(),results,totalDeduction:type==='moveout'?v.totalDeduction:0,depositHeld:v.depositHeld||0,checkinDate:t.start||''});
   if(type==='movein'&&v.status==='draft') v.status='in-progress';
-  if(type==='moveout') v.status='complete';
+  if(type==='moveout'){ v.status='complete'; const p2=P(v.propertyId)||{}; _chargeInvFee('moveout',p2,L(p2.landlordId)); }
   pushInv2(v); render();
   toast('✓ '+({movein:'Move-in',midterm:'Mid-tenancy',moveout:'Move-out'}[type])+' report generated');
 }
@@ -3841,7 +3871,8 @@ function _invReportHtml(r,p,t){
       ${r.type==='moveout'&&x.charge?`<div style="background:#FBF6F2;border:1px solid #F0E0D4;border-radius:7px;padding:8px 11px;font-size:11px;color:#8A5A3A;line-height:1.55">${esc(x.summary)}</div>`:r.type!=='moveout'?`<div style="font-size:11px;color:#64748B;line-height:1.5">${esc(x.summary)}</div>`:''}
     </div>`;
   }).join('');
-  const footer=r.type==='moveout'?`<div style="background:#F9FAFB;border-top:1px solid #E2E5EA;padding:16px 24px;font-size:10.5px;color:#7A8699;line-height:1.6"><b style="color:#475569">How these figures were calculated</b><br>Every item was classified as fair wear &amp; tear (never chargeable) or tenant damage/cleaning (chargeable). Chargeable items apply apportionment — the tenant pays only the proportion of an item's remaining expected life, never new-for-old.</div>`:'';
+  const footer=(r.type==='moveout'?`<div style="background:#F9FAFB;border-top:1px solid #E2E5EA;padding:16px 24px;font-size:10.5px;color:#7A8699;line-height:1.6"><b style="color:#475569">How these figures were calculated</b><br>Every item was classified as fair wear &amp; tear (never chargeable) or tenant damage/cleaning (chargeable). Chargeable items apply apportionment — the tenant pays only the proportion of an item's remaining expected life, never new-for-old.</div>`:'')
+    +`<div style="border-top:1px solid #E2E5EA;padding:12px 24px;font-size:10px;color:#94A3B8;line-height:1.6">This report is a fair and accurate record of condition based on the photographs and notes taken at the time of each stage. Report ref: ${esc(r.id)} · Please review and raise any inaccuracy promptly — after 7 days without dispute this record will be treated as agreed.</div>`;
   return `<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;border-radius:8px;overflow:hidden;border:1px solid #E2E5EA">
     <div style="background:#0B1E3D;color:#fff;padding:20px 24px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
@@ -3864,8 +3895,16 @@ function viewInvReports(vid){
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
         ${l.email?`<button class="btn sm ${r.sentLandlordAt?'':'navy'}" onclick="emailInvReport('${vid}','${r.id}','landlord')">${r.sentLandlordAt?'✓ Sent to landlord '+fmtDate(r.sentLandlordAt):'Send to landlord'}</button>`:''}
         ${t.email?`<button class="btn sm ${r.sentTenantAt?'':'navy'}" onclick="emailInvReport('${vid}','${r.id}','tenant')">${r.sentTenantAt?'✓ Sent to tenant '+fmtDate(r.sentTenantAt):'Send to tenant'}</button>`:''}
+        <button class="btn sm" onclick="deleteInvReport('${vid}','${r.id}')" style="color:var(--red)">Delete</button>
       </div></div>${_invReportHtml(r,p,t)}</div>`).join('');
   modal('Inventory reports',body,`<button class="btn" onclick="closeModal()">Close</button>`);
+}
+function deleteInvReport(vid,rid){
+  if(!confirm('Delete this report? This cannot be undone.')) return;
+  const v=(S.inventories2||[]).find(x=>x.id===vid); if(!v) return;
+  v.reports=(v.reports||[]).filter(x=>x.id!==rid); pushInv2(v);
+  if(v.reports.length) viewInvReports(vid); else closeModal();
+  render(); toast('✓ Report deleted');
 }
 function emailInvReport(vid,rid,recipient){
   const v=(S.inventories2||[]).find(x=>x.id===vid); const r=(v.reports||[]).find(x=>x.id===rid); if(!r) return;
