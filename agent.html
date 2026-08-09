@@ -1764,7 +1764,14 @@ function _commitTenant(pid,info){
   const p=P(pid); if(!p.id||!info.name) return null;
   p.tenant={name:info.name,email:info.email||'',start:info.start||today(),occupants:info.occupants||[]};
   let tn=S.tenancies.find(t=>t.propertyId===pid); if(tn)tn.stage='managed'; else { tn={id:uid('t'),who:p.address,propertyId:pid,stage:'managed'}; S.tenancies.push(tn); }
-  let rec=tenantRecFor(pid); const isNew=!rec; if(isNew) rec={id:uid('tn'),status:'active'};
+  let rec=tenantRecFor(pid);
+  // A different name means a new tenant replacing the sitting one — close out the old record
+  // instead of mutating it, so stale deposit/reference/contract docs from the outgoing tenant
+  // never silently carry over and show as "Protected"/"On file" for the new tenancy.
+  if(rec && info.name && rec.name && info.name.trim().toLowerCase()!==rec.name.trim().toLowerCase()){
+    rec.status='ended'; rec.endDate=today(); pushTenantRec(rec); rec=null;
+  }
+  const isNew=!rec; if(isNew) rec={id:uid('tn'),status:'active'};
   rec.propertyId=pid; rec.landlordId=p.landlordId; rec.name=info.name; rec.email=info.email||''; rec.phone=info.phone||''; rec.start=info.start||today(); rec.rent=p.rent||0; rec.deposit=info.deposit!=null?info.deposit:rec.deposit; rec.occupants=info.occupants||[];
   if(info.guarantor!==undefined) rec.guarantor=info.guarantor;
   if(info.depositCertName){ rec.depositCertName=info.depositCertName; rec.depositCertUrl=info.depositCertUrl||rec.depositCertUrl; }
@@ -3835,11 +3842,14 @@ function vCompliance(){
     const propHtml=props.map(p=>{
       const items3=_fullCertItems(p).map(it=>[it[0],it[1]+(it[0]==='epc'&&p.certs&&p.certs.epcRating?' · '+p.certs.epcRating:''),it[2],it[3],it[4]]);
       const pIssues=items3.filter(it=>_itemRag(it).k!=='ok').length;
-      const certHtml=items3.map(it=>{ const [k,lab,d,kind]=it; const r=_itemRag(it); const action=k==='rtr'?`rtrWizard('${p.id}')`:k==='deposit'?`setTenant('${p.id}')`:`editCert('${p.id}','${k}')`; return `<div class="tree-leaf">
+      const rec3=tenantRecFor(p.id); const dc=p.certs||{};
+      const docUrlOf=k=>({gas:dc.gasDocUrl,eicr:dc.eicrDocUrl,epc:dc.epcDocUrl,legionella:dc.legionellaDocUrl,hmo:dc.hmoDocUrl,smoke:dc.smokeDocUrl,co:dc.coDocUrl,deposit:rec3&&rec3.depositCertUrl,rtr:rec3&&rec3.rtrDocUrl}[k]);
+      const certHtml=items3.map(it=>{ const [k,lab,d,kind]=it; const r=_itemRag(it); const action=k==='rtr'?`rtrWizard('${p.id}')`:k==='deposit'?`setTenant('${p.id}')`:`editCert('${p.id}','${k}')`; const docUrl=docUrlOf(k); return `<div class="tree-leaf">
           <span class="tree-dot" style="background:${r.color}"></span>
           <span style="flex:1;font-size:12.5px">${lab}</span>
           <span class="faint" style="font-size:11.5px;margin-right:8px">${kind==='custom'?r.label:d?(kind==='decl'?'Confirmed '+fmtDate(d):fmtDate(d)):(kind==='decl'?'Not confirmed':'No certificate')}</span>
           <span class="pill" style="background:${r.bg};color:${r.color}">${r.label}</span>
+          ${docUrl?`<button class="btn sm" onclick="viewDoc('${docUrl}','${esc(lab)}')">View</button>`:''}
           <button class="btn sm" onclick="${action}">${r.k==='ok'?'Update':k==='deposit'?'Manage':'Add'}</button>
         </div>`; }).join('');
       return `<details class="tree-node" ${pIssues?'open':''}>
