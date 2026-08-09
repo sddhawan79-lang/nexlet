@@ -445,7 +445,7 @@ function render(){
     dashboard:vDashboard, landlords:vLandlords, landlord:vLandlordDetail, pipeline:vPipeline,
     marketing:vMarketing, listing:vListingDetail, applicants:vApplicants, offers:vOffers,
     keys:vKeys, reports:vReports, clientmoney:vClientMoney,
-    referencing:vReferencing, properties:vProperties, property:vPropertyDetail, llportal:vLandlordPortal,
+    referencing:vReferencing, properties:vProperties, property:vPropertyDetail, llportal:vLandlordPortal, llproperty:vLandlordPortalProperty,
     invoices:vInvoices, invoice:vInvoiceDetail, settings:vSettings, templates:vTemplates, notices:vNotices, notice:vNoticeDetail, compliance:vCompliance,
     rent:vRentArrears, maintenance:vMaintenance, inventory2:vInventoryList, inventorydetail:vInventoryDetail, statement:vStatement
   }[view]||vDashboard)();
@@ -1224,8 +1224,11 @@ function lifecycleStepper(p){
 }
 function tenancyChecklistPanel(p){
   const cl=_tenancyChecklist(p);
+  // Once everything's done this duplicated every row already shown in Compliance & documents
+  // below — collapse to one line, expandable, instead of repeating the same list twice.
+  if(cl.pct===100) return `<div class="panel" style="margin-bottom:14px"><div class="panel-bd" style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px"><span style="font-size:12.5px;font-weight:600;color:var(--green)">✓ Tenancy setup complete — ready to let</span><span class="faint" style="font-size:11.5px">Details below in Compliance &amp; documents</span></div></div>`;
   const rows=cl.items.map(i=>`<div class="doc" style="padding:7px 0"><div class="di" style="background:${i.done?'var(--green-bg)':i.warn?'var(--amber-bg)':'var(--red-bg)'};color:${i.done?'var(--green)':i.warn?'var(--amber)':'var(--red)'}">${i.done?'✓':'!'}</div><div style="flex:1;font-size:12.5px;font-weight:600;color:var(--navy)">${i.label}</div>${i.done?'<span class="faint" style="font-size:11.5px">Done</span>':`<button class="btn sm" onclick="${i.go}">Fix</button>`}</div>`).join('');
-  return `<div class="panel" style="margin-bottom:18px"><div class="panel-hd"><h2>Tenancy setup checklist</h2><span class="pill" style="background:${cl.pct===100?'var(--green-bg)':'var(--amber-bg)'};color:${cl.pct===100?'var(--green)':'var(--amber)'}">${cl.pct}% complete${cl.pct===100?' — ready to let':''}</span></div><div class="panel-bd">${rows}</div></div>`;
+  return `<div class="panel" style="margin-bottom:18px"><div class="panel-hd"><h2>Tenancy setup checklist</h2><span class="pill" style="background:var(--amber-bg);color:var(--amber)">${cl.pct}% complete</span></div><div class="panel-bd">${rows}</div></div>`;
 }
 function vPropertyDetail(){
   const p=P(sel); if(!p.id) return vProperties();
@@ -1257,7 +1260,7 @@ function vPropertyDetail(){
     ${lifecycleStepper(p)}
     ${tenancyChecklistPanel(p)}
     <div class="grid2">
-      <div class="panel"><div class="panel-hd"><h2>Compliance certificates</h2></div><div class="panel-bd">
+      <div class="panel"><div class="panel-hd"><h2>Compliance &amp; documents</h2></div><div class="panel-bd">
         ${certRow('gas','Gas Safety (annual)',c.gas,c.gasDocUrl)}
         ${certRow('eicr','EICR (every 5 years)',c.eicr,c.eicrDocUrl)}
         ${certRow('epc','EPC'+(c.epcRating?' · rated '+c.epcRating:''),c.epc,c.epcDocUrl)}
@@ -1292,6 +1295,9 @@ function vPropertyDetail(){
           <button class="btn sm" onclick="legionellaWizard('${p.id}')">🧪 Self-assess</button>
           ${c.legionellaReportHtml?`<button class="btn sm" onclick="viewLegionellaReport('${p.id}')">View assessment</button>`:''}
         </div>
+        ${(()=>{ const rec=tenantRecFor(p.id); if(!rec) return '';
+          return `${rec.refDocName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">📄</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Reference report</div><div class="faint" style="font-size:11.5px">${esc(rec.refDocName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.refDocUrl?`<button class="btn sm" onclick="viewDoc('${rec.refDocUrl}','Reference report')">View</button>`:''}</div>`:''}
+          ${rec.origContractName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">📄</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Original tenancy agreement</div><div class="faint" style="font-size:11.5px">${esc(rec.origContractName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.origContractUrl?`<button class="btn sm" onclick="viewDoc('${rec.origContractUrl}','Original tenancy agreement')">View</button>`:''}</div>`:''}`; })()}
       </div></div>
       <div class="panel"><div class="panel-hd"><h2>Tenancy</h2></div><div class="panel-bd">
         ${L(p.landlordId).service==='full'?`<div class="kv"><span class="k">Management fee</span><span class="v"><b>${propFee(p)}%</b> of rent · ${gbp(p.rent*propFee(p)/100)}/mo <a href="#" onclick="editPropFee('${p.id}');return false" style="color:var(--blue);font-weight:600;margin-left:6px">edit</a></span></div>`:''}
@@ -1300,9 +1306,7 @@ function vPropertyDetail(){
           ${p.tenant.occupants&&p.tenant.occupants.length?`<div class="kv"><span class="k">Also on tenancy</span><span class="v">${p.tenant.occupants.map(o=>esc(o.name)).join(', ')}</span></div>`:''}
           <div class="kv"><span class="k">Start date</span><span class="v">${fmtDate(p.tenant.start)}</span></div>
           ${(()=>{ const rec=tenantRecFor(p.id); if(!rec) return ''; const g=rec.guarantor;
-            return `${g&&g.name?`<div class="kv"><span class="k">Guarantor</span><span class="v">${esc(g.name)}${g.email?' · '+esc(g.email):''}${g.phone?' · '+esc(g.phone):''}</span></div>`:''}
-            ${rec.depositCertName?`<div class="kv"><span class="k">Deposit certificate</span><span class="v">${esc(rec.depositCertName)} ${rec.depositCertUrl?`<a href="#" onclick="event.preventDefault();viewDoc('${rec.depositCertUrl}','Deposit certificate')">View</a>`:''}</span></div>`:''}
-            ${rec.refDocName?`<div class="kv"><span class="k">Reference report</span><span class="v">${esc(rec.refDocName)} ${rec.refDocUrl?`<a href="#" onclick="event.preventDefault();viewDoc('${rec.refDocUrl}','Reference report')">View</a>`:''}</span></div>`:''}`; })()}
+            return g&&g.name?`<div class="kv"><span class="k">Guarantor</span><span class="v">${esc(g.name)}${g.email?' · '+esc(g.email):''}${g.phone?' · '+esc(g.phone):''}</span></div>`:''; })()}
           <div class="kv" style="border:none"><span class="k">Rent due day</span><span class="v">${esc(p.rentDueDay||'1st')} <a href="#" onclick="editRentDueDay('${p.id}');return false" style="color:var(--blue);font-size:12px;margin-left:4px">edit</a></span></div>
           <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">${(()=>{ const rec=tenantRecFor(p.id);
             return (rec&&rec.invited)?`<span class="faint" style="font-size:12.5px">✓ Portal invited ${fmtDate(rec.invitedAt)}</span><button class="btn sm" onclick="inviteTenantToPortal('${p.id}')">Resend</button>`
@@ -1849,8 +1853,26 @@ function vLandlordPortal(){
       <div class="kpi"><div class="l">Service</div><div class="v" style="font-size:18px">${(SVC[l.service]||SVC.full).label}</div></div>
     </div>
     <div class="panel"><div class="panel-hd"><h2>Your properties</h2></div>
-      ${props.map(p=>{const comp=propCompliance(p);return `<div class="row"><div class="av">⌂</div><div style="flex:1"><div style="font-size:13.5px;font-weight:600;color:var(--navy)">${esc(p.address)}</div><div class="faint" style="font-size:12px">${p.tenant?'Tenant: '+esc(p.tenant.name):'Vacant'} · ${gbp(p.rent)}/mo</div></div><span class="pill" style="background:${comp.pct===100?'var(--green-bg)':'var(--amber-bg)'};color:${comp.pct===100?'var(--green)':'var(--amber)'}">Compliance ${comp.pct}%</span></div>`;}).join('')}
+      ${props.map(p=>{const comp=propCompliance(p);return `<div class="row" style="cursor:pointer" onclick="go('llproperty','${p.id}')"><div class="av">⌂</div><div style="flex:1"><div style="font-size:13.5px;font-weight:600;color:var(--navy)">${esc(p.address)}</div><div class="faint" style="font-size:12px">${p.tenant?'Tenant: '+esc(p.tenant.name):'Vacant'} · ${gbp(p.rent)}/mo</div></div><span class="pill" style="background:${comp.pct===100?'var(--green-bg)':'var(--amber-bg)'};color:${comp.pct===100?'var(--green)':'var(--amber)'}">Compliance ${comp.pct}%</span></div>`;}).join('')}
     </div>`;
+}
+function vLandlordPortalProperty(){
+  const p=P(sel); if(!p.id) return vLandlords();
+  const l=L(p.landlordId); const c=p.certs||{}; const rec=tenantRecFor(p.id);
+  const items=_fullCertItems(p);
+  const docUrlOf=k=>({gas:c.gasDocUrl,eicr:c.eicrDocUrl,epc:c.epcDocUrl,legionella:c.legionellaDocUrl,hmo:c.hmoDocUrl,smoke:c.smokeDocUrl,co:c.coDocUrl,deposit:rec&&rec.depositCertUrl,rtr:rec&&rec.rtrDocUrl}[k]);
+  return `
+    <div class="back" onclick="go('llportal','${l.id}')">← Back to portfolio</div>
+    <div class="note" style="margin-bottom:16px">👁 <b>Landlord read-only portal preview</b> — this is what ${esc(l.name)} sees for this property.</div>
+    <h1 class="pg">${esc(p.address)}</h1><div class="sub">${p.tenant?'Tenant: '+esc(p.tenant.name):'Vacant'} · ${gbp(p.rent)}/mo</div>
+    <div class="panel"><div class="panel-hd"><h2>Compliance &amp; documents</h2></div><div class="panel-bd">
+      ${items.map(it=>{ const [k,lab,d,kind]=it; const r=_itemRag(it); const docUrl=docUrlOf(k);
+        return `<div class="doc"><div class="di" style="background:${r.bg};color:${r.color}">⛨</div>
+          <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${lab}</div><div class="faint" style="font-size:11.5px">${kind==='custom'?r.label:d?fmtDate(d):'No certificate on file'}</div></div>
+          <span class="pill" style="background:${r.bg};color:${r.color}">${r.label}</span>
+          ${docUrl?`<button class="btn sm" onclick="viewDoc('${docUrl}','${esc(lab)}')">View</button>`:'<span class="faint" style="font-size:11.5px">No file uploaded</span>'}
+        </div>`; }).join('')}
+    </div></div>`;
 }
 
 // ── INVOICING (built-in, free; quarterly-upfront; VAT-ready) ──
