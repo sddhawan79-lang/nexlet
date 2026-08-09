@@ -1529,12 +1529,13 @@ function setTenant(pid){ const p=P(pid); const t=p.tenant||{}; const rec=tenantR
     <input id="tn-g-email" placeholder="Guarantor email" value="${esc(g.email||'')}">
     <input id="tn-g-phone" placeholder="Guarantor phone" value="${esc(g.phone||'')}">
   </div></div>
+  <div style="font-size:12.5px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;border-top:1px solid var(--border);margin:18px 0 12px;padding-top:16px">Documents</div>
   ${_docSlotHtml('deposit','Deposit certificate','(custodial/insured scheme cert or Prescribed Information)',rec.depositCertName,rec.depositCertUrl,'aiScanDeposit')}
   <div class="fg" style="margin-top:-8px"><label>Protection covers tenancy until <span class="faint">(only for a fixed-term cert with an "ending on or after" date — leave blank for a periodic tenancy, no re-protection needed on renewal or rent increase)</span></label><div style="display:flex;gap:8px;align-items:center"><input id="tn-deposit-expiry" type="date" value="${rec.depositCertExpiry||''}" style="flex:1"><a href="#" onclick="event.preventDefault();document.getElementById('tn-deposit-expiry').value=''">Clear</a></div></div>
   <div id="tn-deposit-scan-status" class="faint" style="font-size:11px;margin-top:-8px"></div>
   ${_docSlotHtml('ref','Reference report','(employer/previous-landlord reference or credit check)',rec.refDocName,rec.refDocUrl)}
   ${_docSlotHtml('origcontract','Original signed tenancy agreement','(if this tenancy was already running when NexLet took over management — stays legally valid; no need to reissue, even after the 1 May 2026 conversion to a periodic tenancy)',rec.origContractName,rec.origContractUrl)}
-  <div style="font-size:11px;font-weight:700;letter-spacing:.4px;color:var(--faint);text-transform:uppercase;margin:14px 0 8px">Identity &amp; address (safeguarding — optional but recommended)</div>
+  <div style="font-size:11px;font-weight:700;letter-spacing:.4px;color:var(--faint);text-transform:uppercase;margin:18px 0 8px;border-top:1px solid var(--border);padding-top:16px">Identity &amp; address (safeguarding — optional but recommended)</div>
   ${_docSlotHtml('id1','Photo ID — 1 of 2','(passport or driving licence)',rec.id1DocName,rec.id1DocUrl)}
   ${_docSlotHtml('id2','Photo ID — 2 of 2','(a second form: passport, driving licence, or national ID card)',rec.id2DocName,rec.id2DocUrl)}
   ${_docSlotHtml('addressproof','Proof of address','(utility bill, council tax bill, or bank statement — dated within the last 3 months)',rec.addressProofName,rec.addressProofUrl)}
@@ -1577,12 +1578,22 @@ async function viewDoc(url,label){
 }
 // ── Deposit certificate & reference report file slots, shared by the tenant modal.
 function _docSlotHtml(kind,label,hint,name,url,scanFn){
+  if(name){
+    return `<div class="fg"><label>${label}</label>
+      <div class="doc" style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-top:2px">
+        <div class="di" style="background:var(--green-bg);color:var(--green);flex-shrink:0">📄</div>
+        <div style="flex:1;font-size:12.5px;color:var(--txt);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(name)}</div>
+        ${url?`<a href="#" onclick="event.preventDefault();viewDoc('${url}','${esc(label)}')" style="font-size:12px;flex-shrink:0">View</a>`:''}
+        <label style="font-size:12px;color:var(--blue);cursor:pointer;flex-shrink:0">Replace<input type="file" accept="application/pdf,image/*" style="display:none" onchange="tnAttachFile(this,'${kind}')${scanFn?`;${scanFn}(this)`:''}"></label>
+      </div>
+      <div id="tn-${kind}-status"></div></div>`;
+  }
   return `<div class="fg"><label>${label} <span class="faint">${hint}</span></label>
     <label style="display:flex;align-items:center;gap:10px;padding:10px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer">
-      <span style="font-size:18px">📄</span><div style="font-size:12.5px;font-weight:600;flex:1">${name?'Replace file':scanFn?'Click to attach — AI reads the date':'Click to attach'}</div>
+      <span style="font-size:18px">📄</span><div style="font-size:12.5px;font-weight:600;flex:1">${scanFn?'Click to attach — AI reads the date':'Click to attach'}</div>
       <input type="file" accept="application/pdf,image/*" style="display:none" onchange="tnAttachFile(this,'${kind}')${scanFn?`;${scanFn}(this)`:''}">
     </label>
-    <div id="tn-${kind}-status" style="margin-top:6px;font-size:11.5px">${name?`<span style="color:var(--green)">✓ ${esc(name)} on file</span> ${url?`<a href="#" onclick="event.preventDefault();viewDoc('${url}','${esc(label)}')">View</a>`:''}`:'<span class="faint">No file attached yet</span>'}</div></div>`;
+    <div id="tn-${kind}-status" style="margin-top:6px;font-size:11.5px"><span class="faint">No file attached yet</span></div></div>`;
 }
 function tnAttachFile(input,kind){ const f=input.files[0]; if(!f) return; window._tnFiles=window._tnFiles||{}; window._tnFiles[kind]=f;
   const st=document.getElementById('tn-'+kind+'-status'); if(st) st.innerHTML='<span style="color:var(--blue)">✦ '+esc(f.name)+' attached — will upload on Save</span>'; }
