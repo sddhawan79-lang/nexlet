@@ -1529,18 +1529,25 @@ function setTenant(pid){ const p=P(pid); const t=p.tenant||{}; const rec=tenantR
     <input id="tn-g-email" placeholder="Guarantor email" value="${esc(g.email||'')}">
     <input id="tn-g-phone" placeholder="Guarantor phone" value="${esc(g.phone||'')}">
   </div></div>
-  <div style="font-size:12.5px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;border-top:1px solid var(--border);margin:18px 0 12px;padding-top:16px">Documents</div>
-  ${_docSlotHtml('deposit','Deposit certificate','(custodial/insured scheme cert or Prescribed Information)',rec.depositCertName,rec.depositCertUrl,'aiScanDeposit')}
-  <div class="fg" style="margin-top:-8px"><label>Protection covers tenancy until <span class="faint">(only for a fixed-term cert with an "ending on or after" date — leave blank for a periodic tenancy, no re-protection needed on renewal or rent increase)</span></label><div style="display:flex;gap:8px;align-items:center"><input id="tn-deposit-expiry" type="date" value="${rec.depositCertExpiry||''}" style="flex:1"><a href="#" onclick="event.preventDefault();document.getElementById('tn-deposit-expiry').value=''">Clear</a></div></div>
-  <div id="tn-deposit-scan-status" class="faint" style="font-size:11px;margin-top:-8px"></div>
-  ${_docSlotHtml('ref','Reference report','(employer/previous-landlord reference or credit check)',rec.refDocName,rec.refDocUrl)}
-  ${_docSlotHtml('origcontract','Original signed tenancy agreement','(if this tenancy was already running when NexLet took over management — stays legally valid; no need to reissue, even after the 1 May 2026 conversion to a periodic tenancy)',rec.origContractName,rec.origContractUrl)}
-  <div style="font-size:11px;font-weight:700;letter-spacing:.4px;color:var(--faint);text-transform:uppercase;margin:18px 0 8px;border-top:1px solid var(--border);padding-top:16px">Identity &amp; address (safeguarding — optional but recommended)</div>
-  ${_docSlotHtml('id1','Photo ID — 1 of 2','(passport or driving licence)',rec.id1DocName,rec.id1DocUrl)}
-  ${_docSlotHtml('id2','Photo ID — 2 of 2','(a second form: passport, driving licence, or national ID card)',rec.id2DocName,rec.id2DocUrl)}
-  ${_docSlotHtml('addressproof','Proof of address','(utility bill, council tax bill, or bank statement — dated within the last 3 months)',rec.addressProofName,rec.addressProofUrl)}
+  <div style="background:#F6F8FB;border:1px solid var(--border);border-radius:10px;padding:16px;margin-top:18px">
+    <div style="font-size:12.5px;font-weight:700;color:var(--navy)">📁 Tenancy documents</div>
+    <div class="faint" style="font-size:11.5px;margin-bottom:10px">Deposit, referencing &amp; the signed agreement for ${rec.name?esc(rec.name):'this tenant'}</div>
+    ${_docSlotHtml('deposit','Deposit certificate','(custodial/insured scheme cert or Prescribed Information)',rec.depositCertName,rec.depositCertUrl,'aiScanDeposit')}
+    <div class="fg" style="margin-top:-8px"><label>Protection covers tenancy until <span class="faint">(only for a fixed-term cert with an "ending on or after" date — leave blank for a periodic tenancy, no re-protection needed on renewal or rent increase)</span></label><div style="display:flex;gap:8px;align-items:center"><input id="tn-deposit-expiry" type="date" value="${rec.depositCertExpiry||''}" style="flex:1"><a href="#" onclick="event.preventDefault();document.getElementById('tn-deposit-expiry').value=''">Clear</a></div></div>
+    <div id="tn-deposit-scan-status" class="faint" style="font-size:11px;margin-top:-8px"></div>
+    ${_docSlotHtml('ref','Reference report','(employer/previous-landlord reference or credit check)',rec.refDocName,rec.refDocUrl)}
+    ${_docSlotHtml('origcontract','Original signed tenancy agreement','(if this tenancy was already running when NexLet took over management — stays legally valid; no need to reissue, even after the 1 May 2026 conversion to a periodic tenancy)',rec.origContractName,rec.origContractUrl)}
+  </div>
+  <details style="background:#F6F8FB;border:1px solid var(--border);border-radius:10px;padding:16px;margin-top:12px">
+    <summary style="font-size:12.5px;font-weight:700;color:var(--navy);cursor:pointer;list-style:none">🪪 Identity &amp; address <span class="faint" style="font-weight:400;text-transform:none;letter-spacing:0">— safeguarding, optional but recommended${(rec.id1DocName||rec.id2DocName||rec.addressProofName)?' · on file':''}</span></summary>
+    <div style="margin-top:12px">
+      ${_docSlotHtml('id1','Photo ID — 1 of 2','(passport or driving licence)',rec.id1DocName,rec.id1DocUrl)}
+      ${_docSlotHtml('id2','Photo ID — 2 of 2','(a second form: passport, driving licence, or national ID card)',rec.id2DocName,rec.id2DocUrl)}
+      ${_docSlotHtml('addressproof','Proof of address','(utility bill, council tax bill, or bank statement — dated within the last 3 months)',rec.addressProofName,rec.addressProofUrl)}
+    </div>
+  </details>
   <div class="hint">Saving creates the tenancy record (for rent tracking, maintenance &amp; the tenant portal) and moves the let to Managed. All named adults appear on Section 8/13 notices, and a named guarantor is copied on them too.</div>`;
-  modal('Set up tenant',body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" id="tn-save-btn" onclick="saveTenant('${pid}')">Save tenant</button>`, true); }
+  modal(rec.name?'Set up tenant — '+esc(rec.name):'Set up tenant',body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" id="tn-save-btn" onclick="saveTenant('${pid}')">Save tenant</button>`, true); }
 function _occRowHtml(o){ o=o||{}; return `<div style="display:grid;grid-template-columns:1.3fr 1.3fr 1fr auto;gap:8px;margin-bottom:6px" data-occ-row><input placeholder="Full name" value="${esc(o.name||'')}"><input placeholder="Email (optional)" value="${esc(o.email||'')}"><input placeholder="Phone (optional)" value="${esc(o.phone||'')}"><button type="button" class="btn sm" onclick="this.closest('[data-occ-row]').remove()">✕</button></div>`; }
 function tnAddOccupant(){ const c=document.getElementById('tn-occupants'); if(!c) return; c.insertAdjacentHTML('beforeend',_occRowHtml({})); }
 function _readOccupants(){ return [...document.querySelectorAll('#tn-occupants [data-occ-row]')].map(r=>{ const inputs=r.querySelectorAll('input'); return {name:(inputs[0].value||'').trim(),email:(inputs[1].value||'').trim(),phone:(inputs[2].value||'').trim()}; }).filter(o=>o.name); }
