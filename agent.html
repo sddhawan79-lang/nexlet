@@ -1560,7 +1560,7 @@ function setTenant(pid){ const p=P(pid); const t=p.tenant||{}; const rec=tenantR
     <input id="tn-g-phone" placeholder="Guarantor phone" value="${esc(g.phone||'')}">
     <div style="grid-column:1/-1;margin-top:4px">
       <div id="tn-docs-guarantor" style="display:flex;flex-direction:column;gap:4px">${_docBucketHtml('guarantor')}</div>
-      <label style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer;font-size:11.5px;font-weight:600;margin-top:6px">+ Add guarantor ID/document<input type="file" accept="application/pdf,image/*" style="display:none" onchange="tnDocAdd('guarantor',this)"></label>
+      <label style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer;font-size:11.5px;font-weight:600;margin-top:6px">+ Add guarantor ID/document<input type="file" accept="application/pdf,image/*" style="display:none" multiple onchange="tnDocAdd('guarantor',this)"></label>
     </div>
   </div></div>
   </div>
@@ -1588,7 +1588,7 @@ function setTenant(pid){ const p=P(pid); const t=p.tenant||{}; const rec=tenantR
     ${_docSlotHtml('id2','Photo ID — 2 of 2','(a second form: passport, driving licence, or national ID card)',rec.id2DocName,rec.id2DocUrl)}
     <div class="fg"><label>Proof of address <span class="faint">(utility bill, council tax bill, or bank statement — dated within the last 3 months; attach as many as needed, e.g. 3 months of statements)</span></label>
     <div id="tn-docs-address" style="display:flex;flex-direction:column;gap:4px">${_docBucketHtml('address')}</div>
-    <label style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer;font-size:12.5px;font-weight:600;margin-top:6px">+ Add document<input type="file" accept="application/pdf,image/*" style="display:none" onchange="tnDocAdd('address',this)"></label>
+    <label style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer;font-size:12.5px;font-weight:600;margin-top:6px">+ Add document<input type="file" accept="application/pdf,image/*" style="display:none" multiple onchange="tnDocAdd('address',this)"></label>
     </div>
   </div>
   </div>
@@ -1605,7 +1605,7 @@ function _occRowHtml(o){ o=o||{}; const key=o.id=o.id||uid('occ');
     </div>
     <div style="margin-top:8px">
       <div id="tn-docs-${key}" style="display:flex;flex-direction:column;gap:4px">${_docBucketHtml(key)}</div>
-      <label style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer;font-size:11.5px;font-weight:600;margin-top:6px">+ Add ID/document<input type="file" accept="application/pdf,image/*" style="display:none" onchange="tnDocAdd('${key}',this)"></label>
+      <label style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer;font-size:11.5px;font-weight:600;margin-top:6px">+ Add ID/document<input type="file" accept="application/pdf,image/*" style="display:none" multiple onchange="tnDocAdd('${key}',this)"></label>
     </div>
   </div>`;
 }
@@ -1615,10 +1615,10 @@ async function _storageUpload(file,path,bucket){
   if(!sb||!LIVE) return null;
   try{
     const{error:upErr}=await sb.storage.from(bucket||'property-documents').upload(path,file,{contentType:file.type,upsert:true});
-    if(upErr){ console.error('storage upload failed',upErr); return null; }
+    if(upErr){ console.error('storage upload failed',upErr); window._lastStorageError=upErr.message||String(upErr); return null; }
     const{data}=sb.storage.from(bucket||'property-documents').getPublicUrl(path);
     return (data&&data.publicUrl)||null;
-  }catch(e){ console.error('storage upload exception',e); return null; }
+  }catch(e){ console.error('storage upload exception',e); window._lastStorageError=e.message||String(e); return null; }
 }
 async function _signedUrlFor(url){
   const m=url.match(/\/object\/public\/([^/]+)\/(.+)$/);
@@ -1672,7 +1672,7 @@ function _docBucketHtml(key){
   return existing+pending||'<div class="faint" style="font-size:11px">No documents attached</div>';
 }
 function _refreshDocBucket(key){ const el=document.getElementById('tn-docs-'+key); if(el) el.innerHTML=_docBucketHtml(key); }
-function tnDocAdd(key,input){ const f=input.files[0]; if(!f) return; window._tnDocs[key]=window._tnDocs[key]||{existing:[],pending:[]}; window._tnDocs[key].pending.push(f); input.value=''; _refreshDocBucket(key); }
+function tnDocAdd(key,input){ const files=[...(input.files||[])]; if(!files.length) return; window._tnDocs[key]=window._tnDocs[key]||{existing:[],pending:[]}; window._tnDocs[key].pending.push(...files); input.value=''; _refreshDocBucket(key); }
 function tnDocRemoveExisting(key,i){ window._tnDocs[key].existing.splice(i,1); _refreshDocBucket(key); }
 function tnDocRemovePending(key,i){ window._tnDocs[key].pending.splice(i,1); _refreshDocBucket(key); }
 // AI-reads the deposit scheme certificate's "ending on or after" date, same pipeline as aiScanCert.
@@ -1967,14 +1967,14 @@ async function saveTenant(pid){ const nm=val('tn-name'); if(!nm){toast('Enter te
   // the guarantor/occupant objects below read from bucket.existing, so uploads must land before that.
   for(const key of Object.keys(window._tnDocs||{})){
     const bucket=window._tnDocs[key]; if(!bucket.pending||!bucket.pending.length) continue;
-    let ok=0;
+    let ok=0; window._lastStorageError='';
     for(const f of bucket.pending){
       const ext=(f.name.split('.').pop()||'pdf');
       const url=await _storageUpload(f,pid+'/doc-'+key+'-'+Date.now()+'-'+Math.random().toString(36).slice(2,6)+'.'+ext,'tenant-documents');
       if(url){ bucket.existing.push({name:f.name,url}); ok++; }
     }
     const failCount=bucket.pending.length-ok;
-    if(failCount) failed.push(failCount+' document'+(failCount>1?'s':''));
+    if(failCount) failed.push(failCount+' document'+(failCount>1?'s':'')+(window._lastStorageError?' ('+window._lastStorageError+')':''));
     bucket.pending=[];
   }
   const hasGuarantor=document.getElementById('tn-has-guarantor').checked;
