@@ -213,7 +213,7 @@ const rowToInv=r=>({id:r.id,no:r.no||'',landlordId:r.landlord_id||'',propertyId:
 const invToRow=i=>({id:i.id,agency_id:window._agencyId,no:i.no,landlord_id:i.landlordId,property_id:i.propertyId,type:i.type,period_label:i.periodLabel,issued:i.issued||null,supply_from:i.supplyFrom||null,supply_to:i.supplyTo||null,lines:i.lines||[],vat:!!i.vat,status:i.status});
 
 // ── targeted writes (§4). No-ops in DEMO mode; toast on error in LIVE. ──
-async function _w(promise){ if(!LIVE)return; try{ const {error}=await promise; if(error){console.error(error);toast('⚠ Save failed — retry',1);} }catch(e){ console.error(e); toast('⚠ Save failed — retry',1); } }
+async function _w(promise){ if(!LIVE)return; try{ const {error}=await promise; if(error){console.error(error);toast('⚠ Save failed: '+(error.message||'unknown error')+' — retry',1);} }catch(e){ console.error(e); toast('⚠ Save failed: '+(e.message||'unknown error')+' — retry',1); } }
 const pushLandlord =l  =>_w(sb.from('agency_landlords').upsert(landlordToRow(l)));
 const pushProperty =p  =>_w(sb.from('properties').upsert(propToRow(p)));
 const pushListing  =l  =>_w(sb.from('agency_listings').upsert({id:l.id,agency_id:window._agencyId,data:l,updated_at:new Date().toISOString()}));
