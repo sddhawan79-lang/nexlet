@@ -234,8 +234,8 @@ const pushTenantRec =t =>_w(sb.from('agency_tenants').upsert(tenantToRow(t)));
 const pushRent    =r  =>_w(sb.from('agency_rent_ledger').upsert(rentToRow(r)));
 const pushJob     =j  =>_w(sb.from('agency_maintenance').upsert(jobToRow(j)));
 const pushInv2    =v  =>_w(sb.from('agency_inventories').upsert(inv2ToRow(v)));
-const rowToTenant=r=>({id:r.id,propertyId:r.property_id,landlordId:r.landlord_id,userId:r.user_id,name:r.name||'',email:r.email||'',phone:r.phone||'',start:r.start_date||'',end:r.end_date||'',rent:r.rent||0,deposit:r.deposit,scheme:r.scheme||'',schemeRef:r.scheme_ref||'',status:r.status||'active',inviteToken:r.invite_token||'',invitedAt:r.invited_at||'',invited:!!r.invited_at,occupants:r.occupants||[],guarantor:r.guarantor||null,depositCertName:r.deposit_cert_name||'',depositCertUrl:r.deposit_cert_url||'',depositCertExpiry:r.deposit_cert_expiry||'',refDocName:r.ref_doc_name||'',refDocUrl:r.ref_doc_url||'',shareCode:r.share_code||'',dob:r.dob||'',rtrResult:r.rtr_result||'',rtrExpiry:r.rtr_expiry||'',rtrCheckDate:r.rtr_check_date||'',rtrDocName:r.rtr_doc_name||'',rtrDocUrl:r.rtr_doc_url||'',origContractName:r.orig_contract_name||'',origContractUrl:r.orig_contract_url||'',id1DocName:r.id1_doc_name||'',id1DocUrl:r.id1_doc_url||'',id2DocName:r.id2_doc_name||'',id2DocUrl:r.id2_doc_url||'',addressProofName:r.address_proof_name||'',addressProofUrl:r.address_proof_url||'',forwardingAddress:r.forwarding_address||'',finalMeters:r.final_meters||null,endNotes:r.end_notes||'',checkoutPackSentAt:r.checkout_pack_sent_at||''});
-const tenantToRow=t=>({id:t.id,agency_id:window._agencyId,property_id:t.propertyId,landlord_id:t.landlordId,name:t.name,email:t.email||'',phone:t.phone||'',start_date:t.start||null,end_date:t.end||null,rent:t.rent||0,deposit:t.deposit,scheme:t.scheme||'',scheme_ref:t.schemeRef||'',status:t.status||'active',invite_token:t.inviteToken||null,invited_at:t.invitedAt||null,occupants:t.occupants||[],guarantor:t.guarantor||null,deposit_cert_name:t.depositCertName||'',deposit_cert_url:t.depositCertUrl||'',deposit_cert_expiry:t.depositCertExpiry||null,ref_doc_name:t.refDocName||'',ref_doc_url:t.refDocUrl||'',share_code:t.shareCode||'',dob:t.dob||null,rtr_result:t.rtrResult||'',rtr_expiry:t.rtrExpiry||null,rtr_check_date:t.rtrCheckDate||null,rtr_doc_name:t.rtrDocName||'',rtr_doc_url:t.rtrDocUrl||'',orig_contract_name:t.origContractName||'',orig_contract_url:t.origContractUrl||'',id1_doc_name:t.id1DocName||'',id1_doc_url:t.id1DocUrl||'',id2_doc_name:t.id2DocName||'',id2_doc_url:t.id2DocUrl||'',address_proof_name:t.addressProofName||'',address_proof_url:t.addressProofUrl||'',forwarding_address:t.forwardingAddress||'',final_meters:t.finalMeters||null,end_notes:t.endNotes||'',checkout_pack_sent_at:t.checkoutPackSentAt||null,updated_at:new Date().toISOString()});
+const rowToTenant=r=>({id:r.id,propertyId:r.property_id,landlordId:r.landlord_id,userId:r.user_id,name:r.name||'',email:r.email||'',phone:r.phone||'',start:r.start_date||'',end:r.end_date||'',rent:r.rent||0,deposit:r.deposit,scheme:r.scheme||'',schemeRef:r.scheme_ref||'',status:r.status||'active',inviteToken:r.invite_token||'',invitedAt:r.invited_at||'',invited:!!r.invited_at,occupants:r.occupants||[],guarantor:r.guarantor||null,depositCertName:r.deposit_cert_name||'',depositCertUrl:r.deposit_cert_url||'',depositCertExpiry:r.deposit_cert_expiry||'',refDocName:r.ref_doc_name||'',refDocUrl:r.ref_doc_url||'',shareCode:r.share_code||'',dob:r.dob||'',rtrResult:r.rtr_result||'',rtrExpiry:r.rtr_expiry||'',rtrCheckDate:r.rtr_check_date||'',rtrDocName:r.rtr_doc_name||'',rtrDocUrl:r.rtr_doc_url||'',origContractName:r.orig_contract_name||'',origContractUrl:r.orig_contract_url||'',id1DocName:r.id1_doc_name||'',id1DocUrl:r.id1_doc_url||'',id2DocName:r.id2_doc_name||'',id2DocUrl:r.id2_doc_url||'',addressProofName:r.address_proof_name||'',addressProofUrl:r.address_proof_url||'',addressProofDocs:r.address_proof_docs||[],forwardingAddress:r.forwarding_address||'',finalMeters:r.final_meters||null,endNotes:r.end_notes||'',checkoutPackSentAt:r.checkout_pack_sent_at||''});
+const tenantToRow=t=>({id:t.id,agency_id:window._agencyId,property_id:t.propertyId,landlord_id:t.landlordId,name:t.name,email:t.email||'',phone:t.phone||'',start_date:t.start||null,end_date:t.end||null,rent:t.rent||0,deposit:t.deposit,scheme:t.scheme||'',scheme_ref:t.schemeRef||'',status:t.status||'active',invite_token:t.inviteToken||null,invited_at:t.invitedAt||null,occupants:t.occupants||[],guarantor:t.guarantor||null,deposit_cert_name:t.depositCertName||'',deposit_cert_url:t.depositCertUrl||'',deposit_cert_expiry:t.depositCertExpiry||null,ref_doc_name:t.refDocName||'',ref_doc_url:t.refDocUrl||'',share_code:t.shareCode||'',dob:t.dob||null,rtr_result:t.rtrResult||'',rtr_expiry:t.rtrExpiry||null,rtr_check_date:t.rtrCheckDate||null,rtr_doc_name:t.rtrDocName||'',rtr_doc_url:t.rtrDocUrl||'',orig_contract_name:t.origContractName||'',orig_contract_url:t.origContractUrl||'',id1_doc_name:t.id1DocName||'',id1_doc_url:t.id1DocUrl||'',id2_doc_name:t.id2DocName||'',id2_doc_url:t.id2DocUrl||'',address_proof_name:t.addressProofName||'',address_proof_url:t.addressProofUrl||'',address_proof_docs:t.addressProofDocs||[],forwarding_address:t.forwardingAddress||'',final_meters:t.finalMeters||null,end_notes:t.endNotes||'',checkout_pack_sent_at:t.checkoutPackSentAt||null,updated_at:new Date().toISOString()});
 const rowToMsg=r=>({id:r.id,landlordId:r.landlord_id,tenantId:r.tenant_id,propertyId:r.property_id,sender:r.sender||'agent',body:r.body||'',createdAt:r.created_at});
 const msgToRow=m=>({id:m.id,agency_id:window._agencyId,landlord_id:m.landlordId||null,tenant_id:m.tenantId||null,property_id:m.propertyId||null,sender:m.sender||'agent',body:m.body||''});
 const pushMessage=m=>_w(sb.from('agency_messages').insert(msgToRow(m)));
@@ -1307,7 +1307,7 @@ function vPropertyDetail(){
           ${rec.origContractName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">📄</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Original tenancy agreement</div><div class="faint" style="font-size:11.5px">${esc(rec.origContractName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.origContractUrl?`<button class="btn sm" onclick="viewDoc('${rec.origContractUrl}','Original tenancy agreement')">View</button>`:''}</div>`:''}
           ${rec.id1DocName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">🪪</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Photo ID — 1 of 2</div><div class="faint" style="font-size:11.5px">${esc(rec.id1DocName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.id1DocUrl?`<button class="btn sm" onclick="viewDoc('${rec.id1DocUrl}','Photo ID')">View</button>`:''}</div>`:''}
           ${rec.id2DocName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">🪪</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Photo ID — 2 of 2</div><div class="faint" style="font-size:11.5px">${esc(rec.id2DocName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.id2DocUrl?`<button class="btn sm" onclick="viewDoc('${rec.id2DocUrl}','Photo ID')">View</button>`:''}</div>`:''}
-          ${rec.addressProofName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">🏠</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Proof of address</div><div class="faint" style="font-size:11.5px">${esc(rec.addressProofName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.addressProofUrl?`<button class="btn sm" onclick="viewDoc('${rec.addressProofUrl}','Proof of address')">View</button>`:''}</div>`:''}`; })()}
+          ${(rec.addressProofDocs&&rec.addressProofDocs.length)?rec.addressProofDocs.map((d,i)=>`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">🏠</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Proof of address${rec.addressProofDocs.length>1?' ('+(i+1)+' of '+rec.addressProofDocs.length+')':''}</div><div class="faint" style="font-size:11.5px">${esc(d.name)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${d.url?`<button class="btn sm" onclick="viewDoc('${d.url}','Proof of address')">View</button>`:''}</div>`).join(''):''}`; })()}
         <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
           <div style="font-size:11px;font-weight:700;letter-spacing:.4px;color:var(--faint);text-transform:uppercase;margin-bottom:8px">Advisory — not legally required</div>
           ${advisoryDocRow(p,'pat','PAT testing (appliances)','No blanket legal requirement in England — evidence of duty of care if the landlord has it done')}
@@ -1523,7 +1523,9 @@ function setTenant(pid){ const p=P(pid); const t=p.tenant||{}; const rec=tenantR
   const occRows=occ.map(o=>_occRowHtml(o)).join('');
   const g=rec.guarantor||{}; const hasG=!!(g.name||g.email||g.phone);
   window._tnFiles={};
-  const docCount=[rec.depositCertName,rec.refDocName,rec.origContractName,rec.id1DocName,rec.id2DocName,rec.addressProofName].filter(Boolean).length;
+  window._tnAddrDocs=(rec.addressProofDocs&&rec.addressProofDocs.length)?rec.addressProofDocs.slice():(rec.addressProofName?[{name:rec.addressProofName,url:rec.addressProofUrl}]:[]);
+  window._tnAddrPending=[];
+  const docCount=[rec.depositCertName,rec.refDocName,rec.origContractName,rec.id1DocName,rec.id2DocName,(window._tnAddrDocs.length?'x':'')].filter(Boolean).length;
   const tabBtn=(id,label)=>`<button type="button" id="tn-tab-btn-${id}" onclick="tnTab('${id}')" style="background:none;border:none;border-bottom:2px solid ${id==='details'?'var(--navy)':'transparent'};color:${id==='details'?'var(--navy)':'#94A3B8'};font-weight:${id==='details'?'700':'500'};font-size:13.5px;padding:8px 4px;cursor:pointer;margin-right:22px">${label}</button>`;
   const body=`<div style="display:flex;border-bottom:1px solid var(--border);margin-bottom:18px">${tabBtn('details','Tenant details')}${tabBtn('docs','Documents ('+docCount+'/6)')}</div>
   <div id="tn-tab-details">
@@ -1557,7 +1559,10 @@ function setTenant(pid){ const p=P(pid); const t=p.tenant||{}; const rec=tenantR
     <div class="faint" style="font-size:11.5px;margin-bottom:10px">Safeguarding — optional but recommended</div>
     ${_docSlotHtml('id1','Photo ID — 1 of 2','(passport or driving licence)',rec.id1DocName,rec.id1DocUrl)}
     ${_docSlotHtml('id2','Photo ID — 2 of 2','(a second form: passport, driving licence, or national ID card)',rec.id2DocName,rec.id2DocUrl)}
-    ${_docSlotHtml('addressproof','Proof of address','(utility bill, council tax bill, or bank statement — dated within the last 3 months)',rec.addressProofName,rec.addressProofUrl)}
+    <div class="fg"><label>Proof of address <span class="faint">(utility bill, council tax bill, or bank statement — dated within the last 3 months; attach as many as needed, e.g. 3 months of statements)</span></label>
+    <div id="tn-addr-docs-list">${_addrDocsHtml()}</div>
+    <label style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer;font-size:12.5px;font-weight:600;margin-top:2px">+ Add document<input type="file" accept="application/pdf,image/*" style="display:none" onchange="tnAddrDocAdd(this)"></label>
+    </div>
   </div>
   </div>
   <div class="hint" style="margin-top:14px">Saving creates the tenancy record (for rent tracking, maintenance &amp; the tenant portal) and moves the let to Managed. All named adults appear on Section 8/13 notices, and a named guarantor is copied on them too.</div>`;
@@ -1618,6 +1623,25 @@ function _docSlotHtml(kind,label,hint,name,url,scanFn){
 }
 function tnAttachFile(input,kind){ const f=input.files[0]; if(!f) return; window._tnFiles=window._tnFiles||{}; window._tnFiles[kind]=f;
   const st=document.getElementById('tn-'+kind+'-status'); if(st) st.innerHTML='<span style="color:var(--blue)">✦ '+esc(f.name)+' attached — will upload on Save</span>'; }
+// ── Proof of address: multi-file (3 months' bank statements, council tax, utility bill, etc). ──
+function _addrDocsHtml(){
+  const existing=(window._tnAddrDocs||[]).map((d,i)=>`<div class="doc" style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-top:2px">
+    <div class="di" style="background:var(--green-bg);color:var(--green);flex-shrink:0">📄</div>
+    <div style="flex:1;font-size:12.5px;color:var(--txt);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(d.name)}</div>
+    ${d.url?`<a href="#" onclick="event.preventDefault();viewDoc('${d.url}','Proof of address')" style="font-size:12px;flex-shrink:0">View</a>`:''}
+    <a href="#" onclick="event.preventDefault();tnAddrDocRemove(${i})" style="font-size:12px;color:var(--red);flex-shrink:0">Remove</a>
+  </div>`).join('');
+  const pending=(window._tnAddrPending||[]).map((f,i)=>`<div class="doc" style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-top:2px;background:var(--blue-bg)">
+    <div class="di" style="background:#fff;color:var(--blue);flex-shrink:0">📄</div>
+    <div style="flex:1;font-size:12.5px;color:var(--txt);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">✦ ${esc(f.name)} <span class="faint">(will upload on Save)</span></div>
+    <a href="#" onclick="event.preventDefault();tnAddrDocRemovePending(${i})" style="font-size:12px;color:var(--red);flex-shrink:0">Remove</a>
+  </div>`).join('');
+  return existing+pending||'<div class="faint" style="font-size:11.5px">No documents attached yet</div>';
+}
+function _refreshAddrDocs(){ const el=document.getElementById('tn-addr-docs-list'); if(el) el.innerHTML=_addrDocsHtml(); }
+function tnAddrDocAdd(input){ const f=input.files[0]; if(!f) return; window._tnAddrPending=window._tnAddrPending||[]; window._tnAddrPending.push(f); input.value=''; _refreshAddrDocs(); }
+function tnAddrDocRemove(i){ window._tnAddrDocs.splice(i,1); _refreshAddrDocs(); }
+function tnAddrDocRemovePending(i){ window._tnAddrPending.splice(i,1); _refreshAddrDocs(); }
 // AI-reads the deposit scheme certificate's "ending on or after" date, same pipeline as aiScanCert.
 async function aiScanDeposit(input){
   const file=input.files&&input.files[0]; if(!file) return;
@@ -1893,7 +1917,7 @@ function _commitTenant(pid,info){
   if(info.origContractName){ rec.origContractName=info.origContractName; rec.origContractUrl=info.origContractUrl||rec.origContractUrl; }
   if(info.id1DocName){ rec.id1DocName=info.id1DocName; rec.id1DocUrl=info.id1DocUrl||rec.id1DocUrl; }
   if(info.id2DocName){ rec.id2DocName=info.id2DocName; rec.id2DocUrl=info.id2DocUrl||rec.id2DocUrl; }
-  if(info.addressProofName){ rec.addressProofName=info.addressProofName; rec.addressProofUrl=info.addressProofUrl||rec.addressProofUrl; }
+  if(info.addressProofDocs){ rec.addressProofDocs=info.addressProofDocs; rec.addressProofName=''; rec.addressProofUrl=''; }
   S.tenants=S.tenants||[]; if(isNew) S.tenants.push(rec);
   save(); pushProperty(p); pushTenancy(tn); pushTenantRec(rec);
   return rec;
@@ -1911,7 +1935,13 @@ async function saveTenant(pid){ const nm=val('tn-name'); if(!nm){toast('Enter te
   if(files.origcontract){ const ext=(files.origcontract.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.origcontract,pid+'/orig-contract-'+Date.now()+'.'+ext,'tenant-documents'); if(url){ info.origContractName=files.origcontract.name; info.origContractUrl=url; } else failed.push('original contract'); }
   if(files.id1){ const ext=(files.id1.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.id1,pid+'/id1-'+Date.now()+'.'+ext,'tenant-documents'); if(url){ info.id1DocName=files.id1.name; info.id1DocUrl=url; } else failed.push('ID document 1'); }
   if(files.id2){ const ext=(files.id2.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.id2,pid+'/id2-'+Date.now()+'.'+ext,'tenant-documents'); if(url){ info.id2DocName=files.id2.name; info.id2DocUrl=url; } else failed.push('ID document 2'); }
-  if(files.addressproof){ const ext=(files.addressproof.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.addressproof,pid+'/address-proof-'+Date.now()+'.'+ext,'tenant-documents'); if(url){ info.addressProofName=files.addressproof.name; info.addressProofUrl=url; } else failed.push('proof of address'); }
+  const addrKeep=(window._tnAddrDocs||[]).slice(); let addrFailed=0;
+  for(const f of (window._tnAddrPending||[])){
+    const ext=(f.name.split('.').pop()||'pdf'); const url=await _storageUpload(f,pid+'/address-proof-'+Date.now()+'-'+Math.random().toString(36).slice(2,6)+'.'+ext,'tenant-documents');
+    if(url) addrKeep.push({name:f.name,url}); else addrFailed++;
+  }
+  if(addrFailed) failed.push(addrFailed+' proof-of-address file'+(addrFailed>1?'s':''));
+  info.addressProofDocs=addrKeep;
   _commitTenant(pid,info);
   window._tnFiles={};
   closeModal(); render();
