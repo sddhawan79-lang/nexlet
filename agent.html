@@ -1713,7 +1713,8 @@ function _rtrWizRender(){
   if(w.step===1){
     body+=`<div class="hint" style="margin-bottom:10px">Enter the tenant's share code (from the gov.uk "prove your right to rent" service) and date of birth.</div>
       <div class="fg"><label>Share code</label><input id="rtr-code" value="${esc(w.code)}" placeholder="W-XXX-XXX-XXX" style="text-transform:uppercase;font-family:monospace"></div>
-      <div class="fg"><label>Date of birth</label><input id="rtr-dob" type="date" value="${w.dob}"></div>`;
+      <div class="fg"><label>Date of birth</label><input id="rtr-dob" type="date" value="${w.dob}"></div>
+      <div class="faint" style="font-size:11.5px;margin-top:-4px">Checked by an external referencing company instead? <a href="#" onclick="event.preventDefault();closeModal();rtrExternal('${w.pid}')">Upload their report instead</a></div>`;
     modal('Right to Rent check — step 1 of 3',body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="_rtrWizNext()">Next</button>`,true);
   } else if(w.step===2){
     body+=`<div class="hint" style="margin-bottom:10px">Check the code on GOV.UK, then record the result here.</div>
