@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign Your Tenancy Agreement — Beacon Residentials</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%230B1E3D'/><path d='M8 22V13l8-6 8 6v9' stroke='%2300C896' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/><path d='M13 22v-5h6v5' stroke='%2300C896' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--font:'DM Sans',system-ui,sans-serif;--disp:'DM Serif Display',Georgia,serif;--navy:#0B1E3D;--green:#00C896;--green-dark:#009970;--white:#fff;--off:#F6F8FB;--border:#E4EAF1;--txt:#1A2B45;--muted:#7A8FA6;--red:#E53E3E;--radius:10px}
+body{font-family:var(--font);color:var(--txt);background:var(--off);min-height:100vh;-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:var(--disp)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font);font-size:13px;font-weight:600;padding:10px 20px;border-radius:8px;cursor:pointer;transition:all .15s;border:1.5px solid var(--border);background:var(--white);color:var(--txt);text-decoration:none}
+.btn:hover{opacity:.85}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-green{background:var(--green-dark);color:var(--white);border-color:var(--green-dark)}
+.portal-wrap{max-width:860px;margin:0 auto;padding:0 16px 40px}
+.portal-header{display:flex;align-items:center;justify-content:space-between;padding:18px 24px;background:var(--white);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50;margin-bottom:20px}
+.portal-logo{font-family:var(--disp);font-size:20px;font-weight:700;color:var(--navy)}
+.portal-logo span{color:var(--green)}
+.panel{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.panel-head{padding:16px 20px;border-bottom:1px solid var(--border)}
+.panel-head h2{font-size:15px;font-weight:600;color:var(--txt);margin-bottom:2px;font-family:var(--disp)}
+.panel-head p{font-size:12px;color:var(--muted)}
+.panel-body{padding:20px}
+.esign-consent-overlay{position:fixed;inset:0;z-index:1000;background:rgba(11,30,61,0.96);display:flex;align-items:center;justify-content:center;padding:20px}
+.esign-consent-card{background:var(--white);border-radius:16px;padding:36px 32px;max-width:480px;width:100%;text-align:center}
+.doc-frame{max-height:60vh;overflow-y:auto;border-top:1px solid var(--border);font-size:13.5px;line-height:1.8;padding:20px 24px}
+.doc-frame p{margin-bottom:10px}
+.sig-canvas-wrap{border:1.5px solid var(--border);border-radius:8px;overflow:hidden;background:var(--white);touch-action:none}
+.sig-canvas{display:block;width:100%;height:140px;cursor:crosshair;touch-action:none}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--navy);color:var(--white);font-size:13px;padding:12px 24px;border-radius:100px;z-index:9999;opacity:0;pointer-events:none;transition:opacity .3s}
+.toast.show{opacity:1}
+.toast.err{background:var(--red)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:var(--white);border-radius:50%;animation:spin .6s linear infinite}
+.success-card{text-align:center;padding:40px 20px}
+.success-anim{font-size:48px;margin-bottom:16px}
+.success-title{font-size:18px;font-weight:600;margin-bottom:8px;font-family:var(--disp)}
+.success-sub{font-size:13px;color:var(--muted);line-height:1.6;max-width:460px;margin:0 auto}
+.field-label{font-size:12px;font-weight:600;margin-bottom:6px;display:block}
+.field-input{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:14px}
+.badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:4px 10px;border-radius:100px;background:rgba(0,200,150,.12);color:var(--green-dark)}
+.signer-block{border-top:1px solid var(--border);padding-top:18px;margin-top:18px}
+.signer-block:first-child{border-top:none;padding-top:0;margin-top:0}
+</style>
+</head>
+<body>
+<div id="toast" class="toast"></div>
+<div class="esign-consent-overlay" id="consent">
+  <div class="esign-consent-card">
+    <div style="font-size:40px;margin-bottom:16px">⚖️</div>
+    <h2 style="font-size:18px;margin-bottom:12px">Electronic Document Consent</h2>
+    <p style="font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:28px">By continuing, you confirm you consent to receiving and signing this tenancy agreement electronically. Electronic signatures are legally binding under the <strong style="color:var(--txt)">Electronic Communications Act 2000</strong>.</p>
+    <button class="btn btn-green" style="width:100%;padding:12px;font-size:14px" onclick="acceptConsent()">I Agree — Continue</button>
+  </div>
+</div>
+<div id="body" style="display:none">
+  <div class="portal-wrap">
+    <div class="portal-header"><div class="portal-logo">Beacon <span>Residentials</span></div><div id="landlord-display" style="font-size:13px;font-weight:600"></div></div>
+    <div id="status-screen" style="display:none"><div class="panel"><div class="panel-body"><div id="status-inner" class="success-card"></div></div></div></div>
+    <div id="sign-screen" style="display:none">
+      <div class="panel" style="margin-bottom:16px">
+        <div class="panel-head" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <div><h2>Tenancy Agreement</h2><p>Please review the full agreement below before signing.</p></div>
+          <span class="badge" id="agent-signed-badge" style="display:none"></span>
+        </div>
+        <div class="doc-frame" id="doc-frame"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>Signatures</h2><p id="sig-head-sub">Sign in the box using your mouse or finger.</p></div>
+        <div class="panel-body" id="signers-wrap"></div>
+        <div class="panel-body" style="padding-top:0">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;gap:12px;flex-wrap:wrap">
+            <button class="btn" onclick="declineAgreement()" style="padding:10px 16px;color:var(--red)">Decline</button>
+            <button class="btn btn-green" id="submit-btn" onclick="submitSig()" style="padding:11px 22px">Adopt &amp; sign agreement</button>
+          </div>
+          <p style="font-size:11px;color:var(--muted);line-height:1.6;margin-top:14px">By clicking "Adopt &amp; sign", every signatory agrees that their electronic signature is the legal equivalent of a handwritten one, and that a timestamped, countersigned copy will be issued to all parties.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
+<script>
+// Tenant + any joint occupants sign in ONE sitting (mirrors the landlord/joint-owner
+// pattern in agency-esign.html, generalised to N signers via the `occupants` list).
+// Talks ONLY to agency_tenancy_agreement_load / _sign / _decline (token-gated,
+// SECURITY DEFINER — anon has no direct table access).
+const SUPABASE_URL = 'https://mahtcfukgzbonwibtsxz.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1haHRjZnVrZ3pib253aWJ0c3h6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MjQ2MDAsImV4cCI6MjA5MTIwMDYwMH0.-wC55rGp1WFKfjKR3EhuXqAPDiWJ4w_e2LBXjHr_y5Y';
+const AG_EDGE = 'https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let pads=[], agreement=null;
+const TOKEN = new URLSearchParams(location.search).get('t');
+const $ = id => document.getElementById(id);
+function toast(msg,err){ const t=$('toast'); t.textContent=msg; t.className='toast show'+(err?' err':''); setTimeout(()=>t.className='toast',3000); }
+function fmtDate(d){ return new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}); }
+function esc(s){ const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+function agencyEmail(to,subject,html){ return fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'send_email',to,subject,html,bcc:'beaconresidentials@gmail.com'})}).catch(e=>console.error('[esign email]',e)); }
+function acceptConsent(){ $('consent').style.display='none'; $('body').style.display='block'; init(); }
+function showStatus(icon,title,sub){ $('sign-screen').style.display='none'; $('status-screen').style.display='block';
+  $('status-inner').innerHTML='<div class="success-anim">'+icon+'</div><div class="success-title">'+esc(title)+'</div><div class="success-sub">'+sub+'</div>'; }
+
+async function init(){
+  if(!TOKEN){ showStatus('⚠️','Invalid link','This signing link is missing its reference. Please use the link from your email.'); return; }
+  $('sign-screen').style.display='block';
+  $('doc-frame').innerHTML='<p style="color:var(--muted)">Loading your tenancy agreement…</p>';
+  const { data, error } = await sb.rpc('agency_tenancy_agreement_load', { p_token: TOKEN });
+  const row = Array.isArray(data) ? data[0] : data;
+  if(error||!row){ showStatus('⚠️','Agreement not found','This link may have expired or already been completed. Please contact your managing agent.'); return; }
+  agreement = row;
+  if(row.status==='signed'){ showStatus('✅','Already signed','You have already signed this tenancy agreement. A countersigned copy was emailed to you. You can close this page.'); return; }
+  if(row.status==='declined'){ showStatus('🚫','Agreement declined','This agreement was declined. Please contact your managing agent if this was a mistake.'); return; }
+  if(row.status==='void'){ showStatus('🚫','No longer active','This agreement has been withdrawn by your managing agent.'); return; }
+
+  $('doc-frame').innerHTML = row.document_html || '<p>(Agreement text unavailable.)</p>';
+  if(row.agent_signed_at){ const b=$('agent-signed-badge'); b.style.display='inline-flex'; b.textContent='✔ Signed by agent '+fmtDate(row.agent_signed_at); }
+  const occupants = row.occupants||[];
+  $('landlord-display').textContent = [row.tenant_name,...occupants.map(o=>o.name)].filter(Boolean).join(' & ');
+  if(occupants.length) $('sig-head-sub').textContent = 'Every named tenant on this agreement must sign below.';
+
+  const signers = [{name:row.tenant_name,label:'Your full name'}, ...occupants.map(o=>({name:o.name,label:o.name+"'s signature"}))];
+  const wrap=$('signers-wrap');
+  wrap.innerHTML = signers.map((s,i)=>`<div class="signer-block">
+    <label class="field-label" for="signer-name-${i}">${i===0?'Full name (as signatory)':esc(s.label)}</label>
+    <input type="text" id="signer-name-${i}" class="field-input" style="margin-bottom:16px" value="${esc(s.name||'')}" ${i>0?'disabled':''}>
+    <div class="sig-canvas-wrap"><canvas class="sig-canvas" id="sig-canvas-${i}"></canvas></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:8px"><button class="btn" onclick="clearSig(${i})" style="padding:8px 14px">Clear</button></div>
+  </div>`).join('');
+  requestAnimationFrame(()=>{
+    pads = signers.map((s,i)=>{
+      const canvas=$('sig-canvas-'+i); const ratio=Math.max(window.devicePixelRatio||1,1);
+      canvas.width=canvas.offsetWidth*ratio; canvas.height=canvas.offsetHeight*ratio; canvas.getContext('2d').scale(ratio,ratio);
+      return new SignaturePad(canvas,{penColor:'#0B1E3D',minWidth:0.7,maxWidth:2.2});
+    });
+  });
+}
+function clearSig(i){ if(pads[i]) pads[i].clear(); }
+
+async function submitSig(){
+  const name = $('signer-name-0').value.trim();
+  if(!name){ toast('Please type your full name', true); return; }
+  for(let i=0;i<pads.length;i++){ if(!pads[i]||pads[i].isEmpty()){ toast(i===0?'Please draw your signature':'Every named tenant must sign — a signature box is empty', true); return; } }
+  const btn=$('submit-btn'); btn.disabled=true; btn.innerHTML='<span class="spin"></span> Signing…';
+  const sigPng = pads[0].toDataURL('image/png');
+  const occupants = agreement.occupants||[];
+  const occupantSigs = occupants.map((o,idx)=>({name:o.name, sig_png: pads[idx+1].toDataURL('image/png'), signed_at: new Date().toISOString()}));
+  try{
+    const { data, error } = await sb.rpc('agency_tenancy_agreement_sign', { p_token: TOKEN, p_name: name, p_sig_png: sigPng, p_occupant_sigs: occupantSigs });
+    if(error) throw error;
+    if(data && data!=='signed'){ showStatus('ℹ️','Already completed','This agreement was already '+esc(data)+'.'); return; }
+    await sendSignedCopies(name, occupants);
+    showStatus('✅','Tenancy agreement signed',
+      'Thank you'+(occupants.length?', everyone':', <b>'+esc(name)+'</b>')+'. Signed on <b>'+fmtDate(new Date())+'</b>.<br><br>Your managing agent has been notified and a timestamped, countersigned copy will be emailed to you shortly. You can close this page.');
+  }catch(e){
+    console.error(e); btn.disabled=false; btn.textContent='Adopt & sign agreement';
+    toast('Could not save signature — please try again', true);
+  }
+}
+async function sendSignedCopies(name, occupants){
+  const subj='Your signed tenancy agreement — '+(agreement.agent_name||'Beacon Residentials');
+  const cert=`<div style="font-family:Arial,sans-serif;color:#1A2B45">
+    <div style="border:1px solid #E4EAF1;border-radius:10px;padding:20px 22px">
+      <div style="font-size:15px;font-weight:700;color:#0B1E3D;margin-bottom:4px">✔ Fully signed tenancy agreement</div>
+      <table style="width:100%;font-size:12.5px;border-collapse:collapse">
+        <tr><td style="padding:6px 0;color:#7A8FA6">Agent</td><td style="padding:6px 0;font-weight:600">${esc(agreement.agent_name||'')}</td></tr>
+        <tr><td style="padding:6px 0;color:#7A8FA6">Tenant(s)</td><td style="padding:6px 0;font-weight:600">${esc([name,...occupants.map(o=>o.name)].filter(Boolean).join(' & '))}</td></tr>
+        <tr><td style="padding:6px 0;color:#7A8FA6">Signed</td><td style="padding:6px 0">${new Date().toLocaleString('en-GB')}</td></tr>
+      </table>
+    </div>
+    <hr style="border:none;border-top:1px solid #E4EAF1;margin:24px 0">
+    <div style="font-size:12.5px;line-height:1.7">${agreement.document_html}</div></div>`;
+  const emails=[agreement.tenant_email, ...occupants.map(o=>o.email)].filter(Boolean);
+  for(const e of emails) await agencyEmail(e, subj, cert);
+  if(agreement.agent_email) await agencyEmail(agreement.agent_email, 'Signed: '+(name||'tenant')+' — tenancy agreement complete', cert);
+}
+async function declineAgreement(){
+  const reason = prompt('Optionally, tell your agent why you\u2019re declining (this is sent to them):') || '';
+  try{ await sb.rpc('agency_tenancy_agreement_decline', { p_token: TOKEN, p_reason: reason });
+    showStatus('🚫','Agreement declined','Your managing agent has been notified. If this was a mistake, please contact them to re-issue the agreement.');
+  }catch(e){ console.error(e); toast('Could not record — please try again', true); }
+}
+</script>
+</body>
+</html>

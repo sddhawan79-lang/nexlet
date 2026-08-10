@@ -297,6 +297,8 @@ async function loadData(agency){
     if(po.data) S.payouts=po.data.map(r=>r.data);
     const ld=await sb.from('agency_landlord_leads').select('*').eq('agency_id',window._agencyId);
     if(ld.data) S.landlordLeads=ld.data.map(rowToLead);
+    const ta=await sb.from('agency_tenancy_agreements').select('*').eq('agency_id',window._agencyId);
+    if(ta.data) S.tenancyAgreements=ta.data;
   }catch(e){ /* run sql-agency-lettings.sql to enable */ }
 }
 async function pollMessages(){
@@ -320,6 +322,7 @@ async function boot(){
   try{ await loadData(agency); }catch(e){ console.error(e); toast('⚠ Could not load agency data',1); }
   reconcileAgreements();
   setInterval(pollAgreements, 20000);   // pick up landlord counter-signatures live
+  setInterval(pollTenancyAgreements, 20000); // pick up tenant/occupant signatures live
   setInterval(pollMessages, 15000);     // pick up new landlord/tenant messages live
   restoreView();
   render();
@@ -1020,7 +1023,7 @@ function vLandlordDetail(){
         :!l.invitedAt?`<button class="btn navy" onclick="inviteToPortal('${l.id}')">📧 Invite landlord to portal — next step</button>`
         :`<span class="faint" style="font-size:12.5px;align-self:center">✓ Portal invited ${fmtDate(l.invitedAt)}</span><button class="btn sm" onclick="inviteToPortal('${l.id}')">Resend invite</button>`}
       ${(()=>{ const a=agreementFor(l.id);
-        if(l.agreement) return `<button class="btn" onclick="viewSignedAgreement('${l.id}')">✔ View signed agreement</button><button class="btn sm" onclick="openAgreement('${l.id}')" title="Issue a new agreement to sign — e.g. renewal or amended terms">Send new agreement</button>`;
+        if(l.agreement) return `<button class="btn" onclick="viewSignedAgreement('${l.id}')">✔ View signed agreement</button><button class="btn sm" onclick="viewSigningReceipt('${l.id}')">🧾 Signing receipt</button><button class="btn sm" onclick="openAgreement('${l.id}')" title="Issue a new agreement to sign — e.g. renewal or amended terms">Send new agreement</button>`;
         if(a&&a.status==='sent') return `<button class="btn" onclick="openAgreement('${l.id}')" style="border-color:var(--amber);color:var(--amber)">⏳ Awaiting landlord signature · resend</button>`;
         if(a&&a.status==='declined') return `<button class="btn" onclick="openAgreement('${l.id}')" style="border-color:var(--red);color:var(--red)">✕ Declined · re-send agreement</button>`;
         return `<button class="btn navy" onclick="openAgreement('${l.id}')">✍️ Send agreement to sign</button>`;
@@ -1166,6 +1169,8 @@ function _tenancyChecklist(p){
       const go=k==='rtr'?`rtrWizard('${p.id}')`:k==='deposit'?`setTenant('${p.id}')`:`editCert('${p.id}','${k}')`;
       items.push({k,label:it[1],done:r.k==='ok'||r.k==='soon',warn:r.k==='soon',go}); });
     const rec=tenantRecFor(p.id);
+    const ta=rec&&tenancyAgreementFor(rec.id);
+    items.push({k:'tenancyagreement',label:'Tenancy agreement signed',done:!!(ta&&ta.status==='signed')||!!(rec&&rec.origContractName),warn:!!(ta&&ta.status==='sent'),go:`openTenancyAgreement('${p.id}')`});
     items.push({k:'portal',label:'Tenant invited to portal',done:!!(rec&&rec.invited),go:`inviteTenantToPortal('${p.id}')`});
   }
   const done=items.filter(i=>i.done).length;
@@ -1304,6 +1309,10 @@ function vPropertyDetail(){
         </div>
         ${(()=>{ const rec=tenantRecFor(p.id); if(!rec) return '';
           return `${rec.refDocName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">📄</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Reference report</div><div class="faint" style="font-size:11.5px">${esc(rec.refDocName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.refDocUrl?`<button class="btn sm" onclick="viewDoc('${rec.refDocUrl}','Reference report')">View</button>`:''}</div>`:''}
+    ${(()=>{ const ta=tenancyAgreementFor(rec.id); if(!ta) return '';
+      if(ta.status==='signed') return `<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">✍</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Tenancy agreement (e-signed)</div><div class="faint" style="font-size:11.5px">Signed ${fmtDate(ta.tenant_signed_at)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">Signed</span><button class="btn sm" onclick="viewSignedTenancyAgreement('${p.id}')">View</button></div>`;
+      if(ta.status==='sent') return `<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--amber-bg);color:var(--amber)">⏳</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Tenancy agreement (e-signed)</div><div class="faint" style="font-size:11.5px">Awaiting tenant signature</div></div><span class="pill" style="background:var(--amber-bg);color:var(--amber)">Sent</span></div>`;
+      return ''; })()}
           ${rec.origContractName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">📄</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Original tenancy agreement</div><div class="faint" style="font-size:11.5px">${esc(rec.origContractName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.origContractUrl?`<button class="btn sm" onclick="viewDoc('${rec.origContractUrl}','Original tenancy agreement')">View</button>`:''}</div>`:''}
           ${rec.id1DocName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">🪪</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Photo ID — 1 of 2</div><div class="faint" style="font-size:11.5px">${esc(rec.id1DocName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.id1DocUrl?`<button class="btn sm" onclick="viewDoc('${rec.id1DocUrl}','Photo ID')">View</button>`:''}</div>`:''}
           ${rec.id2DocName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">🪪</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Photo ID — 2 of 2</div><div class="faint" style="font-size:11.5px">${esc(rec.id2DocName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.id2DocUrl?`<button class="btn sm" onclick="viewDoc('${rec.id2DocUrl}','Photo ID')">View</button>`:''}</div>`:''}
@@ -1562,6 +1571,13 @@ function setTenant(pid){ const p=P(pid); const t=p.tenant||{}; const rec=tenantR
     <div class="fg" style="margin-top:-8px"><label>Protection covers tenancy until <span class="faint">(only for a fixed-term cert with an "ending on or after" date — leave blank for a periodic tenancy, no re-protection needed on renewal or rent increase)</span></label><div style="display:flex;gap:8px;align-items:center"><input id="tn-deposit-expiry" type="date" value="${rec.depositCertExpiry||''}" style="flex:1"><a href="#" onclick="event.preventDefault();document.getElementById('tn-deposit-expiry').value=''">Clear</a></div></div>
     <div id="tn-deposit-scan-status" class="faint" style="font-size:11px;margin-top:-8px"></div>
     ${_docSlotHtml('ref','Reference report','(employer/previous-landlord reference or credit check)',rec.refDocName,rec.refDocUrl)}
+    <div class="fg"><label>Tenancy agreement <span class="faint">(e-sign with the tenant — recommended for new tenancies; skip if uploading an already-signed contract below)</span></label>
+    ${(()=>{ const ta=tenancyAgreementFor(rec.id);
+      if(ta&&ta.status==='signed') return `<div class="doc" style="border:1px solid var(--border);border-radius:8px;padding:8px 10px"><div class="di" style="background:var(--green-bg);color:var(--green)">✓</div><div style="flex:1;font-size:12.5px">Signed ${fmtDate(ta.tenant_signed_at)}</div><button class="btn sm" onclick="viewSignedTenancyAgreement('${pid}')">View</button><button class="btn sm" onclick="viewTenancySigningReceipt('${pid}')">Receipt</button></div>`;
+      if(ta&&ta.status==='sent') return `<div class="doc" style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:var(--amber-bg)"><div class="di" style="background:#fff;color:var(--amber)">⏳</div><div style="flex:1;font-size:12.5px">Awaiting tenant signature — sent ${fmtDate(ta.created_at)}</div><button class="btn sm" onclick="openTenancyAgreement('${pid}')">Resend</button></div>`;
+      return `<button type="button" class="btn sm" onclick="openTenancyAgreement('${pid}')">✨ Generate &amp; send for e-signature</button>`;
+    })()}
+    </div>
     ${_docSlotHtml('origcontract','Original signed tenancy agreement','(if this tenancy was already running when NexLet took over management — stays legally valid; no need to reissue, even after the 1 May 2026 conversion to a periodic tenancy)',rec.origContractName,rec.origContractUrl)}
   </div>
   <div style="background:#F6F8FB;border:1px solid var(--border);border-radius:10px;padding:16px;margin-top:12px">
@@ -2892,6 +2908,188 @@ async function pollAgreements(){
   if(!LIVE) return;
   try{ const {data}=await sb.from('agency_agreements').select('*').eq('agency_id',window._agencyId);
     if(data){ S.agreements=data; reconcileAgreements(); } }catch(e){}
+}
+// ── Formal signing-receipt audit trail (document info + signee info + timestamped events),
+// same shape as a DocuSign/Adobe Sign completion certificate — for the landlord's records.
+function _ridFor(str){ let h=0; for(let i=0;i<str.length;i++){ h=((h<<5)-h+str.charCodeAt(i))|0; } return Math.abs(h).toString(36).toUpperCase().padStart(8,'0').slice(0,8); }
+function signingReceiptHtml(a,l){
+  const fmt=d=>d?new Date(d).toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'UTC'})+' UTC':'—';
+  const b=agencyBrand();
+  const title=(a.service==='letonly'?'Tenant-Find Agreement':'Letting & Management Agreement')+' — '+esc(l.address||l.name||'');
+  const signees=[{name:a.agent_name,email:a.agent_email,role:'Agent',ts:a.agent_signed_at}];
+  signees.push({name:a.landlord_name,email:a.landlord_email,role:a.joint_name?'Landlord 1':'Landlord',ts:a.landlord_signed_at});
+  if(a.joint_name) signees.push({name:a.joint_name,email:a.joint_email,role:'Landlord 2',ts:a.joint_signed_at});
+  const rid=s=>_ridFor((s.email||s.name||'')+a.id);
+  const signeeCards=signees.map(s=>`<div style="border:1px solid #E4EAF1;border-radius:8px;padding:14px 16px;margin-bottom:10px;display:grid;grid-template-columns:1fr 1fr;gap:4px 18px;font-size:12px">
+    <div><span style="color:#7A8FA6">Signee name</span><br><b>${esc(s.name||'—')}</b></div>
+    <div><span style="color:#7A8FA6">Audit level</span><br><b>Email</b></div>
+    <div><span style="color:#7A8FA6">Signee email</span><br>${esc(s.email||'—')}</div>
+    <div><span style="color:#7A8FA6">Recipient ID</span><br>${rid(s)}</div>
+    <div><span style="color:#7A8FA6">Signee role</span><br>${esc(s.role)}</div>
+    <div><span style="color:#7A8FA6">OTP required</span><br>No</div>
+  </div>`).join('');
+  const events=[{label:'Sent',name:signees[0].name,ts:a.agent_signed_at}];
+  signees.slice(1).forEach(s=>{ if(s.ts) events.push({label:'Signed',name:s.name,ts:s.ts}); });
+  const completedAt=signees.slice(1).every(s=>s.ts)?signees.slice(1).reduce((m,s)=>s.ts&&new Date(s.ts)>new Date(m||0)?s.ts:m,null):null;
+  if(completedAt) events.push({label:'Completed',name:'',ts:completedAt});
+  const eventsHtml=events.filter(e=>e.ts).sort((x,y)=>new Date(x.ts)-new Date(y.ts)).map(e=>`<div style="display:flex;justify-content:space-between;border-bottom:1px solid #F1F3F6;padding:10px 0;font-size:12.5px">
+    <div><b>${e.label}</b>${e.name?' · '+esc(e.name):''}</div><div style="color:#7A8FA6">${fmt(e.ts)}</div></div>`).join('');
+  return `<div style="max-width:640px;margin:0 auto;font-family:Arial,sans-serif;color:#1A2332">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+      <div style="font-size:17px;font-weight:700;color:#0B1E3D">✒ Signing receipt</div>
+      <div style="font-size:11px;color:#7A8FA6">${esc(b.name)}</div>
+    </div>
+    <div style="font-size:11px;color:#7A8FA6;text-transform:uppercase;letter-spacing:.4px;margin-bottom:14px">Document information</div>
+    <div style="border:1px solid #E4EAF1;border-radius:8px;padding:14px 16px;margin-bottom:22px;font-size:12.5px">
+      <div style="color:#7A8FA6">Document name</div><div style="font-weight:600;margin-bottom:8px">${title}</div>
+      <div style="color:#7A8FA6">Document ID</div><div style="font-weight:600">${esc(a.id)}</div>
+    </div>
+    <div style="font-size:11px;color:#7A8FA6;text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Signee information</div>
+    ${signeeCards}
+    <div style="font-size:11px;color:#7A8FA6;text-transform:uppercase;letter-spacing:.4px;margin:22px 0 4px">Signing events</div>
+    ${eventsHtml}
+    <div style="font-size:10.5px;color:#94A3B8;margin-top:20px">Electronic signatures applied under the Electronic Communications Act 2000. This receipt is generated from ${esc(b.name)}'s own signing records.</div>
+  </div>`;
+}
+function viewSigningReceipt(id){
+  const a=agreementFor(id); if(!a||a.status!=='signed'){ toast('No completed signing on file',1); return; }
+  const l=L(id);
+  const w=window.open('','_blank'); if(!w){ toast('Allow pop-ups to view',1); return; }
+  w.document.write(`<html><head><title>Signing receipt</title><style>body{margin:24px auto;padding:0 20px}@media print{button{display:none}}</style></head><body><button onclick="print()" style="padding:10px 18px;background:#0B1E3D;color:#fff;border:none;border-radius:8px;cursor:pointer;margin-bottom:20px;font-family:Arial,sans-serif">Print / Save as PDF</button>${signingReceiptHtml(a,l)}</body></html>`);
+  w.document.close();
+}
+
+// ============================================================================
+// TENANCY AGREEMENT E-SIGNATURE — the tenant's written statement of terms.
+// Fully separate from agency_agreements (landlord management agreement).
+// Agent signs on behalf of the landlord (authority comes from the signed
+// management agreement), then the tenant + every named occupant sign
+// together at tenancy-esign.html?t=<token>. See tenancy-agreement-esign-migration.sql.
+// ============================================================================
+function tenancyAgreementFor(tid){ return (S.tenancyAgreements||[]).filter(a=>a.tenant_id===tid).sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0))[0]; }
+function buildTenancyAgreementHtml(p,rec,l){
+  const b=agencyBrand();
+  const occNames=(rec.occupants||[]).map(o=>o.name).filter(Boolean);
+  const tenantNames=[rec.name,...occNames].filter(Boolean).join(', ');
+  const depositScheme=rec.scheme||'a government-approved tenancy deposit scheme (to be confirmed within 30 days of receipt)';
+  return `<h2 style="font-family:Georgia,serif;font-size:19px;color:#0B1E3D;margin-bottom:4px">Written Statement of Tenancy Terms</h2>
+    <p style="color:#7A8FA6;font-size:12px;margin-bottom:18px">An assured tenancy under the Housing Act 1988, as amended by the Renters’ Rights Act — periodic from the outset, with no fixed term.</p>
+    <p><b>Parties.</b> Landlord: <b>${esc(landlordName(l))}</b>, acting through their managing agent <b>${esc(b.name)}</b>${b.address?' of '+esc(b.address):''}. Tenant(s): <b>${esc(tenantNames)}</b>. Property: <b>${esc(p.address)}${p.city?', '+esc(p.city):''}${p.postcode?' '+esc(p.postcode):''}</b>.</p>
+    <p><b>1. Tenancy type and term.</b> This is a periodic assured tenancy starting <b>${fmtDate(rec.start)}</b>, running from period to period with no fixed end date. There is no Section 21 route for the Landlord to end this tenancy — it can only be ended by the Tenant giving notice, or by the Landlord relying on a statutory ground under Section 8 of the Housing Act 1988 through the courts.</p>
+    <p><b>2. Rent.</b> ${gbp(rec.rent||p.rent)} per month, due on the ${esc(p.rentDueDay||'1st')} of each period. Rent can only be increased once every 12 months, by the Landlord serving a statutory Section 13 notice giving at least 2 months’ notice — never by any other mechanism — and the Tenant may refer an increase they consider above market rent to the First-tier Tribunal.</p>
+    <p><b>3. Deposit.</b> ${gbp(rec.deposit||0)} held as a deposit, protected in ${esc(depositScheme)}. Any dispute about deductions at the end of the tenancy is resolved through that scheme’s free adjudication service — the Landlord cannot unilaterally withhold funds.</p>
+    <p><b>4. Right to Rent.</b> It is a continuing condition of this tenancy that every adult occupier maintains a Right to Rent under the Immigration Act 2014. Where an occupier’s right is time-limited, the Tenant must provide evidence of its renewal when it falls due.</p>
+    <p><b>5. Tenant’s responsibilities.</b> The Tenant will: pay the rent on time; keep the Property reasonably clean and undamaged, fair wear and tear excepted; report repairs promptly; allow the Landlord or Agent access with at least 24 hours’ written notice (except genuine emergencies); test smoke and carbon monoxide alarms regularly and report any fault; help control the risk of Legionella by running taps after any absence and not tampering with the boiler’s thermostat; tell the Landlord before leaving the Property unoccupied for more than 28 days; not sub-let or assign the tenancy; and, at the end of the tenancy, remove all belongings — anything left for more than 14 days afterwards may be treated as abandoned. Where there is more than one Tenant, each is jointly and severally responsible for the whole of these obligations.</p>
+    <p><b>6. Pets.</b> The Tenant may request permission to keep a pet. The Landlord cannot unreasonably refuse and must respond within 28 days; reasonable conditions (such as pet damage insurance) may be attached to any consent given.</p>
+    <p><b>7. Landlord’s responsibilities.</b> The Landlord will: keep the structure, exterior, and installations for water, gas, electricity, heating and sanitation in repair; keep the Property to the Decent Homes Standard; investigate and act on reports of damp or mould within the timescales required by Awaab’s Law; maintain a valid EPC, Gas Safety record (where applicable) and EICR, and give the Tenant a copy of each; and not interfere with the Tenant’s quiet enjoyment of the Property.</p>
+    <p><b>8. Insurance.</b> The Landlord’s insurance (where held) does not cover the Tenant’s own belongings — the Tenant is responsible for insuring their own possessions.</p>
+    <p><b>9. Ending the tenancy.</b> The Tenant may end the tenancy at any time by giving at least 2 months’ written notice. The Landlord may only recover possession by serving a valid notice under Section 8 relying on a statutory ground, and, if the Tenant does not leave, by obtaining a court order.</p>
+    <p style="color:#7A8FA6;font-size:11.5px;margin-top:16px">This statement satisfies the Landlord’s obligation to give the Tenant written terms. It does not remove any right either party has under the Housing Act 1988, the Renters’ Rights Act, or other legislation in force.</p>`;
+}
+let _tnAgSigPad=null;
+function openTenancyAgreement(pid){
+  const p=P(pid); const l=L(p.landlordId); const rec=tenantRecFor(pid);
+  if(!rec){ toast('Set up the tenant record first',1); return; }
+  const rtrOk=!!rec.rtrCheckDate;
+  const depositWithinGrace=rec.start&&((new Date()-new Date(rec.start))/864e5)<30;
+  const readiness=`<div class="note${rtrOk?'':' warn'}" style="margin-bottom:12px"><b>Readiness check</b><br>
+    Right to Rent: ${rtrOk?'✓ Confirmed':'⚠ Not done yet — complete this before signing'}<br>
+    Deposit protection: ${rec.depositCertName?'✓ Protected':(depositWithinGrace?'⏳ Within the 30-day window':'⚠ Overdue — protect it before signing')}</div>`;
+  const occWithEmail=(rec.occupants||[]).filter(o=>o.email);
+  const body=`${readiness}
+    <div class="fg"><label>Tenant’s email — the secure signing link is sent here</label><input id="ta-email" value="${esc(rec.email||'')}" placeholder="tenant@email.com"></div>
+    ${occWithEmail.length?`<div class="note" style="margin:-8px 0 4px">${occWithEmail.map(o=>esc(o.name)).join(', ')} will also be sent the link — every named adult signs in one sitting.</div>`:''}
+    <div class="fg"><label>Agreement preview</label><div id="ta-preview" style="max-height:220px;overflow-y:auto;border:1px solid #E4EAF1;border-radius:8px;padding:14px;font-size:12.5px;line-height:1.7;background:var(--off)">${buildTenancyAgreementHtml(p,rec,l)}</div></div>
+    <div class="fg"><label>Your name (signing on behalf of ${esc(landlordName(l))})</label><input id="ta-agent-name" value="${esc(window._agentName||S.agency.name||'')}"></div>
+    <div class="fg"><label>Your signature</label>
+      <div style="border:1.5px solid #E4EAF1;border-radius:8px;overflow:hidden;background:#fff"><canvas id="ta-sig" style="display:block;width:100%;height:130px;touch-action:none;cursor:crosshair"></canvas></div>
+      <div style="margin-top:6px"><button class="btn sm" onclick="_taClearSig()">Clear</button></div></div>
+    <p class="hint">You sign first, then NexLet emails the tenant (and any joint occupants) a secure link to sign together. Everyone receives a timestamped copy once complete.</p>`;
+  modal('Send tenancy agreement for e-signature', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="sendTenancyAgreement('${pid}')">Sign &amp; send to tenant</button>`, true);
+  setTimeout(()=>{ const c=document.getElementById('ta-sig'); if(!c||!window.SignaturePad) return;
+    const ratio=Math.max(window.devicePixelRatio||1,1); c.width=c.offsetWidth*ratio; c.height=c.offsetHeight*ratio; c.getContext('2d').scale(ratio,ratio);
+    _tnAgSigPad=new SignaturePad(c,{penColor:'#0B1E3D',minWidth:0.7,maxWidth:2.2}); },30);
+}
+function _taClearSig(){ if(_tnAgSigPad) _tnAgSigPad.clear(); }
+async function sendTenancyAgreement(pid){
+  const p=P(pid); const l=L(p.landlordId); const rec=tenantRecFor(pid);
+  const email=val('ta-email'); const agentName=val('ta-agent-name')||S.agency.name||'The agent';
+  if(!email){ toast('Enter the tenant\'s email',1); return; }
+  if(!_tnAgSigPad||_tnAgSigPad.isEmpty()){ toast('Please add your signature',1); return; }
+  if(!LIVE){ toast('Connect to Supabase to send (not available in demo)',1); return; }
+  const token=uid('ta')+Math.random().toString(36).slice(2,10);
+  const occupants=(rec.occupants||[]).filter(o=>o.name).map(o=>({name:o.name,email:o.email||''}));
+  const row={ id:uid('ta'), agency_id:window._agencyId, property_id:pid, tenant_id:rec.id, landlord_id:l.id, token,
+    document_html: buildTenancyAgreementHtml(p,rec,l), agent_name:agentName, agent_email:window._agentEmail||'',
+    agent_sig_png:_tnAgSigPad.toDataURL('image/png'), agent_signed_at:new Date().toISOString(),
+    tenant_name:rec.name, tenant_email:email, occupants, status:'sent' };
+  const { error }=await sb.from('agency_tenancy_agreements').insert(row);
+  if(error){ console.error(error); toast('⚠ Could not send — run tenancy-agreement-esign-migration.sql then retry',1); return; }
+  S.tenancyAgreements=S.tenancyAgreements||[]; S.tenancyAgreements.push(row);
+  rec.email=rec.email||email; pushTenantRec(rec);
+  const link='https://'+location.host+location.pathname.replace(/agent\.html$/,'')+'tenancy-esign.html?t='+token;
+  agencyEmail(email,'Please sign your tenancy agreement — '+p.address,`<p>Hi ${esc((rec.name||'').split(' ')[0])},</p><p>Please review and sign your tenancy agreement for <b>${esc(p.address)}</b>.</p><p><a href="${link}">Sign your tenancy agreement</a></p>`);
+  occupants.forEach(o=>{ if(o.email) agencyEmail(o.email,'Please sign your tenancy agreement — '+p.address,`<p>Hi ${esc((o.name||'').split(' ')[0])},</p><p>Please review and sign your tenancy agreement for <b>${esc(p.address)}</b>.</p><p><a href="${link}">Sign your tenancy agreement</a></p>`); });
+  closeModal(); render(); toast('✓ Sent to tenant for signature');
+}
+function viewSignedTenancyAgreement(pid){
+  const p=P(pid); const rec=tenantRecFor(pid); if(!rec) return;
+  const a=tenancyAgreementFor(rec.id); if(!a){ toast('No tenancy agreement on file',1); return; }
+  const w=window.open('','_blank'); if(!w){ toast('Allow pop-ups to view',1); return; }
+  const fmt=d=>d?new Date(d).toLocaleString('en-GB',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
+  const occNames=[a.tenant_name,...(a.occupants||[]).map(o=>o.name)].filter(Boolean).join(', ');
+  const cert=`<div style="border:1px solid #E4EAF1;border-radius:10px;padding:20px 22px"><div style="font-size:15px;font-weight:700;color:#0B1E3D;margin-bottom:4px">✔ Fully signed tenancy agreement</div>
+    <table style="width:100%;font-size:12.5px;border-collapse:collapse">
+      <tr><td style="padding:6px 0;color:#7A8FA6">Agent</td><td style="padding:6px 0;font-weight:600">${esc(a.agent_name||'')}</td></tr>
+      <tr><td style="padding:6px 0;color:#7A8FA6">Tenant(s)</td><td style="padding:6px 0;font-weight:600">${esc(occNames)}</td></tr>
+      <tr><td style="padding:6px 0;color:#7A8FA6">Signed</td><td style="padding:6px 0">${fmt(a.tenant_signed_at)}</td></tr>
+    </table></div>`;
+  w.document.write(`<html><head><title>Signed Tenancy Agreement</title><style>body{font-family:Arial,sans-serif;max-width:760px;margin:24px auto;padding:0 20px;color:#1A2B45;line-height:1.7}@media print{button{display:none}}</style></head><body><button onclick="print()" style="padding:10px 18px;background:#0B1E3D;color:#fff;border:none;border-radius:8px;cursor:pointer;margin-bottom:16px">Print / Save as PDF</button>${cert}<hr style="margin:24px 0;border:none;border-top:1px solid #E4EAF1">${a.document_html}</body></html>`);
+  w.document.close();
+}
+function tenancySigningReceiptHtml(a,p){
+  const fmt=d=>d?new Date(d).toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'UTC'})+' UTC':'—';
+  const b=agencyBrand();
+  const signees=[{name:a.agent_name,email:a.agent_email,role:'Agent',ts:a.agent_signed_at},{name:a.tenant_name,email:a.tenant_email,role:(a.occupants&&a.occupants.length)?'Tenant 1':'Tenant',ts:a.tenant_signed_at}];
+  (a.occupants||[]).forEach((o,i)=>{ const sig=(a.occupant_sigs||[]).find(s=>s.name===o.name); signees.push({name:o.name,email:o.email,role:'Tenant '+(i+2),ts:sig?sig.signed_at:null}); });
+  const rid=s=>_ridFor((s.email||s.name||'')+a.id);
+  const signeeCards=signees.map(s=>`<div style="border:1px solid #E4EAF1;border-radius:8px;padding:14px 16px;margin-bottom:10px;display:grid;grid-template-columns:1fr 1fr;gap:4px 18px;font-size:12px">
+    <div><span style="color:#7A8FA6">Signee name</span><br><b>${esc(s.name||'—')}</b></div>
+    <div><span style="color:#7A8FA6">Audit level</span><br><b>Email</b></div>
+    <div><span style="color:#7A8FA6">Signee email</span><br>${esc(s.email||'—')}</div>
+    <div><span style="color:#7A8FA6">Recipient ID</span><br>${rid(s)}</div>
+    <div><span style="color:#7A8FA6">Signee role</span><br>${esc(s.role)}</div>
+    <div><span style="color:#7A8FA6">OTP required</span><br>No</div>
+  </div>`).join('');
+  const events=[{label:'Sent',name:signees[0].name,ts:a.agent_signed_at}];
+  signees.slice(1).forEach(s=>{ if(s.ts) events.push({label:'Signed',name:s.name,ts:s.ts}); });
+  const allSigned=signees.slice(1).every(s=>s.ts);
+  const completedAt=allSigned?signees.slice(1).reduce((m,s)=>new Date(s.ts)>new Date(m||0)?s.ts:m,null):null;
+  if(completedAt) events.push({label:'Completed',name:'',ts:completedAt});
+  const eventsHtml=events.filter(e=>e.ts).sort((x,y)=>new Date(x.ts)-new Date(y.ts)).map(e=>`<div style="display:flex;justify-content:space-between;border-bottom:1px solid #F1F3F6;padding:10px 0;font-size:12.5px"><div><b>${e.label}</b>${e.name?' · '+esc(e.name):''}</div><div style="color:#7A8FA6">${fmt(e.ts)}</div></div>`).join('');
+  return `<div style="max-width:640px;margin:0 auto;font-family:Arial,sans-serif;color:#1A2332">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px"><div style="font-size:17px;font-weight:700;color:#0B1E3D">✒ Signing receipt</div><div style="font-size:11px;color:#7A8FA6">${esc(b.name)}</div></div>
+    <div style="font-size:11px;color:#7A8FA6;text-transform:uppercase;letter-spacing:.4px;margin-bottom:14px">Document information</div>
+    <div style="border:1px solid #E4EAF1;border-radius:8px;padding:14px 16px;margin-bottom:22px;font-size:12.5px"><div style="color:#7A8FA6">Document name</div><div style="font-weight:600;margin-bottom:8px">Tenancy Agreement — ${esc(p&&p.address||'')}</div><div style="color:#7A8FA6">Document ID</div><div style="font-weight:600">${esc(a.id)}</div></div>
+    <div style="font-size:11px;color:#7A8FA6;text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Signee information</div>
+    ${signeeCards}
+    <div style="font-size:11px;color:#7A8FA6;text-transform:uppercase;letter-spacing:.4px;margin:22px 0 4px">Signing events</div>
+    ${eventsHtml}
+    <div style="font-size:10.5px;color:#94A3B8;margin-top:20px">Electronic signatures applied under the Electronic Communications Act 2000. This receipt is generated from ${esc(b.name)}’s own signing records.</div>
+  </div>`;
+}
+function viewTenancySigningReceipt(pid){
+  const p=P(pid); const rec=tenantRecFor(pid); if(!rec) return;
+  const a=tenancyAgreementFor(rec.id); if(!a||a.status!=='signed'){ toast('No completed signing on file',1); return; }
+  const w=window.open('','_blank'); if(!w){ toast('Allow pop-ups to view',1); return; }
+  w.document.write(`<html><head><title>Signing receipt</title><style>body{margin:24px auto;padding:0 20px}@media print{button{display:none}}</style></head><body><button onclick="print()" style="padding:10px 18px;background:#0B1E3D;color:#fff;border:none;border-radius:8px;cursor:pointer;margin-bottom:20px;font-family:Arial,sans-serif">Print / Save as PDF</button>${tenancySigningReceiptHtml(a,p)}</body></html>`);
+  w.document.close();
+}
+async function pollTenancyAgreements(){
+  if(!LIVE) return;
+  try{ const {data}=await sb.from('agency_tenancy_agreements').select('*').eq('agency_id',window._agencyId);
+    if(data){ const prevSigned=new Set((S.tenancyAgreements||[]).filter(a=>a.status==='signed').map(a=>a.id));
+      S.tenancyAgreements=data; if(data.some(a=>a.status==='signed'&&!prevSigned.has(a.id))) render(); } }catch(e){}
 }
 function signedCertHtml(a){
   const fmt=d=>d?new Date(d).toLocaleString('en-GB',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
