@@ -3027,10 +3027,15 @@ async function sendTenancyAgreement(pid){
   if(error){ console.error(error); toast('⚠ Could not send — run tenancy-agreement-esign-migration.sql then retry',1); return; }
   S.tenancyAgreements=S.tenancyAgreements||[]; S.tenancyAgreements.push(row);
   rec.email=rec.email||email; pushTenantRec(rec);
-  const link='https://'+location.host+location.pathname.replace(/agent\.html$/,'')+'tenancy-esign.html?t='+token;
-  agencyEmail(email,'Please sign your tenancy terms & conditions — '+p.address,`<p>Hi ${esc((rec.name||'').split(' ')[0])},</p><p>Please review and sign your tenancy terms &amp; conditions for <b>${esc(p.address)}</b>.</p><p><a href="${link}">Sign your tenancy terms &amp; conditions</a></p>`);
-  occupants.forEach(o=>{ if(o.email) agencyEmail(o.email,'Please sign your tenancy terms & conditions — '+p.address,`<p>Hi ${esc((o.name||'').split(' ')[0])},</p><p>Please review and sign your tenancy terms &amp; conditions for <b>${esc(p.address)}</b>.</p><p><a href="${link}">Sign your tenancy terms &amp; conditions</a></p>`); });
-  closeModal(); render(); toast('✓ Sent to tenant for signature');
+  const link=new URL('tenancy-esign.html?t='+encodeURIComponent(token), location.href).href;
+  const mailBody=nm=>`<p>Hi ${esc(nm)},</p><p>Please review and sign your tenancy terms &amp; conditions for <b>${esc(p.address)}</b>.</p><p><a href="${link}">Sign your tenancy terms &amp; conditions</a></p>`;
+  const r1=await agencyEmail(email,'Please sign your tenancy terms & conditions — '+p.address,mailBody((rec.name||'').split(' ')[0]));
+  const occResults=[];
+  for(const o of occupants){ if(o.email) occResults.push({email:o.email, r:await agencyEmail(o.email,'Please sign your tenancy terms & conditions — '+p.address,mailBody((o.name||'').split(' ')[0]))}); }
+  closeModal(); render();
+  const failed=[!r1.ok?email:null, ...occResults.filter(x=>!x.r.ok).map(x=>x.email)].filter(Boolean);
+  if(!failed.length) toast('✓ Sent to tenant for signature');
+  else toast('⚠ Saved, but email failed for: '+failed.join(', ')+' — check the address and resend',1);
 }
 function viewSignedTenancyAgreement(pid){
   const p=P(pid); const rec=tenantRecFor(pid); if(!rec) return;
