@@ -1282,7 +1282,7 @@ function vPropertyDetail(){
           <button class="btn sm" onclick="rtrWizard('${p.id}')">${rec&&rec.rtrCheckDate?'Update':'Check'}</button></div>
           <div class="faint" style="font-size:11px;padding:0 0 10px 30px;margin-top:-6px">Checked by an external referencing company instead of the GOV.UK wizard? <a href="#" onclick="rtrExternal('${p.id}');return false">Upload their report</a></div>`; })():''}
         ${p.tenant?declRow('htr','How to Rent guide','Give the tenant the current gov.uk “How to rent” guide on or before move-in',c.htr,null,null):''}
-        ${(p.tenant&&tenantRecFor(p.id)&&tenantRecFor(p.id).start&&new Date(tenantRecFor(p.id).start)<new Date('2026-05-01'))?declRow('infosheet','RRA Information Sheet','Existing tenancy (started before 1 May 2026) — must be given the government Information Sheet explaining the Renters\u2019 Rights Act changes, by 31 May 2026',c.infosheet,null,null):''}
+        ${(p.tenant&&tenantRecFor(p.id)&&tenantRecFor(p.id).start&&new Date(tenantRecFor(p.id).start)<new Date('2026-05-01'))?declRow('infosheet','RRA Information Sheet','Existing tenancy (started before 1 May 2026) — must be given the government Information Sheet explaining the Renters\u2019 Rights Act changes, by 31 May 2026',c.infosheet,c.infosheetDoc,c.infosheetDocUrl):''}
         ${p.tenant?(()=>{ const rec=tenantRecFor(p.id); if(!rec||!rec.deposit) return ''; const r=_depositRAG(rec); return `<div class="doc"><div class="di" style="background:${r.bg};color:${r.color}">⛨</div>
           <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Deposit protection</div><div class="faint" style="font-size:11.5px">${rec.depositCertName?esc(rec.depositCertName)+(rec.depositCertExpiry?(r.k==='expired'?' — expired '+fmtDate(rec.depositCertExpiry):' — covers until '+fmtDate(rec.depositCertExpiry)):''):'Must be protected within 30 days of receipt'}</div></div>
           <span class="pill" style="background:${r.bg};color:${r.color}">${r.label}</span>
@@ -1414,9 +1414,14 @@ function editCert(pid,key){ const p=P(pid); const c=p.certs||(p.certs={}); const
     return;
   }
   if(key==='infosheet'){
-    const body=`<div class="note" style="margin-bottom:12px">Existing tenancies (started before 1 May 2026) converted automatically to assured periodic tenancies under the Renters\u2019 Rights Act \u2014 no new tenancy agreement is needed. But the tenant must be given the government\u2019s Information Sheet explaining the changes, by 31 May 2026 (a civil penalty of up to \u00a37,000 applies if missed \u2014 give it now if overdue).</div>
-      <a class="btn sm" href="https://assets.publishing.service.gov.uk/media/69bc04b8f7b1c24d8e23ce60/The_Renters__Rights_Act_Information_Sheet_2026.pdf" target="_blank" style="margin-bottom:12px;display:inline-block">\ud83d\udcc4 Download the Information Sheet (gov.uk)</a>
-      <div class="fg"><label>Given to tenant on</label><input id="ct-date" type="date" value="${cur||today()}"></div>`;
+    const isDoc=c.infosheetDoc;
+    const body=`<div class="note" style="margin-bottom:12px">Existing tenancies (started before 1 May 2026) converted automatically to assured periodic tenancies under the Renters’ Rights Act — no new tenancy agreement is needed. But the tenant must be given the government’s Information Sheet explaining the changes, by 31 May 2026 (a civil penalty of up to £7,000 applies if missed — give it now if overdue).</div>
+      <a class="btn sm" href="https://assets.publishing.service.gov.uk/media/69bc04b8f7b1c24d8e23ce60/The_Renters__Rights_Act_Information_Sheet_2026.pdf" target="_blank" style="margin-bottom:12px;display:inline-block">📄 Download the Information Sheet (gov.uk)</a>
+      <div class="fg"><label>Given to tenant on</label><input id="ct-date" type="date" value="${cur||today()}"></div>
+      <div class="fg"><label>Evidence <span class="faint">(optional — a signed copy, or your email/letter confirming it was sent)</span></label>
+      ${isDoc?`<div class="doc" style="border:1px solid var(--border);border-radius:8px;padding:8px 10px"><div class="di" style="background:var(--green-bg);color:var(--green)">📄</div><div style="flex:1;font-size:12.5px">${esc(c.infosheetDoc)}</div>${c.infosheetDocUrl?`<a href="#" onclick="event.preventDefault();viewDoc('${c.infosheetDocUrl}','Information Sheet evidence')" style="font-size:12px">View</a>`:''}<label style="font-size:12px;color:var(--blue);cursor:pointer">Replace<input type="file" accept="application/pdf,image/*" style="display:none" onchange="window._certFile=this.files[0]"></label></div>`
+      :`<label style="display:flex;align-items:center;gap:10px;padding:10px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer"><span style="font-size:18px">📄</span><div style="font-size:12.5px;font-weight:600;flex:1">Click to attach</div><input type="file" accept="application/pdf,image/*" style="display:none" onchange="window._certFile=this.files[0];this.closest('.fg').querySelector('div').textContent='✦ '+this.files[0].name+' attached — will upload on Confirm'"></label>`}
+      </div>`;
     modal('Confirm '+label,body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveCert('${pid}','${key}')">Confirm</button>`, true);
     return;
   }
@@ -1519,13 +1524,14 @@ function tnTab(name){
   });
 }
 function setTenant(pid){ const p=P(pid); const t=p.tenant||{}; const rec=tenantRecFor(pid)||{};
+  window._tnFiles={};
+  window._tnDocs={};
+  window._tnDocs['address']={existing:(rec.addressProofDocs&&rec.addressProofDocs.length)?rec.addressProofDocs.slice():(rec.addressProofName?[{name:rec.addressProofName,url:rec.addressProofUrl}]:[]),pending:[]};
+  const g=rec.guarantor||{}; const hasG=!!(g.name||g.email||g.phone);
+  window._tnDocs['guarantor']={existing:(g.docs||[]).slice(),pending:[]};
   const occ=(t.occupants||rec.occupants||[]);
   const occRows=occ.map(o=>_occRowHtml(o)).join('');
-  const g=rec.guarantor||{}; const hasG=!!(g.name||g.email||g.phone);
-  window._tnFiles={};
-  window._tnAddrDocs=(rec.addressProofDocs&&rec.addressProofDocs.length)?rec.addressProofDocs.slice():(rec.addressProofName?[{name:rec.addressProofName,url:rec.addressProofUrl}]:[]);
-  window._tnAddrPending=[];
-  const docCount=[rec.depositCertName,rec.refDocName,rec.origContractName,rec.id1DocName,rec.id2DocName,(window._tnAddrDocs.length?'x':'')].filter(Boolean).length;
+  const docCount=[rec.depositCertName,rec.refDocName,rec.origContractName,rec.id1DocName,rec.id2DocName,(window._tnDocs['address'].existing.length?'x':'')].filter(Boolean).length;
   const tabBtn=(id,label)=>`<button type="button" id="tn-tab-btn-${id}" onclick="tnTab('${id}')" style="background:none;border:none;border-bottom:2px solid ${id==='details'?'var(--navy)':'transparent'};color:${id==='details'?'var(--navy)':'#94A3B8'};font-weight:${id==='details'?'700':'500'};font-size:13.5px;padding:8px 4px;cursor:pointer;margin-right:22px">${label}</button>`;
   const body=`<div style="display:flex;border-bottom:1px solid var(--border);margin-bottom:18px">${tabBtn('details','Tenant details')}${tabBtn('docs','Documents ('+docCount+'/6)')}</div>
   <div id="tn-tab-details">
@@ -1542,6 +1548,10 @@ function setTenant(pid){ const p=P(pid); const t=p.tenant||{}; const rec=tenantR
     <input id="tn-g-name" placeholder="Guarantor name" value="${esc(g.name||'')}" style="grid-column:1/-1">
     <input id="tn-g-email" placeholder="Guarantor email" value="${esc(g.email||'')}">
     <input id="tn-g-phone" placeholder="Guarantor phone" value="${esc(g.phone||'')}">
+    <div style="grid-column:1/-1;margin-top:4px">
+      <div id="tn-docs-guarantor" style="display:flex;flex-direction:column;gap:4px">${_docBucketHtml('guarantor')}</div>
+      <label style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer;font-size:11.5px;font-weight:600;margin-top:6px">+ Add guarantor ID/document<input type="file" accept="application/pdf,image/*" style="display:none" onchange="tnDocAdd('guarantor',this)"></label>
+    </div>
   </div></div>
   </div>
   <div id="tn-tab-docs" style="display:none">
@@ -1560,16 +1570,30 @@ function setTenant(pid){ const p=P(pid); const t=p.tenant||{}; const rec=tenantR
     ${_docSlotHtml('id1','Photo ID — 1 of 2','(passport or driving licence)',rec.id1DocName,rec.id1DocUrl)}
     ${_docSlotHtml('id2','Photo ID — 2 of 2','(a second form: passport, driving licence, or national ID card)',rec.id2DocName,rec.id2DocUrl)}
     <div class="fg"><label>Proof of address <span class="faint">(utility bill, council tax bill, or bank statement — dated within the last 3 months; attach as many as needed, e.g. 3 months of statements)</span></label>
-    <div id="tn-addr-docs-list">${_addrDocsHtml()}</div>
-    <label style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer;font-size:12.5px;font-weight:600;margin-top:2px">+ Add document<input type="file" accept="application/pdf,image/*" style="display:none" onchange="tnAddrDocAdd(this)"></label>
+    <div id="tn-docs-address" style="display:flex;flex-direction:column;gap:4px">${_docBucketHtml('address')}</div>
+    <label style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer;font-size:12.5px;font-weight:600;margin-top:6px">+ Add document<input type="file" accept="application/pdf,image/*" style="display:none" onchange="tnDocAdd('address',this)"></label>
     </div>
   </div>
   </div>
   <div class="hint" style="margin-top:14px">Saving creates the tenancy record (for rent tracking, maintenance &amp; the tenant portal) and moves the let to Managed. All named adults appear on Section 8/13 notices, and a named guarantor is copied on them too.</div>`;
   modal(rec.name?'Set up tenant — '+esc(rec.name):'Set up tenant',body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" id="tn-save-btn" onclick="saveTenant('${pid}')">Save tenant</button>`, true); }
-function _occRowHtml(o){ o=o||{}; return `<div style="display:grid;grid-template-columns:1.3fr 1.3fr 1fr auto;gap:8px;margin-bottom:6px" data-occ-row><input placeholder="Full name" value="${esc(o.name||'')}"><input placeholder="Email (optional)" value="${esc(o.email||'')}"><input placeholder="Phone (optional)" value="${esc(o.phone||'')}"><button type="button" class="btn sm" onclick="this.closest('[data-occ-row]').remove()">✕</button></div>`; }
+function _occRowHtml(o){ o=o||{}; const key=o.id=o.id||uid('occ');
+  window._tnDocs=window._tnDocs||{}; window._tnDocs[key]=window._tnDocs[key]||{existing:(o.docs||[]).slice(),pending:[]};
+  return `<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px" data-occ-row data-occ-key="${key}">
+    <div style="display:grid;grid-template-columns:1.3fr 1.3fr 1fr auto;gap:8px">
+      <input class="occ-name" placeholder="Full name" value="${esc(o.name||'')}">
+      <input class="occ-email" placeholder="Email (optional)" value="${esc(o.email||'')}">
+      <input class="occ-phone" placeholder="Phone (optional)" value="${esc(o.phone||'')}">
+      <button type="button" class="btn sm" onclick="this.closest('[data-occ-row]').remove()">✕</button>
+    </div>
+    <div style="margin-top:8px">
+      <div id="tn-docs-${key}" style="display:flex;flex-direction:column;gap:4px">${_docBucketHtml(key)}</div>
+      <label style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer;font-size:11.5px;font-weight:600;margin-top:6px">+ Add ID/document<input type="file" accept="application/pdf,image/*" style="display:none" onchange="tnDocAdd('${key}',this)"></label>
+    </div>
+  </div>`;
+}
 function tnAddOccupant(){ const c=document.getElementById('tn-occupants'); if(!c) return; c.insertAdjacentHTML('beforeend',_occRowHtml({})); }
-function _readOccupants(){ return [...document.querySelectorAll('#tn-occupants [data-occ-row]')].map(r=>{ const inputs=r.querySelectorAll('input'); return {name:(inputs[0].value||'').trim(),email:(inputs[1].value||'').trim(),phone:(inputs[2].value||'').trim()}; }).filter(o=>o.name); }
+function _readOccupants(){ return [...document.querySelectorAll('#tn-occupants [data-occ-row]')].map(r=>{ const key=r.getAttribute('data-occ-key'); const docs=(window._tnDocs[key]&&window._tnDocs[key].existing)||[]; return {id:key,name:(r.querySelector('.occ-name').value||'').trim(),email:(r.querySelector('.occ-email').value||'').trim(),phone:(r.querySelector('.occ-phone').value||'').trim(),docs}; }).filter(o=>o.name); }
 async function _storageUpload(file,path,bucket){
   if(!sb||!LIVE) return null;
   try{
@@ -1623,25 +1647,17 @@ function _docSlotHtml(kind,label,hint,name,url,scanFn){
 }
 function tnAttachFile(input,kind){ const f=input.files[0]; if(!f) return; window._tnFiles=window._tnFiles||{}; window._tnFiles[kind]=f;
   const st=document.getElementById('tn-'+kind+'-status'); if(st) st.innerHTML='<span style="color:var(--blue)">✦ '+esc(f.name)+' attached — will upload on Save</span>'; }
-// ── Proof of address: multi-file (3 months' bank statements, council tax, utility bill, etc). ──
-function _addrDocsHtml(){
-  const existing=(window._tnAddrDocs||[]).map((d,i)=>`<div class="doc" style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-top:2px">
-    <div class="di" style="background:var(--green-bg);color:var(--green);flex-shrink:0">📄</div>
-    <div style="flex:1;font-size:12.5px;color:var(--txt);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(d.name)}</div>
-    ${d.url?`<a href="#" onclick="event.preventDefault();viewDoc('${d.url}','Proof of address')" style="font-size:12px;flex-shrink:0">View</a>`:''}
-    <a href="#" onclick="event.preventDefault();tnAddrDocRemove(${i})" style="font-size:12px;color:var(--red);flex-shrink:0">Remove</a>
-  </div>`).join('');
-  const pending=(window._tnAddrPending||[]).map((f,i)=>`<div class="doc" style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-top:2px;background:var(--blue-bg)">
-    <div class="di" style="background:#fff;color:var(--blue);flex-shrink:0">📄</div>
-    <div style="flex:1;font-size:12.5px;color:var(--txt);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">✦ ${esc(f.name)} <span class="faint">(will upload on Save)</span></div>
-    <a href="#" onclick="event.preventDefault();tnAddrDocRemovePending(${i})" style="font-size:12px;color:var(--red);flex-shrink:0">Remove</a>
-  </div>`).join('');
-  return existing+pending||'<div class="faint" style="font-size:11.5px">No documents attached yet</div>';
+// ── Generic multi-doc bucket: proof of address, guarantor, and each occupant use this. ──
+function _docBucketHtml(key){
+  const b=window._tnDocs[key]||{existing:[],pending:[]};
+  const existing=(b.existing||[]).map((d,i)=>`<div class="doc" style="border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:12px"><div class="di" style="width:26px;height:26px;font-size:13px;background:var(--green-bg);color:var(--green)">📄</div><div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(d.name)}</div>${d.url?`<a href="#" onclick="event.preventDefault();viewDoc('${d.url}','Document')" style="font-size:11.5px;flex-shrink:0">View</a>`:''}<a href="#" onclick="event.preventDefault();tnDocRemoveExisting('${key}',${i})" style="font-size:11.5px;color:var(--red);flex-shrink:0">Remove</a></div>`).join('');
+  const pending=(b.pending||[]).map((f,i)=>`<div class="doc" style="border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:12px;background:var(--blue-bg)"><div class="di" style="width:26px;height:26px;font-size:13px;background:#fff;color:var(--blue)">📄</div><div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">✦ ${esc(f.name)} <span class="faint">(uploads on Save)</span></div><a href="#" onclick="event.preventDefault();tnDocRemovePending('${key}',${i})" style="font-size:11.5px;color:var(--red);flex-shrink:0">Remove</a></div>`).join('');
+  return existing+pending||'<div class="faint" style="font-size:11px">No documents attached</div>';
 }
-function _refreshAddrDocs(){ const el=document.getElementById('tn-addr-docs-list'); if(el) el.innerHTML=_addrDocsHtml(); }
-function tnAddrDocAdd(input){ const f=input.files[0]; if(!f) return; window._tnAddrPending=window._tnAddrPending||[]; window._tnAddrPending.push(f); input.value=''; _refreshAddrDocs(); }
-function tnAddrDocRemove(i){ window._tnAddrDocs.splice(i,1); _refreshAddrDocs(); }
-function tnAddrDocRemovePending(i){ window._tnAddrPending.splice(i,1); _refreshAddrDocs(); }
+function _refreshDocBucket(key){ const el=document.getElementById('tn-docs-'+key); if(el) el.innerHTML=_docBucketHtml(key); }
+function tnDocAdd(key,input){ const f=input.files[0]; if(!f) return; window._tnDocs[key]=window._tnDocs[key]||{existing:[],pending:[]}; window._tnDocs[key].pending.push(f); input.value=''; _refreshDocBucket(key); }
+function tnDocRemoveExisting(key,i){ window._tnDocs[key].existing.splice(i,1); _refreshDocBucket(key); }
+function tnDocRemovePending(key,i){ window._tnDocs[key].pending.splice(i,1); _refreshDocBucket(key); }
 // AI-reads the deposit scheme certificate's "ending on or after" date, same pipeline as aiScanCert.
 async function aiScanDeposit(input){
   const file=input.files&&input.files[0]; if(!file) return;
@@ -1925,23 +1941,30 @@ function _commitTenant(pid,info){
 async function saveTenant(pid){ const nm=val('tn-name'); if(!nm){toast('Enter tenant name',1);return;}
   const btn=document.getElementById('tn-save-btn'); if(btn){btn.disabled=true;btn.textContent='Saving…';}
   const files=window._tnFiles||{};
-  const hasGuarantor=document.getElementById('tn-has-guarantor').checked;
-  const guarantor=hasGuarantor?{name:val('tn-g-name'),email:val('tn-g-email'),phone:val('tn-g-phone')}:null;
-  const rec=tenantRecFor(pid)||{};
-  const info={name:nm,email:val('tn-email'),phone:val('tn-phone'),start:val('tn-start'),deposit:val('tn-deposit')?parseFloat(val('tn-deposit')):undefined,depositCertExpiry:val('tn-deposit-expiry')||'',occupants:_readOccupants(),guarantor};
   const failed=[];
+  // Upload every pending file across all doc buckets (address, guarantor, each occupant) first —
+  // the guarantor/occupant objects below read from bucket.existing, so uploads must land before that.
+  for(const key of Object.keys(window._tnDocs||{})){
+    const bucket=window._tnDocs[key]; if(!bucket.pending||!bucket.pending.length) continue;
+    let ok=0;
+    for(const f of bucket.pending){
+      const ext=(f.name.split('.').pop()||'pdf');
+      const url=await _storageUpload(f,pid+'/doc-'+key+'-'+Date.now()+'-'+Math.random().toString(36).slice(2,6)+'.'+ext,'tenant-documents');
+      if(url){ bucket.existing.push({name:f.name,url}); ok++; }
+    }
+    const failCount=bucket.pending.length-ok;
+    if(failCount) failed.push(failCount+' document'+(failCount>1?'s':''));
+    bucket.pending=[];
+  }
+  const hasGuarantor=document.getElementById('tn-has-guarantor').checked;
+  const guarantor=hasGuarantor?{name:val('tn-g-name'),email:val('tn-g-email'),phone:val('tn-g-phone'),docs:(window._tnDocs.guarantor&&window._tnDocs.guarantor.existing)||[]}:null;
+  const rec=tenantRecFor(pid)||{};
+  const info={name:nm,email:val('tn-email'),phone:val('tn-phone'),start:val('tn-start'),deposit:val('tn-deposit')?parseFloat(val('tn-deposit')):undefined,depositCertExpiry:val('tn-deposit-expiry')||'',occupants:_readOccupants(),guarantor,addressProofDocs:(window._tnDocs.address&&window._tnDocs.address.existing)||[]};
   if(files.deposit){ const ext=(files.deposit.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.deposit,pid+'/deposit-'+Date.now()+'.'+ext,'tenant-documents'); if(url){ info.depositCertName=files.deposit.name; info.depositCertUrl=url; } else failed.push('deposit certificate'); }
   if(files.ref){ const ext=(files.ref.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.ref,pid+'/reference-'+Date.now()+'.'+ext,'tenant-documents'); if(url){ info.refDocName=files.ref.name; info.refDocUrl=url; } else failed.push('reference report'); }
   if(files.origcontract){ const ext=(files.origcontract.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.origcontract,pid+'/orig-contract-'+Date.now()+'.'+ext,'tenant-documents'); if(url){ info.origContractName=files.origcontract.name; info.origContractUrl=url; } else failed.push('original contract'); }
   if(files.id1){ const ext=(files.id1.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.id1,pid+'/id1-'+Date.now()+'.'+ext,'tenant-documents'); if(url){ info.id1DocName=files.id1.name; info.id1DocUrl=url; } else failed.push('ID document 1'); }
   if(files.id2){ const ext=(files.id2.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.id2,pid+'/id2-'+Date.now()+'.'+ext,'tenant-documents'); if(url){ info.id2DocName=files.id2.name; info.id2DocUrl=url; } else failed.push('ID document 2'); }
-  const addrKeep=(window._tnAddrDocs||[]).slice(); let addrFailed=0;
-  for(const f of (window._tnAddrPending||[])){
-    const ext=(f.name.split('.').pop()||'pdf'); const url=await _storageUpload(f,pid+'/address-proof-'+Date.now()+'-'+Math.random().toString(36).slice(2,6)+'.'+ext,'tenant-documents');
-    if(url) addrKeep.push({name:f.name,url}); else addrFailed++;
-  }
-  if(addrFailed) failed.push(addrFailed+' proof-of-address file'+(addrFailed>1?'s':''));
-  info.addressProofDocs=addrKeep;
   _commitTenant(pid,info);
   window._tnFiles={};
   closeModal(); render();
