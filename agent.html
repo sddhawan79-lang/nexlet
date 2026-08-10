@@ -234,8 +234,8 @@ const pushTenantRec =t =>_w(sb.from('agency_tenants').upsert(tenantToRow(t)));
 const pushRent    =r  =>_w(sb.from('agency_rent_ledger').upsert(rentToRow(r)));
 const pushJob     =j  =>_w(sb.from('agency_maintenance').upsert(jobToRow(j)));
 const pushInv2    =v  =>_w(sb.from('agency_inventories').upsert(inv2ToRow(v)));
-const rowToTenant=r=>({id:r.id,propertyId:r.property_id,landlordId:r.landlord_id,userId:r.user_id,name:r.name||'',email:r.email||'',phone:r.phone||'',start:r.start_date||'',end:r.end_date||'',rent:r.rent||0,deposit:r.deposit,scheme:r.scheme||'',schemeRef:r.scheme_ref||'',status:r.status||'active',inviteToken:r.invite_token||'',invitedAt:r.invited_at||'',invited:!!r.invited_at,occupants:r.occupants||[],guarantor:r.guarantor||null,depositCertName:r.deposit_cert_name||'',depositCertUrl:r.deposit_cert_url||'',depositCertExpiry:r.deposit_cert_expiry||'',refDocName:r.ref_doc_name||'',refDocUrl:r.ref_doc_url||'',shareCode:r.share_code||'',dob:r.dob||'',rtrResult:r.rtr_result||'',rtrExpiry:r.rtr_expiry||'',rtrCheckDate:r.rtr_check_date||'',rtrDocName:r.rtr_doc_name||'',rtrDocUrl:r.rtr_doc_url||'',rtrCheckMethod:r.rtr_check_method||'',origContractName:r.orig_contract_name||'',origContractUrl:r.orig_contract_url||'',id1DocName:r.id1_doc_name||'',id1DocUrl:r.id1_doc_url||'',id2DocName:r.id2_doc_name||'',id2DocUrl:r.id2_doc_url||'',addressProofName:r.address_proof_name||'',addressProofUrl:r.address_proof_url||'',addressProofDocs:r.address_proof_docs||[],forwardingAddress:r.forwarding_address||'',finalMeters:r.final_meters||null,endNotes:r.end_notes||'',checkoutPackSentAt:r.checkout_pack_sent_at||''});
-const tenantToRow=t=>({id:t.id,agency_id:window._agencyId,property_id:t.propertyId,landlord_id:t.landlordId,name:t.name,email:t.email||'',phone:t.phone||'',start_date:t.start||null,end_date:t.end||null,rent:t.rent||0,deposit:t.deposit,scheme:t.scheme||'',scheme_ref:t.schemeRef||'',status:t.status||'active',invite_token:t.inviteToken||null,invited_at:t.invitedAt||null,occupants:t.occupants||[],guarantor:t.guarantor||null,deposit_cert_name:t.depositCertName||'',deposit_cert_url:t.depositCertUrl||'',deposit_cert_expiry:t.depositCertExpiry||null,ref_doc_name:t.refDocName||'',ref_doc_url:t.refDocUrl||'',share_code:t.shareCode||'',dob:t.dob||null,rtr_result:t.rtrResult||'',rtr_expiry:t.rtrExpiry||null,rtr_check_date:t.rtrCheckDate||null,rtr_doc_name:t.rtrDocName||'',rtr_doc_url:t.rtrDocUrl||'',rtr_check_method:t.rtrCheckMethod||'',orig_contract_name:t.origContractName||'',orig_contract_url:t.origContractUrl||'',id1_doc_name:t.id1DocName||'',id1_doc_url:t.id1DocUrl||'',id2_doc_name:t.id2DocName||'',id2_doc_url:t.id2DocUrl||'',address_proof_name:t.addressProofName||'',address_proof_url:t.addressProofUrl||'',address_proof_docs:t.addressProofDocs||[],forwarding_address:t.forwardingAddress||'',final_meters:t.finalMeters||null,end_notes:t.endNotes||'',checkout_pack_sent_at:t.checkoutPackSentAt||null,updated_at:new Date().toISOString()});
+const rowToTenant=r=>({id:r.id,propertyId:r.property_id,landlordId:r.landlord_id,userId:r.user_id,name:r.name||'',email:r.email||'',phone:r.phone||'',start:r.start_date||'',end:r.end_date||'',rent:r.rent||0,deposit:r.deposit,scheme:r.scheme||'',schemeRef:r.scheme_ref||'',status:r.status||'active',inviteToken:r.invite_token||'',invitedAt:r.invited_at||'',invited:!!r.invited_at,occupants:r.occupants||[],guarantor:r.guarantor||null,depositCertName:r.deposit_cert_name||'',depositCertUrl:r.deposit_cert_url||'',depositCertExpiry:r.deposit_cert_expiry||'',refDocName:r.ref_doc_name||'',refDocUrl:r.ref_doc_url||'',shareCode:r.share_code||'',dob:r.dob||'',rtrResult:r.rtr_result||'',rtrExpiry:r.rtr_expiry||'',rtrCheckDate:r.rtr_check_date||'',rtrDocName:r.rtr_doc_name||'',rtrDocUrl:r.rtr_doc_url||'',rtrDocs:r.rtr_docs||[],rtrCheckMethod:r.rtr_check_method||'',origContractName:r.orig_contract_name||'',origContractUrl:r.orig_contract_url||'',id1DocName:r.id1_doc_name||'',id1DocUrl:r.id1_doc_url||'',id2DocName:r.id2_doc_name||'',id2DocUrl:r.id2_doc_url||'',addressProofName:r.address_proof_name||'',addressProofUrl:r.address_proof_url||'',addressProofDocs:r.address_proof_docs||[],forwardingAddress:r.forwarding_address||'',finalMeters:r.final_meters||null,endNotes:r.end_notes||'',checkoutPackSentAt:r.checkout_pack_sent_at||''});
+const tenantToRow=t=>({id:t.id,agency_id:window._agencyId,property_id:t.propertyId,landlord_id:t.landlordId,name:t.name,email:t.email||'',phone:t.phone||'',start_date:t.start||null,end_date:t.end||null,rent:t.rent||0,deposit:t.deposit,scheme:t.scheme||'',scheme_ref:t.schemeRef||'',status:t.status||'active',invite_token:t.inviteToken||null,invited_at:t.invitedAt||null,occupants:t.occupants||[],guarantor:t.guarantor||null,deposit_cert_name:t.depositCertName||'',deposit_cert_url:t.depositCertUrl||'',deposit_cert_expiry:t.depositCertExpiry||null,ref_doc_name:t.refDocName||'',ref_doc_url:t.refDocUrl||'',share_code:t.shareCode||'',dob:t.dob||null,rtr_result:t.rtrResult||'',rtr_expiry:t.rtrExpiry||null,rtr_check_date:t.rtrCheckDate||null,rtr_doc_name:t.rtrDocName||'',rtr_doc_url:t.rtrDocUrl||'',rtr_docs:t.rtrDocs||[],rtr_check_method:t.rtrCheckMethod||'',orig_contract_name:t.origContractName||'',orig_contract_url:t.origContractUrl||'',id1_doc_name:t.id1DocName||'',id1_doc_url:t.id1DocUrl||'',id2_doc_name:t.id2DocName||'',id2_doc_url:t.id2DocUrl||'',address_proof_name:t.addressProofName||'',address_proof_url:t.addressProofUrl||'',address_proof_docs:t.addressProofDocs||[],forwarding_address:t.forwardingAddress||'',final_meters:t.finalMeters||null,end_notes:t.endNotes||'',checkout_pack_sent_at:t.checkoutPackSentAt||null,updated_at:new Date().toISOString()});
 const rowToMsg=r=>({id:r.id,landlordId:r.landlord_id,tenantId:r.tenant_id,propertyId:r.property_id,sender:r.sender||'agent',body:r.body||'',createdAt:r.created_at});
 const msgToRow=m=>({id:m.id,agency_id:window._agencyId,landlord_id:m.landlordId||null,tenant_id:m.tenantId||null,property_id:m.propertyId||null,sender:m.sender||'agent',body:m.body||''});
 const pushMessage=m=>_w(sb.from('agency_messages').insert(msgToRow(m)));
@@ -1284,7 +1284,7 @@ function vPropertyDetail(){
         ${p.tenant?(()=>{ const rec=tenantRecFor(p.id); const r=_rtrRAG(rec); return `<div class="doc"><div class="di" style="background:${r.bg};color:${r.color}">⛨</div>
           <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Right to Rent check</div><div class="faint" style="font-size:11.5px">${rec&&rec.rtrCheckDate?'Checked '+fmtDate(rec.rtrCheckDate)+(rec.rtrResult?' · '+esc(rec.rtrResult):'')+(rec.rtrExpiry?' · expires '+fmtDate(rec.rtrExpiry):'')+(rec.rtrCheckMethod?' · via '+esc(rec.rtrCheckMethod):''):'Check before the tenancy starts'}</div></div>
           <span class="pill" style="background:${r.bg};color:${r.color}">${r.label}</span>
-          ${rec&&rec.rtrDocUrl?`<button class="btn sm" onclick="viewDoc('${rec.rtrDocUrl}','Right to Rent evidence')">View</button>`:''}
+          ${rec&&rec.rtrDocUrl?`<button class="btn sm" onclick="viewDoc('${rec.rtrDocUrl}','Right to Rent evidence')">View${(rec.rtrDocs&&rec.rtrDocs.length>1)?' ('+rec.rtrDocs.length+')':''}</button>`:''}
           <button class="btn sm" onclick="rtrWizard('${p.id}')">${rec&&rec.rtrCheckDate?'Update':'Check'}</button></div>
           <div class="faint" style="font-size:11px;padding:0 0 10px 30px;margin-top:-6px">Checked by an external referencing company instead of the GOV.UK wizard? <a href="#" onclick="rtrExternal('${p.id}');return false">Upload their report</a></div>`; })():''}
         ${p.tenant?declRow('htr','How to Rent guide','Give the tenant the current gov.uk “How to rent” guide on or before move-in',c.htr,null,null):''}
@@ -1751,43 +1751,51 @@ async function _rtrWizSave(){
 // ── RTR done by an external referencing company (not the GOV.UK wizard) — upload
 // their report, optionally AI-scan it, and mark the check satisfied directly.
 function rtrExternal(pid){ const rec=tenantRecFor(pid); if(!rec){ toast('Set up the tenant first',1); return; }
-  window._certFile=null; const existingFile=rec.rtrDocName||'';
+  window._tnDocs=window._tnDocs||{};
+  window._tnDocs['rtrext']={existing:(rec.rtrDocs&&rec.rtrDocs.length)?rec.rtrDocs.slice():(rec.rtrDocName?[{name:rec.rtrDocName,url:rec.rtrDocUrl}]:[]),pending:[]};
   const partnerOpts=REF_PARTNERS.map(x=>`<option ${rec.rtrCheckMethod===x?'selected':''}>${x}</option>`).join('');
   const body=`<div class="note" style="margin-bottom:12px">Use this when the Right to Rent check was carried out by an external referencing company rather than the GOV.UK share-code wizard. Attach their report — AI can read it, or enter the date yourself — then mark it satisfied.</div>
     <div class="fg"><label>Checked by <span class="faint">(the referencing company or identity-check provider that ran it — you remain responsible for their check being Home Office–compliant)</span></label><select id="rtr-ext-method"><option value="">Select…</option>${partnerOpts}<option ${rec.rtrCheckMethod&&!REF_PARTNERS.includes(rec.rtrCheckMethod)?'selected':''} value="Other">Other</option></select></div>
-    <div class="fg"><label>Referencing company's report</label>
-      <label style="display:flex;align-items:center;gap:10px;padding:10px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer">
-        <span style="font-size:18px">📄</span><div style="font-size:12.5px;font-weight:600;flex:1">${existingFile?'Replace file':'Click to attach & scan with AI'}</div>
-        <input type="file" accept="image/*,.pdf" style="display:none" onchange="aiScanRtrExternal('${pid}',this)">
-      </label>
-      <div id="ct-evid-status" style="margin-top:6px;font-size:11.5px">${existingFile?`<span style="color:var(--green)">✓ ${esc(existingFile)} on file</span> ${rec.rtrDocUrl?`<a href="#" onclick="event.preventDefault();viewDoc('${rec.rtrDocUrl}','Right to Rent report')">View</a>`:''}`:'<span class="faint">No file attached yet</span>'}</div></div>
+    <div class="fg"><label>Referencing company's report <span class="faint">(attach as many pages/files as needed)</span></label>
+      <div id="tn-docs-rtrext" style="display:flex;flex-direction:column;gap:4px">${_docBucketHtml('rtrext')}</div>
+      <label style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer;font-size:12.5px;font-weight:600;margin-top:6px">✦ Add &amp; scan with AI<input type="file" accept="image/*,.pdf" multiple style="display:none" onchange="rtrExtDocAdd('${pid}',this)"></label>
+      <div id="ct-evid-status" style="margin-top:6px;font-size:11.5px"></div></div>
     <div class="fg"><label>Checked on</label><input id="rtr-ext-date" type="date" value="${rec.rtrCheckDate||today()}"></div>`;
   modal('Right to Rent — external check',body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveRtrExternal('${pid}')">Mark satisfied</button>`,true);
 }
-async function aiScanRtrExternal(pid,input){
-  const file=input.files&&input.files[0]; if(!file) return; window._certFile=file;
-  const st=document.getElementById('ct-evid-status');
-  if(st) st.innerHTML='<span style="color:var(--blue)">✦ '+esc(file.name)+' attached</span>';
-  if(!window._sessionToken){ if(st) st.innerHTML='<span style="color:var(--green)">✓ '+esc(file.name)+' attached</span> — enter the date manually.'; return; }
+async function rtrExtDocAdd(pid,input){
+  const files=[...(input.files||[])]; if(!files.length) return;
+  window._tnDocs['rtrext'].pending.push(...files); input.value=''; _refreshDocBucket('rtrext');
+  const file=files[0]; const st=document.getElementById('ct-evid-status');
+  if(!window._sessionToken){ if(st) st.textContent='Enter the date manually.'; return; }
+  if(st) st.innerHTML='<span style="color:var(--blue)">✦ Reading '+esc(file.name)+'…</span>';
   try{
     const b64=await _fileB64(file); const isImg=(file.type||'').startsWith('image/');
     const prompt='This is a UK Right to Rent referencing report from an external checking company. Return ONLY JSON, no prose: {"checkDate":"YYYY-MM-DD or null","satisfied":true|false}. "satisfied" = true if the report clears the tenant to rent.';
     const content=isImg?[{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:prompt}]:[{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},{type:'text',text:prompt}];
     const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:150,messages:[{role:'user',content}]})});
-    if(res.status===402){ if(st) st.innerHTML='<span style="color:var(--green)">✓ '+esc(file.name)+' attached</span> — AI allowance reached, enter date manually.'; return; }
+    if(res.status===402){ if(st) st.textContent='AI allowance reached — enter the date manually.'; return; }
     const data=await res.json(); const txt=((data.content&&data.content[0]&&data.content[0].text)||'{}').replace(/```json|```/g,'').trim();
     let parsed; try{ parsed=JSON.parse(txt); }catch(e){ parsed=null; }
     if(parsed&&parsed.checkDate){ const el=document.getElementById('rtr-ext-date'); if(el) el.value=parsed.checkDate; }
-    if(st) st.innerHTML=`<span style="color:var(--green)">✓ ${esc(file.name)} attached</span>`+(parsed?(parsed.satisfied===false?' — ⚠ report may flag an issue, review before confirming':' — looks satisfactory, review & confirm'):' — review & confirm manually');
-  }catch(e){ if(st) st.innerHTML='<span style="color:var(--green)">✓ '+esc(file.name)+' attached</span> — enter the date manually.'; }
+    if(st) st.innerHTML=parsed?(parsed.satisfied===false?'⚠ report may flag an issue, review before confirming':'✓ looks satisfactory, review &amp; confirm'):'Review &amp; confirm manually';
+  }catch(e){ if(st) st.textContent='Enter the date manually.'; }
 }
 async function saveRtrExternal(pid){
   const rec=tenantRecFor(pid); if(!rec) return;
-  const f=window._certFile;
+  const bucket=window._tnDocs['rtrext']||{existing:[],pending:[]};
+  let failed=0;
+  for(const f of bucket.pending){
+    const ext=(f.name.split('.').pop()||'pdf');
+    const url=await _storageUpload(f,pid+'/rtr-'+Date.now()+'-'+Math.random().toString(36).slice(2,6)+'.'+ext,'tenant-documents');
+    if(url) bucket.existing.push({name:f.name,url}); else failed++;
+  }
+  rec.rtrDocs=bucket.existing; rec.rtrDocName=bucket.existing[0]?bucket.existing[0].name:''; rec.rtrDocUrl=bucket.existing[0]?bucket.existing[0].url:'';
   rec.rtrCheckDate=val('rtr-ext-date')||today(); rec.rtrResult='Valid'; rec.shareCode=rec.shareCode||'External check';
   rec.rtrCheckMethod=val('rtr-ext-method')||rec.rtrCheckMethod||'';
-  if(f){ rec.rtrDocName=f.name; const ext=(f.name.split('.').pop()||'pdf'); const url=await _storageUpload(f,pid+'/rtr-'+Date.now()+'.'+ext,'tenant-documents'); if(url) rec.rtrDocUrl=url; }
-  window._certFile=null; save(); pushTenantRec(rec); closeModal(); render(); toast('✓ Right to Rent marked satisfied (external check)');
+  save(); pushTenantRec(rec); closeModal(); render();
+  if(failed) toast('⚠ Marked satisfied, but '+failed+' file'+(failed>1?'s':'')+' failed to upload'+(window._lastStorageError?' ('+window._lastStorageError+')':'')+' — re-attach and save again',1);
+  else toast('✓ Right to Rent marked satisfied (external check)');
 }
 // ── Legionella self-assessment wizard — HSE ACOP L8-based checklist a landlord/agent
 // can complete themselves for a standard domestic let (no water testing required by law).
