@@ -3974,18 +3974,49 @@ function _ensureRoomShape(r){
   if(!r.checkin) r.checkin={photos:r.checkinPhoto?[r.checkinPhoto]:[],note:r.checkinNote||''};
   if(!r.checkout) r.checkout={photos:r.checkoutPhoto?[r.checkoutPhoto]:[],note:r.checkoutNote||''};
   if(!r.visits) r.visits=[];
+  if(r.lifeYears==null) r.lifeYears=_usefulLife(r.item);
+  if(r.ageAtCheckin==null) r.ageAtCheckin=0;
+  if(r.estCost==null) r.estCost=0;
   return r;
+}
+// ── Useful-life lookup (years) — standard figures used by TDS/mydeposits/DPS product-lifespan
+// guides, editable per item. Deposit deductions must apportion by remaining useful life, never
+// charge full replacement ("betterment") — see Propertymark/mydeposits guidance.
+const ITEM_LIFE=[
+  [/carpet/i,5],[/curtain|blind/i,5],[/paint|decorat|wallpaper|wall\b/i,4],
+  [/laminate|vinyl|wood(en)? floor|flooring/i,10],[/sofa|armchair|upholster/i,8],
+  [/mattress|\bbed\b/i,8],[/towel|bedding|linen|duvet|pillow/i,2],
+  [/fridge|freezer|washing machine|dishwasher|\boven\b|cooker|microwave|appliance/i,8],
+  [/kitchen unit|worktop|cupboard/i,15],[/bath|shower|toilet|sanitaryware|basin/i,15],
+  [/door|handle|lock/i,10],[/furniture|wardrobe|table|chair|desk|drawer/i,10]
+];
+function _usefulLife(itemName){ const m=ITEM_LIFE.find(([re])=>re.test(itemName||'')); return m?m[1]:6; }
+// Deterministic apportionment — AI supplies classification, estimated cost & apparent age;
+// this function does the actual maths so the figure is defensible at adjudication, not just AI-asserted.
+function _apportionCharge(classification,estCost,ageAtCheckin,lifeYears,tenancyMonths){
+  estCost=+estCost||0; ageAtCheckin=+ageAtCheckin||0; lifeYears=+lifeYears||6;
+  const tenancyYears=(tenancyMonths||0)/12;
+  if(classification==='fair_wear'||!estCost) return {charge:0,breakdown:'Classified as fair wear &amp; tear — not chargeable.'};
+  if(classification==='cleaning') return {charge:Math.round(estCost),breakdown:'Cleaning cost charged in full (£'+Math.round(estCost)+') — fair wear &amp; tear applies to condition, not cleanliness.'};
+  const ageAtEnd=ageAtCheckin+tenancyYears;
+  const remaining=Math.max(0,lifeYears-ageAtEnd);
+  const fraction=lifeYears>0?remaining/lifeYears:0;
+  const charge=Math.round(estCost*fraction);
+  const breakdown=`Estimated repair/replacement cost £${Math.round(estCost)}. Useful life ${lifeYears} yrs; item was ~${ageAtCheckin.toFixed(1)} yrs old at check-in, +${tenancyYears.toFixed(1)} yrs tenancy = ${ageAtEnd.toFixed(1)} yrs old now, leaving ${remaining.toFixed(1)} yrs (${Math.round(fraction*100)}%) of useful life. Apportioned charge: £${Math.round(estCost)} × ${Math.round(fraction*100)}% = £${charge} (never the full replacement cost — avoids betterment).`;
+  return {charge,breakdown};
 }
 function _invActiveTab(vid){ window._invTabs=window._invTabs||{}; return window._invTabs[vid]||0; }
 function _invSetTab(vid,i){ window._invTabs=window._invTabs||{}; window._invTabs[vid]=i; render(); }
-function _photoStrip(vid,i,stage,visitIdx,photos){
+function _toggleFieldMode(vid){ window._invField=window._invField||{}; window._invField[vid]=!window._invField[vid]; render(); }
+function _photoStrip(vid,i,stage,visitIdx,photos,big){
   const key=vid+'|'+i+'|'+stage+'|'+visitIdx; window._invPhotoExpand=window._invPhotoExpand||{};
   const list=photos||[]; const LIMIT=8; const expanded=window._invPhotoExpand[key]||list.length<=LIMIT;
   const shown=expanded?list:list.slice(0,LIMIT);
-  const thumbs=shown.map((u,pi)=>`<div style="position:relative;width:54px;height:54px;flex-shrink:0"><img src="${u}" style="width:100%;height:100%;object-fit:cover;border-radius:6px;cursor:pointer" onclick="viewDoc('${u}','Photo')"><button onclick="removeRoomPhoto('${vid}',${i},'${stage}',${visitIdx==null?'null':visitIdx},${pi})" style="position:absolute;top:-5px;right:-5px;width:16px;height:16px;border-radius:50%;background:var(--red);color:#fff;border:none;font-size:10px;line-height:16px;cursor:pointer;padding:0">✕</button></div>`).join('');
-  const toggleBtn=list.length>LIMIT?`<button onclick="_invToggleExpand('${key}')" style="width:54px;height:54px;border:1.5px dashed var(--border);border-radius:6px;background:var(--off);color:var(--muted);font-size:10.5px;font-weight:700;cursor:pointer;flex-shrink:0;line-height:1.2">${expanded?'Show less':'+'+(list.length-LIMIT)+' more'}</button>`:'';
-  return `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px">${thumbs}${toggleBtn}
-    <label style="width:54px;height:54px;border:1.5px dashed var(--border);border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:18px;color:var(--faint)">＋<input type="file" accept="image/*" multiple style="display:none" onchange="addRoomPhotos('${vid}',${i},'${stage}',${visitIdx==null?'null':visitIdx},this)"></label>
+  const sz=big?92:54;
+  const thumbs=shown.map((u,pi)=>`<div style="position:relative;width:${sz}px;height:${sz}px;flex-shrink:0"><img src="${u}" style="width:100%;height:100%;object-fit:cover;border-radius:6px;cursor:pointer" onclick="viewDoc('${u}','Photo')"><button onclick="removeRoomPhoto('${vid}',${i},'${stage}',${visitIdx==null?'null':visitIdx},${pi})" style="position:absolute;top:-5px;right:-5px;width:${big?22:16}px;height:${big?22:16}px;border-radius:50%;background:var(--red);color:#fff;border:none;font-size:${big?12:10}px;line-height:${big?22:16}px;cursor:pointer;padding:0">✕</button></div>`).join('');
+  const toggleBtn=list.length>LIMIT?`<button onclick="_invToggleExpand('${key}')" style="width:${sz}px;height:${sz}px;border:1.5px dashed var(--border);border-radius:6px;background:var(--off);color:var(--muted);font-size:10.5px;font-weight:700;cursor:pointer;flex-shrink:0;line-height:1.2">${expanded?'Show less':'+'+(list.length-LIMIT)+' more'}</button>`:'';
+  return `<div style="display:flex;gap:${big?8:6}px;flex-wrap:wrap;align-items:center;margin-bottom:6px">${thumbs}${toggleBtn}
+    <label style="width:${sz}px;height:${sz}px;border:1.5px dashed var(--border);border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:${big?26:18}px;color:var(--faint)">＋<input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="addRoomPhotos('${vid}',${i},'${stage}',${visitIdx==null?'null':visitIdx},this)"></label>
   </div>`;
 }
 function _invToggleExpand(key){ window._invPhotoExpand=window._invPhotoExpand||{}; window._invPhotoExpand[key]=!window._invPhotoExpand[key]; render(); }
@@ -4029,10 +4060,15 @@ function vInventoryDetail(){
   const latestVisit=r.visits.length?r.visits[r.visits.length-1]:null;
   const clsColor={fair_wear:'var(--green)',damage:'var(--red)',cleaning:'var(--amber)'};
   const clsLabel={fair_wear:'Fair wear & tear',damage:'Tenant damage',cleaning:'Cleaning'};
-  const tabs=v.rooms.map((rm,i)=>`<button class="btn sm ${i===activeIdx?'navy':''}" onclick="_invSetTab('${v.id}',${i})" style="white-space:nowrap">${esc(rm.room)}</button>`).join('');
-  const colHtml=(label,stage,visitIdx,data)=>`<div style="flex:1;min-width:180px"><div class="faint" style="font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">${label}${data&&data.date?' · '+fmtDate(data.date):''}</div>
-    ${_photoStrip(v.id,activeIdx,stage,visitIdx,data?data.photos:[])}
-    <textarea placeholder="Condition note" rows="2" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;resize:vertical" oninput="roomNoteField('${v.id}',${activeIdx},'${stage}',${visitIdx==null?'null':visitIdx},this.value)">${esc(data?data.note||'':'')}</textarea></div>`;
+  const fieldOn=!!(window._invField&&window._invField[v.id]);
+  const tabs=fieldOn
+    ? `<button class="btn navy" style="flex:1;padding:14px;font-size:14px" onclick="_invSetTab('${v.id}',${Math.max(0,activeIdx-1)})" ${activeIdx===0?'disabled':''}>← Prev</button>
+       <div style="flex:2;text-align:center;font-weight:700;color:var(--navy);font-size:13px;align-self:center">Room ${activeIdx+1} of ${v.rooms.length}</div>
+       <button class="btn navy" style="flex:1;padding:14px;font-size:14px" onclick="_invSetTab('${v.id}',${Math.min(v.rooms.length-1,activeIdx+1)})" ${activeIdx===v.rooms.length-1?'disabled':''}>Next →</button>`
+    : v.rooms.map((rm,i)=>`<button class="btn sm ${i===activeIdx?'navy':''}" onclick="_invSetTab('${v.id}',${i})" style="white-space:nowrap">${esc(rm.room)}</button>`).join('');
+  const colHtml=(label,stage,visitIdx,data)=>`<div style="flex:1;min-width:180px"><div class="faint" style="font-size:${fieldOn?'13px':'10.5px'};text-transform:uppercase;letter-spacing:.4px;margin-bottom:${fieldOn?'8px':'6px'};font-weight:${fieldOn?'700':'400'}">${label}${data&&data.date?' · '+fmtDate(data.date):''}</div>
+    ${_photoStrip(v.id,activeIdx,stage,visitIdx,data?data.photos:[],fieldOn)}
+    <textarea placeholder="Condition note" rows="${fieldOn?3:2}" style="width:100%;font-size:${fieldOn?'15px':'12px'};padding:${fieldOn?'10px':'6px 8px'};border:1px solid var(--border);border-radius:6px;resize:vertical" oninput="roomNoteField('${v.id}',${activeIdx},'${stage}',${visitIdx==null?'null':visitIdx},this.value)">${esc(data?data.note||'':'')}</textarea></div>`;
   const midCol=latestVisit
     ? colHtml('Mid-tenancy'+(r.visits.length>1?' ('+r.visits.length+')':''),'visit',r.visits.length-1,latestVisit)
     : `<div style="flex:1;min-width:180px;display:flex;align-items:center;justify-content:center"><button class="btn sm" onclick="startMidCheck('${v.id}')">+ Start mid-tenancy check</button></div>`;
@@ -4047,18 +4083,25 @@ function vInventoryDetail(){
       <div class="kpi"><div class="l">Return to tenant</div><div class="v" style="color:var(--green)">${money2(ret)}</div></div>
       <div class="kpi"><div class="l">Rooms</div><div class="v">${v.rooms.length}</div></div>
     </div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${tabs}<button class="btn sm" onclick="addRoom('${v.id}')">＋ Room</button></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${tabs}${fieldOn?'':`<button class="btn sm" onclick="addRoom('${v.id}')">＋ Room</button>`}</div>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:6px"><button class="btn sm" onclick="_toggleFieldMode('${v.id}')">${fieldOn?'💻 Desktop view':'📱 Field mode — easier on phone'}</button></div>
     <div class="panel"><div class="panel-bd">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:12px">
         <div><div class="faint" style="font-size:10.5px;text-transform:uppercase;letter-spacing:.4px">${esc(r.room||'')}</div><div style="font-weight:700;color:var(--navy);font-size:15px">${esc(r.item||'')}</div></div>
         ${r.classification?`<div style="text-align:right"><span class="pill" style="background:${clsColor[r.classification]}22;color:${clsColor[r.classification]}">${clsLabel[r.classification]}</span><div style="font-weight:700;font-size:16px;color:${r.charge?'var(--red)':'var(--green)'};margin-top:4px">${money2(r.charge||0)}</div></div>`:''}
       </div>
-      <div style="display:flex;gap:16px;flex-wrap:wrap">
+      ${(r.classification&&r.classification!=='fair_wear')?`<div style="display:flex;gap:14px;align-items:center;margin-bottom:10px;font-size:11.5px;color:var(--muted)">
+        <div>Est. cost £<input type="number" value="${r.estCost||0}" style="width:60px;padding:3px 6px;border:1px solid var(--border);border-radius:5px" onchange="_setItemParam('${v.id}',${activeIdx},'estCost',this.value)"></div>
+        <div>Useful life <input type="number" value="${r.lifeYears||6}" style="width:44px;padding:3px 6px;border:1px solid var(--border);border-radius:5px" onchange="_setItemParam('${v.id}',${activeIdx},'lifeYears',this.value)"> yrs</div>
+        <div>Age at check-in <input type="number" step="0.5" value="${r.ageAtCheckin||0}" style="width:44px;padding:3px 6px;border:1px solid var(--border);border-radius:5px" onchange="_setItemParam('${v.id}',${activeIdx},'ageAtCheckin',this.value)"> yrs</div>
+      </div>`:''}
+      <div style="display:flex;gap:16px;flex-wrap:wrap;flex-direction:${fieldOn?'column':'row'}">
         ${colHtml('Check-in','checkin',null,r.checkin)}
         ${midCol}
         ${colHtml('Check-out','checkout',null,r.checkout)}
       </div>
       ${r.reasoning?`<div class="note" style="font-size:11.5px;margin-top:10px">${esc(r.reasoning)}</div>`:''}
+      ${r.breakdown?`<div class="faint" style="font-size:11px;margin-top:6px">${r.breakdown}</div>`:''}
       <div style="display:flex;gap:8px;margin-top:10px">
         <button class="btn sm" ${(!r.checkin.photos.length||!((latestVisit&&latestVisit.photos.length)||r.checkout.photos.length))?'disabled title="Add check-in and mid-tenancy/check-out photos first"':''} onclick="aiCompareItem('${v.id}',${activeIdx})">✦ AI compare</button>
         <button class="btn sm" onclick="removeRoom('${v.id}',${activeIdx})" style="color:var(--red)">Remove room</button>
@@ -4067,6 +4110,7 @@ function vInventoryDetail(){
     <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
       <button class="btn navy" ${_invHasCheckin(v)?'':'disabled title="Add check-in photos first"'} onclick="generateInvReport('${v.id}','movein')">✦ Move-in report</button>
       <button class="btn navy" ${_invHasVisit(v)?'':'disabled title="Add mid-tenancy check photos first"'} onclick="generateInvReport('${v.id}','midterm')">✦ Mid-tenancy report</button>
+      <button class="btn" ${(_invHasVisit(v)||_invHasCheckout(v))?'':'disabled title="Add a visit or check-out photos first"'} onclick="generateInvReport('${v.id}','precheckout')" title="Advisory snag list, sent before the final check-out — gives the tenant a chance to fix issues and avoid being charged">📸 Pre-checkout snag check</button>
       <button class="btn navy" ${_invHasCheckout(v)?'':'disabled title="Add check-out photos first"'} onclick="generateInvReport('${v.id}','moveout')">✦ Move-out report</button>
       ${v.reports&&v.reports.length?`<button class="btn" onclick="viewInvReports('${v.id}')">View reports (${v.reports.length})</button>`:''}
     </div>`;
@@ -4075,11 +4119,21 @@ function _invHasCheckin(v){ return v.rooms.some(r=>_ensureRoomShape(r).checkin.p
 function _invHasVisit(v){ return v.rooms.some(r=>{ _ensureRoomShape(r); return r.checkin.photos.length&&r.visits.length&&r.visits[r.visits.length-1].photos.length; }); }
 function _invHasCheckout(v){ return v.rooms.some(r=>{ _ensureRoomShape(r); const lv=r.visits.length?r.visits[r.visits.length-1]:null; return r.checkin.photos.length&&((lv&&lv.photos.length)||r.checkout.photos.length); }); }
 function addRoom(vid){ const v=(S.inventories2||[]).find(x=>x.id===vid); const room=prompt('Room (e.g. Living room)'); if(!room)return; const item=prompt('Item (e.g. Carpet)')||'Item';
-  v.rooms.push({room,item,checkin:{photos:[],note:''},checkout:{photos:[],note:''},visits:[],classification:'',charge:0,reasoning:''});
+  v.rooms.push({room,item,checkin:{photos:[],note:''},checkout:{photos:[],note:''},visits:[],classification:'',charge:0,reasoning:'',breakdown:'',estCost:0,ageAtCheckin:0,lifeYears:_usefulLife(item)});
   window._invTabs=window._invTabs||{}; window._invTabs[vid]=v.rooms.length-1; pushInv2(v); render(); }
 function removeRoom(vid,i){ const v=(S.inventories2||[]).find(x=>x.id===vid); v.rooms.splice(i,1);
   window._invTabs=window._invTabs||{}; if(window._invTabs[vid]>=v.rooms.length) window._invTabs[vid]=Math.max(0,v.rooms.length-1);
   pushInv2(v); render(); }
+// Recompute a room's deduction after the agent overrides the AI's cost/life/age estimate
+// (e.g. using the landlord's actual purchase invoice) — same formula, just re-run.
+function _setItemParam(vid,i,field,value){
+  const v=(S.inventories2||[]).find(x=>x.id===vid); const r=_ensureRoomShape(v.rooms[i]); const t=(S.tenants||[]).find(x=>x.id===v.tenantId)||{};
+  r[field]=field==='ageAtCheckin'?parseFloat(value)||0:(parseInt(value)||0);
+  const months=t.start?Math.max(1,Math.round((new Date()-new Date(t.start))/(1000*60*60*24*30))):12;
+  const ap=_apportionCharge(r.classification,r.estCost,r.ageAtCheckin,r.lifeYears,months);
+  r.charge=ap.charge; r.breakdown=ap.breakdown;
+  v.totalDeduction=v.rooms.reduce((s,x)=>s+(x.charge||0),0); pushInv2(v); render();
+}
 async function aiCompareItem(vid,i){
   const v=(S.inventories2||[]).find(x=>x.id===vid); const r=_ensureRoomShape(v.rooms[i]); const t=(S.tenants||[]).find(x=>x.id===v.tenantId)||{};
   if(!window._sessionToken){ toast('AI compare needs a live login',1); return; }
@@ -4090,7 +4144,7 @@ async function aiCompareItem(vid,i){
   toast('✦ Comparing photos…');
   const months=t.start?Math.max(1,Math.round((new Date()-new Date(t.start))/(1000*60*60*24*30))):12;
   try{
-    const prompt=`You are a UK tenancy deposit-scheme adjudicator. Compare the CHECK-IN photos and the ${toLabel.toUpperCase()} photos of this item: "${r.room} — ${r.item}". Check-in note: "${r.checkin.note||'none'}". ${toLabel} note: "${toSet.note||'none'}". Tenancy length: ${months} months.\nClassify as exactly one of: fair_wear (normal deterioration from use — never chargeable), damage (tenant-caused, beyond fair wear), cleaning (below check-in cleanliness standard). If chargeable, apply apportionment — the tenant only pays the proportion of the item's remaining expected life, never full replacement cost (avoid betterment / new-for-old). Return ONLY JSON: {"classification":"fair_wear|damage|cleaning","charge":number,"reasoning":"one or two sentences, including any apportionment math"}`;
+    const prompt=`You are assessing a UK tenancy deposit item for a letting agent. Compare the CHECK-IN photos and the ${toLabel.toUpperCase()} photos of this item: "${r.room} — ${r.item}". Check-in note: "${r.checkin.note||'none'}". ${toLabel} note: "${toSet.note||'none'}".\nClassify as exactly one of: fair_wear (normal deterioration from use — never chargeable), damage (tenant-caused, beyond fair wear), cleaning (below check-in cleanliness standard). If damage or cleaning, estimate a like-for-like repair/replacement cost in GBP, and estimate how many years old the item looked AT CHECK-IN (0 = new). Do NOT calculate any final charge yourself — that is computed separately from your cost/age estimate. Return ONLY JSON: {"classification":"fair_wear|damage|cleaning","estimatedCost":number,"ageAtCheckinYears":number,"reasoning":"one or two sentences describing the specific change observed"}`;
     const checkinParts=await Promise.all(r.checkin.photos.map(_imgPart));
     const stageParts=await Promise.all(toSet.photos.map(_imgPart));
     const content=[...checkinParts,{type:'text',text:'CHECK-IN photos above.'},...stageParts,{type:'text',text:toLabel.toUpperCase()+' photos above.\n\n'+prompt}];
@@ -4101,7 +4155,12 @@ async function aiCompareItem(vid,i){
     const txt=((data.content&&data.content[0]&&data.content[0].text)||'').replace(/```json|```/g,'').trim();
     if(!txt){ console.error('aiCompareItem: empty response',data); toast('AI returned no result — try again',1); return; }
     let parsed; try{ parsed=JSON.parse(txt); }catch(pe){ console.error('aiCompareItem: bad JSON',txt); toast('AI response unreadable — try again',1); return; }
-    r.classification=parsed.classification||'fair_wear'; r.charge=+parsed.charge||0; r.reasoning=parsed.reasoning||'';
+    r.classification=parsed.classification||'fair_wear';
+    r.estCost=+parsed.estimatedCost||0;
+    if(parsed.ageAtCheckinYears!=null) r.ageAtCheckin=+parsed.ageAtCheckinYears||0;
+    if(!r.lifeYears) r.lifeYears=_usefulLife(r.item);
+    const ap=_apportionCharge(r.classification,r.estCost,r.ageAtCheckin,r.lifeYears,months);
+    r.charge=ap.charge; r.breakdown=ap.breakdown; r.reasoning=parsed.reasoning||'';
     v.totalDeduction=v.rooms.reduce((s,x)=>s+(x.charge||0),0); pushInv2(v); render(); toast('✓ AI comparison complete — review before finalising');
   }catch(e){ console.error('aiCompareItem exception',e); toast('Could not compare ('+(e.message||e)+')',1); }
 }
@@ -4113,6 +4172,7 @@ async function generateInvReport(vid,type){
   let eligible,stageLabel;
   if(type==='movein'){ eligible=v.rooms.filter(r=>r.checkin.photos.length); stageLabel='move-in'; }
   else if(type==='midterm'){ eligible=v.rooms.filter(r=>r.checkin.photos.length&&r.visits.length&&r.visits[r.visits.length-1].photos.length); stageLabel='mid-tenancy'; }
+  else if(type==='precheckout'){ eligible=v.rooms.filter(r=>{ const lv=r.visits.length?r.visits[r.visits.length-1]:null; return r.checkin.photos.length&&((lv&&lv.photos.length)||r.checkout.photos.length); }); stageLabel='pre-checkout'; }
   else { eligible=v.rooms.filter(r=>{ const lv=r.visits.length?r.visits[r.visits.length-1]:null; return r.checkin.photos.length&&((lv&&lv.photos.length)||r.checkout.photos.length); }); stageLabel='move-out'; }
   if(!eligible.length){ toast(type==='movein'?'Add check-in photos to at least one room first':'Add photos for this stage to at least one room first',1); return; }
   toast('✦ Generating '+stageLabel+' report — this can take a moment…');
@@ -4128,8 +4188,8 @@ async function generateInvReport(vid,type){
         promptTxt=`UK letting agent move-in condition report, written as evidence for a future deposit dispute. Describe the condition of "${r.room} — ${r.item}" from these ${r.checkin.photos.length} check-in photo(s). Note: "${r.checkin.note||'none'}". Be specific and factual — name the material/colour/finish where visible, and explicitly record any existing marks, wear, damage or cleanliness issues visible in the photos (so the tenant is not later charged for them). Avoid vague filler like "good condition" or "as expected" with no detail — an adjudicator needs a description precise enough to compare against the check-out. Return ONLY JSON: {"summary":"one or two sentences, specific and evidential"}`;
         content=[...(await Promise.all(r.checkin.photos.map(_imgPart))),{type:'text',text:promptTxt}];
       } else {
-        const chargeAsk=type==='moveout'?', "charge":number (apportioned £ the tenant should pay if damage/cleaning — never full replacement cost, never new-for-old)':'';
-        promptTxt=`UK tenancy deposit adjudicator, writing evidence for a possible dispute. Compare CHECK-IN vs ${cmpLabel.toUpperCase()} photos for "${r.room} — ${r.item}". Notes: check-in "${r.checkin.note||'none'}", ${cmpLabel} "${toSet.note||'none'}". Classify as fair_wear|damage|cleaning. Name the SPECIFIC change observed (not "some wear" or "looks worse") — what changed, where, and how that goes beyond (or stays within) fair wear and tear for the tenancy length. ${type==='moveout'?'If chargeable, show the apportionment maths explicitly: repair/replacement cost, the item\'s expected life, its age at check-in, and the resulting proportion charged — never claim full replacement (betterment).':''} Return ONLY JSON: {"classification":"fair_wear|damage|cleaning","summary":"one to three specific, factual sentences an adjudicator could act on"${chargeAsk}}`;
+        const costAsk=(type==='moveout'||type==='precheckout')?', "estimatedCost":number (like-for-like repair/replacement cost in GBP, only if damage/cleaning), "ageAtCheckinYears":number (how old the item looked AT CHECK-IN, 0=new)':'';
+        promptTxt=`UK tenancy deposit adjudicator, writing evidence for a possible dispute. Compare CHECK-IN vs ${cmpLabel.toUpperCase()} photos for "${r.room} — ${r.item}". Notes: check-in "${r.checkin.note||'none'}", ${cmpLabel} "${toSet.note||'none'}". Classify as fair_wear|damage|cleaning. Name the SPECIFIC change observed (not "some wear" or "looks worse") — what changed, where, and how that goes beyond (or stays within) fair wear and tear for the tenancy length. ${(type==='moveout'||type==='precheckout')?'Do NOT calculate any final charge — that is computed separately, deterministically, from your cost/age estimate (apportioned by remaining useful life, never full replacement cost).':''} Return ONLY JSON: {"classification":"fair_wear|damage|cleaning","summary":"one to three specific, factual sentences an adjudicator could act on"${costAsk}}`;
         content=[...(await Promise.all(r.checkin.photos.map(_imgPart))),{type:'text',text:'CHECK-IN above.'},...(await Promise.all(toSet.photos.map(_imgPart))),{type:'text',text:cmpLabel.toUpperCase()+' above.\n\n'+promptTxt}];
       }
       const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:280,messages:[{role:'user',content}]})});
@@ -4138,34 +4198,47 @@ async function generateInvReport(vid,type){
       if(!res.ok){ console.error('generateInvReport error',res.status,data); results.push({room:r.room,item:r.item,classification:type==='movein'?'baseline':'fair_wear',charge:0,summary:'AI error ('+res.status+') — review manually.',checkinPhotos:r.checkin.photos.slice(0,2),checkinNote:r.checkin.note||'',stagePhotos:toSet?toSet.photos.slice(0,2):[],stageNote:toSet?toSet.note||'':'',stageLabel:cmpLabel}); continue; }
       const txt=((data.content&&data.content[0]&&data.content[0].text)||'').replace(/```json|```/g,'').trim();
       let parsed; try{ parsed=JSON.parse(txt); }catch(pe){ console.error('generateInvReport: bad JSON',txt); parsed=null; }
-      const entry={room:r.room,item:r.item,classification:type==='movein'?'baseline':((parsed&&parsed.classification)||'fair_wear'),summary:(parsed&&parsed.summary)||'Could not read AI response — review manually.',charge:type==='moveout'?(+((parsed&&parsed.charge))||0):0,checkinPhotos:r.checkin.photos.slice(0,2),checkinNote:r.checkin.note||'',stagePhotos:toSet?toSet.photos.slice(0,2):[],stageNote:toSet?toSet.note||'':'',stageLabel:cmpLabel};
+      const cls=type==='movein'?'baseline':((parsed&&parsed.classification)||'fair_wear');
+      let charge=0, breakdown='';
+      if(type==='moveout'||type==='precheckout'){
+        const lifeYears=r.lifeYears||_usefulLife(r.item);
+        const ageAtCheckin=(parsed&&parsed.ageAtCheckinYears!=null)?(+parsed.ageAtCheckinYears||0):(r.ageAtCheckin||0);
+        const estCost=+((parsed&&parsed.estimatedCost))||0;
+        const tenancyMonths=_monthsBetween(t.start,today())||12;
+        const ap=_apportionCharge(cls,estCost,ageAtCheckin,lifeYears,tenancyMonths);
+        charge=ap.charge; breakdown=ap.breakdown;
+        if(type==='moveout'){ r.lifeYears=lifeYears; r.ageAtCheckin=ageAtCheckin; r.estCost=estCost; }
+      }
+      const entry={room:r.room,item:r.item,classification:cls,summary:(parsed&&parsed.summary)||'Could not read AI response — review manually.',charge,breakdown,checkinPhotos:r.checkin.photos.slice(0,2),checkinNote:r.checkin.note||'',stagePhotos:toSet?toSet.photos.slice(0,2):[],stageNote:toSet?toSet.note||'':'',stageLabel:cmpLabel};
       results.push(entry);
-      if(type==='moveout'){ r.classification=entry.classification; r.charge=entry.charge; r.reasoning=entry.summary; }
+      if(type==='moveout'){ r.classification=entry.classification; r.charge=entry.charge; r.reasoning=entry.summary; r.breakdown=breakdown; }
     }catch(e){ console.error('generateInvReport exception',e); results.push({room:r.room,item:r.item,classification:'fair_wear',charge:0,summary:'Could not analyse ('+(e.message||e)+').',checkinPhotos:r.checkin.photos.slice(0,2),checkinNote:r.checkin.note||'',stagePhotos:toSet?toSet.photos.slice(0,2):[],stageNote:toSet?toSet.note||'':'',stageLabel:cmpLabel}); }
   }
   if(!results.length){ toast('AI report failed — check the console for details',1); return; }
   if(type==='moveout') v.totalDeduction=v.rooms.reduce((s,x)=>s+(x.charge||0),0);
+  const indicativeTotal=results.reduce((s,x)=>s+(x.charge||0),0);
   v.reports=v.reports||[];
-  v.reports.unshift({id:uid('ir'),type,date:today(),results,totalDeduction:type==='moveout'?v.totalDeduction:0,depositHeld:v.depositHeld||0,checkinDate:t.start||''});
+  v.reports.unshift({id:uid('ir'),type,date:today(),results,totalDeduction:type==='moveout'?v.totalDeduction:(type==='precheckout'?indicativeTotal:0),depositHeld:v.depositHeld||0,checkinDate:t.start||'',remedyDeadline:type==='precheckout'?(t.end||''):''});
   if(type==='movein'&&v.status==='draft') v.status='in-progress';
   if(type==='moveout'){ v.status='complete'; const p2=P(v.propertyId)||{}; _chargeInvFee('moveout',p2,L(p2.landlordId)); }
   pushInv2(v); render();
-  toast('✓ '+({movein:'Move-in',midterm:'Mid-tenancy',moveout:'Move-out'}[type])+' report generated');
+  toast('✓ '+({movein:'Move-in',midterm:'Mid-tenancy',precheckout:'Pre-checkout snag',moveout:'Move-out'}[type])+' report generated');
 }
 function _monthsBetween(a,b){ if(!a||!b) return null; return Math.max(0,Math.round((new Date(b)-new Date(a))/(1000*60*60*24*30))); }
 function _invReportHtml(r,p,t){
   const clsLabel={fair_wear:'Fair wear & tear',damage:'Tenant damage',cleaning:'Cleaning needed',baseline:'Noted'};
   const clsColor={fair_wear:'#1B7A4B',damage:'#C0392B',cleaning:'#D98324',baseline:'#5B6473'};
-  const typeTitle={movein:'Move-in condition report',midterm:'Mid-tenancy inspection report',moveout:'Move-out & deposit deduction schedule'}[r.type];
-  const typeKicker={movein:'Move-in · Baseline condition',midterm:'Mid-tenancy · Inspection',moveout:'Check-out · Deposit deduction schedule'}[r.type];
-  const months=r.type==='moveout'?_monthsBetween(r.checkinDate,r.date):null;
+  const typeTitle={movein:'Move-in condition report',midterm:'Mid-tenancy inspection report',precheckout:'Pre-checkout snag list',moveout:'Move-out & deposit deduction schedule'}[r.type];
+  const typeKicker={movein:'Move-in · Baseline condition',midterm:'Mid-tenancy · Inspection',precheckout:'Pre-checkout · Advisory — not a final deduction',moveout:'Check-out · Deposit deduction schedule'}[r.type];
+  const months=(r.type==='moveout'||r.type==='precheckout')?_monthsBetween(r.checkinDate,r.date):null;
   const dateBlock=r.type==='movein'
     ?`<div>Recorded: <b style="color:#fff">${fmtDate(r.date)}</b></div>`
-    :`<div>Check-in: <b style="color:#fff">${r.checkinDate?fmtDate(r.checkinDate):'—'}</b></div><div>${r.type==='moveout'?'Check-out':'Inspection'}: <b style="color:#fff">${fmtDate(r.date)}</b></div>${months!=null?`<div>Tenancy length: <b style="color:#fff">${months} months</b></div>`:''}`;
-  const money=r.type==='moveout'?`<div style="display:grid;grid-template-columns:repeat(3,1fr);background:#F4F6F9;border-bottom:1px solid #E2E5EA">
+    :`<div>Check-in: <b style="color:#fff">${r.checkinDate?fmtDate(r.checkinDate):'—'}</b></div><div>${r.type==='moveout'?'Check-out':r.type==='precheckout'?'Inspected':'Inspection'}: <b style="color:#fff">${fmtDate(r.date)}</b></div>${months!=null?`<div>Tenancy length: <b style="color:#fff">${months} months</b></div>`:''}`;
+  const remedyBanner=(r.type==='precheckout')?`<div style="background:#FEF2E7;border-bottom:1px solid #E2E5EA;padding:12px 24px;font-size:11.5px;color:#B86E20;line-height:1.6"><b>Advisory only — not a final deduction.</b> These items can still be fixed by the tenant${r.remedyDeadline?' before <b>'+fmtDate(r.remedyDeadline)+'</b>':' before check-out'} to avoid being charged at move-out.</div>`:'';
+  const money=(r.type==='moveout'||r.type==='precheckout')?`<div style="display:grid;grid-template-columns:repeat(3,1fr);background:#F4F6F9;border-bottom:1px solid #E2E5EA">
       <div style="padding:16px 20px;border-right:1px solid #E2E5EA"><div style="font-size:10px;font-weight:700;letter-spacing:.5px;color:#94A3B8;text-transform:uppercase">Deposit held</div><div style="font-size:20px;font-weight:700;color:#0B1E3D;margin-top:4px">${money2(r.depositHeld)}</div></div>
-      <div style="padding:16px 20px;border-right:1px solid #E2E5EA"><div style="font-size:10px;font-weight:700;letter-spacing:.5px;color:#94A3B8;text-transform:uppercase">Proposed deduction</div><div style="font-size:20px;font-weight:700;color:#C0392B;margin-top:4px">${money2(r.totalDeduction)}</div><div style="font-size:10px;color:#94A3B8;margin-top:1px">${r.results.length} item${r.results.length===1?'':'s'} assessed</div></div>
-      <div style="padding:16px 20px"><div style="font-size:10px;font-weight:700;letter-spacing:.5px;color:#94A3B8;text-transform:uppercase">Return to tenant</div><div style="font-size:20px;font-weight:700;color:#1B7A4B;margin-top:4px">${money2(Math.max(0,r.depositHeld-r.totalDeduction))}</div></div>
+      <div style="padding:16px 20px;border-right:1px solid #E2E5EA"><div style="font-size:10px;font-weight:700;letter-spacing:.5px;color:#94A3B8;text-transform:uppercase">${r.type==='precheckout'?'Indicative deduction':'Proposed deduction'}</div><div style="font-size:20px;font-weight:700;color:#C0392B;margin-top:4px">${money2(r.totalDeduction)}</div><div style="font-size:10px;color:#94A3B8;margin-top:1px">${r.results.length} item${r.results.length===1?'':'s'} assessed</div></div>
+      <div style="padding:16px 20px"><div style="font-size:10px;font-weight:700;letter-spacing:.5px;color:#94A3B8;text-transform:uppercase">${r.type==='precheckout'?'If unresolved, return':'Return to tenant'}</div><div style="font-size:20px;font-weight:700;color:#1B7A4B;margin-top:4px">${money2(Math.max(0,r.depositHeld-r.totalDeduction))}</div></div>
     </div>`:'';
   const legend=r.type!=='movein'?`<div style="display:flex;gap:16px;flex-wrap:wrap;padding:12px 24px;border-bottom:1px solid #EEF1F5;font-size:11px;color:#475569">
       <div style="display:flex;align-items:center;gap:6px"><span style="width:9px;height:9px;border-radius:2px;background:#1B7A4B;display:inline-block"></span> Fair wear &amp; tear</div>
@@ -4188,7 +4261,7 @@ function _invReportHtml(r,p,t){
         <div><div style="font-size:10px;font-weight:700;letter-spacing:.5px;color:#94A3B8;text-transform:uppercase">${esc(x.room)}</div><div style="font-size:14px;font-weight:700;color:#0B1E3D">${esc(x.item)}</div></div>
         <div style="display:flex;align-items:center;gap:10px">
           <span style="font-size:10px;font-weight:700;color:#fff;background:${clsColor[x.classification]||'#5B6473'};padding:3px 9px;border-radius:100px;white-space:nowrap">${clsLabel[x.classification]||x.classification}</span>
-          ${r.type==='moveout'?`<span style="font-size:15px;font-weight:700;color:${x.charge?'#C0392B':'#1B7A4B'};min-width:48px;text-align:right">${charge}</span>`:''}
+          ${(r.type==='moveout'||r.type==='precheckout')?`<span style="font-size:15px;font-weight:700;color:${x.charge?'#C0392B':'#1B7A4B'};min-width:48px;text-align:right">${charge}</span>`:''}
         </div>
       </div>
       <div style="display:flex;gap:8px;margin-bottom:8px"><div style="display:flex;gap:6px;flex:1">${photoStrip(x.checkinPhotos)}</div><div style="display:flex;gap:6px;flex:1">${photoStrip(x.stagePhotos)}</div></div>
@@ -4196,12 +4269,12 @@ function _invReportHtml(r,p,t){
         <div style="flex:1"><b style="color:#475569">Check-in:</b> ${esc(x.checkinNote||'—')}</div>
         <div style="flex:1"><b style="color:#475569">${x.stageLabel==='mid-tenancy'?'Now':'Check-out'}:</b> ${esc(x.stageNote||'—')}</div>
       </div>
-      ${r.type==='moveout'&&x.charge?`<div style="background:#FBF6F2;border:1px solid #F0E0D4;border-radius:7px;padding:8px 11px;font-size:11px;color:#8A5A3A;line-height:1.55">${esc(x.summary)}</div>`:r.type!=='moveout'?`<div style="font-size:11px;color:#64748B;line-height:1.5">${esc(x.summary)}</div>`:''}
+      ${(r.type==='moveout'||r.type==='precheckout')&&x.charge?`<div style="background:#FBF6F2;border:1px solid #F0E0D4;border-radius:7px;padding:8px 11px;font-size:11px;color:#8A5A3A;line-height:1.55">${esc(x.summary)}${x.breakdown?'<br><span style="color:#A87A56">'+x.breakdown+'</span>':''}</div>`:(r.type!=='moveout'&&r.type!=='precheckout')?`<div style="font-size:11px;color:#64748B;line-height:1.5">${esc(x.summary)}</div>`:`<div style="font-size:11px;color:#64748B;line-height:1.5">${esc(x.summary)}</div>`}
     </div>`;
   }).join('');
-  const footer=(r.type==='moveout'?`<div style="background:#F9FAFB;border-top:1px solid #E2E5EA;padding:16px 24px;font-size:10.5px;color:#7A8699;line-height:1.6"><b style="color:#475569">How these figures were calculated</b><br>Every item was classified as fair wear &amp; tear (never chargeable) or tenant damage/cleaning (chargeable). Chargeable items apply apportionment — the tenant pays only the proportion of an item's remaining expected life, never new-for-old.</div>`:'')
+  const footer=((r.type==='moveout'||r.type==='precheckout')?`<div style="background:#F9FAFB;border-top:1px solid #E2E5EA;padding:16px 24px;font-size:10.5px;color:#7A8699;line-height:1.6"><b style="color:#475569">How these figures were calculated</b><br>Every item was classified as fair wear &amp; tear (never chargeable), cleaning (charged in full), or damage. Damage is apportioned by remaining useful life: repair/replacement cost × (years of useful life remaining ÷ total useful life) — the tenant never pays full replacement cost, per Propertymark/mydeposits betterment guidance. The maths for each chargeable item is shown against that item above.${r.type==='precheckout'?' These figures are indicative only — the real move-out inspection determines the final deduction.':''}</div>`:'')
     +((r.sentLandlordAt||r.sentTenantAt)?`<div style="background:#EAF6EF;border-top:1px solid #E2E5EA;padding:10px 24px;font-size:10.5px;color:#1B7A4B;line-height:1.6">${r.sentLandlordAt?'✓ Sent to landlord '+new Date(r.sentLandlordAt).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):''}${r.sentLandlordAt&&r.sentTenantAt?' · ':''}${r.sentTenantAt?'✓ Sent to tenant '+new Date(r.sentTenantAt).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):''}</div>`:'')
-    +`<div style="border-top:1px solid #E2E5EA;padding:12px 24px;font-size:10px;color:#94A3B8;line-height:1.6">This report is a fair and accurate record of condition based on the photographs and notes taken at the time of each stage. Report ref: ${esc(r.id)} · Please review and raise any inaccuracy promptly — after 7 days without dispute this record will be treated as agreed.</div>`;
+    +`<div style="border-top:1px solid #E2E5EA;padding:12px 24px;font-size:10px;color:#94A3B8;line-height:1.6">This report is a fair and accurate record of condition based on the photographs and notes taken at the time of each stage.${r.type==='moveout'?' Report ref: '+esc(r.id)+' · Please review and raise any inaccuracy within 14 days — after that, without a dispute raised, this record will be treated as agreed.':' Report ref: '+esc(r.id)+'.'}</div>`;
   return `<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;border-radius:8px;overflow:hidden;border:1px solid #E2E5EA">
     <div style="background:#0B1E3D;color:#fff;padding:20px 24px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
@@ -4209,7 +4282,7 @@ function _invReportHtml(r,p,t){
         <div style="text-align:right;font-size:11px;color:rgba(255,255,255,.75);line-height:1.6">${dateBlock}</div>
       </div>
     </div>
-    ${money}${legend}
+    ${money}${remedyBanner}${legend}
     <div style="padding:4px 24px 8px;background:#fff">${rows}</div>
     ${footer}
   </div>`;
@@ -4217,7 +4290,7 @@ function _invReportHtml(r,p,t){
 function viewInvReports(vid){
   const v=(S.inventories2||[]).find(x=>x.id===vid); if(!v||!v.reports||!v.reports.length) return;
   const p=P(v.propertyId)||{}; const l=L(p.landlordId)||{}; const t=(S.tenants||[]).find(x=>x.id===v.tenantId)||{};
-  const typeLabel={movein:'Move-in',midterm:'Mid-tenancy',moveout:'Move-out'};
+  const typeLabel={movein:'Move-in',midterm:'Mid-tenancy',precheckout:'Pre-checkout',moveout:'Move-out'};
   const body=v.reports.map(r=>`<div style="margin-bottom:18px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px">
       <b style="font-size:12.5px;color:var(--navy)">${typeLabel[r.type]} · ${fmtDate(r.date)}</b>
@@ -4240,7 +4313,7 @@ function emailInvReport(vid,rid,recipient){
   const p=P(v.propertyId)||{}; const l=L(p.landlordId)||{}; const t=(S.tenants||[]).find(x=>x.id===v.tenantId)||{};
   const to=recipient==='landlord'?l.email:t.email;
   if(!to){ toast('No '+recipient+' email on file',1); return; }
-  const typeTitle={movein:'Move-in condition report',midterm:'Mid-tenancy inspection report',moveout:'Move-out & deposit report'}[r.type];
+  const typeTitle={movein:'Move-in condition report',midterm:'Mid-tenancy inspection report',precheckout:'Pre-checkout snag list',moveout:'Move-out & deposit report'}[r.type];
   agencyEmail(to,typeTitle+' — '+(p.address||''),`<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#1A2B45">${_invReportHtml(r,p,t)}</div>`);
   if(recipient==='landlord') r.sentLandlordAt=new Date().toISOString(); else r.sentTenantAt=new Date().toISOString();
   pushInv2(v); render(); toast('✓ Report emailed to '+to);
