@@ -1376,11 +1376,13 @@ async function savePropFee(pid){ const p=P(pid); const oldFee=propFee(p); p.feeP
 async function _sendFeeChangeLetter(p,l,oldFee,newFee){
   const b=agencyBrand();
   const subject=`Management fee update — ${p.address}`;
-  const body=`<p>Dear ${esc(l.name)},</p>
-    <p>This letter confirms a change to the management fee for <b>${esc(p.address)}</b>, effective <b>${fmtDate(today())}</b>.</p>
+  const sig=b.agent&&b.agent!==b.name?`${esc(b.agent)}<br>${esc(b.name)}`:esc(b.name);
+  const body=`<p>Dear ${esc(l.name.split(' ')[0])},</p>
+    <p>I hope you're well. I'm writing to let you know about a change to the management fee for <b>${esc(p.address)}</b>, effective <b>${fmtDate(today())}</b>.</p>
     <p><b>Previous fee:</b> ${oldFee}% of gross monthly rent<br><b>New fee:</b> ${newFee}% of gross monthly rent (${gbp(p.rent*newFee/100)}/mo at the current rent)</p>
-    <p>This fee will be applied to all future rent collections and management invoices for this property. All other terms of your management agreement remain unchanged.</p>
-    <p>Kind regards,<br>${esc(b.agent)}<br>${esc(b.name)}</p>`;
+    <p>This new rate will apply to all rent collections and management invoices from this date onwards. Everything else in your management agreement stays exactly as it is.</p>
+    <p>If you'd like to talk through what's driving this change, or have any questions at all, just reply to this email — always happy to help.</p>
+    <p>Best wishes,<br>${sig}</p>`;
   const html=letterWrap(subject,body);
   if(LIVE){ const row={id:uid('lt'),agency_id:window._agencyId,landlord_id:l.id,property_id:p.id,type:'fee_change',subject,body_html:html,status:'sent'};
     try{ await sb.from('agency_letters').insert(row); }catch(e){}
@@ -1510,12 +1512,22 @@ function propTenancyStatus(p){
 }
 function startMarketingForProperty(pid){ const p=P(pid); if(propTenancyStatus(p)==='unsigned'){ toast('Send the agreement first — you can\'t market before the landlord signs',1); return; } openListing(null,pid); }
 function recordExistingTenant(pid){ const p=P(pid); if(propTenancyStatus(p)==='unsigned'){ toast('Send the agreement first — an instruction must be signed even for a sitting tenant',1); return; } setTenant(pid); }
+function tnTab(name){
+  ['details','docs'].forEach(t=>{
+    const panel=document.getElementById('tn-tab-'+t); if(panel) panel.style.display=(t===name?'block':'none');
+    const btn=document.getElementById('tn-tab-btn-'+t); if(btn){ btn.style.color=t===name?'var(--navy)':'#94A3B8'; btn.style.borderBottomColor=t===name?'var(--navy)':'transparent'; btn.style.fontWeight=t===name?'700':'500'; }
+  });
+}
 function setTenant(pid){ const p=P(pid); const t=p.tenant||{}; const rec=tenantRecFor(pid)||{};
   const occ=(t.occupants||rec.occupants||[]);
   const occRows=occ.map(o=>_occRowHtml(o)).join('');
   const g=rec.guarantor||{}; const hasG=!!(g.name||g.email||g.phone);
   window._tnFiles={};
-  const body=`<div class="fg"><label>Tenant name (lead)</label><input id="tn-name" value="${esc(t.name||rec.name||'')}"></div>
+  const docCount=[rec.depositCertName,rec.refDocName,rec.origContractName,rec.id1DocName,rec.id2DocName,rec.addressProofName].filter(Boolean).length;
+  const tabBtn=(id,label)=>`<button type="button" id="tn-tab-btn-${id}" onclick="tnTab('${id}')" style="background:none;border:none;border-bottom:2px solid ${id==='details'?'var(--navy)':'transparent'};color:${id==='details'?'var(--navy)':'#94A3B8'};font-weight:${id==='details'?'700':'500'};font-size:13.5px;padding:8px 4px;cursor:pointer;margin-right:22px">${label}</button>`;
+  const body=`<div style="display:flex;border-bottom:1px solid var(--border);margin-bottom:18px">${tabBtn('details','Tenant details')}${tabBtn('docs','Documents ('+docCount+'/6)')}</div>
+  <div id="tn-tab-details">
+  <div class="fg"><label>Tenant name (lead)</label><input id="tn-name" value="${esc(t.name||rec.name||'')}"></div>
   <div class="grid2" style="gap:10px"><div class="fg"><label>Email</label><input id="tn-email" value="${esc(t.email||rec.email||'')}"></div>
   <div class="fg"><label>Phone</label><input id="tn-phone" value="${esc(rec.phone||'')}"></div></div>
   <div class="grid2" style="gap:10px"><div class="fg"><label>Tenancy start</label><input id="tn-start" type="date" value="${t.start||rec.start||''}"></div>
@@ -1529,7 +1541,9 @@ function setTenant(pid){ const p=P(pid); const t=p.tenant||{}; const rec=tenantR
     <input id="tn-g-email" placeholder="Guarantor email" value="${esc(g.email||'')}">
     <input id="tn-g-phone" placeholder="Guarantor phone" value="${esc(g.phone||'')}">
   </div></div>
-  <div style="background:#F6F8FB;border:1px solid var(--border);border-radius:10px;padding:16px;margin-top:18px">
+  </div>
+  <div id="tn-tab-docs" style="display:none">
+  <div style="background:#F6F8FB;border:1px solid var(--border);border-radius:10px;padding:16px">
     <div style="font-size:12.5px;font-weight:700;color:var(--navy)">📁 Tenancy documents</div>
     <div class="faint" style="font-size:11.5px;margin-bottom:10px">Deposit, referencing &amp; the signed agreement for ${rec.name?esc(rec.name):'this tenant'}</div>
     ${_docSlotHtml('deposit','Deposit certificate','(custodial/insured scheme cert or Prescribed Information)',rec.depositCertName,rec.depositCertUrl,'aiScanDeposit')}
@@ -1538,15 +1552,15 @@ function setTenant(pid){ const p=P(pid); const t=p.tenant||{}; const rec=tenantR
     ${_docSlotHtml('ref','Reference report','(employer/previous-landlord reference or credit check)',rec.refDocName,rec.refDocUrl)}
     ${_docSlotHtml('origcontract','Original signed tenancy agreement','(if this tenancy was already running when NexLet took over management — stays legally valid; no need to reissue, even after the 1 May 2026 conversion to a periodic tenancy)',rec.origContractName,rec.origContractUrl)}
   </div>
-  <details style="background:#F6F8FB;border:1px solid var(--border);border-radius:10px;padding:16px;margin-top:12px">
-    <summary style="font-size:12.5px;font-weight:700;color:var(--navy);cursor:pointer;list-style:none">🪪 Identity &amp; address <span class="faint" style="font-weight:400;text-transform:none;letter-spacing:0">— safeguarding, optional but recommended${(rec.id1DocName||rec.id2DocName||rec.addressProofName)?' · on file':''}</span></summary>
-    <div style="margin-top:12px">
-      ${_docSlotHtml('id1','Photo ID — 1 of 2','(passport or driving licence)',rec.id1DocName,rec.id1DocUrl)}
-      ${_docSlotHtml('id2','Photo ID — 2 of 2','(a second form: passport, driving licence, or national ID card)',rec.id2DocName,rec.id2DocUrl)}
-      ${_docSlotHtml('addressproof','Proof of address','(utility bill, council tax bill, or bank statement — dated within the last 3 months)',rec.addressProofName,rec.addressProofUrl)}
-    </div>
-  </details>
-  <div class="hint">Saving creates the tenancy record (for rent tracking, maintenance &amp; the tenant portal) and moves the let to Managed. All named adults appear on Section 8/13 notices, and a named guarantor is copied on them too.</div>`;
+  <div style="background:#F6F8FB;border:1px solid var(--border);border-radius:10px;padding:16px;margin-top:12px">
+    <div style="font-size:12.5px;font-weight:700;color:var(--navy)">🪪 Identity &amp; address</div>
+    <div class="faint" style="font-size:11.5px;margin-bottom:10px">Safeguarding — optional but recommended</div>
+    ${_docSlotHtml('id1','Photo ID — 1 of 2','(passport or driving licence)',rec.id1DocName,rec.id1DocUrl)}
+    ${_docSlotHtml('id2','Photo ID — 2 of 2','(a second form: passport, driving licence, or national ID card)',rec.id2DocName,rec.id2DocUrl)}
+    ${_docSlotHtml('addressproof','Proof of address','(utility bill, council tax bill, or bank statement — dated within the last 3 months)',rec.addressProofName,rec.addressProofUrl)}
+  </div>
+  </div>
+  <div class="hint" style="margin-top:14px">Saving creates the tenancy record (for rent tracking, maintenance &amp; the tenant portal) and moves the let to Managed. All named adults appear on Section 8/13 notices, and a named guarantor is copied on them too.</div>`;
   modal(rec.name?'Set up tenant — '+esc(rec.name):'Set up tenant',body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" id="tn-save-btn" onclick="saveTenant('${pid}')">Save tenant</button>`, true); }
 function _occRowHtml(o){ o=o||{}; return `<div style="display:grid;grid-template-columns:1.3fr 1.3fr 1fr auto;gap:8px;margin-bottom:6px" data-occ-row><input placeholder="Full name" value="${esc(o.name||'')}"><input placeholder="Email (optional)" value="${esc(o.email||'')}"><input placeholder="Phone (optional)" value="${esc(o.phone||'')}"><button type="button" class="btn sm" onclick="this.closest('[data-occ-row]').remove()">✕</button></div>`; }
 function tnAddOccupant(){ const c=document.getElementById('tn-occupants'); if(!c) return; c.insertAdjacentHTML('beforeend',_occRowHtml({})); }
@@ -1913,7 +1927,7 @@ function tenantWelcomeLetterHtml(rec,p){ const b=agencyBrand();
       <p><b>Reporting a maintenance issue</b><br>Please log any repairs or maintenance issues through your tenant portal, or email us directly — we'll acknowledge it and keep you updated on progress.</p>
       <p><b>Rent and other queries</b><br>Your rent amount and due date are unchanged. For anything else — rent, your tenancy, or general questions — just get in touch using the details above.</p>
       <p>We look forward to looking after your home.</p>
-      <p>Kind regards,<br>${esc(b.agent)}<br>${esc(b.name)}</p>
+      <p>Kind regards,<br>${(b.agent&&b.agent!==b.name)?esc(b.agent)+'<br>':''}${esc(b.name)}</p>
     </div></div>`;
 }
 async function sendTenantWelcomeLetter(pid){
@@ -2916,7 +2930,7 @@ const TEMPLATES=[
       <p>One thing to flag now so it's never a surprise later: move-in and move-out inventory reports are billed separately from your management fee (set out in Clause 5b), at roughly 65% of what an independent inventory clerk would charge — we run them in-house with photographic evidence and AI-assisted condition comparison.</p>
       <p>Two optional items worth knowing about: PAT testing of appliances and pest control treatment aren't legally required for standard lets, but if you already have them done, we're happy to keep the records on file alongside your other certificates — just let us know.</p>
       <p>If you have any questions at all, simply reply to this email. We look forward to a long and successful working relationship.</p>
-      <p>Kind regards,<br>${esc(b.agent)}<br>${esc(b.name)}</p>`})},
+      <p>Kind regards,<br>${(b.agent&&b.agent!==b.name)?esc(b.agent)+'<br>':''}${esc(b.name)}</p>`})},
   {key:'rent_statement',group:'Statements & requests',title:'Monthly rent statement / remittance',icon:'💷',ai:false,needProp:true,
     fields:[{k:'month',label:'Statement period',type:'text',def:()=>_thisMonth()},{k:'received',label:'Rent received (£)',type:'number',def:p=>p&&p.rent||0},{k:'deductions',label:'Deductions / fees (£)',type:'number',def:()=>''},{k:'note',label:'Note (optional)',type:'text',def:()=>''}],
     build:(l,p,b,f)=>{const rec=+f.received||0, fee=f.deductions!==''&&f.deductions!=null?+f.deductions:(p?rec*propFee(p)/100:0), net=rec-fee; return {subject:`Rent statement — ${f.month} — ${p?p.address:''}`,body:`<p>Dear ${esc(l.name)},</p>
