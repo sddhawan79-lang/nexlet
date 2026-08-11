@@ -453,7 +453,7 @@ function render(){
   document.getElementById('tb-title').textContent=(NAV.find(n=>n.k===view)||{}).t||_titleMap[view]||'';
   document.getElementById('tb-actions').innerHTML=topActions();
   document.getElementById('view').innerHTML=({
-    dashboard:vDashboard, landlords:vLandlords, landlord:vLandlordDetail, pipeline:vPipeline,
+    dashboard:vDashboard, landlords:vLandlords, landlord:vLandlordDetail, valuation:vValuationDetail, valuationreport:vValuationReport, pipeline:vPipeline,
     marketing:vMarketing, listing:vListingDetail, applicants:vApplicants, offers:vOffers,
     keys:vKeys, reports:vReports, clientmoney:vClientMoney,
     referencing:vReferencing, properties:vProperties, property:vPropertyDetail, llportal:vLandlordPortal, llproperty:vLandlordPortalProperty,
@@ -971,7 +971,7 @@ function leadRow(x){
     <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:600;color:var(--navy)">${esc(x.name||'Unnamed')}</div>
       <div class="faint" style="font-size:12px">${esc(x.address||x.note||'—')}${x.phone?' · '+esc(x.phone):''}${x.email?' · '+esc(x.email):''} · via ${esc(x.source||'Website')}</div></div>
     <span class="pill" style="background:${x.status==='contacted'?'var(--blue-bg)':'var(--amber-bg)'};color:${x.status==='contacted'?'var(--blue)':'var(--amber)'}">${x.status==='contacted'?'Contacted':'New'}</span>
-    <div style="display:flex;gap:6px;flex-shrink:0"><button class="btn sm navy" onclick="convertLead('${x.id}')">Onboard</button><button class="btn sm" style="color:var(--red)" onclick="declineLead('${x.id}')">Decline</button></div>
+    <div style="display:flex;gap:6px;flex-shrink:0"><button class="btn sm" onclick="go('valuation','${x.id}')">Valuation</button><button class="btn sm navy" onclick="convertLead('${x.id}')">Onboard</button><button class="btn sm" style="color:var(--red)" onclick="declineLead('${x.id}')">Decline</button></div>
   </div>`;
 }
 function openLandlordLead(id){
@@ -997,6 +997,169 @@ function convertLead(id){
   openOnboard(); OB.name=x.name||''; OB.email=x.email||''; OB.phone=x.phone||''; OB.address=x.address||''; renderOnboard();
 }
 function declineLead(id){ const x=(S.landlordLeads||[]).find(l=>l.id===id); if(!x)return; x.status='declined'; save(); pushLandlordLead&&pushLandlordLead(x); render(); toast('Enquiry declined'); }
+
+// ── RENTAL VALUATION & LANDLORD PROPOSAL ──
+// Sits between logging an enquiry and onboarding: work out an achievable rent from
+// manually-logged comparable lettings (no live portal feed — see chat), then generate
+// a clean landlord-facing proposal. Raw comparables stay internal; the report only shows
+// the resulting figure, the plan, the fee and what's needed from the landlord.
+const VAL_PTYPES=['Flat','Terraced house','Semi-detached','Detached','Maisonette','Studio','HMO room'];
+const MARKETING_STEPS=['Professional photography and a floor plan','Listed on Rightmove, Zoopla and our own site','Accompanied viewings with vetted applicants','Right to Rent and reference checks completed before any offer is accepted'];
+const LANDLORD_TODO=['Keep the property empty and accessible for viewings','Have a valid EPC, gas safety certificate (if applicable) and EICR in place before marketing starts','Confirm any mortgage or leasehold consent-to-let you need','Come back to us quickly on referencing and offer updates so we can move fast'];
+function VAL(id){ return (S.valuations||[]).find(x=>x.id===id)||{}; }
+function valFor(leadId){
+  S.valuations=S.valuations||[]; let v=S.valuations.find(x=>x.leadId===leadId);
+  if(!v){ const lead=(S.landlordLeads||[]).find(l=>l.id===leadId)||{};
+    v={id:uid('val'),leadId,propertyAddress:lead.address||'',ptype:'Flat',beds:'',baths:'',visitAt:'',visitNotes:'',
+       comparables:[],suggestedRent:'',rentOverridden:false,agencyType:'sole',service:'full',feePct:DEF_FEE,letWeeks:DEF_WEEKS,
+       extraNotes:'',status:'draft',createdAt:new Date().toISOString()};
+    S.valuations.push(v); save(); }
+  return v;
+}
+function recalcRent(v){ if(v.rentOverridden||!v.comparables.length) return; const avg=v.comparables.reduce((s,c)=>s+(parseFloat(c.rent)||0),0)/v.comparables.length; v.suggestedRent=Math.round(avg/5)*5; }
+function addComparable(vid){
+  const v=VAL(vid); const addr=val('cmp-addr'), rentN=parseFloat(val('cmp-rent'));
+  if(!addr||!rentN){ toast('Enter an address and achieved rent',1); return; }
+  v.comparables.push({id:uid('cmp'),address:addr,beds:val('cmp-beds'),rent:rentN,dateLet:val('cmp-date'),notes:val('cmp-notes')});
+  recalcRent(v); save(); render(); toast('✓ Comparable added');
+}
+function deleteComparable(vid,cid){ const v=VAL(vid); v.comparables=v.comparables.filter(c=>c.id!==cid); recalcRent(v); save(); render(); }
+function resetRentToAvg(vid){ const v=VAL(vid); v.rentOverridden=false; recalcRent(v); save(); render(); toast('Reset to comparable average'); }
+function toggleValFee(s){ document.getElementById('vv-fee-full').style.display=s==='full'?'':'none'; document.getElementById('vv-fee-letonly').style.display=s==='full'?'none':''; }
+function saveValuation(vid){
+  const v=VAL(vid); if(!v.id) return;
+  v.propertyAddress=val('vv-addr'); v.ptype=val('vv-ptype'); v.beds=val('vv-beds'); v.baths=val('vv-baths');
+  v.visitAt=val('vv-visit'); v.visitNotes=val('vv-visitnotes');
+  v.agencyType=val('vv-agtype'); v.service=val('vv-service');
+  if(v.service==='full') v.feePct=parseFloat(val('vv-fee'))||DEF_FEE; else v.letWeeks=parseFloat(val('vv-weeks'))||DEF_WEEKS;
+  const manualRent=parseFloat(val('vv-rent'));
+  if(manualRent){ v.suggestedRent=manualRent; v.rentOverridden=true; }
+  v.extraNotes=val('vv-notes');
+  save(); render(); toast('✓ Valuation saved');
+}
+function markValuationSent(vid){
+  const v=VAL(vid); v.status='sent'; v.sentAt=new Date().toISOString();
+  const lead=(S.landlordLeads||[]).find(l=>l.id===v.leadId); if(lead) lead.status='contacted';
+  save(); render(); toast('✓ Marked as sent to landlord');
+}
+function convertFromValuation(vid){
+  const v=VAL(vid); const lead=(S.landlordLeads||[]).find(l=>l.id===v.leadId); if(!lead) return;
+  convertLead(lead.id);
+  OB.addr=v.propertyAddress||lead.address||''; OB.ptype=v.ptype||'Flat'; OB.beds=v.beds||''; OB.baths=v.baths||'';
+  OB.rent=v.suggestedRent||''; OB.agencyType=v.agencyType||'sole'; OB.service=v.service||'full';
+  OB.feePct=v.feePct!=null?v.feePct:DEF_FEE; OB.letWeeks=v.letWeeks!=null?v.letWeeks:DEF_WEEKS;
+  renderOnboard();
+}
+function vValuationDetail(){
+  const leadId=sel; const lead=(S.landlordLeads||[]).find(l=>l.id===leadId); if(!lead) return vLandlords();
+  const v=valFor(leadId); const isFull=v.service==='full';
+  const avgRent=v.comparables.length?v.comparables.reduce((s,c)=>s+(parseFloat(c.rent)||0),0)/v.comparables.length:0;
+  return `<div class="back" onclick="go('landlords')">← Landlords</div>
+    <h1 class="pg">Valuation — ${esc(lead.name||'Landlord')}</h1>
+    <div class="sub">Work out an achievable rent from comparable lettings, then turn it into a proposal for the landlord.</div>
+
+    <div class="panel" style="margin-bottom:16px"><div class="panel-hd"><h2>Property &amp; visit</h2>${v.status==='sent'?'<span class="pill" style="background:var(--green-bg);color:var(--green)">Sent to landlord</span>':'<span class="pill" style="background:var(--off);color:#64748B">Draft</span>'}</div>
+      <div class="panel-bd">
+        <div class="fg"><label>Property address</label><input id="vv-addr" value="${esc(v.propertyAddress)}" placeholder="e.g. 12 Elm Street, Harrow"></div>
+        <div class="grid3" style="gap:10px">
+          <div class="fg"><label>Type</label><select id="vv-ptype">${VAL_PTYPES.map(t=>`<option ${v.ptype===t?'selected':''}>${t}</option>`).join('')}</select></div>
+          <div class="fg"><label>Bedrooms</label><input id="vv-beds" type="number" value="${esc(v.beds)}"></div>
+          <div class="fg"><label>Bathrooms</label><input id="vv-baths" type="number" value="${esc(v.baths)}"></div>
+        </div>
+        <div class="grid2" style="gap:10px">
+          <div class="fg"><label>Valuation visit <span class="faint">(optional)</span></label><input id="vv-visit" type="datetime-local" value="${v.visitAt||''}"></div>
+          <div class="fg"><label>Visit notes</label><input id="vv-visitnotes" value="${esc(v.visitNotes||'')}" placeholder="condition, access, anything to flag"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-bottom:16px"><div class="panel-hd"><h2>Comparable lettings</h2><span class="faint" style="font-size:12px">${v.comparables.length} added · internal — not shown to the landlord</span></div>
+      <div class="panel-bd">
+        ${v.comparables.length?`<table style="width:100%;border-collapse:collapse;font-size:12.5px;margin-bottom:14px">
+          <thead><tr style="border-bottom:1px solid var(--border)"><th style="text-align:left;padding:6px 4px;color:var(--faint);font-size:10px;text-transform:uppercase">Address</th><th style="text-align:left;padding:6px 4px;color:var(--faint);font-size:10px;text-transform:uppercase">Beds</th><th style="text-align:right;padding:6px 4px;color:var(--faint);font-size:10px;text-transform:uppercase">Rent</th><th style="text-align:left;padding:6px 4px;color:var(--faint);font-size:10px;text-transform:uppercase">Let date</th><th style="text-align:left;padding:6px 4px;color:var(--faint);font-size:10px;text-transform:uppercase">Notes</th><th></th></tr></thead>
+          <tbody>${v.comparables.map(c=>`<tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:8px 4px">${esc(c.address)}</td><td style="padding:8px 4px">${esc(c.beds||'—')}</td><td style="padding:8px 4px;text-align:right;font-weight:600">${gbp(c.rent)}</td>
+            <td style="padding:8px 4px">${c.dateLet?fmtDate(c.dateLet):'—'}</td><td style="padding:8px 4px;color:var(--faint)">${esc(c.notes||'—')}</td>
+            <td style="padding:8px 4px;text-align:right"><button class="btn sm" style="color:var(--red)" onclick="deleteComparable('${v.id}','${c.id}')">Remove</button></td></tr>`).join('')}</tbody>
+        </table>`:`<div class="empty" style="padding:14px 0;text-align:center"><span class="faint" style="font-size:12.5px">No comparables yet — add recent lets nearby from the portals or your own records.</span></div>`}
+        <div class="grid2" style="gap:10px;grid-template-columns:2fr 1fr 1fr 1fr 2fr">
+          <div class="fg"><label>Address</label><input id="cmp-addr" placeholder="e.g. 8 Elm Street"></div>
+          <div class="fg"><label>Beds</label><input id="cmp-beds" type="number"></div>
+          <div class="fg"><label>Rent £/mo</label><input id="cmp-rent" type="number"></div>
+          <div class="fg"><label>Let date</label><input id="cmp-date" type="date"></div>
+          <div class="fg"><label>Notes</label><input id="cmp-notes" placeholder="condition, source, etc"></div>
+        </div>
+        <button class="btn sm" onclick="addComparable('${v.id}')">＋ Add comparable</button>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-bottom:16px"><div class="panel-hd"><h2>Rent &amp; terms</h2></div>
+      <div class="panel-bd">
+        <div class="fg"><label>Suggested achievable rent £/mo</label><input id="vv-rent" type="number" value="${esc(v.suggestedRent)}">
+          ${v.comparables.length?`<div class="hint" style="color:var(--faint);margin-top:4px">${v.rentOverridden?`Overridden — comparable average is ${gbp(avgRent)}. <a href="#" onclick="event.preventDefault();resetRentToAvg('${v.id}')">Reset to average</a>`:'Set from the average of your comparables above — edit to override.'}</div>`:''}
+        </div>
+        <div class="grid2" style="gap:10px">
+          <div class="fg"><label>Agency type</label><select id="vv-agtype"><option value="sole" ${v.agencyType!=='multiple'?'selected':''}>Sole agency</option><option value="multiple" ${v.agencyType==='multiple'?'selected':''}>Multiple agency</option></select></div>
+          <div class="fg"><label>Service level</label><select id="vv-service" onchange="toggleValFee(this.value)"><option value="full" ${isFull?'selected':''}>Full management</option><option value="letonly" ${!isFull?'selected':''}>Let-only</option></select></div>
+        </div>
+        <div class="fg" id="vv-fee-full" style="${isFull?'':'display:none'}"><label>Management fee % of rent</label><input id="vv-fee" type="number" step="0.5" value="${v.feePct!=null?v.feePct:DEF_FEE}"></div>
+        <div class="fg" id="vv-fee-letonly" style="${isFull?'display:none':''}"><label>Fee (weeks' rent)</label><input id="vv-weeks" type="number" step="0.5" value="${v.letWeeks!=null?v.letWeeks:DEF_WEEKS}"></div>
+        <div class="fg"><label>Notes for the landlord <span class="faint">(optional — anything property-specific)</span></label><textarea id="vv-notes" rows="2">${esc(v.extraNotes||'')}</textarea></div>
+        <button class="btn navy" onclick="saveValuation('${v.id}')">Save valuation</button>
+      </div>
+    </div>
+
+    <div class="panel"><div class="panel-hd"><h2>Landlord proposal</h2></div>
+      <div class="panel-bd" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+        <div class="faint" style="font-size:12.5px;max-width:420px">The report shown to the landlord — achievable rent, what we'll handle, what we need from them. No raw comparable data goes in it.</div>
+        <div style="display:flex;gap:8px;flex-shrink:0">
+          <button class="btn" onclick="go('valuationreport','${leadId}')">Open report</button>
+          ${v.status!=='sent'?`<button class="btn" onclick="markValuationSent('${v.id}')">Mark as sent</button>`:''}
+          <button class="btn navy" onclick="convertFromValuation('${v.id}')">Landlord's on board → send agreement</button>
+        </div>
+      </div>
+    </div>`;
+}
+function vValuationReport(){
+  const leadId=sel; const lead=(S.landlordLeads||[]).find(l=>l.id===leadId); if(!lead) return vLandlords();
+  const v=valFor(leadId); const a=S.agency; const isFull=v.service==='full'; const rent=parseFloat(v.suggestedRent)||0;
+  const fee=isFull?(v.feePct!=null?v.feePct:DEF_FEE):(v.letWeeks!=null?v.letWeeks:DEF_WEEKS);
+  const feeText=isFull
+    ? `Full management: we handle the letting and the day-to-day running of the tenancy for ${fee}% of the monthly rent${rent?' — '+gbp(rent*fee/100)+'/month at this rent.':'.'}`
+    : `Let-only: we find and reference the tenant and hand over the paperwork for a one-off fee of ${fee} weeks' rent${rent?' ('+gbp(rent/4.345*fee)+')':''}. No ongoing fee.`;
+  return `<div class="no-print" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div class="back" onclick="go('valuation','${leadId}')">← Back to valuation</div>
+      <button class="btn navy" onclick="window.print()">🖨 Print / PDF</button>
+    </div>
+    <div class="panel" style="max-width:720px;margin:0 auto"><div style="padding:36px 40px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px">
+        <div><div style="font-family:var(--disp);font-size:22px;color:var(--navy)">${esc(a.name||'Your Lettings')}</div><div class="faint" style="font-size:12px;margin-top:4px">Rental valuation &amp; letting proposal</div></div>
+        <div class="faint" style="font-size:12px;text-align:right">${new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}</div>
+      </div>
+      <div style="font-size:15px;font-weight:600;color:var(--navy)">${esc(v.propertyAddress||lead.address||'Property address')}</div>
+      <div class="faint" style="font-size:12.5px;margin-bottom:26px">Prepared for ${esc(lead.name||'Landlord')}${v.beds?' · '+esc(v.beds)+' bed':''}${v.ptype?' · '+esc(v.ptype):''}</div>
+
+      <div style="background:var(--off);border-radius:10px;padding:22px 24px;margin-bottom:26px;text-align:center">
+        <div class="faint" style="font-size:10.5px;text-transform:uppercase;letter-spacing:.06em">Achievable monthly rent</div>
+        <div style="font-size:34px;font-weight:800;color:var(--navy);margin-top:6px">${gbp(rent)}<span style="font-size:14px;font-weight:500;color:var(--faint)"> /month</span></div>
+        <div class="faint" style="font-size:12px;margin-top:6px">Based on current demand and recently let comparable properties nearby</div>
+      </div>
+
+      <div style="font-size:10px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">What we'll do for you</div>
+      <ul style="margin:0 0 22px;padding-left:18px;font-size:13px;line-height:1.9">${MARKETING_STEPS.map(s=>`<li>${esc(s)}</li>`).join('')}</ul>
+
+      <div style="font-size:10px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Fee</div>
+      <p style="font-size:13px;line-height:1.7;margin:0 0 22px">${feeText}</p>
+
+      <div style="font-size:10px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">What we'll need from you</div>
+      <ul style="margin:0 0 ${v.extraNotes?'22px':'6px'};padding-left:18px;font-size:13px;line-height:1.9">${LANDLORD_TODO.map(s=>`<li>${esc(s)}</li>`).join('')}</ul>
+
+      ${v.extraNotes?`<div style="font-size:10px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Notes</div><p style="font-size:13px;line-height:1.7;margin:0 0 6px">${esc(v.extraNotes)}</p>`:''}
+    </div></div>
+    <div class="no-print" style="max-width:720px;margin:18px auto 0;text-align:center">
+      <button class="btn navy" onclick="convertFromValuation('${v.id}')">Landlord's on board → send agreement to sign</button>
+    </div>`;
+}
 
 // ── LANDLORD DETAIL (CRM) ──
 function vLandlordDetail(){
