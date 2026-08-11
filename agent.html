@@ -1210,8 +1210,11 @@ function vLandlordDetail(){
         <div class="panel"><div class="panel-hd"><h2>Document vault</h2></div><div class="panel-bd">
           ${docRow('Photo ID (AML)',d.id,'🪪','id',d.idDate,d.idExpiry)}
           ${docRow('Proof of address (AML)',d.address,'🏠','address',d.addressDate)}
+          ${(l.entity==='joint'||d.id2)?docRow('Owner 2 — Photo ID (AML)',d.id2,'🪪','id2',d.id2Date):''}
+          ${(l.entity==='joint'||d.address2)?docRow('Owner 2 — Proof of address (AML)',d.address2,'🏠','address2',d.address2Date):''}
           ${(d.isCompany||d.incorporation)?docRow('Certificate of incorporation',d.incorporation,'🏢','incorporation'):''}
-          ${(d.isCompany||d.directorId)?docRow('Director / owner ID',d.directorId,'🪪','directorId'):''}
+          ${(d.isCompany||d.directorId)?docRow('Director / owner ID — 1',d.directorId,'🪪','directorId'):''}
+          ${(d.directors||[]).map((dir,i)=>docRow('Director / owner ID — '+(i+2)+(dir.name?' ('+esc(dir.name)+')':''),dir.fileName,'🪪','directorExtra_'+i)).join('')}
           ${docRow('Proof of ownership',d.ownership,'📜','ownership',d.ownershipDate)}
           ${(d.isMortgaged||d.mortgageConsent)?docRow('Mortgage consent-to-let <span class="faint">(landlord\'s own responsibility to obtain)</span>',d.mortgageConsent,'🏦','mortgageConsent'):''}
           ${(d.isLeasehold||d.freeholderConsent)?docRow('Freeholder consent',d.freeholderConsent,'🔑','freeholderConsent'):''}
@@ -2529,13 +2532,13 @@ function saveSettings(){ S.agency.name=val('set-name'); S.agency.address=val('se
 // ── ONBOARDING WIZARD ──
 let OB=null;
 function openOnboard(){ OB={step:1,name:'',joint:'',jointEmail:'',entity:'individual',email:'',phone:'',address:'',nrl:false,prsReg:'',contactPref:'Email',idDoc:'',ownDoc:'',aml:false,ownership:false,service:'full',feePct:DEF_FEE,letWeeks:DEF_WEEKS,addr:'',city:'',rent:'',beds:'2',agreement:false,
-  addrDoc:'',sanctions:false,isCompany:false,incorpDoc:'',dirIdDoc:'',isMortgaged:false,mortgageConsentDoc:'',isLeasehold:false,freeholderConsentDoc:'',
+  addrDoc:'',idDoc2:'',addrDoc2:'',sanctions:false,isCompany:false,incorpDoc:'',dirIdDoc:'',extraDirectors:[],isMortgaged:false,mortgageConsentDoc:'',isLeasehold:false,freeholderConsentDoc:'',
   addr:'',pc:'',city:'',ptype:'Flat',rent:'',beds:'',baths:'',furnished:'Unfurnished',epc:'',rentDueDay:'1st',avail:'',feat:'',desc:'',featChips:[],properties:[],agencyType:'sole'};
   OB._file_={}; renderOnboard(); }
 function obSkipDocs(){ OB.skipDocs=true; obNext(); OB.skipDocs=false; }
 function obNext(){
   if(OB.step===1){ OB.name=val('ob-name');OB.joint=val('ob-joint');OB.email=val('ob-email');OB.phone=val('ob-phone');OB.address=val('ob-address');OB.prsReg=val('ob-prs');OB.payout=val('ob-payout');OB.contactPref=val('ob-pref'); if(!OB.name){toast(OB.entity==='company'?'Enter the company name':'Enter the landlord name',1);return;} }
-  if(OB.step===2&&!OB.skipDocs){ if(!OB.idDoc&&!OB.aml){toast('Attach photo ID to continue (AML requirement), or use "Skip for now"',1);return;} if(!OB.addrDoc){toast('Attach proof of address — required for AML, or use "Skip for now"',1);return;} if(!OB.sanctions){toast('Confirm the sanctions (OFSI) check — legally required since May 2025',1);return;} if(OB.isCompany&&(!OB.incorpDoc||!OB.dirIdDoc)){toast('Company landlord: attach incorporation certificate + director ID',1);return;} }
+  if(OB.step===2&&!OB.skipDocs){ if(!OB.idDoc&&!OB.aml){toast('Attach photo ID to continue (AML requirement), or use "Skip for now"',1);return;} if(!OB.addrDoc){toast('Attach proof of address — required for AML, or use "Skip for now"',1);return;} if(!OB.sanctions){toast('Confirm the sanctions (OFSI) check — legally required since May 2025',1);return;} if(OB.isCompany&&(!OB.incorpDoc||!OB.dirIdDoc)){toast('Company landlord: attach incorporation certificate + director ID',1);return;} if(OB.entity==='joint'&&(!OB.idDoc2||!OB.addrDoc2)){toast('Joint owners: attach owner 2\'s photo ID and proof of address too',1);return;} }
   if(OB.step===3&&!OB.skipDocs){ if(!OB.ownDoc&&!OB.ownership){toast('Attach proof of ownership to continue, or use "Skip for now"',1);return;} }
   if(OB.step===4){ /* draft fields captured live via obAddAnotherProp/_obDraftToProp; nothing to snapshot on Next */ }
   if(OB.step===5){ OB.service=val('ob-service'); OB.agencyType=val('ob-agtype')||OB.agencyType||'sole'; OB.feePct=parseFloat(val('ob-fee'))||(OB.agencyType==='multiple'?MULTI_FEE:DEF_FEE); OB.letWeeks=parseFloat(val('ob-weeks'))||(OB.agencyType==='multiple'?MULTI_WEEKS:DEF_WEEKS); }
@@ -2558,7 +2561,9 @@ async function obFinish(){
     aml:OB.aml,ownership:OB.ownership,service:OB.service,agencyType:OB.agencyType||'sole',feePct:OB.feePct,letWeeks:OB.letWeeks,agreement:OB.agreement,status:OB.agreement?'active':'pending',
     docs:{id:OB.idDoc||'',address:OB.addrDoc||'',ownership:OB.ownDoc||'',agreement:OB.agreement?'Signed offline':'',
       idDate:OB.idDoc?today():'',addressDate:OB.addrDoc?today():'',ownershipDate:OB.ownDoc?today():'',amlDate:OB.aml?today():'',
-      incorporation:OB.incorpDoc||'',directorId:OB.dirIdDoc||'',mortgageConsent:OB.mortgageConsentDoc||'',freeholderConsent:OB.freeholderConsentDoc||'',
+      incorporation:OB.incorpDoc||'',directorId:OB.dirIdDoc||'',directors:(OB.extraDirectors||[]).filter(d=>d.fileName).map(d=>({name:d.name,fileName:d.fileName})),
+      id2:OB.idDoc2||'',address2:OB.addrDoc2||'',id2Date:OB.idDoc2?today():'',address2Date:OB.addrDoc2?today():'',
+      mortgageConsent:OB.mortgageConsentDoc||'',freeholderConsent:OB.freeholderConsentDoc||'',
       isCompany:!!OB.isCompany,isMortgaged:!!OB.isMortgaged,isLeasehold:!!OB.isLeasehold,sanctions:!!OB.sanctions,sanctionsDate:OB.sanctions?today():''},
     comms:[{id:uid('c'),date:today(),type:'Note',note:'Landlord onboarded · '+SVC[OB.service].label+(OB.agreement?' · agreement signed':' · agreement pending')}]};
   S.landlords.push(ll); pushLandlord(ll);
@@ -2582,6 +2587,10 @@ function obDoc(key,label,hint,extra){ const v=OB[key]||''; return `<div class="f
   ${v?`<div class="faint" style="font-size:11px;margin-top:4px">✓ ${esc(v)} on file <a href="javascript:void(0)" onclick="OB.${key}='';${key==='idDoc'?'OB.aml=false;':''}${key==='ownDoc'?'OB.ownership=false;':''}renderOnboard()" style="color:var(--red);margin-left:8px">remove</a></div>`:''}
   </div>`; }
 function obAttachFile(input,key,extraCode){ const f=input.files[0]; if(!f) return; OB[key]=f.name; OB._file_[key]=f; if(extraCode) (new Function(extraCode))(); renderOnboard(); }
+function obAddDirector(){ OB.extraDirectors=OB.extraDirectors||[]; OB.extraDirectors.push({id:uid('dir'),name:'',fileName:''}); renderOnboard(); }
+function obRemoveDirector(id){ OB.extraDirectors=(OB.extraDirectors||[]).filter(d=>d.id!==id); renderOnboard(); }
+function obDirectorName(inp,id){ const d=(OB.extraDirectors||[]).find(x=>x.id===id); if(d) d.name=inp.value; }
+function obDirectorFile(input,id){ const f=input.files[0]; if(!f) return; const d=(OB.extraDirectors||[]).find(x=>x.id===id); if(!d) return; d.fileName=f.name; OB._file_=OB._file_||{}; OB._file_['dir_'+id]=f; renderOnboard(); }
 
 // ── AI: verify landlord ID doc (name + expiry) against the name they gave us ──
 async function obVerifyId(btn){
@@ -2662,7 +2671,17 @@ function renderOnboard(){
     ${obDoc('idDoc','Photo ID <span class="faint">(passport or driving licence)</span>','e.g. passport.pdf')}
     ${OB.idDoc?`<div id="ob-id-ai" style="margin:-6px 0 12px;font-size:11.5px">${OB.idAiChecked?(OB.idAiMatch?'<span style="color:var(--green)">✓ AI read: '+esc(OB.idAiName||'')+(OB.idAiExpiry?', expires '+esc(OB.idAiExpiry):'')+' — matches landlord name</span>':'<span style="color:var(--red)">⚠ AI read: '+esc(OB.idAiName||'unreadable')+' — name does not match '+esc(OB.name)+', review manually</span>'):'<button class="btn" style="font-size:11px;padding:4px 10px" onclick="obVerifyId(this)">✦ Verify with AI</button>'}</div>`:''}
     ${obDoc('addrDoc','Proof of current address <span class="faint">(utility bill / bank statement, under 3 months)</span>','e.g. utility_bill.pdf')}
-    ${OB.isCompany?obDoc('incorpDoc','Certificate of incorporation','e.g. certificate_of_incorporation.pdf')+obDoc('dirIdDoc','Director / beneficial-owner ID','e.g. director_id.pdf'):''}
+    ${OB.entity==='joint'?`<div class="note" style="margin:2px 0 12px">Joint owners — both are named and liable on the agreement, so both need their own AML check.</div>
+      ${obDoc('idDoc2',(esc(OB.joint)||'Owner 2')+' — Photo ID','e.g. passport.pdf')}
+      ${obDoc('addrDoc2',(esc(OB.joint)||'Owner 2')+' — Proof of current address','e.g. utility_bill.pdf')}`:''}
+    ${OB.isCompany?obDoc('incorpDoc','Certificate of incorporation','e.g. certificate_of_incorporation.pdf')+obDoc('dirIdDoc','Director / beneficial-owner ID — 1','e.g. director_id.pdf')
+      +(OB.extraDirectors||[]).map((d,i)=>`<div class="fg" style="border:1px dashed var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><label style="margin:0">Director / beneficial-owner ID — ${i+2}</label><a href="javascript:void(0)" onclick="obRemoveDirector('${d.id}')" style="font-size:11px;color:var(--red)">Remove</a></div>
+        <input value="${esc(d.name)}" oninput="obDirectorName(this,'${d.id}')" placeholder="Director name" style="margin-bottom:8px;width:100%">
+        <label style="display:flex;align-items:center;gap:10px;padding:10px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer"><span style="font-size:18px">📄</span><div style="flex:1;font-size:12.5px;font-weight:600">${d.fileName?'Replace file':'Click to attach a file'}</div><input type="file" accept="image/*,.pdf" style="display:none" onchange="obDirectorFile(this,'${d.id}')"></label>
+        ${d.fileName?`<div class="faint" style="font-size:11px;margin-top:4px">✓ ${esc(d.fileName)} on file</div>`:''}
+      </div>`).join('')
+      +`<button class="btn sm" onclick="obAddDirector()" type="button">＋ Add another director / beneficial owner</button>`:''}
     <div class="chk ${OB.sanctions?'on':''}" style="cursor:default" onclick="if(!OB.sanctionsChecking)renderOnboard()"><div class="box">${OB.sanctions?'✓':''}</div><div style="flex:1"><div style="font-weight:600;font-size:13px">Sanctions (UK Sanctions List) check</div>
       ${OB.sanctions?`<div class="faint" style="font-size:11px">Screened ${fmtDate(today())} — no match on the current UK Sanctions List</div>`
         :OB.sanctionsMatches&&OB.sanctionsMatches.length?`<div style="font-size:11px;color:var(--red)">⚠ ${OB.sanctionsMatches.length} possible match(es) — review before proceeding: ${OB.sanctionsMatches.map(m=>esc(m.name)+' ('+m.confidence+'%)').join(', ')}</div>
