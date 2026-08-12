@@ -183,8 +183,8 @@ let LIVE=false;                 // set true only after the auth gateway passes
 window._agencyId=null;          // every LIVE query is scoped to this agency
 
 // ── row ⇄ in-memory-object mappers (snake_case DB ⇄ camelCase S) ──
-const rowToAgency=r=>({name:r.name||'',address:r.address||'',redress:r.redress_scheme||'',redressNo:r.redress_no||'',cmp:r.cmp_scheme||'Not holding client money',cmpNo:r.cmp_no||'',refPartner:r.ref_partner||'',icoNo:r.ico_no||'',vatRegistered:!!r.vat_registered,vatNumber:r.vat_number||'',invoiceSeq:r.invoice_seq||0,paymentTerms:r.payment_terms||14,abortiveFee:r.abortive_fee??250,noticeFee:r.notice_fee??75,renewalFee:r.renewal_fee??60,arrearsFee:r.arrears_fee??30,keyFee:r.key_fee??60,insuranceFee:r.insurance_fee??50,disputeFee:r.dispute_fee??75,invMoveinFee:r.inv_movein_fee??75,invMoveoutFee:r.inv_moveout_fee??65});
-const agencyToRow=a=>({name:a.name,address:a.address,redress_scheme:a.redress,redress_no:a.redressNo,cmp_scheme:a.cmp,cmp_no:a.cmpNo,ref_partner:a.refPartner,ico_no:a.icoNo,vat_registered:!!a.vatRegistered,vat_number:a.vatNumber,invoice_seq:a.invoiceSeq||0,payment_terms:a.paymentTerms||14,abortive_fee:a.abortiveFee||0,notice_fee:a.noticeFee||0,renewal_fee:a.renewalFee||0,arrears_fee:a.arrearsFee||0,key_fee:a.keyFee||0,insurance_fee:a.insuranceFee||0,dispute_fee:a.disputeFee||0,inv_movein_fee:a.invMoveinFee||0,inv_moveout_fee:a.invMoveoutFee||0,updated_at:new Date().toISOString()});
+const rowToAgency=r=>({name:r.name||'',address:r.address||'',companyNo:r.company_no||'',rentGuide:r.rent_guide||[],redress:r.redress_scheme||'',redressNo:r.redress_no||'',cmp:r.cmp_scheme||'Not holding client money',cmpNo:r.cmp_no||'',refPartner:r.ref_partner||'',icoNo:r.ico_no||'',vatRegistered:!!r.vat_registered,vatNumber:r.vat_number||'',invoiceSeq:r.invoice_seq||0,paymentTerms:r.payment_terms||14,abortiveFee:r.abortive_fee??250,noticeFee:r.notice_fee??75,renewalFee:r.renewal_fee??60,arrearsFee:r.arrears_fee??30,keyFee:r.key_fee??60,insuranceFee:r.insurance_fee??50,disputeFee:r.dispute_fee??75,invMoveinFee:r.inv_movein_fee??75,invMoveoutFee:r.inv_moveout_fee??65});
+const agencyToRow=a=>({name:a.name,address:a.address,company_no:a.companyNo||null,rent_guide:a.rentGuide||[],redress_scheme:a.redress,redress_no:a.redressNo,cmp_scheme:a.cmp,cmp_no:a.cmpNo,ref_partner:a.refPartner,ico_no:a.icoNo,vat_registered:!!a.vatRegistered,vat_number:a.vatNumber,invoice_seq:a.invoiceSeq||0,payment_terms:a.paymentTerms||14,abortive_fee:a.abortiveFee||0,notice_fee:a.noticeFee||0,renewal_fee:a.renewalFee||0,arrears_fee:a.arrearsFee||0,key_fee:a.keyFee||0,insurance_fee:a.insuranceFee||0,dispute_fee:a.disputeFee||0,inv_movein_fee:a.invMoveinFee||0,inv_moveout_fee:a.invMoveoutFee||0,updated_at:new Date().toISOString()});
 const rowToLandlord=r=>({id:r.id,name:r.name||'',joint:r.joint||'',jointEmail:r.joint_email||'',entity:r.entity||'individual',boardOptOut:!!(r.docs&&r.docs.boardOptOut),email:r.email||'',phone:r.phone||'',address:r.address||'',nrl:!!r.nrl,prsReg:r.prs_reg||'',payout:r.payout||'',contactPref:r.contact_pref||'Email',aml:!!r.aml_verified,ownership:!!r.ownership_verified,service:r.service||'full',feePct:r.fee_pct,letWeeks:r.let_weeks,agreement:!!r.agreement_signed,status:r.status||'pending',docs:r.docs||{},comms:r.comms||[],inviteToken:r.invite_token||'',invitedAt:r.invited_at||''});
 const landlordToRow=l=>({id:l.id,agency_id:window._agencyId,name:l.name,joint:l.joint||null,joint_email:l.jointEmail||null,entity:l.entity||'individual',email:l.email,phone:l.phone,address:l.address,nrl:!!l.nrl,prs_reg:l.prsReg,payout:l.payout,contact_pref:l.contactPref,aml_verified:!!l.aml,ownership_verified:!!l.ownership,service:l.service,fee_pct:l.feePct,let_weeks:l.letWeeks,agreement_signed:!!l.agreement,status:l.status,docs:l.docs||{},comms:l.comms||[],invite_token:l.inviteToken||null,invited_at:l.invitedAt||null,updated_at:new Date().toISOString()});
 // Bill-to / statement name — a company landlord shows the company name; joint owners
@@ -1018,6 +1018,29 @@ function valFor(leadId){
   return v;
 }
 function outcode(pc){ return (pc||'').trim().split(/\s+/)[0].toUpperCase(); }
+// Instant ballpark for use live on a call, before any comparables are logged: your own nearby
+// lettings first (real, accurate), falling back to your manually-kept rent guide (Settings) for
+// areas/bed counts you haven't let in yet. No live portal data — see chat — so this is deliberately
+// a range, not a single figure, and always says which source it came from.
+function computeBallpark(pcRaw,bedsRaw){
+  const out=outcode(pcRaw); const beds=parseInt(bedsRaw)||null;
+  if(!out&&!beds) return null;
+  const own=(S.properties||[]).filter(p=>p.rent>0)
+    .filter(p=>!out||!p.postcode||outcode(p.postcode)===out)
+    .filter(p=>beds==null||p.beds==null||Math.abs((p.beds||0)-beds)<=1).map(p=>p.rent);
+  if(own.length) return {source:'own',count:own.length,lo:Math.min(...own),hi:Math.max(...own)};
+  const guide=(S.agency.rentGuide||[]).filter(g=>(!out||!g.area||outcode(g.area)===out)&&(beds==null||g.beds==null||Math.abs((g.beds||0)-beds)<=1)).map(g=>g.rent);
+  if(guide.length) return {source:'guide',count:guide.length,lo:Math.min(...guide),hi:Math.max(...guide)};
+  return null;
+}
+function ballparkInnerHtml(r){
+  if(!r) return `<div class="faint" style="font-size:12px">Add a postcode &amp; bedrooms above for an instant ballpark — or add rent-guide entries in Settings.</div>`;
+  return `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+    <div><div class="faint" style="font-size:10.5px;text-transform:uppercase;letter-spacing:.04em">Ballpark while you talk</div><div style="font-size:20px;font-weight:800;color:var(--navy)">${gbp(r.lo)}${r.lo!==r.hi?'–'+gbp(r.hi):''}/mo</div></div>
+    <div class="faint" style="font-size:11px;max-width:220px;text-align:right">${r.source==='own'?`From ${r.count} of your own listing${r.count===1?'':'s'} nearby — real data`:`From your rent-guide entries — your own estimate, not live data`}</div>
+  </div>`;
+}
+function updateBallpark(){ const box=document.getElementById('vv-ballpark'); if(!box) return; box.innerHTML=ballparkInnerHtml(computeBallpark(val('vv-postcode'),val('vv-beds'))); }
 // Comparables we actually have for free: the agency's own current/past managed lets nearby (same postcode
 // outward code) with a similar bed count. No live portal feed is available (Rightmove/Zoopla have no public
 // API) — this is the one source of real, zero-cost comparable evidence; the rest stays a manual log.
@@ -1042,7 +1065,7 @@ function computePricingPlans(v){
   const target=parseFloat(v.landlordTarget)||0;
   const plans=[
     {key:'quick',label:'Quick-let price',rent:Math.round(base*0.97/5)*5,pace:'Fastest — minimises void',note:'Slightly under market value, to secure a tenant with no void period.'},
-    {key:'recommended',label:'Recommended — market value',rent:base,pace:'Balanced — realistic time to let',note:`Based on the average of your ${v.comparables.length} comparable letting${v.comparables.length===1?'':'s'}.`},
+    {key:'recommended',label:'Recommended — market value',rent:base,pace:'Balanced — realistic time to let',note:v.comparables.length?`Based on the average of your ${v.comparables.length} comparable letting${v.comparables.length===1?'':'s'}.`:'Based on your entered market valuation figure.'},
     {key:'stretch',label:'Stretch price',rent:Math.round(base*1.05/5)*5,pace:'Slower — tests appetite above market',note:'Above market value; expect fewer enquiries and a longer time to let.'}
   ];
   if(target&&Math.abs(target-base)>=Math.max(15,base*0.02)) plans.push({key:'landlord',label:"Landlord's asking price",rent:target,
@@ -1050,22 +1073,27 @@ function computePricingPlans(v){
     note:target>base?'Marketed at this figure first; review after 2–3 weeks if there’s little interest.':'Below the market evidence — worth confirming this is really what they want to ask.'});
   return plans;
 }
-function confirmPricingPlan(vid,key){
+function selectPricingPlan(vid,key){
   const v=VAL(vid); const p=computePricingPlans(v).find(x=>x.key===key); if(!p) return;
-  v.suggestedRent=p.rent; v.rentOverridden=true; v.chosenPlan=key; v.confirmedAt=new Date().toISOString();
-  save(); render(); toast('✓ Confirmed — '+p.label+' ('+gbp(p.rent)+'/mo)');
+  const inp=document.getElementById('plan-rent-'+vid+'-'+key); const rent=inp?(parseFloat(inp.value)||p.rent):p.rent;
+  const confirmed=v.status==='sent';
+  v.suggestedRent=rent; v.rentOverridden=true; v.chosenPlan=key; v.confirmedAt=confirmed?new Date().toISOString():'';
+  save(); render(); toast(confirmed?('✓ Confirmed — '+p.label+' ('+gbp(rent)+'/mo)'):('Selected as the proposed price — '+gbp(rent)+'/mo'));
 }
 function pricingPlansHtml(v){
   const plans=computePricingPlans(v); if(!plans.length) return '';
-  return `<div class="panel" style="margin-bottom:16px"><div class="panel-hd"><h2>Advertising price options</h2><span class="faint" style="font-size:12px">Discuss with the landlord, then confirm the one you'll run with</span></div>
+  const sent=v.status==='sent';
+  return `<div class="panel" style="margin-bottom:16px"><div class="panel-hd"><h2>Advertising price options</h2><span class="faint" style="font-size:12px">${sent?'Landlord has the report — confirm what they agree to':"Pick the one you'll propose, then send the report"}</span></div>
     <div class="panel-bd" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
-      ${plans.map(p=>`<div style="border:1.5px solid ${v.chosenPlan===p.key?'var(--navy)':'var(--border)'};border-radius:10px;padding:14px;${v.chosenPlan===p.key?'background:var(--off)':''}">
+      ${plans.map(p=>{ const selected=v.chosenPlan===p.key; const shownRent=(selected&&v.rentOverridden)?v.suggestedRent:p.rent;
+        return `<div style="border:1.5px solid ${selected?'var(--navy)':'var(--border)'};border-radius:10px;padding:14px;${selected?'background:var(--off)':''}">
         <div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--faint)">${esc(p.label)}</div>
-        <div style="font-size:22px;font-weight:800;color:var(--navy);margin:4px 0">${gbp(p.rent)}<span style="font-size:11px;font-weight:500;color:var(--faint)"> /mo</span></div>
+        <div style="display:flex;align-items:baseline;gap:4px;margin:4px 0"><span style="font-size:18px;font-weight:800;color:var(--navy)">£</span><input type="number" id="plan-rent-${v.id}-${p.key}" value="${shownRent}" step="5" style="font-size:22px;font-weight:800;color:var(--navy);border:none;padding:0;width:90px;background:transparent"><span style="font-size:11px;font-weight:500;color:var(--faint)">/mo</span></div>
         <div style="font-size:11.5px;color:var(--faint);margin-bottom:8px">${esc(p.pace)}</div>
         <div style="font-size:12px;line-height:1.5;margin-bottom:10px">${esc(p.note)}</div>
-        ${v.chosenPlan===p.key?`<span class="pill" style="background:var(--green-bg);color:var(--green)">✓ Landlord confirmed</span>`:`<button class="btn sm" onclick="confirmPricingPlan('${v.id}','${p.key}')">Landlord agreed — confirm</button>`}
-      </div>`).join('')}
+        ${selected?`<div class="pill" style="background:var(--green-bg);color:var(--green);margin-bottom:8px">${v.confirmedAt?'✓ Landlord confirmed':'Selected — proposed price'}</div>`:''}
+        <button class="btn sm ${selected?'':'navy'}" onclick="selectPricingPlan('${v.id}','${p.key}')">${sent?'Landlord agreed — confirm':selected?'Update figure':'Select as proposed price'}</button>
+      </div>`; }).join('')}
     </div></div>`;
 }
 function recalcRent(v){ if(v.rentOverridden||!v.comparables.length) return; const avg=v.comparables.reduce((s,c)=>s+(parseFloat(c.rent)||0),0)/v.comparables.length; v.suggestedRent=Math.round(avg/5)*5; }
@@ -1124,21 +1152,18 @@ function vValuationDetail(){
     <div class="panel" style="margin-bottom:16px"><div class="panel-hd"><h2>Property &amp; visit</h2>${v.status==='sent'?'<span class="pill" style="background:var(--green-bg);color:var(--green)">Sent to landlord</span>':'<span class="pill" style="background:var(--off);color:#64748B">Draft</span>'}</div>
       <div class="panel-bd">
         <div class="fg"><label>Property address</label><input id="vv-addr" value="${esc(v.propertyAddress)}" placeholder="e.g. 12 Elm Street, Harrow"></div>
+        <div id="vv-ballpark" style="background:var(--off);border-radius:8px;padding:10px 14px;margin-bottom:12px">${ballparkInnerHtml(computeBallpark(v.postcode,v.beds))}</div>
         <div class="grid3" style="gap:10px">
-          <div class="fg"><label>Postcode <span class="faint">(for matching your own comparables)</span></label><input id="vv-postcode" value="${esc(v.postcode||'')}" placeholder="e.g. HA1 2BC"></div>
+          <div class="fg"><label>Postcode <span class="faint">(for matching your own comparables)</span></label><input id="vv-postcode" value="${esc(v.postcode||'')}" placeholder="e.g. HA1 2BC" oninput="updateBallpark()"></div>
           <div class="fg"><label>Type</label><select id="vv-ptype">${VAL_PTYPES.map(t=>`<option ${v.ptype===t?'selected':''}>${t}</option>`).join('')}</select></div>
-          <div class="fg"><label>Bedrooms</label><input id="vv-beds" type="number" value="${esc(v.beds)}"></div>
-        </div>
-        <div class="grid2" style="gap:10px">
+          <div class="fg"><label>Bedrooms</label><input id="vv-beds" type="number" value="${esc(v.beds)}" oninput="updateBallpark()"></div>
           <div class="fg"><label>Bathrooms</label><input id="vv-baths" type="number" value="${esc(v.baths)}"></div>
           <div class="fg"><label>Reception rooms</label><input id="vv-receptions" type="number" value="${esc(v.receptions)}"></div>
-        </div>
-        <div class="grid3" style="gap:10px">
+          <div class="fg"><label>Furnishing</label><select id="vv-furnishing"><option value="" ${!v.furnishing?'selected':''}>—</option><option value="Unfurnished" ${v.furnishing==='Unfurnished'?'selected':''}>Unfurnished</option><option value="Part-furnished" ${v.furnishing==='Part-furnished'?'selected':''}>Part-furnished</option><option value="Furnished" ${v.furnishing==='Furnished'?'selected':''}>Furnished</option></select></div>
           <div class="fg"><label>Garden</label><select id="vv-garden"><option value="" ${!v.garden?'selected':''}>—</option><option value="None" ${v.garden==='None'?'selected':''}>None</option><option value="Private garden" ${v.garden==='Private garden'?'selected':''}>Private garden</option><option value="Shared garden" ${v.garden==='Shared garden'?'selected':''}>Shared garden</option><option value="Balcony/terrace" ${v.garden==='Balcony/terrace'?'selected':''}>Balcony/terrace</option></select></div>
           <div class="fg"><label>Parking</label><select id="vv-parking"><option value="" ${!v.parking?'selected':''}>—</option><option value="None" ${v.parking==='None'?'selected':''}>None</option><option value="On-street" ${v.parking==='On-street'?'selected':''}>On-street</option><option value="Off-street" ${v.parking==='Off-street'?'selected':''}>Off-street</option><option value="Garage" ${v.parking==='Garage'?'selected':''}>Garage</option><option value="Permit" ${v.parking==='Permit'?'selected':''}>Permit</option></select></div>
-          <div class="fg"><label>Furnishing</label><select id="vv-furnishing"><option value="" ${!v.furnishing?'selected':''}>—</option><option value="Unfurnished" ${v.furnishing==='Unfurnished'?'selected':''}>Unfurnished</option><option value="Part-furnished" ${v.furnishing==='Part-furnished'?'selected':''}>Part-furnished</option><option value="Furnished" ${v.furnishing==='Furnished'?'selected':''}>Furnished</option></select></div>
+          <div class="fg"><label>Valuation visit <span class="faint">(optional)</span></label><input id="vv-visit" type="datetime-local" value="${v.visitAt||''}"></div>
         </div>
-        <div class="fg"><label>Valuation visit <span class="faint">(optional)</span></label><input id="vv-visit" type="datetime-local" value="${v.visitAt||''}"></div>
         <div class="fg"><label>Visit notes</label><input id="vv-visitnotes" value="${esc(v.visitNotes||'')}" placeholder="condition, access, anything to flag"></div>
       </div>
     </div>
@@ -1176,7 +1201,9 @@ function vValuationDetail(){
           <div class="fg"><label>Agency type</label><select id="vv-agtype"><option value="sole" ${v.agencyType!=='multiple'?'selected':''}>Sole agency</option><option value="multiple" ${v.agencyType==='multiple'?'selected':''}>Multiple agency</option></select></div>
           <div class="fg"><label>Service level</label><select id="vv-service" onchange="toggleValFee(this.value)"><option value="full" ${isFull?'selected':''}>Full management</option><option value="letonly" ${!isFull?'selected':''}>Let-only</option></select></div>
         </div>
-        <div class="fg" id="vv-fee-full" style="${isFull?'':'display:none'}"><label>Management fee % of rent</label><input id="vv-fee" type="number" step="0.5" value="${v.feePct!=null?v.feePct:DEF_FEE}"></div>
+        <div class="fg" id="vv-fee-full" style="${isFull?'':'display:none'}"><label>Management fee % of rent</label><input id="vv-fee" type="number" step="0.5" value="${v.feePct!=null?v.feePct:DEF_FEE}">
+          <div class="hint" style="margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span class="faint">Standard rate ${DEF_FEE}% · discount</span><input type="number" step="0.5" min="0" value="0" style="width:64px" oninput="document.getElementById('vv-fee').value=Math.max(0,${DEF_FEE}-(parseFloat(this.value)||0))"><span class="faint">pts off, as agreed with them</span></div>
+        </div>
         <div class="fg" id="vv-fee-letonly" style="${isFull?'display:none':''}"><label>Fee (weeks' rent)</label><input id="vv-weeks" type="number" step="0.5" value="${v.letWeeks!=null?v.letWeeks:DEF_WEEKS}"></div>
         <div class="fg"><label>Landlord's target rent <span class="faint">(optional — e.g. what they said they want)</span></label><input id="vv-target" type="number" value="${esc(v.landlordTarget)}" placeholder="e.g. 2000"></div>
         <div class="fg"><label>Notes for the landlord <span class="faint">(optional — anything property-specific)</span></label><textarea id="vv-notes" rows="2">${esc(v.extraNotes||'')}</textarea></div>
@@ -2629,7 +2656,28 @@ function vSettings(){
       <div class="fg"><label>Invoice payment terms (days)</label><input id="set-terms" type="number" value="${a.paymentTerms||14}" style="max-width:120px"></div>
       <button class="btn navy" onclick="saveSettings()">Save settings</button>
       <div class="note" style="margin-top:16px"><b>AML Policy &amp; Risk Assessment</b> — required by HMRC once you register for Money Laundering Regulations supervision. <a href="AML Policy %26 Risk Assessment.dc.html" target="_blank">Open / print the template →</a></div>
-    </div></div>`;
+    </div></div>
+    <div class="panel" style="max-width:600px;margin-top:16px"><div class="panel-hd"><h2>Rent guide</h2><span class="faint" style="font-size:12px">Your own knowledge of typical rents by area — powers the instant ballpark on the valuation page when you don't have comparables yet</span></div>
+      <div class="panel-bd">
+        ${(a.rentGuide||[]).length?(a.rentGuide||[]).map(g=>`<div class="row" style="padding:6px 0"><div style="flex:1;font-size:12.5px"><b>${esc(g.area)}</b> · ${g.beds} bed · ${gbp(g.rent)}/mo</div><button class="btn sm" style="color:var(--red)" onclick="removeRentGuideEntry('${g.id}')">Remove</button></div>`).join(''):`<div class="faint" style="font-size:12.5px;padding:4px 0 10px">No entries yet — add typical rents for areas you know well.</div>`}
+        <div class="grid3" style="gap:10px;margin-top:10px">
+          <div class="fg"><label>Area <span class="faint">(postcode outward, e.g. HA1)</span></label><input id="rg-area" placeholder="e.g. HA1"></div>
+          <div class="fg"><label>Beds</label><input id="rg-beds" type="number"></div>
+          <div class="fg"><label>Typical rent £/mo</label><input id="rg-rent" type="number"></div>
+        </div>
+        <button class="btn sm" onclick="addRentGuideEntry()">＋ Add entry</button>
+      </div>
+    </div>`;
+}
+function addRentGuideEntry(){
+  const area=val('rg-area'), beds=parseInt(val('rg-beds'))||0, rent=parseFloat(val('rg-rent'))||0;
+  if(!area||!rent){ toast('Enter an area and typical rent',1); return; }
+  S.agency.rentGuide=S.agency.rentGuide||[]; S.agency.rentGuide.push({id:uid('rg'),area,beds,rent});
+  save(); if(LIVE) pushAgency(); render(); toast('✓ Added to rent guide');
+}
+function removeRentGuideEntry(id){
+  S.agency.rentGuide=(S.agency.rentGuide||[]).filter(x=>x.id!==id);
+  save(); if(LIVE) pushAgency(); render();
 }
 function saveSettings(){ S.agency.name=val('set-name'); S.agency.address=val('set-address'); S.agency.companyNo=val('set-companyno'); S.agency.redress=val('set-redress'); S.agency.redressNo=val('set-redressno'); S.agency.cmp=val('set-cmp'); S.agency.icoNo=val('set-ico'); S.agency.refPartner=val('set-ref'); S.agency.vatRegistered=val('set-vat')==='yes'; S.agency.vatNumber=val('set-vatno'); S.agency.paymentTerms=parseInt(val('set-terms'))||14; S.agency.abortiveFee=parseFloat(val('set-abortive'))||0; S.agency.noticeFee=parseFloat(val('set-noticefee'))||0; S.agency.renewalFee=parseFloat(val('set-renewalfee'))||0; S.agency.arrearsFee=parseFloat(val('set-arrearsfee'))||0; S.agency.keyFee=parseFloat(val('set-keyfee'))||0; S.agency.insuranceFee=parseFloat(val('set-insurancefee'))||0; S.agency.disputeFee=parseFloat(val('set-disputefee'))||0; S.agency.invMoveinFee=parseFloat(val('set-invmoveinfee'))||0; S.agency.invMoveoutFee=parseFloat(val('set-invmoveoutfee'))||0; save(); pushAgency(); render(); toast('✓ Settings saved'); }
 
@@ -2860,7 +2908,8 @@ function renderOnboard(){
     <div class="fg"><label>Service level</label><select id="ob-service" onchange="OB.service=this.value;renderOnboard()">
       <option value="full" ${isF?'selected':''}>Full management</option><option value="letonly" ${!isF?'selected':''}>Let-only (one-off)</option></select></div>
     <div class="fg"><label>Your fee <span class="faint">(editable)</span></label>
-      <div class="feebox">${isF?`<input id="ob-fee" type="number" step="0.5" value="${OB.feePct}" oninput="_obFee()"> <span>% of monthly rent</span>`:`<input id="ob-weeks" type="number" step="0.5" value="${OB.letWeeks}" oninput="_obFee()"> <span>weeks' rent (one-off)${isMulti?' ≈ 1 month':''}</span>`}</div></div>
+      <div class="feebox">${isF?`<input id="ob-fee" type="number" step="0.5" value="${OB.feePct}" oninput="_obFee()"> <span>% of monthly rent</span>`:`<input id="ob-weeks" type="number" step="0.5" value="${OB.letWeeks}" oninput="_obFee()"> <span>weeks' rent (one-off)${isMulti?' ≈ 1 month':''}</span>`}</div>
+      ${isF?`<div class="hint" style="margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span class="faint">Standard rate ${DEF_FEE}% \u00b7 discount</span><input type="number" step="0.5" min="0" value="0" style="width:64px" oninput="document.getElementById('ob-fee').value=Math.max(0,${DEF_FEE}-(parseFloat(this.value)||0));_obFee()"><span class="faint">pts off, as agreed with them</span></div>`:''}</div>
     <div class="note" id="ob-feenote">${isF
       ? `<b>Full management${isMulti?' · multiple agency':' · sole agency'}.</b> ${rent?'Your fee: <b>'+gbp(rent*OB.feePct/100)+'/mo</b>. ':''}Compliance, repairs, inspections, renewals. Tenant pays landlord directly (no client money).`
       : `<b>Let-only${isMulti?' · multiple agency':' · sole agency'}.</b> ${rent?'Your fee: <b>'+gbp(rent/4.345*OB.letWeeks)+'</b> one-off. ':''}Find tenant, paperwork, hand over. No ongoing fee.`}</div>`;
