@@ -1120,7 +1120,7 @@ function saveValuation(vid){
 }
 function markValuationSent(vid){
   const v=VAL(vid); v.status='sent'; v.sentAt=new Date().toISOString();
-  const lead=(S.landlordLeads||[]).find(l=>l.id===v.leadId); if(lead) lead.status='contacted';
+  const lead=(S.landlordLeads||[]).find(l=>l.id===v.leadId); if(lead){ lead.status='contacted'; lead.comms=lead.comms||[]; lead.comms.push({id:uid('c'),date:today(),type:'Note',note:'Valuation report sent to landlord (offline/printed).'}); }
   save(); render(); toast('✓ Marked as sent to landlord');
 }
 async function emailValuationReport(vid){
@@ -1128,7 +1128,9 @@ async function emailValuationReport(vid){
   if(!lead.email){ toast('No email on file for this landlord — add one on the enquiry first',1); return; }
   if(!LIVE){ toast('Connect to Supabase to send (not available in demo)',1); return; }
   const r=await agencyEmail(lead.email,'Your rental valuation & letting proposal — '+(S.agency.name||'NexLet'), valuationEmailHtml(v,lead));
-  if(r.ok){ v.status='sent'; v.sentAt=new Date().toISOString(); const l2=lead; l2.status='contacted';
+  if(r.ok){ v.status='sent'; v.sentAt=new Date().toISOString(); lead.status='contacted';
+    lead.comms=lead.comms||[]; lead.comms.push({id:uid('c'),date:today(),type:'Note',note:'Valuation report emailed to '+lead.email+'.'});
+    const existing=existingLandlordForLead(lead); if(existing){ existing.comms=existing.comms||[]; existing.comms.push({id:uid('c'),date:today(),type:'Note',note:'Valuation report emailed to '+lead.email+'.'}); pushLandlord(existing); }
     save(); render(); toast('✓ Emailed to '+lead.email); }
   else toast('⚠ Could not send — check the address and retry',1);
 }
@@ -1219,13 +1221,16 @@ function vValuationDetail(){
     ${pricingPlansHtml(v)}
 
     <div class="panel"><div class="panel-hd"><h2>Landlord proposal</h2></div>
-      <div class="panel-bd" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <div class="panel-bd">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
         <div class="faint" style="font-size:12.5px;max-width:420px">The report shown to the landlord — achievable rent (or pricing options), what we'll handle, what we need from them. No raw comparable data goes in it.</div>
         <div style="display:flex;gap:8px;flex-shrink:0;align-items:center">
           <button class="btn" onclick="go('valuationreport','${leadId}')">Open report</button>
           ${v.status==='sent'?`<span class="pill" style="background:var(--green-bg);color:var(--green)">✓ Sent ${fmtDate(v.sentAt||v.createdAt)}</span>`:`<button class="btn navy" onclick="emailValuationReport('${v.id}')">✉ Email report to landlord</button><a href="javascript:void(0)" onclick="markValuationSent('${v.id}')" style="font-size:11.5px">sent it another way</a>`}
           ${existingLandlord?`<span class="pill" style="background:var(--off);color:#64748B">Already onboarded</span><button class="btn navy" onclick="go('landlord','${existingLandlord.id}')">View landlord record</button>`:`<button class="btn navy" onclick="convertFromValuation('${v.id}')">Landlord's on board → send agreement</button>`}
         </div>
+      </div>
+      ${(lead.comms&&lead.comms.length)?`<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">${lead.comms.slice().reverse().map(c=>`<div class="faint" style="font-size:11.5px;padding:2px 0">${fmtDate(c.date)} — ${esc(c.note)}</div>`).join('')}</div>`:''}
       </div>
     </div>`;
 }
