@@ -1170,7 +1170,7 @@ function vLandlordDetail(){
   const d=l.docs||{};
   const docRow=(label,name,icon,col,date,expiry)=>`<div class="doc"><div class="di" style="background:${name?'var(--green-bg)':'var(--off)'};color:${name?'var(--green)':'var(--faint)'}">${icon}</div>
     <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${label}</div><div class="faint" style="font-size:11.5px">${name?esc(name)+(date?' · verified '+fmtDate(date):''):'Not uploaded'}${expiry?` · <span style="color:${new Date(expiry)<new Date()?'var(--red)':'var(--muted)'}">expires ${fmtDate(expiry)}</span>`:''}</div></div>
-    ${name?`<span class="pill" style="background:var(--green-bg);color:var(--green)">✓ On file</span>${d[col+'Url']?`<button class="btn sm" onclick="viewDoc('${d[col+'Url']}','${esc(label)}')">View</button>`:''}`:`<button class="btn sm" onclick="uploadDoc('${l.id}','${col}')">Upload</button>`}</div>`;
+    ${name?`<span class="pill" style="background:var(--green-bg);color:var(--green)">✓ On file</span>${d[col+'Url']?`<button class="btn sm" onclick="viewDoc('${d[col+'Url']}','${esc(label)}')">View</button>`:''}<button class="btn sm" onclick="uploadDoc('${l.id}','${col}','${esc(label).replace(/<[^>]*>/g,'')}')">Replace</button>`:`<button class="btn sm" onclick="uploadDoc('${l.id}','${col}','${esc(label).replace(/<[^>]*>/g,'')}')">Upload</button>`}</div>`;
   return `
     <div class="back" onclick="go('landlords')">← All landlords</div>
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px">
@@ -1205,7 +1205,7 @@ function vLandlordDetail(){
           <div class="kv"><span class="k">PRS Database</span><span class="v">${l.prsReg?'✓ '+esc(l.prsReg):'<span style="color:var(--amber)">⚠ Not verified</span>'}</span></div>
           <div class="kv"><span class="k">Non-resident (NRL)</span><span class="v">${l.nrl?'<span style="color:var(--purple)">Yes — NRL scheme applies</span>':'No'}</span></div>
           <div class="kv"><span class="k">AML / ID</span><span class="v">${l.aml?'✓ Verified '+(d.amlDate?'('+fmtDate(d.amlDate)+')':''):'<span style="color:var(--red)">Outstanding</span>'}</span></div>
-          <div class="kv" style="border:none"><span class="k">Sanctions screen</span><span class="v">${d.sanctions?'✓ Clear '+(d.sanctionsDate?'('+fmtDate(d.sanctionsDate)+')':''):'<span style="color:var(--red)">Not yet run</span>'}</span></div>
+          <div class="kv" style="border:none"><span class="k">Sanctions screen</span><span class="v">${d.sanctions?'✓ Clear '+(d.sanctionsDate?'('+fmtDate(d.sanctionsDate)+')':'')+(d.sanctionsMethod==='manual'?' · manual':''):`<span style="color:var(--red)">Not yet run</span> <button class="btn sm" style="margin-left:6px" onclick="ldRunSanctions('${l.id}')" ${l._sanctionsChecking?'disabled':''}>${l._sanctionsChecking?'Checking…':'Run check'}</button> <a href="javascript:void(0)" onclick="ldManualSanctions('${l.id}')" style="font-size:11.5px;margin-left:6px">check manually</a>`}</span></div>
         </div></div>
         <div class="panel"><div class="panel-hd"><h2>Document vault</h2></div><div class="panel-bd">
           ${docRow('Photo ID (AML)',d.id,'🪪','id',d.idDate,d.idExpiry)}
@@ -2840,8 +2840,8 @@ function saveComm(id){ const l=L(id); const note=val('cm-note'); if(!note){toast
   l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:val('cm-type'),note}); save(); pushLandlord(l); closeModal(); render(); toast('✓ Contact logged'); }
 
 // ── DOC UPLOAD / PROPERTY ADD ──
-function uploadDoc(id,col){ const l=L(id);
-  const label=col==='id'?'Photo ID (AML)':col==='ownership'?'Proof of ownership':'Signed agreement';
+function uploadDoc(id,col,passedLabel){ const l=L(id);
+  const label=passedLabel||(col==='id'?'Photo ID (AML)':col==='ownership'?'Proof of ownership':'Signed agreement');
   const cur=l.docs&&l.docs[col]; const curExp=(col==='id'&&l.docs&&l.docs.idExpiry)||'';
   window._udFile=null;
   const body=`<div class="fg"><label>${label}</label>
@@ -2881,6 +2881,33 @@ async function saveUploadDoc(id,col){
   if(col==='id'){ l.aml=true; const exp=val('ud-expiry'); if(exp) l.docs.idExpiry=exp; }
   if(col==='ownership')l.ownership=true; if(col==='agreement'){l.agreement=true;l.status='active';}
   save(); pushLandlord(l); window._udFile=null; closeModal(); render(); toast('✓ Document attached');
+}
+// ── Sanctions check post-onboarding (landlord detail page) ──
+async function ldRunSanctions(id){
+  const l=L(id); l._sanctionsChecking=true; render();
+  try{
+    const res=await fetch('https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/sanctions-check',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({name:l.name})});
+    const data=await res.json();
+    if(data.error){ toast(data.error+' — or use "check manually"',1); l._sanctionsChecking=false; render(); return; }
+    l.docs=l.docs||{};
+    if(data.clear){ l.docs.sanctions=true; l.docs.sanctionsDate=today(); l.docs.sanctionsMethod='auto'; toast('✓ No match on the UK Sanctions List'); }
+    else { l._sanctionsMatches=data.matches||[]; toast('⚠ Possible match found — review before proceeding',1); }
+  }catch(e){ toast('Sanctions check failed — use "check manually" below',1); }
+  l._sanctionsChecking=false; save(); pushLandlord(l); render();
+}
+function ldManualSanctions(id){
+  const l=L(id);
+  const body=`<div class="faint" style="font-size:12px;margin-bottom:10px">Search the name yourself on the <a href="https://www.gov.uk/government/publications/financial-sanctions-consolidated-list-of-targets/consolidated-list-of-targets" target="_blank">UK Sanctions List search on gov.uk</a>, then log what you found.</div>
+    <div class="fg"><label>Result</label><select id="ld-sanc-result"><option value="clear">No match found</option><option value="match">Possible match found — needs review</option></select></div>
+    <div class="fg"><label>Notes <span class="faint">(optional)</span></label><input id="ld-sanc-notes" placeholder="search terms used, near-matches dismissed, etc"></div>`;
+  modal('Log manual sanctions check', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="ldSaveManualSanctions('${id}')">Save</button>`, true);
+}
+function ldSaveManualSanctions(id){
+  const l=L(id); l.docs=l.docs||{};
+  const result=val('ld-sanc-result'), notes=val('ld-sanc-notes');
+  l.docs.sanctions=(result==='clear'); l.docs.sanctionsDate=today(); l.docs.sanctionsMethod='manual'; l.docs.sanctionsNotes=notes||'';
+  save(); pushLandlord(l); closeModal(); render();
+  toast(result==='clear'?'✓ Manual check logged':'Logged — resolve the possible match before proceeding',1);
 }
 function addProperty(id){ const l=L(id); const defFee=(l.feePct!=null?l.feePct:DEF_FEE);
   const body=`<div class="grid2" style="gap:10px"><div class="fg"><label>Address</label><input id="ap-addr" placeholder="e.g. 12 High Street"></div>
