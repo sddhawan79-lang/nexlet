@@ -2564,7 +2564,7 @@ async function obFinish(){
       incorporation:OB.incorpDoc||'',directorId:OB.dirIdDoc||'',directors:(OB.extraDirectors||[]).filter(d=>d.fileName).map(d=>({name:d.name,fileName:d.fileName})),
       id2:OB.idDoc2||'',address2:OB.addrDoc2||'',id2Date:OB.idDoc2?today():'',address2Date:OB.addrDoc2?today():'',
       mortgageConsent:OB.mortgageConsentDoc||'',freeholderConsent:OB.freeholderConsentDoc||'',
-      isCompany:!!OB.isCompany,isMortgaged:!!OB.isMortgaged,isLeasehold:!!OB.isLeasehold,sanctions:!!OB.sanctions,sanctionsDate:OB.sanctions?today():''},
+      isCompany:!!OB.isCompany,isMortgaged:!!OB.isMortgaged,isLeasehold:!!OB.isLeasehold,sanctions:!!OB.sanctions,sanctionsDate:OB.sanctions?today():'',sanctionsMethod:OB.sanctionsMethod||'auto',sanctionsNotes:OB.sanctionsManualNotes||''},
     comms:[{id:uid('c'),date:today(),type:'Note',note:'Landlord onboarded · '+SVC[OB.service].label+(OB.agreement?' · agreement signed':' · agreement pending')}]};
   S.landlords.push(ll); pushLandlord(ll);
   const allProps=[...(OB.properties||[])]; const draft=_obDraftToProp(); if(draft) allProps.push(draft);
@@ -2609,7 +2609,16 @@ async function obVerifyId(btn){
     const hits=b.filter(t=>a.has(t)).length;
     OB.idAiMatch = hits>=Math.min(2,a.size) || (a.size===1&&hits>=1);
     OB.aml = OB.idAiMatch;
-  }catch(e){ toast('Could not read the ID — review manually',1); OB.idAiChecked=true; OB.idAiMatch=false; }
+  }catch(e){ toast('Could not read the ID — check the document yourself below',1); OB.idAiChecked=true; OB.idAiMatch=false; OB.idAiName=''; }
+  renderOnboard();
+}
+// Manual override when the AI misreads the name (blurry photo, glare, handwriting) — agent confirms what's actually on the document.
+function obConfirmIdName(){
+  const typed=val('ob-id-ai-fix'); if(!typed){toast('Type the name shown on the ID',1);return;}
+  OB.idAiName=typed; OB.idAiMatch=true; OB.idAiOverridden=true; OB.aml=true;
+  const norm=s=>(s||'').toLowerCase().replace(/[^a-z ]/g,'').split(' ').filter(Boolean);
+  const a=new Set(norm(OB.name)); const b=norm(typed); const hits=b.filter(t=>a.has(t)).length;
+  if(hits<Math.min(2,a.size)&&!(a.size===1&&hits>=1)) toast('Noted — name still differs from "'+OB.name+'". Confirm that\'s expected (e.g. maiden name) before proceeding.',1);
   renderOnboard();
 }
 // ── AI: verify ownership doc owner name against the landlord's name ──
@@ -2644,7 +2653,16 @@ async function obRunSanctionsCheck(){
     OB.sanctions=data.clear;
     OB.sanctionsChecking=false;
     toast(data.clear?'✓ No match on the UK Sanctions List':'⚠ Possible match found — review before continuing');
-  }catch(e){ toast('Sanctions check failed — try again',1); OB.sanctionsChecking=false; }
+  }catch(e){ toast('Sanctions check failed — try again, or use "Check manually" below',1); OB.sanctionsChecking=false; }
+  renderOnboard();
+}
+function obLogManualSanctionsCheck(){
+  const result=val('ob-sanc-manual-result'), notes=val('ob-sanc-manual-notes');
+  OB.sanctionsMethod='manual'; OB.sanctionsManual=false; OB.sanctionsMatches=[];
+  OB.sanctionsManualNotes=notes||''; OB.sanctionsCheckedAt=new Date().toISOString();
+  OB.sanctions=(result==='clear');
+  if(result!=='clear'){ toast('Logged — resolve the possible match before proceeding',1); }
+  else toast('✓ Manual check logged');
   renderOnboard();
 }
 function renderOnboard(){
@@ -2669,7 +2687,11 @@ function renderOnboard(){
   if(s===2) body=`<div class="note" style="margin-bottom:14px">Anti-money-laundering &amp; sanctions checks — legally required for every letting since 14 May 2025 (Money Laundering Regs 2017). Verify identity, current address, and screen against the UK/OFSI sanctions list. Keep records for 5 years.</div>
     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;margin-bottom:14px"><input type="checkbox" style="width:auto" ${OB.isCompany?'checked':''} onchange="OB.isCompany=this.checked;renderOnboard()"> This is a limited-company / corporate landlord</label>
     ${obDoc('idDoc','Photo ID <span class="faint">(passport or driving licence)</span>','e.g. passport.pdf')}
-    ${OB.idDoc?`<div id="ob-id-ai" style="margin:-6px 0 12px;font-size:11.5px">${OB.idAiChecked?(OB.idAiMatch?'<span style="color:var(--green)">✓ AI read: '+esc(OB.idAiName||'')+(OB.idAiExpiry?', expires '+esc(OB.idAiExpiry):'')+' — matches landlord name</span>':'<span style="color:var(--red)">⚠ AI read: '+esc(OB.idAiName||'unreadable')+' — name does not match '+esc(OB.name)+', review manually</span>'):'<button class="btn" style="font-size:11px;padding:4px 10px" onclick="obVerifyId(this)">✦ Verify with AI</button>'}</div>`:''}
+    ${OB.idDoc?`<div id="ob-id-ai" style="margin:-6px 0 12px;font-size:11.5px">${OB.idAiChecked?(OB.idAiOverridden?'<span style="color:var(--green)">✓ Confirmed by you: '+esc(OB.idAiName||'')+'</span> <a href="javascript:void(0)" onclick="OB.idAiOverridden=false;renderOnboard()" style="margin-left:6px">change</a>'
+        :OB.idAiMatch?'<span style="color:var(--green)">✓ AI read: '+esc(OB.idAiName||'')+(OB.idAiExpiry?', expires '+esc(OB.idAiExpiry):'')+' — matches landlord name</span>'
+        :'<span style="color:var(--red)">⚠ AI read: '+esc(OB.idAiName||'unreadable')+' — name does not match '+esc(OB.name)+'. Photo may be blurry or the AI misread it — check the document yourself:</span>'
+          +'<div style="display:flex;gap:6px;margin-top:6px"><input id="ob-id-ai-fix" placeholder="Type the name exactly as shown on the ID" value="'+esc(OB.idAiName||'')+'" style="flex:1;font-size:11.5px"><button class="btn sm navy" onclick="obConfirmIdName()" type="button">Confirm</button></div>'
+        ):'<button class="btn" style="font-size:11px;padding:4px 10px" onclick="obVerifyId(this)">✦ Verify with AI</button>'}</div>`:''}
     ${obDoc('addrDoc','Proof of current address <span class="faint">(utility bill / bank statement, under 3 months)</span>','e.g. utility_bill.pdf')}
     ${OB.entity==='joint'?`<div class="note" style="margin:2px 0 12px">Joint owners — both are named and liable on the agreement, so both need their own AML check.</div>
       ${obDoc('idDoc2',(esc(OB.joint)||'Owner 2')+' — Photo ID','e.g. passport.pdf')}
@@ -2683,10 +2705,19 @@ function renderOnboard(){
       </div>`).join('')
       +`<button class="btn sm" onclick="obAddDirector()" type="button">＋ Add another director / beneficial owner</button>`:''}
     <div class="chk ${OB.sanctions?'on':''}" style="cursor:default" onclick="if(!OB.sanctionsChecking)renderOnboard()"><div class="box">${OB.sanctions?'✓':''}</div><div style="flex:1"><div style="font-weight:600;font-size:13px">Sanctions (UK Sanctions List) check</div>
-      ${OB.sanctions?`<div class="faint" style="font-size:11px">Screened ${fmtDate(today())} — no match on the current UK Sanctions List</div>`
+      ${OB.sanctions?`<div class="faint" style="font-size:11px">${OB.sanctionsMethod==='manual'?'Manually checked':'Screened'} ${fmtDate(today())} — no match on the current UK Sanctions List${OB.sanctionsManualNotes?' · '+esc(OB.sanctionsManualNotes):''}</div>`
         :OB.sanctionsMatches&&OB.sanctionsMatches.length?`<div style="font-size:11px;color:var(--red)">⚠ ${OB.sanctionsMatches.length} possible match(es) — review before proceeding: ${OB.sanctionsMatches.map(m=>esc(m.name)+' ('+m.confidence+'%)').join(', ')}</div>
           <label style="display:flex;align-items:center;gap:6px;font-size:11px;margin-top:4px;cursor:pointer"><input type="checkbox" style="width:auto" onchange="OB.sanctions=this.checked;renderOnboard()"> I've reviewed these and confirmed no true match</label>`
-        :`<button class="btn" style="font-size:11px;padding:4px 10px;margin-top:2px" onclick="obRunSanctionsCheck()" ${OB.sanctionsChecking?'disabled':''}>${OB.sanctionsChecking?'Checking against gov.uk…':'Run sanctions check'}</button>`}
+        :`<div style="display:flex;align-items:center;gap:8px;margin-top:2px;flex-wrap:wrap">
+            <button class="btn" style="font-size:11px;padding:4px 10px" onclick="obRunSanctionsCheck()" ${OB.sanctionsChecking?'disabled':''}>${OB.sanctionsChecking?'Checking against gov.uk…':'Run sanctions check'}</button>
+            <a href="javascript:void(0)" onclick="OB.sanctionsManual=!OB.sanctionsManual;renderOnboard()" style="font-size:11px">${OB.sanctionsManual?'Cancel manual check':"Can't reach it? Check manually"}</a>
+          </div>
+          ${OB.sanctionsManual?`<div style="border:1px dashed var(--border);border-radius:7px;padding:10px;margin-top:8px">
+            <div class="faint" style="font-size:11px;margin-bottom:8px">Search the name yourself on the <a href="https://www.gov.uk/government/publications/financial-sanctions-consolidated-list-of-targets/consolidated-list-of-targets" target="_blank">UK Sanctions List search on gov.uk</a>, then log what you found.</div>
+            <select id="ob-sanc-manual-result" style="margin-bottom:8px"><option value="clear">No match found</option><option value="match">Possible match found — needs review</option></select>
+            <input id="ob-sanc-manual-notes" placeholder="Notes (optional — search terms used, any near-matches dismissed)" style="margin-bottom:8px;width:100%">
+            <button class="btn sm navy" onclick="obLogManualSanctionsCheck()" type="button">Log manual check result</button>
+          </div>`:''}`}
     </div></div>
     <div class="chk ${OB.aml?'on':''}" onclick="OB.aml=!OB.aml;renderOnboard()"><div class="box">${OB.aml?'✓':''}</div><div><div style="font-weight:600;font-size:13px">Identity &amp; AML check passed</div><div class="faint" style="font-size:11px">Confirm once you've reviewed the ID, address proof and sanctions result above</div></div></div>`;
   if(s===3) body=`<div class="note" style="margin-bottom:14px">Confirm the landlord is legally entitled to let — and that any lender or freeholder permits letting. Title register, mortgage statement or council tax bill.</div>
