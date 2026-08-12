@@ -3136,9 +3136,7 @@ function openAgreement(id){
     <div class="fg"><label>Agreement preview</label>
       <div id="ag-preview" style="max-height:220px;overflow-y:auto;border:1px solid #E4EAF1;border-radius:8px;padding:14px;font-size:12.5px;line-height:1.7;background:var(--off)">${buildManagementAgreement(l,service)}</div></div>
     <div class="fg"><label>Your name (signing for ${esc(S.agency.name||'the agency')})</label><input id="ag-agent-name" value="${esc(window._agentName||S.agency.name||'')}"></div>
-    <div class="fg"><label>Your signature</label>
-      <div style="border:1.5px solid #E4EAF1;border-radius:8px;overflow:hidden;background:#fff"><canvas id="ag-sig" style="display:block;width:100%;height:130px;touch-action:none;cursor:crosshair"></canvas></div>
-      <div style="margin-top:6px"><button class="btn sm" onclick="agClearSig()">Clear</button></div></div>
+    ${sigBlockHtml('ag')}
     <p class="hint">You sign first, then NexLet emails the landlord a secure link to counter-sign. Both parties receive a timestamped copy automatically once complete.</p>`;
   modal('Send agreement for e-signature', body,
     `<button class="btn" onclick="closeModal()">Cancel</button>
