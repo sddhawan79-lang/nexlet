@@ -1066,7 +1066,7 @@ function computePricingPlans(v){
   const plans=[
     {key:'quick',label:'Quick-let price',rent:Math.round(base*0.97/5)*5,pace:'Fastest — minimises void',note:'Slightly under market value, to secure a tenant with no void period.'},
     {key:'recommended',label:'Recommended — market value',rent:base,pace:'Balanced — realistic time to let',note:v.comparables.length?`Based on the average of your ${v.comparables.length} comparable letting${v.comparables.length===1?'':'s'}.`:'Based on your entered market valuation figure.'},
-    {key:'stretch',label:'Stretch price',rent:Math.round(base*1.05/5)*5,pace:'Slower — tests appetite above market',note:'Above market value; expect fewer enquiries and a longer time to let.'}
+    {key:'stretch',label:'Stretch price',rent:Math.round(base*1.05/5)*5,pace:'Worth testing first',note:'A stronger opening price — if it doesn\u2019t land within a couple of weeks, we simply adjust down to the recommended figure.'}
   ];
   if(target&&Math.abs(target-base)>=Math.max(15,base*0.02)) plans.push({key:'landlord',label:"Landlord's asking price",rent:target,
     pace:target>base?'Slower — may sit longer before an offer':'Likely to let quickly — below market value',
@@ -1140,9 +1140,14 @@ function convertFromValuation(vid){
   OB.feePct=v.feePct!=null?v.feePct:DEF_FEE; OB.letWeeks=v.letWeeks!=null?v.letWeeks:DEF_WEEKS;
   renderOnboard();
 }
+function existingLandlordForLead(lead){
+  if(!lead) return null;
+  return (S.landlords||[]).find(l=>(lead.email&&l.email&&l.email.toLowerCase()===lead.email.toLowerCase())||(lead.name&&l.name&&l.name.toLowerCase()===lead.name.toLowerCase()))||null;
+}
 function vValuationDetail(){
   const leadId=sel; const lead=(S.landlordLeads||[]).find(l=>l.id===leadId); if(!lead) return vLandlords();
   const v=valFor(leadId); const isFull=v.service==='full';
+  const existingLandlord=existingLandlordForLead(lead);
   const avgRent=v.comparables.length?v.comparables.reduce((s,c)=>s+(parseFloat(c.rent)||0),0)/v.comparables.length:0;
   const ownComps=ownComparables(v);
   return `<div class="back" onclick="go('landlords')">← Landlords</div>
@@ -1219,7 +1224,7 @@ function vValuationDetail(){
         <div style="display:flex;gap:8px;flex-shrink:0;align-items:center">
           <button class="btn" onclick="go('valuationreport','${leadId}')">Open report</button>
           ${v.status==='sent'?`<span class="pill" style="background:var(--green-bg);color:var(--green)">✓ Sent ${fmtDate(v.sentAt||v.createdAt)}</span>`:`<button class="btn navy" onclick="emailValuationReport('${v.id}')">✉ Email report to landlord</button><a href="javascript:void(0)" onclick="markValuationSent('${v.id}')" style="font-size:11.5px">sent it another way</a>`}
-          <button class="btn navy" onclick="convertFromValuation('${v.id}')">Landlord's on board → send agreement</button>
+          ${existingLandlord?`<span class="pill" style="background:var(--off);color:#64748B">Already onboarded</span><button class="btn navy" onclick="go('landlord','${existingLandlord.id}')">View landlord record</button>`:`<button class="btn navy" onclick="convertFromValuation('${v.id}')">Landlord's on board → send agreement</button>`}
         </div>
       </div>
     </div>`;
