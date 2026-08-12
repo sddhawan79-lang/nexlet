@@ -6,7 +6,7 @@
 <title>NexLet — Agency Portal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600;700&family=Dancing+Script:wght@600;700&family=Caveat:wght@600;700&display=swap" rel="stylesheet">
 <style>
 :root{
   --navy:#0B1E3D; --navy2:#16305a; --orange:#E8923A; --green:#1B7A4B; --green-bg:#EAF6EF;
@@ -3072,6 +3072,56 @@ function buildManagementAgreement(l, service){
     <p style="font-size:11px;color:#7A8FA6;margin-top:8px">Signed for and on behalf of ${esc(a.name||'the Agent')}${a.companyNo?' (company no. '+esc(a.companyNo)+')':''}${a.address?', '+esc(a.address):''}.</p>`;
 }
 
+// ── Signature capture: draw with mouse/touch, or type your name in a signature-style font ──
+const SIG_FONTS=[['Dancing Script','cursive, sans-serif'],['Caveat','cursive, sans-serif']];
+function sigBlockHtml(prefix){
+  return `<div class="fg"><label>Your signature</label>
+    <div style="display:flex;gap:14px;margin-bottom:8px;font-size:12.5px">
+      <label style="cursor:pointer;display:flex;align-items:center;gap:5px"><input type="radio" name="${prefix}-sigmode" value="draw" checked onchange="setSigMode('${prefix}','draw')" style="width:auto">Draw</label>
+      <label style="cursor:pointer;display:flex;align-items:center;gap:5px"><input type="radio" name="${prefix}-sigmode" value="type" onchange="setSigMode('${prefix}','type')" style="width:auto">Type</label>
+    </div>
+    <div id="${prefix}-draw-wrap" style="border:1.5px solid #E4EAF1;border-radius:8px;overflow:hidden;background:#fff"><canvas id="${prefix}-sig" style="display:block;width:100%;height:130px;touch-action:none;cursor:crosshair"></canvas></div>
+    <div id="${prefix}-type-wrap" style="display:none">
+      <input id="${prefix}-sig-text" placeholder="Type your name" oninput="renderTypedSig('${prefix}')" style="margin-bottom:8px">
+      <select id="${prefix}-sig-font" onchange="renderTypedSig('${prefix}')" style="margin-bottom:8px">${SIG_FONTS.map(f=>`<option value="${f[0]},${f[1]}">${f[0]}</option>`).join('')}</select>
+      <div style="border:1.5px solid #E4EAF1;border-radius:8px;background:#fff;height:90px;display:flex;align-items:center;padding:0 16px;overflow:hidden"><span id="${prefix}-sig-preview" style="font-size:38px;color:#0B1E3D;white-space:nowrap"></span></div>
+    </div>
+    <div style="margin-top:6px"><button class="btn sm" onclick="clearSig('${prefix}')" type="button">Clear</button></div></div>`;
+}
+function setSigMode(prefix,mode){
+  window['_'+prefix+'SigMode']=mode;
+  document.getElementById(prefix+'-draw-wrap').style.display=mode==='draw'?'':'none';
+  document.getElementById(prefix+'-type-wrap').style.display=mode==='type'?'':'none';
+}
+function renderTypedSig(prefix){
+  const text=val(prefix+'-sig-text'); const font=val(prefix+'-sig-font').split(',')[0];
+  document.getElementById(prefix+'-sig-preview').style.fontFamily="'"+font+"', cursive";
+  document.getElementById(prefix+'-sig-preview').textContent=text;
+}
+function clearSig(prefix){
+  const pad=window['_'+prefix+'SigPadObj']; if(pad) pad.clear();
+  const t=document.getElementById(prefix+'-sig-text'); if(t){ t.value=''; renderTypedSig(prefix); }
+}
+function initSigPad(prefix){
+  window['_'+prefix+'SigMode']='draw';
+  const c=document.getElementById(prefix+'-sig'); if(!c||!window.SignaturePad) return;
+  const ratio=Math.max(window.devicePixelRatio||1,1);
+  c.width=c.offsetWidth*ratio; c.height=c.offsetHeight*ratio; c.getContext('2d').scale(ratio,ratio);
+  window['_'+prefix+'SigPadObj']=new SignaturePad(c,{penColor:'#0B1E3D',minWidth:0.7,maxWidth:2.2});
+}
+// Returns a dataURL for whichever mode is active, or null if nothing captured
+function getSigDataUrl(prefix){
+  const mode=window['_'+prefix+'SigMode']||'draw';
+  if(mode==='draw'){ const pad=window['_'+prefix+'SigPadObj']; return (pad&&!pad.isEmpty())?pad.toDataURL('image/png'):null; }
+  const text=val(prefix+'-sig-text'); if(!text) return null;
+  const font=val(prefix+'-sig-font').split(',')[0];
+  const c=document.createElement('canvas'); c.width=600; c.height=160; const ctx=c.getContext('2d');
+  ctx.fillStyle='#fff'; ctx.fillRect(0,0,c.width,c.height);
+  ctx.fillStyle='#0B1E3D'; ctx.font="52px '"+font+"', cursive"; ctx.textBaseline='middle';
+  ctx.fillText(text,20,c.height/2);
+  return c.toDataURL('image/png');
+}
+
 function openAgreement(id){
   const l=L(id); if(!l.id) return;
   const service=l.service||'full';
@@ -3094,12 +3144,7 @@ function openAgreement(id){
     `<button class="btn" onclick="closeModal()">Cancel</button>
      <button class="btn" onclick="markAgreementOffline('${id}')">Mark signed offline</button>
      <button class="btn navy" onclick="sendAgreement('${id}')">Sign &amp; send to landlord</button>`, true);
-  setTimeout(()=>{
-    const c=document.getElementById('ag-sig'); if(!c||!window.SignaturePad) return;
-    const ratio=Math.max(window.devicePixelRatio||1,1);
-    c.width=c.offsetWidth*ratio; c.height=c.offsetHeight*ratio; c.getContext('2d').scale(ratio,ratio);
-    _agSigPad=new SignaturePad(c,{penColor:'#0B1E3D',minWidth:0.7,maxWidth:2.2});
-  },30);
+  setTimeout(()=>{ initSigPad('ag'); },30);
 }
 function agRefreshPreview(id){ const l=L(id); const sv=document.getElementById('ag-service').value; document.getElementById('ag-preview').innerHTML=buildManagementAgreement(l,sv); }
 function agClearSig(){ if(_agSigPad) _agSigPad.clear(); }
@@ -3110,12 +3155,13 @@ async function sendAgreement(id){
   const jointEmail=l.entity==='joint'?val('ag-joint-email'):'';
   if(!email){ toast('Enter the landlord\'s email',1); return; }
   if(l.entity==='joint'&&!jointEmail){ toast('Enter the joint owner\'s email too',1); return; }
-  if(!_agSigPad||_agSigPad.isEmpty()){ toast('Please add your signature',1); return; }
+  const sigDataUrl=getSigDataUrl('ag');
+  if(!sigDataUrl){ toast('Please add your signature',1); return; }
   if(!LIVE){ toast('Connect to Supabase to send (not available in demo)',1); return; }
   const token=uid('agt')+Math.random().toString(36).slice(2,10);
   const row={ id:uid('ag'), agency_id:window._agencyId, landlord_id:l.id, token, service,
     document_html:buildManagementAgreement(l,service), agent_name:agentName, agent_email:window._agentEmail||'',
-    agent_sig_png:_agSigPad.toDataURL('image/png'), agent_signed_at:new Date().toISOString(),
+    agent_sig_png:sigDataUrl, agent_signed_at:new Date().toISOString(),
     landlord_name:l.name, landlord_email:email, entity:l.entity||'individual', joint_name:l.entity==='joint'?(l.joint||''):'', joint_email:jointEmail, status:'sent' };
   const { error }=await sb.from('agency_agreements').insert(row);
   if(error){ console.error(error); toast('⚠ Could not create agreement — retry',1); return; }
@@ -3267,27 +3313,24 @@ function openTenancyAgreement(pid){
     ${occWithEmail.length?`<div class="note" style="margin:-8px 0 4px">${occWithEmail.map(o=>esc(o.name)).join(', ')} will also be sent the link — every named adult signs in one sitting.</div>`:''}
     <div class="fg"><label>Agreement preview</label><div id="ta-preview" style="max-height:220px;overflow-y:auto;border:1px solid #E4EAF1;border-radius:8px;padding:14px;font-size:12.5px;line-height:1.7;background:var(--off)">${buildTenancyAgreementHtml(p,rec,l)}</div></div>
     <div class="fg"><label>Your name (signing on behalf of ${esc(landlordName(l))})</label><input id="ta-agent-name" value="${esc(window._agentName||S.agency.name||'')}"></div>
-    <div class="fg"><label>Your signature</label>
-      <div style="border:1.5px solid #E4EAF1;border-radius:8px;overflow:hidden;background:#fff"><canvas id="ta-sig" style="display:block;width:100%;height:130px;touch-action:none;cursor:crosshair"></canvas></div>
-      <div style="margin-top:6px"><button class="btn sm" onclick="_taClearSig()">Clear</button></div></div>
+    ${sigBlockHtml('ta')}
     <p class="hint">You sign first, then NexLet emails the tenant (and any joint occupants) a secure link to sign together. Everyone receives a timestamped copy once complete.</p>`;
   modal('Send tenancy terms &amp; conditions for e-signature', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="sendTenancyAgreement('${pid}')">Sign &amp; send to tenant</button>`, true);
-  setTimeout(()=>{ const c=document.getElementById('ta-sig'); if(!c||!window.SignaturePad) return;
-    const ratio=Math.max(window.devicePixelRatio||1,1); c.width=c.offsetWidth*ratio; c.height=c.offsetHeight*ratio; c.getContext('2d').scale(ratio,ratio);
-    _tnAgSigPad=new SignaturePad(c,{penColor:'#0B1E3D',minWidth:0.7,maxWidth:2.2}); },30);
+  setTimeout(()=>{ initSigPad('ta'); },30);
 }
-function _taClearSig(){ if(_tnAgSigPad) _tnAgSigPad.clear(); }
+function _taClearSig(){ clearSig('ta'); }
 async function sendTenancyAgreement(pid){
   const p=P(pid); const l=L(p.landlordId); const rec=tenantRecFor(pid);
   const email=val('ta-email'); const agentName=val('ta-agent-name')||S.agency.name||'The agent';
   if(!email){ toast('Enter the tenant\'s email',1); return; }
-  if(!_tnAgSigPad||_tnAgSigPad.isEmpty()){ toast('Please add your signature',1); return; }
+  const sigDataUrl=getSigDataUrl('ta');
+  if(!sigDataUrl){ toast('Please add your signature',1); return; }
   if(!LIVE){ toast('Connect to Supabase to send (not available in demo)',1); return; }
   const token=uid('ta')+Math.random().toString(36).slice(2,10);
   const occupants=(rec.occupants||[]).filter(o=>o.name).map(o=>({name:o.name,email:o.email||''}));
   const row={ id:uid('ta'), agency_id:window._agencyId, property_id:pid, tenant_id:rec.id, landlord_id:l.id, token,
     document_html: buildTenancyAgreementHtml(p,rec,l), agent_name:agentName, agent_email:window._agentEmail||'',
-    agent_sig_png:_tnAgSigPad.toDataURL('image/png'), agent_signed_at:new Date().toISOString(),
+    agent_sig_png:sigDataUrl, agent_signed_at:new Date().toISOString(),
     tenant_name:rec.name, tenant_email:email, occupants, status:'sent' };
   const { error }=await sb.from('agency_tenancy_agreements').insert(row);
   if(error){ console.error(error); toast('⚠ Could not send — run tenancy-agreement-esign-migration.sql then retry',1); return; }
