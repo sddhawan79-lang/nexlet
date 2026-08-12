@@ -183,8 +183,8 @@ let LIVE=false;                 // set true only after the auth gateway passes
 window._agencyId=null;          // every LIVE query is scoped to this agency
 
 // ── row ⇄ in-memory-object mappers (snake_case DB ⇄ camelCase S) ──
-const rowToAgency=r=>({name:r.name||'',address:r.address||'',companyNo:r.company_no||'',rentGuide:r.rent_guide||[],redress:r.redress_scheme||'',redressNo:r.redress_no||'',cmp:r.cmp_scheme||'Not holding client money',cmpNo:r.cmp_no||'',refPartner:r.ref_partner||'',icoNo:r.ico_no||'',vatRegistered:!!r.vat_registered,vatNumber:r.vat_number||'',invoiceSeq:r.invoice_seq||0,paymentTerms:r.payment_terms||14,abortiveFee:r.abortive_fee??250,noticeFee:r.notice_fee??75,renewalFee:r.renewal_fee??60,arrearsFee:r.arrears_fee??30,keyFee:r.key_fee??60,insuranceFee:r.insurance_fee??50,disputeFee:r.dispute_fee??75,invMoveinFee:r.inv_movein_fee??75,invMoveoutFee:r.inv_moveout_fee??65});
-const agencyToRow=a=>({name:a.name,address:a.address,company_no:a.companyNo||null,rent_guide:a.rentGuide||[],redress_scheme:a.redress,redress_no:a.redressNo,cmp_scheme:a.cmp,cmp_no:a.cmpNo,ref_partner:a.refPartner,ico_no:a.icoNo,vat_registered:!!a.vatRegistered,vat_number:a.vatNumber,invoice_seq:a.invoiceSeq||0,payment_terms:a.paymentTerms||14,abortive_fee:a.abortiveFee||0,notice_fee:a.noticeFee||0,renewal_fee:a.renewalFee||0,arrears_fee:a.arrearsFee||0,key_fee:a.keyFee||0,insurance_fee:a.insuranceFee||0,dispute_fee:a.disputeFee||0,inv_movein_fee:a.invMoveinFee||0,inv_moveout_fee:a.invMoveoutFee||0,updated_at:new Date().toISOString()});
+const rowToAgency=r=>({name:r.name||'',address:r.address||'',companyNo:r.company_no||'',rentGuide:r.rent_guide||[],marketComps:r.market_comps||[],redress:r.redress_scheme||'',redressNo:r.redress_no||'',cmp:r.cmp_scheme||'Not holding client money',cmpNo:r.cmp_no||'',refPartner:r.ref_partner||'',icoNo:r.ico_no||'',vatRegistered:!!r.vat_registered,vatNumber:r.vat_number||'',invoiceSeq:r.invoice_seq||0,paymentTerms:r.payment_terms||14,abortiveFee:r.abortive_fee??250,noticeFee:r.notice_fee??75,renewalFee:r.renewal_fee??60,arrearsFee:r.arrears_fee??30,keyFee:r.key_fee??60,insuranceFee:r.insurance_fee??50,disputeFee:r.dispute_fee??75,invMoveinFee:r.inv_movein_fee??75,invMoveoutFee:r.inv_moveout_fee??65});
+const agencyToRow=a=>({name:a.name,address:a.address,company_no:a.companyNo||null,rent_guide:a.rentGuide||[],market_comps:a.marketComps||[],redress_scheme:a.redress,redress_no:a.redressNo,cmp_scheme:a.cmp,cmp_no:a.cmpNo,ref_partner:a.refPartner,ico_no:a.icoNo,vat_registered:!!a.vatRegistered,vat_number:a.vatNumber,invoice_seq:a.invoiceSeq||0,payment_terms:a.paymentTerms||14,abortive_fee:a.abortiveFee||0,notice_fee:a.noticeFee||0,renewal_fee:a.renewalFee||0,arrears_fee:a.arrearsFee||0,key_fee:a.keyFee||0,insurance_fee:a.insuranceFee||0,dispute_fee:a.disputeFee||0,inv_movein_fee:a.invMoveinFee||0,inv_moveout_fee:a.invMoveoutFee||0,updated_at:new Date().toISOString()});
 const rowToLandlord=r=>({id:r.id,name:r.name||'',joint:r.joint||'',jointEmail:r.joint_email||'',entity:r.entity||'individual',boardOptOut:!!(r.docs&&r.docs.boardOptOut),email:r.email||'',phone:r.phone||'',address:r.address||'',nrl:!!r.nrl,prsReg:r.prs_reg||'',payout:r.payout||'',contactPref:r.contact_pref||'Email',aml:!!r.aml_verified,ownership:!!r.ownership_verified,service:r.service||'full',feePct:r.fee_pct,letWeeks:r.let_weeks,agreement:!!r.agreement_signed,status:r.status||'pending',docs:r.docs||{},comms:r.comms||[],inviteToken:r.invite_token||'',invitedAt:r.invited_at||''});
 const landlordToRow=l=>({id:l.id,agency_id:window._agencyId,name:l.name,joint:l.joint||null,joint_email:l.jointEmail||null,entity:l.entity||'individual',email:l.email,phone:l.phone,address:l.address,nrl:!!l.nrl,prs_reg:l.prsReg,payout:l.payout,contact_pref:l.contactPref,aml_verified:!!l.aml,ownership_verified:!!l.ownership,service:l.service,fee_pct:l.feePct,let_weeks:l.letWeeks,agreement_signed:!!l.agreement,status:l.status,docs:l.docs||{},comms:l.comms||[],invite_token:l.inviteToken||null,invited_at:l.invitedAt||null,updated_at:new Date().toISOString()});
 // Bill-to / statement name — a company landlord shows the company name; joint owners
@@ -559,7 +559,7 @@ function openListing(id,pid){
       <div class="fg"><label>Available from</label><input id="ls-avail" type="date" value="${l.available||''}"></div>
     </div>
     <div class="fg"><label>EPC rating</label><select id="ls-epc">${['','A','B','C','D','E','F','G'].map(t=>`<option ${l.epc===t?'selected':''}>${t||'—'}</option>`).join('')}</select></div>
-    <div class="fg"><label>Description</label><textarea id="ls-desc" rows="3" placeholder="Bright two-bed flat close to transport…">${esc(l.description||'')}</textarea></div>
+    <div class="fg"><label>Description</label><div style="display:flex;gap:8px;align-items:flex-start"><textarea id="ls-desc" rows="3" placeholder="Bright two-bed flat close to transport…" style="flex:1">${esc(l.description||'')}</textarea><button class="btn sm" id="ls-ai-btn" onclick="generateListingDescription()" type="button" style="flex-shrink:0">✦ AI draft</button></div></div>
     <div class="fg"><label>Key features (comma-separated)</label><input id="ls-feat" value="${esc((l.features||[]).join(', '))}" placeholder="Garden, Parking, Double glazing"></div>`;
   modal(id?'Edit listing':'Create listing', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveListing('${l.id}')">Save listing</button>`, true);
   window._edLST=l;
@@ -575,6 +575,27 @@ function saveListing(lid){
   l.shareToken=l.shareToken||(uid('sh')+Math.random().toString(36).slice(2,8));
   S.listings=S.listings||[]; if(!S.listings.find(x=>x.id===l.id)) S.listings.push(l);
   save(); pushListing&&pushListing(l); closeModal(); go('listing',l.id); toast('✓ Listing saved');
+}
+// AI-drafted description, styled the way top agents write Rightmove/Zoopla/OpenRent listings:
+// a short hook, then flowing sentences covering layout/condition/area — no bullet spam, no
+// ALL-CAPS (portals reject or auto-rewrite all-caps descriptions), no unverifiable superlatives.
+async function generateListingDescription(){
+  const btn=document.getElementById('ls-ai-btn'); if(!window._sessionToken){ toast('AI draft needs a live session',1); return; }
+  const addr=val('ls-addr'), pc=val('ls-pc'), rent=val('ls-rent'), beds=val('ls-beds'), baths=val('ls-baths'),
+    ptype=val('ls-type'), furn=val('ls-furn'), epc=val('ls-epc'), feat=val('ls-feat');
+  if(!addr&&!beds){ toast('Add at least an address and bedrooms first',1); return; }
+  if(btn){ btn.disabled=true; btn.textContent='✦ Drafting…'; }
+  const prompt=`You are a UK letting agent writing a property listing description for Rightmove, Zoopla and OpenRent. Write ONE paragraph (60-90 words) in the polished, matter-of-fact style top London agents use — a short opening hook, then flowing sentences on layout and condition. No bullet points, no ALL CAPS, no made-up features, no exaggerated claims (e.g. don't invent a view or a renovation that wasn't mentioned). Plain text only, no markdown, no heading.\n\nProperty details:\n- Type: ${ptype||'property'}, ${beds||'?'} bed, ${baths||'?'} bath, ${furn||''}\n- Address/area: ${addr||''}${pc?', '+pc:''}\n- Rent: £${rent||'?'}/month\n- EPC rating: ${epc||'not specified'}\n- Features: ${feat||'none listed'}`;
+  try{
+    const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:300,messages:[{role:'user',content:prompt}]})});
+    if(res.status===402){ toast('AI allowance reached — write it manually for now',1); }
+    else{
+      const data=await res.json(); const txt=((data.content&&data.content[0]&&data.content[0].text)||'').trim();
+      if(txt){ const ta=document.getElementById('ls-desc'); if(ta) ta.value=txt; toast('✦ Draft added — review before publishing'); }
+      else toast('AI returned nothing — try again',1);
+    }
+  }catch(e){ console.error(e); toast('AI draft failed',1); }
+  if(btn){ btn.disabled=false; btn.textContent='✦ AI draft'; }
 }
 function togglePortal(lid,portal){ const l=LST(lid); l.portals=l.portals||{}; l.portals[portal]=!l.portals[portal]; if(Object.values(l.portals).some(Boolean)&&l.status==='draft')l.status='live'; save(); pushListing&&pushListing(l); render(); }
 function publishListing(lid){ const l=LST(lid); l.portals={rightmove:true,zoopla:true,website:true}; l.status='live'; l.publishedAt=today(); save(); pushListing&&pushListing(l); render(); toast('✓ Published to Rightmove, Zoopla & your site'); }
@@ -1029,6 +1050,8 @@ function computeBallpark(pcRaw,bedsRaw){
     .filter(p=>!out||!p.postcode||outcode(p.postcode)===out)
     .filter(p=>beds==null||p.beds==null||Math.abs((p.beds||0)-beds)<=1).map(p=>p.rent);
   if(own.length) return {source:'own',count:own.length,lo:Math.min(...own),hi:Math.max(...own)};
+  const bank=(S.agency.marketComps||[]).filter(c=>!out||!c.area||outcode(c.area)===out).filter(c=>beds==null||c.beds==null||Math.abs((c.beds||0)-beds)<=1).map(c=>c.rent);
+  if(bank.length) return {source:'bank',count:bank.length,lo:Math.min(...bank),hi:Math.max(...bank)};
   const guide=(S.agency.rentGuide||[]).filter(g=>(!out||!g.area||outcode(g.area)===out)&&(beds==null||g.beds==null||Math.abs((g.beds||0)-beds)<=1)).map(g=>g.rent);
   if(guide.length) return {source:'guide',count:guide.length,lo:Math.min(...guide),hi:Math.max(...guide)};
   return null;
@@ -1037,7 +1060,7 @@ function ballparkInnerHtml(r){
   if(!r) return `<div class="faint" style="font-size:12px">Add a postcode &amp; bedrooms above for an instant ballpark — or add rent-guide entries in Settings.</div>`;
   return `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
     <div><div class="faint" style="font-size:10.5px;text-transform:uppercase;letter-spacing:.04em">Ballpark while you talk</div><div style="font-size:20px;font-weight:800;color:var(--navy)">${gbp(r.lo)}${r.lo!==r.hi?'–'+gbp(r.hi):''}/mo</div></div>
-    <div class="faint" style="font-size:11px;max-width:220px;text-align:right">${r.source==='own'?`From ${r.count} of your own listing${r.count===1?'':'s'} nearby — real data`:`From your rent-guide entries — your own estimate, not live data`}</div>
+    <div class="faint" style="font-size:11px;max-width:220px;text-align:right">${r.source==='own'?`From ${r.count} of your own listing${r.count===1?'':'s'} nearby — real data`:r.source==='bank'?`From ${r.count} listing${r.count===1?'':'s'} in your area comparables bank`:`From your rent-guide entries — your own estimate, not live data`}</div>
   </div>`;
 }
 function updateBallpark(){ const box=document.getElementById('vv-ballpark'); if(!box) return; box.innerHTML=ballparkInnerHtml(computeBallpark(val('vv-postcode'),val('vv-beds'))); }
@@ -1056,6 +1079,47 @@ function addOwnComparable(vid,pid){
   const v=VAL(vid); const c=ownComparables(v).find(x=>x.id===pid); if(!c) return;
   v.comparables.push({id:uid('cmp'),address:c.address,beds:c.beds,rent:c.rent,dateLet:'',notes:'Your own listing'});
   recalcRent(v); save(); render(); toast('✓ Added from your own lettings');
+}
+// Area comparables bank: listings the agent has manually pasted+extracted from portals, kept at
+// agency level so they persist and keep building across every future valuation in that area —
+// not just this one. Still never a live feed; still only what you've actually gone and looked at.
+function marketCompsFor(v){
+  const vOut=outcode(v.postcode); const vBeds=parseInt(v.beds)||null;
+  if(!vOut&&!vBeds) return [];
+  return (S.agency.marketComps||[]).filter(c=>!vOut||!c.area||outcode(c.area)===vOut)
+    .filter(c=>vBeds==null||c.beds==null||Math.abs((c.beds||0)-vBeds)<=1).slice(0,8);
+}
+function addMarketComp(vid,cid){
+  const v=VAL(vid); const c=(S.agency.marketComps||[]).find(x=>x.id===cid); if(!c) return;
+  v.comparables.push({id:uid('cmp'),address:c.address,beds:c.beds,rent:c.rent,dateLet:c.dateLet||'',notes:'From your area comparables bank'});
+  recalcRent(v); save(); render(); toast('✓ Added from your comparables bank');
+}
+async function extractComparablesFromPaste(vid){
+  const v=VAL(vid); const text=val('cmp-paste'); const btn=document.getElementById('cmp-extract-btn');
+  if(!text||text.trim().length<10){ toast('Paste some listing text first',1); return; }
+  if(!window._sessionToken){ toast('AI extract needs a live session',1); return; }
+  if(btn){ btn.disabled=true; btn.textContent='✦ Extracting…'; }
+  const prompt=`The text below was copied from one or more UK property-to-rent listings (Rightmove, Zoopla, OpenRent, etc). Extract EVERY distinct listing you can find. Return ONLY a JSON array, no prose: [{"address":"as specific as given","beds":number or null,"rent":number (monthly GBP — if a weekly figure is given, convert: weekly*52/12, rounded to nearest 5),"dateLet":"YYYY-MM-DD or null if not stated"}]. Skip anything that isn't clearly a property listing with a price.\n\nTEXT:\n${text}`;
+  try{
+    const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:1200,messages:[{role:'user',content:prompt}]})});
+    if(res.status===402){ toast('AI allowance reached — enter these manually for now',1); }
+    else{
+      const data=await res.json(); let txt=((data.content&&data.content[0]&&data.content[0].text)||'').replace(/```json|```/g,'').trim();
+      const arr=JSON.parse(txt||'[]').filter(x=>x&&x.address&&x.rent);
+      if(!arr.length){ toast('Couldn\'t find any listings in that text — try pasting more detail',1); }
+      else{
+        S.agency.marketComps=S.agency.marketComps||[];
+        arr.forEach(x=>{
+          v.comparables.push({id:uid('cmp'),address:x.address,beds:x.beds||'',rent:x.rent,dateLet:x.dateLet||'',notes:'AI-extracted from pasted listing'});
+          S.agency.marketComps.push({id:uid('mc'),address:x.address,beds:x.beds||null,rent:x.rent,dateLet:x.dateLet||'',area:v.postcode||'',addedAt:new Date().toISOString()});
+        });
+        recalcRent(v); document.getElementById('cmp-paste').value='';
+        save(); if(LIVE) pushAgency(); render();
+        toast('✓ Added '+arr.length+' comparable'+(arr.length===1?'':'s')+' — saved to your area bank too');
+      }
+    }
+  }catch(e){ console.error(e); toast('AI extract failed — check the text and try again',1); }
+  if(btn){ btn.disabled=false; btn.textContent='✦ Extract with AI'; }
 }
 // Rent isn't one number — give the agent 3-4 concrete options to run past the landlord, from a quick,
 // safe let to testing a higher figure, so "they want £2,000" has a clear next step instead of a guess.
@@ -1152,6 +1216,7 @@ function vValuationDetail(){
   const existingLandlord=existingLandlordForLead(lead);
   const avgRent=v.comparables.length?v.comparables.reduce((s,c)=>s+(parseFloat(c.rent)||0),0)/v.comparables.length:0;
   const ownComps=ownComparables(v);
+  const marketComps=marketCompsFor(v);
   return `<div class="back" onclick="go('landlords')">← Landlords</div>
     <h1 class="pg">Valuation — ${esc(lead.name||'Landlord')}</h1>
     <div class="sub">Work out an achievable rent from comparable lettings, then turn it into a proposal for the landlord.</div>
@@ -1181,6 +1246,10 @@ function vValuationDetail(){
           <div class="faint" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Suggested from your own lettings nearby</div>
           ${ownComps.map(c=>`<div class="row" style="padding:6px 0"><div style="flex:1;font-size:12.5px">${esc(c.address)} ${c.beds?'· '+c.beds+' bed':''} · <b>${gbp(c.rent)}</b>/mo</div><button class="btn sm" onclick="addOwnComparable('${v.id}','${c.id}')">＋ Add</button></div>`).join('')}
         </div>`:''}
+        ${marketComps.length?`<div style="margin-bottom:14px">
+          <div class="faint" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">From listings you've logged nearby (your area comparables bank)</div>
+          ${marketComps.map(c=>`<div class="row" style="padding:6px 0"><div style="flex:1;font-size:12.5px">${esc(c.address)} ${c.beds?'· '+c.beds+' bed':''} · <b>${gbp(c.rent)}</b>/mo${c.dateLet?' · '+fmtDate(c.dateLet):''}</div><button class="btn sm" onclick="addMarketComp('${v.id}','${c.id}')">＋ Add</button></div>`).join('')}
+        </div>`:''}
         ${v.comparables.length?`<table style="width:100%;border-collapse:collapse;font-size:12.5px;margin-bottom:14px">
           <thead><tr style="border-bottom:1px solid var(--border)"><th style="text-align:left;padding:6px 4px;color:var(--faint);font-size:10px;text-transform:uppercase">Address</th><th style="text-align:left;padding:6px 4px;color:var(--faint);font-size:10px;text-transform:uppercase">Beds</th><th style="text-align:right;padding:6px 4px;color:var(--faint);font-size:10px;text-transform:uppercase">Rent</th><th style="text-align:left;padding:6px 4px;color:var(--faint);font-size:10px;text-transform:uppercase">Let date</th><th style="text-align:left;padding:6px 4px;color:var(--faint);font-size:10px;text-transform:uppercase">Notes</th><th></th></tr></thead>
           <tbody>${v.comparables.map(c=>`<tr style="border-bottom:1px solid var(--border)">
@@ -1188,6 +1257,12 @@ function vValuationDetail(){
             <td style="padding:8px 4px">${c.dateLet?fmtDate(c.dateLet):'—'}</td><td style="padding:8px 4px;color:var(--faint)">${esc(c.notes||'—')}</td>
             <td style="padding:8px 4px;text-align:right"><button class="btn sm" style="color:var(--red)" onclick="deleteComparable('${v.id}','${c.id}')">Remove</button></td></tr>`).join('')}</tbody>
         </table>`:`<div class="empty" style="padding:14px 0;text-align:center"><span class="faint" style="font-size:12.5px">No comparables yet — add recent lets nearby from the portals or your own records.</span></div>`}
+        <div style="border:1px dashed var(--border);border-radius:8px;padding:10px;margin-bottom:12px">
+          <div class="faint" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Paste listings you've found nearby (Rightmove/Zoopla/OpenRent) — AI extracts them all</div>
+          <textarea id="cmp-paste" rows="4" placeholder="Copy the visible text (address, price, beds) from up to ~10 similar listings and paste it all here at once…" style="margin-bottom:6px"></textarea>
+          <button class="btn sm" id="cmp-extract-btn" onclick="extractComparablesFromPaste('${v.id}')" type="button">✦ Extract with AI</button>
+          <div class="hint" style="margin-top:4px">This app can't fetch a URL itself — copy the text you can see on the page, not just the link. Extracted ones are added here AND saved to your area's comparables bank, so next time they're already there.</div>
+        </div>
         <div class="grid2" style="gap:10px;grid-template-columns:2fr 1fr 1fr 1fr 2fr">
           <div class="fg"><label>Address</label><input id="cmp-addr" placeholder="e.g. 8 Elm Street"></div>
           <div class="fg"><label>Beds</label><input id="cmp-beds" type="number"></div>
