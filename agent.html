@@ -1006,11 +1006,12 @@ function declineLead(id){ const x=(S.landlordLeads||[]).find(l=>l.id===id); if(!
 const VAL_PTYPES=['Flat','Terraced house','Semi-detached','Detached','Maisonette','Studio','HMO room'];
 const MARKETING_STEPS=['Professional photography and a floor plan','Listed on Rightmove, Zoopla and our own site','Accompanied viewings with vetted applicants','Right to Rent and reference checks completed before any offer is accepted'];
 const LANDLORD_TODO=['Keep the property empty and accessible for viewings','Have a valid EPC, gas safety certificate (if applicable) and EICR in place before marketing starts','Confirm any mortgage or leasehold consent-to-let you need','Come back to us quickly on referencing and offer updates so we can move fast'];
+const HOW_WE_HELP=['Certificates tracked automatically — gas, EICR, EPC and deposit protection are flagged before they lapse, not after','Referencing and Right to Rent checks logged with evidence, meeting Home Office requirements','Deposit deductions calculated with real useful-life and betterment tables at check-out — the same approach adjudicators use, not a guess','Every agreement, notice and inspection is e-signed and timestamped, giving you a defensible record if anything is ever disputed','A landlord portal showing certificates, statements and communications any time — no chasing us for updates'];
 function VAL(id){ return (S.valuations||[]).find(x=>x.id===id)||{}; }
 function valFor(leadId){
   S.valuations=S.valuations||[]; let v=S.valuations.find(x=>x.leadId===leadId);
   if(!v){ const lead=(S.landlordLeads||[]).find(l=>l.id===leadId)||{};
-    v={id:uid('val'),leadId,propertyAddress:lead.address||'',postcode:'',ptype:'Flat',beds:'',baths:'',visitAt:'',visitNotes:'',
+    v={id:uid('val'),leadId,propertyAddress:lead.address||'',postcode:'',ptype:'Flat',beds:'',baths:'',receptions:'',garden:'',parking:'',furnishing:'',visitAt:'',visitNotes:'',
        comparables:[],suggestedRent:'',rentOverridden:false,landlordTarget:'',chosenPlan:'',agencyType:'sole',service:'full',feePct:DEF_FEE,letWeeks:DEF_WEEKS,
        extraNotes:'',status:'draft',createdAt:new Date().toISOString()};
     S.valuations.push(v); save(); }
@@ -1079,7 +1080,8 @@ function resetRentToAvg(vid){ const v=VAL(vid); v.rentOverridden=false; recalcRe
 function toggleValFee(s){ document.getElementById('vv-fee-full').style.display=s==='full'?'':'none'; document.getElementById('vv-fee-letonly').style.display=s==='full'?'none':''; }
 function saveValuation(vid){
   const v=VAL(vid); if(!v.id) return;
-  v.propertyAddress=val('vv-addr'); v.ptype=val('vv-ptype'); v.beds=val('vv-beds'); v.baths=val('vv-baths');
+  v.propertyAddress=val('vv-addr'); v.postcode=val('vv-postcode'); v.ptype=val('vv-ptype'); v.beds=val('vv-beds'); v.baths=val('vv-baths');
+  v.receptions=val('vv-receptions'); v.garden=val('vv-garden'); v.parking=val('vv-parking'); v.furnishing=val('vv-furnishing');
   v.visitAt=val('vv-visit'); v.visitNotes=val('vv-visitnotes');
   v.agencyType=val('vv-agtype'); v.service=val('vv-service');
   if(v.service==='full') v.feePct=parseFloat(val('vv-fee'))||DEF_FEE; else v.letWeeks=parseFloat(val('vv-weeks'))||DEF_WEEKS;
@@ -1129,8 +1131,14 @@ function vValuationDetail(){
         </div>
         <div class="grid2" style="gap:10px">
           <div class="fg"><label>Bathrooms</label><input id="vv-baths" type="number" value="${esc(v.baths)}"></div>
-          <div class="fg"><label>Valuation visit <span class="faint">(optional)</span></label><input id="vv-visit" type="datetime-local" value="${v.visitAt||''}"></div>
+          <div class="fg"><label>Reception rooms</label><input id="vv-receptions" type="number" value="${esc(v.receptions)}"></div>
         </div>
+        <div class="grid3" style="gap:10px">
+          <div class="fg"><label>Garden</label><select id="vv-garden"><option value="" ${!v.garden?'selected':''}>—</option><option value="None" ${v.garden==='None'?'selected':''}>None</option><option value="Private garden" ${v.garden==='Private garden'?'selected':''}>Private garden</option><option value="Shared garden" ${v.garden==='Shared garden'?'selected':''}>Shared garden</option><option value="Balcony/terrace" ${v.garden==='Balcony/terrace'?'selected':''}>Balcony/terrace</option></select></div>
+          <div class="fg"><label>Parking</label><select id="vv-parking"><option value="" ${!v.parking?'selected':''}>—</option><option value="None" ${v.parking==='None'?'selected':''}>None</option><option value="On-street" ${v.parking==='On-street'?'selected':''}>On-street</option><option value="Off-street" ${v.parking==='Off-street'?'selected':''}>Off-street</option><option value="Garage" ${v.parking==='Garage'?'selected':''}>Garage</option><option value="Permit" ${v.parking==='Permit'?'selected':''}>Permit</option></select></div>
+          <div class="fg"><label>Furnishing</label><select id="vv-furnishing"><option value="" ${!v.furnishing?'selected':''}>—</option><option value="Unfurnished" ${v.furnishing==='Unfurnished'?'selected':''}>Unfurnished</option><option value="Part-furnished" ${v.furnishing==='Part-furnished'?'selected':''}>Part-furnished</option><option value="Furnished" ${v.furnishing==='Furnished'?'selected':''}>Furnished</option></select></div>
+        </div>
+        <div class="fg"><label>Valuation visit <span class="faint">(optional)</span></label><input id="vv-visit" type="datetime-local" value="${v.visitAt||''}"></div>
         <div class="fg"><label>Visit notes</label><input id="vv-visitnotes" value="${esc(v.visitNotes||'')}" placeholder="condition, access, anything to flag"></div>
       </div>
     </div>
@@ -1198,7 +1206,8 @@ function valuationReportBodyHtml(v,lead){
   const plans=computePricingPlans(v); const chosenPlan=plans.find(p=>p.key===v.chosenPlan);
   return `
       <div style="font-size:15px;font-weight:600;color:var(--navy)">${esc(v.propertyAddress||lead.address||'Property address')}</div>
-      <div class="faint" style="font-size:12.5px;margin-bottom:26px">Prepared for ${esc(lead.name||'Landlord')}${v.beds?' · '+esc(v.beds)+' bed':''}${v.ptype?' · '+esc(v.ptype):''}</div>
+      <div class="faint" style="font-size:12.5px;margin-bottom:14px">Prepared for ${esc(lead.name||'Landlord')}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:26px">${[v.beds?v.beds+' bed':'',v.baths?v.baths+' bath':'',v.receptions?v.receptions+' reception':'',v.ptype,v.furnishing,v.garden,v.parking?v.parking+' parking':''].filter(Boolean).map(x=>`<span class="pill" style="background:var(--off);color:var(--navy)">${esc(x)}</span>`).join('')}</div>
 
       <div style="background:var(--off);border-radius:10px;padding:22px 24px;margin-bottom:${plans.length&&!chosenPlan?'14px':'26px'};text-align:center">
         <div class="faint" style="font-size:10.5px;text-transform:uppercase;letter-spacing:.06em">${chosenPlan?'Agreed monthly rent':'Achievable monthly rent'}</div>
@@ -1211,6 +1220,10 @@ function valuationReportBodyHtml(v,lead){
 
       <div style="font-size:10px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">What we'll do for you</div>
       <ul style="margin:0 0 22px;padding-left:18px;font-size:13px;line-height:1.9">${MARKETING_STEPS.map(s=>`<li>${esc(s)}</li>`).join('')}</ul>
+
+      <div style="font-size:10px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">How we're different</div>
+      <p style="font-size:13px;line-height:1.7;margin:0 0 10px">Once let, the property is actively managed through our compliance-led portal — not just checked in on.</p>
+      <ul style="margin:0 0 22px;padding-left:18px;font-size:13px;line-height:1.9">${HOW_WE_HELP.map(s=>`<li>${esc(s)}</li>`).join('')}</ul>
 
       <div style="font-size:10px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Fee</div>
       <p style="font-size:13px;line-height:1.7;margin:0 0 22px">${feeText}</p>
