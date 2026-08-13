@@ -1015,7 +1015,7 @@ function saveLandlordLead(id){
 function convertLead(id){
   const x=(S.landlordLeads||[]).find(l=>l.id===id); if(!x)return;
   x.status='contacted'; save(); pushLandlordLead&&pushLandlordLead(x); render();
-  openOnboard(); OB.name=x.name||''; OB.email=x.email||''; OB.phone=x.phone||''; OB.address=x.address||''; renderOnboard();
+  openOnboard(); OB.name=x.name||''; OB.email=x.email||''; OB.phone=x.phone||''; OB.addr=x.address||''; renderOnboard();
 }
 function declineLead(id){ const x=(S.landlordLeads||[]).find(l=>l.id===id); if(!x)return; x.status='declined'; save(); pushLandlordLead&&pushLandlordLead(x); render(); toast('Enquiry declined'); }
 
@@ -2806,7 +2806,9 @@ async function obFinish(){
       isCompany:!!OB.isCompany,isMortgaged:!!OB.isMortgaged,isLeasehold:!!OB.isLeasehold,sanctions:!!OB.sanctions,sanctionsDate:OB.sanctions?today():'',sanctionsMethod:OB.sanctionsMethod||'auto',sanctionsNotes:OB.sanctionsManualNotes||''},
     comms:[{id:uid('c'),date:today(),type:'Note',note:'Landlord onboarded · '+SVC[OB.service].label+(OB.agreement?' · agreement signed':' · agreement pending')}]};
   S.landlords.push(ll); pushLandlord(ll);
-  const allProps=[...(OB.properties||[])]; const draft=_obDraftToProp(); if(draft) allProps.push(draft);
+  const allProps=[...(OB.properties||[])]; const draft=_obDraftToProp();
+  const norm=s=>(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  if(draft&&!allProps.some(p=>norm(p.addr)===norm(draft.addr))) allProps.push(draft);
   for(const dp of allProps){
     const pp={landlordId:id,address:dp.addr,postcode:dp.pc,city:dp.city,ptype:dp.ptype,rent:parseInt(dp.rent)||0,beds:parseInt(dp.beds)||1,baths:parseInt(dp.baths)||1,furnished:dp.furnished,epc:dp.epc,councilTaxBand:dp.councilTaxBand,rentDueDay:dp.rentDueDay||'1st',available:dp.avail||null,description:dp.desc,features:dp.features||[]};
     const newPid=await pushPropertyNew(pp);
@@ -2968,7 +2970,8 @@ function renderOnboard(){
     ${OB.isLeasehold?obDoc('freeholderConsentDoc','Freeholder / managing-agent consent to sublet','e.g. freeholder_consent.pdf'):''}
     <div class="chk ${OB.ownership?'on':''}" onclick="OB.ownership=!OB.ownership;renderOnboard()"><div class="box">${OB.ownership?'✓':''}</div><div><div style="font-weight:600;font-size:13px">Ownership &amp; right-to-let confirmed</div><div class="faint" style="font-size:11px">Confirm once you've reviewed the proof above</div></div></div>`;
   if(s===4) body=`<div class="faint" style="font-size:12px;margin-bottom:12px">Add their properties one at a time — each can have its own rent (optional now, add more later from their record).</div>
-    ${(OB.properties||[]).length?`<div style="margin-bottom:14px">${OB.properties.map((p,i)=>`<div class="row" style="padding:8px 10px"><div style="flex:1"><b style="font-size:13px">${esc(p.addr)}</b><span class="faint" style="font-size:12px"> · ${gbp(p.rent)}/mo expected · ${p.beds} bed</span></div><a href="javascript:void(0)" onclick="obRemoveProp(${i})" style="color:var(--red);font-size:12px">remove</a></div>`).join('')}</div>`:''}
+    ${(OB.properties||[]).length?`<div style="margin-bottom:14px">${OB.properties.map((p,i)=>`<div class="row" style="padding:8px 10px"><div class="di" style="background:var(--green-bg);color:var(--green)">✓</div><div style="flex:1"><b style="font-size:13px">${esc(p.addr)}</b><span class="faint" style="font-size:12px"> · ${gbp(p.rent)}/mo expected · ${p.beds} bed</span></div><a href="javascript:void(0)" onclick="obRemoveProp(${i})" style="color:var(--red);font-size:12px">remove</a></div>`).join('')}</div>`:''}
+    <div style="font-size:12px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.3px;margin-bottom:8px">Property ${(OB.properties||[]).length+1}${(OB.properties||[]).length?' (new — leave blank if you have nothing further to add)':''}</div>
     <div class="grid2" style="gap:10px"><div class="fg"><label>Address</label><input id="ob-addr" value="${esc(OB.addr)}" placeholder="e.g. 12 High Street"></div>
     <div class="fg"><label>Postcode</label><input id="ob-pc" value="${esc(OB.pc)}"></div></div>
     <div class="grid2" style="gap:10px"><div class="fg"><label>Town/City</label><input id="ob-city" value="${esc(OB.city)}"></div>
