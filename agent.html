@@ -1403,7 +1403,7 @@ function vLandlordDetail(){
         :`<span class="faint" style="font-size:12.5px;align-self:center">✓ Portal invited ${fmtDate(l.invitedAt)}</span><button class="btn sm" onclick="inviteToPortal('${l.id}')">Resend invite</button>`}
       ${(()=>{ const a=agreementFor(l.id);
         if(l.agreement) return `<button class="btn" onclick="viewSignedAgreement('${l.id}')">✔ View signed agreement</button><button class="btn sm" onclick="viewSigningReceipt('${l.id}')">🧾 Signing receipt</button><button class="btn sm" onclick="openAgreement('${l.id}')" title="Issue a new agreement to sign — e.g. renewal or amended terms">Send new agreement</button>`;
-        if(a&&a.status==='sent') return `<button class="btn" onclick="openAgreement('${l.id}')" style="border-color:var(--amber);color:var(--amber)">⏳ Awaiting landlord signature · resend</button>`;
+        if(a&&a.status==='sent') return `<button class="btn" onclick="sendAgreementReminder('${a.id}')" style="border-color:var(--amber);color:var(--amber)">⏳ Awaiting landlord signature · send reminder</button><button class="btn sm" onclick="openAgreement('${l.id}')" title="Start over with a new agreement">Re-send agreement</button>`;
         if(a&&a.status==='declined') return `<button class="btn" onclick="openAgreement('${l.id}')" style="border-color:var(--red);color:var(--red)">✕ Declined · re-send agreement</button>`;
         return `<button class="btn navy" onclick="openAgreement('${l.id}')">✍️ Send agreement to sign</button>`;
       })()}
@@ -1585,6 +1585,8 @@ function _notifications(){
   S.properties.filter(p=>p.tenant).forEach(p=>{ const rd=_rentIncreaseDue(p); if(rd) out.push({sev:'amber',label:'Rent review — '+(p.address||''),detail:rd.overdue?'Eligible to increase since '+fmtDate(rd.nextEligible)+' — start the 2-month notice now':'Eligible to increase from '+fmtDate(rd.nextEligible)+' — start preparing now to give full notice',go:`openNotice('${p.id}')`}); });
   (_nextInvoiceReminders()||[]).forEach(r=>{ out.push({sev:r.days<0?'red':'amber',label:'Invoice — '+r.l.name,detail:r.days<0?'Overdue by '+(-r.days)+' days':'Due in '+r.days+' days',go:`go('invoices')`}); });
   S.properties.filter(p=>p.tenant).forEach(p=>{ const cl=_tenancyChecklist(p); const missing=cl.items.filter(i=>!i.done&&!i.warn); if(missing.length) out.push({sev:'red',label:'Tenancy setup — '+(p.address||''),detail:'Missing: '+missing.map(i=>i.label).join(', '),go:`go('property','${p.id}')`}); });
+  (S.agreements||[]).filter(a=>a.status==='sent').forEach(a=>{ const days=Math.floor((Date.now()-new Date(a.agent_signed_at||0).getTime())/86400000); if(days>=2){ const l=L(a.landlord_id); out.push({sev:days>=5?'red':'amber',label:'Instruction not signed — '+(l.name||a.landlord_name||''),detail:'Sent '+days+' day'+(days===1?'':'s')+' ago, still awaiting landlord signature',go:`sendAgreementReminder('${a.id}')`}); } });
+  (S.tenancyAgreements||[]).filter(a=>a.status==='sent').forEach(a=>{ const days=Math.floor((Date.now()-new Date(a.agent_signed_at||0).getTime())/86400000); if(days>=2){ const p=P(a.property_id)||{}; out.push({sev:days>=5?'red':'amber',label:'Tenancy terms unsigned — '+(a.tenant_name||''),detail:(p.address?p.address+' — ':'')+'Sent '+days+' day'+(days===1?'':'s')+' ago, still awaiting signature',go:`sendTenancyReminder('${a.id}')`}); } });
   return out.sort((a,b)=>(a.sev==='red'?0:1)-(b.sev==='red'?0:1));
 }
 function openNotifications(){
@@ -1658,7 +1660,7 @@ function vPropertyDetail(){
     </div>
     ${tstatus==='unsigned'?`<div class="note warn" style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
       <div><b>⚠ Instruction not yet signed.</b> Prep compliance certs now if you like, but hold off on marketing or a tenancy until the landlord has signed.</div>
-      <button class="btn navy sm" onclick="openAgreement('${l.id}')">Send agreement to sign</button>
+      <div style="display:flex;gap:8px">${(()=>{ const a=agreementFor(l.id); return a&&a.status==='sent'?`<button class="btn sm" style="border-color:var(--amber);color:var(--amber)" onclick="sendAgreementReminder('${a.id}')">Send reminder</button>`:''; })()}<button class="btn navy sm" onclick="openAgreement('${l.id}')">Send agreement to sign</button></div>
     </div>`:''}
     ${lifecycleStepper(p)}
     ${tenancyChecklistPanel(p)}
@@ -1702,7 +1704,7 @@ function vPropertyDetail(){
           return `${rec.refDocName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">📄</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Reference report</div><div class="faint" style="font-size:11.5px">${esc(rec.refDocName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.refDocUrl?`<button class="btn sm" onclick="viewDoc('${rec.refDocUrl}','Reference report')">View</button>`:''}</div>`:''}
     ${(()=>{ const ta=tenancyAgreementFor(rec.id); if(!ta) return '';
       if(ta.status==='signed') return `<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">✍</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Tenancy terms &amp; conditions (e-signed)</div><div class="faint" style="font-size:11.5px">Signed ${fmtDate(ta.tenant_signed_at)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">Signed</span><button class="btn sm" onclick="viewSignedTenancyAgreement('${p.id}')">View</button></div>`;
-      if(ta.status==='sent') return `<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--amber-bg);color:var(--amber)">⏳</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Tenancy terms &amp; conditions (e-signed)</div><div class="faint" style="font-size:11.5px">Awaiting tenant signature</div></div><span class="pill" style="background:var(--amber-bg);color:var(--amber)">Sent</span></div>`;
+      if(ta.status==='sent') return `<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--amber-bg);color:var(--amber)">⏳</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Tenancy terms &amp; conditions (e-signed)</div><div class="faint" style="font-size:11.5px">Awaiting tenant signature</div></div><span class="pill" style="background:var(--amber-bg);color:var(--amber)">Sent</span><button class="btn sm" onclick="sendTenancyReminder('${ta.id}')">Send reminder</button></div>`;
       return ''; })()}
           ${rec.origContractName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">📄</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Original tenancy agreement</div><div class="faint" style="font-size:11.5px">${esc(rec.origContractName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.origContractUrl?`<button class="btn sm" onclick="viewDoc('${rec.origContractUrl}','Original tenancy agreement')">View</button>`:''}</div>`:''}
           ${rec.id1DocName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">🪪</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Photo ID — 1 of 2</div><div class="faint" style="font-size:11.5px">${esc(rec.id1DocName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.id1DocUrl?`<button class="btn sm" onclick="viewDoc('${rec.id1DocUrl}','Photo ID')">View</button>`:''}</div>`:''}
@@ -3430,6 +3432,22 @@ function agreementEmailHtml(l,agentName,link,service){
     </div></div>`;
 }
 
+async function sendAgreementReminder(id){
+  const a=(S.agreements||[]).find(x=>x.id===id); if(!a){ toast('Agreement not found',1); return; }
+  if(!LIVE){ toast('Connect to Supabase to send (not available in demo)',1); return; }
+  const l=L(a.landlord_id);
+  const link=new URL('agency-esign.html?t='+encodeURIComponent(a.token), location.href).href;
+  const subj='Reminder: please sign your '+(a.service==='letonly'?'Tenant-Find':'Letting & Management')+' Agreement — '+(S.agency.name||'NexLet');
+  const r1=await agencyEmail(a.landlord_email, subj, agreementEmailHtml(l,a.agent_name,link,a.service));
+  let r2=null;
+  if(a.joint_email) r2=await agencyEmail(a.joint_email, subj, agreementEmailHtml(l,a.agent_name,link,a.service));
+  const sentList=[a.landlord_email+(r1.ok?' ✓':' ✗ FAILED')]; if(r2) sentList.push(a.joint_email+(r2.ok?' ✓':' ✗ FAILED'));
+  if(l.id){ l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:'Signature reminder emailed to: '+sentList.join(', ')}); pushLandlord(l); }
+  render();
+  const allOk=r1.ok&&(!r2||r2.ok);
+  if(allOk) toast('✓ Reminder sent to '+sentList.map(s=>s.replace(' ✓','')).join(' & '));
+  else toast('⚠ Reminder failed for: '+sentList.filter(s=>s.includes('FAILED')).join(', '),1);
+}
 async function markAgreementOffline(id){
   const l=L(id); l.agreement=true; l.status='active'; l.docs=l.docs||{}; l.docs.agreement=l.docs.agreement||'Signed offline';
   l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:'Management agreement recorded as signed offline.'});
@@ -3580,6 +3598,21 @@ async function sendTenancyAgreement(pid){
   const failed=[!r1.ok?email:null, ...occResults.filter(x=>!x.r.ok).map(x=>x.email)].filter(Boolean);
   if(!failed.length) toast('✓ Sent to tenant for signature');
   else toast('⚠ Saved, but email failed for: '+failed.join(', ')+' — check the address and resend',1);
+}
+async function sendTenancyReminder(id){
+  const a=(S.tenancyAgreements||[]).find(x=>x.id===id); if(!a){ toast('Agreement not found',1); return; }
+  if(!LIVE){ toast('Connect to Supabase to send (not available in demo)',1); return; }
+  const p=P(a.property_id)||{};
+  const link=new URL('tenancy-esign.html?t='+encodeURIComponent(a.token), location.href).href;
+  const mailBody=nm=>`<p>Hi ${esc(nm)},</p><p>Just a reminder — please review and sign your tenancy terms &amp; conditions for <b>${esc(p.address||'')}</b>.</p><p><a href="${link}">Sign your tenancy terms &amp; conditions</a></p>`;
+  const r1=await agencyEmail(a.tenant_email,'Reminder: please sign your tenancy terms & conditions — '+(p.address||''),mailBody((a.tenant_name||'').split(' ')[0]));
+  const occResults=[];
+  for(const o of (a.occupants||[])){ if(o.email) occResults.push({email:o.email, r:await agencyEmail(o.email,'Reminder: please sign your tenancy terms & conditions — '+(p.address||''),mailBody((o.name||'').split(' ')[0]))}); }
+  const l=L(a.landlord_id); if(l&&l.id){ l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:'Tenancy terms & conditions signature reminder emailed to '+(a.tenant_name||'tenant')+' for '+(p.address||'the property')+'.'}); pushLandlord(l); }
+  render();
+  const failed=[!r1.ok?a.tenant_email:null, ...occResults.filter(x=>!x.r.ok).map(x=>x.email)].filter(Boolean);
+  if(!failed.length) toast('✓ Reminder sent to tenant');
+  else toast('⚠ Reminder failed for: '+failed.join(', '),1);
 }
 function viewSignedTenancyAgreement(pid){
   const p=P(pid); const rec=tenantRecFor(pid); if(!rec) return;
