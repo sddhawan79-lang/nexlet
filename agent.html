@@ -1759,6 +1759,7 @@ function _tenancyChecklist(p){
     const rec=tenantRecFor(p.id);
     const ta=rec&&tenancyAgreementFor(rec.id);
     items.push({k:'tenancyagreement',label:'Tenancy terms & conditions signed',done:!!(ta&&ta.status==='signed')||!!(rec&&rec.origContractName),warn:!!(ta&&ta.status==='sent'),go:`openTenancyAgreement('${p.id}')`});
+    items.push({k:'moveinpack',label:'Move-in document pack sent',done:!!(rec&&rec.moveInPackSentAt),go:`openMoveInPack('${p.id}')`});
     items.push({k:'portal',label:'Tenant invited to portal',done:!!(rec&&rec.invited),go:`inviteTenantToPortal('${p.id}')`});
   }
   const done=items.filter(i=>i.done).length;
@@ -1885,13 +1886,18 @@ function vPropertyDetail(){
           ${rec&&rec.rtrDocUrl?`<button class="btn sm" onclick="viewDoc('${rec.rtrDocUrl}','Right to Rent evidence')">View${(rec.rtrDocs&&rec.rtrDocs.length>1)?' ('+rec.rtrDocs.length+')':''}</button>`:''}
           <button class="btn sm" onclick="rtrWizard('${p.id}')">${rec&&rec.rtrCheckDate?'Update':'Check'}</button></div>
           <div class="faint" style="font-size:11px;padding:0 0 10px 30px;margin-top:-6px">Checked by an external referencing company instead of the GOV.UK wizard? <a href="#" onclick="rtrExternal('${p.id}');return false">Upload their report</a></div>`; })():''}
-        ${p.tenant?declRow('htr','How to Rent guide','Give the tenant the current gov.uk “How to rent” guide on or before move-in',c.htr,null,null):''}
+        ${p.tenant?(()=>{ const rec0=tenantRecFor(p.id); const cutoff=rec0&&rec0.start&&new Date(rec0.start)<new Date('2026-06-01'); return cutoff?declRow('htr','How to Rent guide (withdrawn June 2026)','This tenancy started before the guide was withdrawn — the gov.uk “How to rent” guide should have been given on or before move-in',c.htr,null,null):''; })():''}
         ${(p.tenant&&tenantRecFor(p.id)&&tenantRecFor(p.id).start&&new Date(tenantRecFor(p.id).start)<new Date('2026-05-01'))?declRow('infosheet','RRA Information Sheet','Existing tenancy (started before 1 May 2026) — must be given the government Information Sheet explaining the Renters\u2019 Rights Act changes, by 31 May 2026',c.infosheet,c.infosheetDoc,c.infosheetDocUrl):''}
         ${p.tenant?(()=>{ const rec=tenantRecFor(p.id); if(!rec||!rec.deposit) return ''; const r=_depositRAG(rec); return `<div class="doc"><div class="di" style="background:${r.bg};color:${r.color}">⛨</div>
           <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Deposit protection</div><div class="faint" style="font-size:11.5px">${rec.depositCertName?esc(rec.depositCertName)+(rec.depositCertExpiry?(r.k==='expired'?' — expired '+fmtDate(rec.depositCertExpiry):' — covers until '+fmtDate(rec.depositCertExpiry)):''):'Must be protected within 30 days of receipt'}</div></div>
           <span class="pill" style="background:${r.bg};color:${r.color}">${r.label}</span>
           ${rec.depositCertUrl?`<button class="btn sm" onclick="viewDoc('${rec.depositCertUrl}','Deposit certificate')">View</button>`:''}
           <button class="btn sm" onclick="setTenant('${p.id}')">Manage</button></div>`; })():''}
+        ${p.tenant?(()=>{ const rec=tenantRecFor(p.id); if(!rec) return ''; const sent=!!rec.moveInPackSentAt;
+          return `<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:${sent?'var(--green-bg)':'var(--amber-bg)'};color:${sent?'var(--green)':'var(--amber)'}">📦</div>
+          <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Move-in document pack</div><div class="faint" style="font-size:11.5px">${sent?'Sent '+fmtDate(rec.moveInPackSentAt)+(rec.moveInPackConfirmedAt?' · tenant confirmed receipt '+fmtDate(rec.moveInPackConfirmedAt):' · awaiting confirmation of receipt'):'Gas Safety, EICR, EPC, deposit protection info (+ RTR/Information Sheet where applicable) — bundle and send'}</div></div>
+          <span class="pill" style="background:${sent?'var(--green-bg)':'var(--amber-bg)'};color:${sent?'var(--green)':'var(--amber)'}">${sent?'Sent':'Not sent'}</span>
+          <button class="btn sm" onclick="openMoveInPack('${p.id}')">${sent?'Resend / manage':'Send pack'}</button></div>`; })():''}
         <div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;flex:1"><input type="checkbox" style="width:auto" ${c.hmoApplicable?'checked':''} onchange="toggleHmoApplicable('${p.id}',this.checked)"> HMO / selective-licensing property <span class="faint" style="font-weight:400">(most properties don’t need this — only tick if it’s a licensed HMO or your council runs selective licensing in that area)</span></label>
         </div>
@@ -2610,6 +2616,64 @@ function _allTenantNames(rec){
   if(names.length===2) return names[0]+' and '+names[1];
   return names.slice(0,-1).join(', ')+' and '+names[names.length-1];
 }
+// ── MOVE-IN DOCUMENT PACK ──
+// What a tenant must actually receive by move-in day (researched against current UK rules):
+// Gas Safety Certificate + EICR before move-in (hard legal requirement — blocks sending if missing/expired),
+// EPC, deposit protection + prescribed info once the deposit's taken, Right to Rent confirmation, and — only
+// for a sitting tenancy that started before 1 May 2026 — the official gov.uk Renters' Rights Act Information
+// Sheet (must be the exact government PDF, so it's a manual upload, never generated text). The old "How to
+// Rent" guide was withdrawn June 2026 and is gated off for anything starting after that.
+function moveInPackItems(p){
+  const c=p.certs||{}; const rec=tenantRecFor(p.id)||{};
+  const preReform=rec.start&&new Date(rec.start)<new Date('2026-05-01');
+  const items=[
+    {key:'gas',label:'Gas Safety Certificate (CP12)',ok:certRAG(c.gas).k==='ok'||certRAG(c.gas).k==='soon',url:c.gasDocUrl,required:true},
+    {key:'eicr',label:'EICR (electrical)',ok:certRAG(c.eicr).k==='ok'||certRAG(c.eicr).k==='soon',url:c.eicrDocUrl,required:true},
+    {key:'epc',label:'EPC',ok:certRAG(c.epc).k==='ok'||certRAG(c.epc).k==='soon',url:c.epcDocUrl,required:false},
+    {key:'deposit',label:'Deposit protection & prescribed information',ok:!rec.deposit||!!rec.depositCertName,url:rec.depositCertUrl,required:!!rec.deposit},
+    {key:'rtr',label:'Right to Rent check completed',ok:!!(rec.rtrResult||rec.rtrCheckDate),url:null,required:true},
+  ];
+  if(preReform) items.push({key:'infosheet',label:'RRA Information Sheet (official gov.uk PDF — sitting tenancy pre-dates 1 May 2026)',ok:!!c.infosheet,url:c.infosheetDocUrl,required:true});
+  return items;
+}
+function openMoveInPack(pid){
+  const p=P(pid); const rec=tenantRecFor(pid);
+  if(!rec){ toast('Set up the tenant first',1); return; }
+  const items=moveInPackItems(p);
+  const blocking=items.filter(i=>i.required&&!i.ok);
+  const body=`<div class="note" style="margin-bottom:12px"><b>${esc(rec.name)}</b>${p.address?' · '+esc(p.address):''}</div>
+    ${items.map(i=>`<div class="row" style="padding:8px 4px"><div class="av" style="background:${i.ok?'var(--green-bg)':'var(--red-bg)'};color:${i.ok?'var(--green)':'var(--red)'}">${i.ok?'✓':'!'}</div>
+      <div style="flex:1;font-size:13px">${esc(i.label)}${!i.ok&&i.required?' <span class="faint">(required \u2014 missing or expired)</span>':!i.ok?' <span class="faint">(not on file \u2014 optional)</span>':''}</div>
+      ${i.url?`<button class="btn sm" onclick="viewDoc('${i.url}','${esc(i.label)}')">View</button>`:''}</div>`).join('')}
+    ${blocking.length?`<div class="note warn" style="margin-top:10px">Can't send yet \u2014 missing: ${blocking.map(i=>esc(i.label)).join(', ')}. Fix these from Compliance &amp; documents first.</div>`:''}
+    ${rec.moveInPackSentAt?`<div class="hint" style="margin-top:10px">Last sent ${fmtDate(rec.moveInPackSentAt)}.${rec.moveInPackConfirmedAt?' Tenant confirmed receipt '+fmtDate(rec.moveInPackConfirmedAt)+'.':''}</div>`:''}`;
+  const footer=`<button class="btn" onclick="closeModal()">Cancel</button>${rec.moveInPackSentAt&&!rec.moveInPackConfirmedAt?`<button class="btn" onclick="confirmMoveInPackReceipt('${pid}')">Mark receipt confirmed</button>`:''}<button class="btn navy" ${blocking.length?'disabled title="Fix the missing items above first"':''} onclick="sendMoveInPack('${pid}')">${rec.moveInPackSentAt?'Resend pack':'Send move-in pack'}</button>`;
+  modal('Move-in document pack', body, footer, true);
+}
+async function sendMoveInPack(pid){
+  const p=P(pid); const rec=tenantRecFor(pid); if(!rec||!rec.email){ toast('Tenant needs an email on file first',1); return; }
+  const items=moveInPackItems(p);
+  const blocking=items.filter(i=>i.required&&!i.ok);
+  if(blocking.length){ toast('Missing required items: '+blocking.map(i=>i.label).join(', '),1); return; }
+  const included=items.filter(i=>i.url);
+  const b=agencyBrand();
+  const html=`<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#1A2B45">
+    <div style="background:#0B1E3D;padding:20px 24px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:20px;font-weight:700">${esc(b.name)}</span></div>
+    <div style="border:1px solid #E4EAF1;border-top:none;border-radius:0 0 10px 10px;padding:26px 24px">
+      <p>Hi ${esc(_allTenantNames(rec))},</p>
+      <p>Please find your move-in document pack for <b>${esc(p.address)}</b> attached. This includes:</p>
+      <ul style="padding-left:18px;line-height:1.8">${items.map(i=>`<li>${esc(i.label)}${!i.url?' (on file with us \u2014 ask if you\'d like a copy)':''}</li>`).join('')}</ul>
+      <p>Please reply to this email with the word <b>"received"</b> so we have a confirmed record that you've got these documents.</p>
+      <p>Kind regards,<br>${esc(b.name)}</p>
+    </div></div>`;
+  if(!LIVE){ toast('Connect to Supabase to send live',1); return; }
+  const r=await agencyEmail(rec.email,'Your move-in document pack — '+p.address, html, included.map(i=>i.url));
+  if(r.ok){ rec.moveInPackSentAt=new Date().toISOString(); pushTenantRec(rec);
+    const ll=p.landlordId?L(p.landlordId):null; if(ll&&ll.id){ ll.comms=ll.comms||[]; ll.comms.push({id:uid('c'),date:today(),type:'Note',note:'Move-in document pack emailed to '+rec.name+' \u2014 '+items.map(i=>i.label).join(', ')}); pushLandlord(ll); }
+    closeModal(); render(); toast('✓ Move-in pack sent to '+rec.name);
+  } else { toast('⚠ Send failed: '+(r.error||'try again'),1); }
+}
+function confirmMoveInPackReceipt(pid){ const rec=tenantRecFor(pid); if(!rec) return; rec.moveInPackConfirmedAt=new Date().toISOString(); pushTenantRec(rec); closeModal(); render(); toast('✓ Receipt confirmed'); }
 function tenantWelcomeLetterHtml(rec,p){ const b=agencyBrand();
   return `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#1A2B45">
     <div style="background:#0B1E3D;padding:20px 24px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:20px;font-weight:700">${esc(b.name)}</span></div>
@@ -3482,11 +3546,11 @@ let _agSigPad=null;
 
 function agreementFor(lid){ return (S.agreements||[]).filter(a=>a.landlord_id===lid).sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0))[0]; }
 
-async function agencyEmail(to,subject,html){
+async function agencyEmail(to,subject,html,attachmentUrls){
   const headers={'Content-Type':'application/json'};
   if(window._sessionToken) headers['Authorization']='Bearer '+window._sessionToken;
   try{
-    const res=await fetch(AG_EDGE,{method:'POST',headers,body:JSON.stringify({type:'send_email',to,subject,html,bcc:'beaconresidentials@gmail.com',from:agencyBrand().name+' <documents@nexlet.co.uk>'})});
+    const res=await fetch(AG_EDGE,{method:'POST',headers,body:JSON.stringify({type:'send_email',to,subject,html,bcc:'beaconresidentials@gmail.com',from:agencyBrand().name+' <documents@nexlet.co.uk>',...(attachmentUrls&&attachmentUrls.length?{attachment_urls:attachmentUrls}:{})})});
     const data=await res.json().catch(()=>({}));
     if(!res.ok){ console.error('[agencyEmail] failed',res.status,data); return {ok:false,error:data.error||data.message||('HTTP '+res.status)}; }
     return {ok:true};
