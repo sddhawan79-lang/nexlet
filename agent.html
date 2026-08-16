@@ -598,7 +598,7 @@ async function generateListingDescription(){
   if(btn){ btn.disabled=false; btn.textContent='✦ AI draft'; }
 }
 function togglePortal(lid,portal){ const l=LST(lid); l.portals=l.portals||{}; l.portals[portal]=!l.portals[portal]; if(Object.values(l.portals).some(Boolean)&&l.status==='draft')l.status='live'; save(); pushListing&&pushListing(l); render(); }
-function publishListing(lid){ const l=LST(lid); l.portals={rightmove:true,zoopla:true,website:true}; l.status='live'; l.publishedAt=today(); save(); pushListing&&pushListing(l); render(); toast('✓ Published to Rightmove, Zoopla & your site'); }
+function publishListing(lid){ const l=LST(lid); l.portals={rightmove:true,zoopla:true,website:true}; l.status='live'; l.publishedAt=today(); if(l.propertyId) _advanceStage(l.propertyId,'marketing'); save(); pushListing&&pushListing(l); render(); toast('✓ Published to Rightmove, Zoopla & your site'); }
 function markLet(lid){ const l=LST(lid); l.status='let'; save(); pushListing&&pushListing(l); render(); toast('✓ Marked let agreed'); }
 
 function vListingDetail(){
@@ -800,7 +800,11 @@ function openOfferAcceptedLetter(oid){
       <label style="display:flex;gap:8px;align-items:center;font-weight:600;font-size:13px;cursor:pointer"><input type="checkbox" id="oa-cl-${c.id}"> ${esc(c.title)}</label>
       <textarea id="oa-clbody-${c.id}" rows="2" style="margin-top:6px;font-size:12px;width:100%">${esc(c.body)}</textarea>
     </div>`).join('')}
-    <div class="fg"><label>Other terms <span class="faint">(optional)</span></label><textarea id="oa-extra" rows="2" placeholder="Any other bespoke terms for this tenancy"></textarea></div>`;
+    <div class="fg"><label>Other terms <span class="faint">(optional)</span></label><textarea id="oa-extra" rows="2" placeholder="Any other bespoke terms for this tenancy"></textarea></div>
+    <div class="fg" style="margin-top:6px"><label style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--navy)">Third parties mentioned in the move-in process</label></div>
+    <div class="hint" style="margin:-4px 0 8px;color:var(--faint)">Editable per tenancy — swap the partner or add your referral/commission disclosure if it differs from your default.</div>
+    <div class="grid2" style="gap:10px"><div class="fg"><label>Referencing partner</label><input id="oa-refpartner" value="${esc(S.agency.refPartner||'')}" placeholder="e.g. Let Alliance"></div><div class="fg"><label>Referral/commission note <span class="faint">(optional)</span></label><input id="oa-refnote" placeholder="e.g. We may receive a referral fee from them"></div></div>
+    <div class="grid2" style="gap:10px"><div class="fg"><label>Utilities referral <span class="faint">(optional — blank skips this step)</span></label><input id="oa-utilities" placeholder="e.g. One Utility Bill"></div><div class="fg"><label>Referral/commission note <span class="faint">(optional)</span></label><input id="oa-utilitiesnote" placeholder="e.g. We receive a referral fee from them"></div></div>`;
   modal('Offer accepted — send letter to tenant', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="confirmOfferAccepted('${oid}')">Send accepted letter &amp; move to referencing</button>`, true);
 }
 async function confirmOfferAccepted(oid){
@@ -814,12 +818,12 @@ async function confirmOfferAccepted(oid){
     moveIn:val('oa-movein')||o.moveIn||today(), dueDay:val('oa-dueday')||'1st',
     bankName:val('oa-bankname'), sortCode:val('oa-sortcode'), accNo:val('oa-accno'), bankRef:val('oa-bankref'),
     clauses:standardClauses().filter(c=>{ const el=document.getElementById('oa-cl-'+c.id); return el&&el.checked; }).map(c=>({title:c.title,body:val('oa-clbody-'+c.id)||c.body})),
-    extra:val('oa-extra')||'' };
+    extra:val('oa-extra')||'', utilities:val('oa-utilities')||'', utilitiesNote:val('oa-utilitiesnote')||'', refPartner:val('oa-refpartner')||'', refNote:val('oa-refnote')||'' };
   o.amount=data.rent; o.moveIn=data.moveIn; o.status='accepted';
   a.status='referencing'; pushApplicant&&pushApplicant(a);
   S.references=S.references||[]; S.references.push({id:uid('r'),applicant:a.name,propertyId:l.propertyId||'',income:0,docs:{},creditState:'not_requested',status:'none',note:'From accepted offer — '+gbp(data.rent)+'/mo'});
   if(l.id){ l.status='let'; pushListing&&pushListing(l);
-    if(l.propertyId){ _commitTenant(l.propertyId,{name:data.tenants,email:data.email,start:data.moveIn,deposit:data.deposit}); const pp=P(l.propertyId); pp.rentDueDay=data.dueDay; save(); pushProperty(pp); }
+    if(l.propertyId){ _commitTenant(l.propertyId,{name:data.tenants,email:data.email,start:data.moveIn,deposit:data.deposit},'referencing'); const pp=P(l.propertyId); pp.rentDueDay=data.dueDay; save(); pushProperty(pp); }
   }
   save(); pushOffer&&pushOffer(o);
   let sent=false;
@@ -832,40 +836,63 @@ async function confirmOfferAccepted(oid){
   toast(sent?'✓ Accepted — letter sent & applicant moved to referencing':'✓ Accepted — applicant moved to referencing');
 }
 function offerAcceptedLetterHtml(d){ const b=agencyBrand(); const totalDue=(d.rent+d.deposit-d.holding);
-  const clausesHtml=d.clauses.length?d.clauses.map(c=>`<p style="margin:8px 0"><b>${esc(c.title)}.</b> ${esc(c.body)}</p>`).join(''):'';
+  const clausesHtml=d.clauses.length?d.clauses.map(c=>`<p style="margin:10px 0"><b>${esc(c.title)}.</b> ${esc(c.body)}</p>`).join(''):'';
+  const bankRows=`<tr><td style="padding:3px 0;color:#7A8FA6">Amount</td><td style="padding:3px 0;text-align:right;font-weight:700">${gbp(d.holding)}</td></tr>
+    <tr><td style="padding:3px 0;color:#7A8FA6">Reference</td><td style="padding:3px 0;text-align:right">${esc(d.bankRef||d.address)}</td></tr>
+    <tr><td style="padding:3px 0;color:#7A8FA6">Account name</td><td style="padding:3px 0;text-align:right">${esc(d.bankName||'—')}</td></tr>
+    <tr><td style="padding:3px 0;color:#7A8FA6">Sort code</td><td style="padding:3px 0;text-align:right">${esc(d.sortCode||'—')}</td></tr>
+    <tr><td style="padding:3px 0;color:#7A8FA6">Account number</td><td style="padding:3px 0;text-align:right">${esc(d.accNo||'—')}</td></tr>`;
   return `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#1A2B45">
     <div style="background:#0B1E3D;padding:20px 24px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:20px;font-weight:700">${esc(b.name)}</span></div>
     <div style="border:1px solid #E4EAF1;border-top:none;border-radius:0 0 10px 10px;padding:26px 24px">
       <p>Hi ${esc(d.tenants)},</p>
-      <p>Congratulations — your offer has been accepted (subject to references and contract) for <b>${esc(d.address)}</b>.</p>
+      <p>Congratulations — your offer has been accepted (subject to references and contract) for:<br><b>${esc(d.address)}</b></p>
       <div style="background:#F5F8FC;border-radius:8px;padding:16px 18px;margin:18px 0">
-        <div style="font-weight:700;margin-bottom:8px">Holding deposit (required to secure the property)</div>
-        <p style="margin:0 0 8px">Please pay the holding deposit (one week's rent) to begin the process. This is deducted from your move-in balance.</p>
-        <table style="font-size:13px;width:100%"><tr><td style="padding:2px 0;color:#7A8FA6">Amount</td><td style="padding:2px 0;text-align:right;font-weight:700">${gbp(d.holding)}</td></tr>
-        <tr><td style="padding:2px 0;color:#7A8FA6">Reference</td><td style="padding:2px 0;text-align:right">${esc(d.bankRef||d.address)}</td></tr>
-        ${d.bankName?`<tr><td style="padding:2px 0;color:#7A8FA6">Account name</td><td style="padding:2px 0;text-align:right">${esc(d.bankName)}</td></tr>`:''}
-        ${d.sortCode?`<tr><td style="padding:2px 0;color:#7A8FA6">Sort code</td><td style="padding:2px 0;text-align:right">${esc(d.sortCode)}</td></tr>`:''}
-        ${d.accNo?`<tr><td style="padding:2px 0;color:#7A8FA6">Account number</td><td style="padding:2px 0;text-align:right">${esc(d.accNo)}</td></tr>`:''}
-        </table>
-        <p style="margin:8px 0 0;font-size:12.5px">Please confirm once payment has been made.</p>
+        <div style="font-weight:700;margin-bottom:8px;color:#0B1E3D">Holding Deposit (required to secure the property)</div>
+        <p style="margin:0 0 10px">Please make payment of the holding deposit (equal to one week's rent) to begin the process. This will be deducted from your move-in balance.</p>
+        <table style="font-size:13px;width:100%">${bankRows}</table>
+        <p style="margin:10px 0 0;font-size:12.5px">Please confirm once payment has been made.</p>
       </div>
-      <p style="font-weight:700;margin-bottom:4px">Please check your tenancy details carefully</p>
-      <p style="font-size:13px;color:#475569;margin-top:0">These details will go into your tenancy agreement. Tell us within 24 hours if anything is incorrect.</p>
-      <ul style="padding-left:18px;line-height:1.8">
+      <p style="font-weight:700;margin-bottom:4px;color:#0B1E3D">Please check your tenancy details carefully</p>
+      <p style="font-size:13px;color:#475569;margin-top:0">These details will go into your tenancy agreement. You must tell us within 24 hours if anything is incorrect.</p>
+      <ul style="padding-left:18px;line-height:1.9">
         <li>Rent: ${gbp(d.rent)}</li><li>Frequency: Monthly</li><li>Deposit: ${gbp(d.deposit)}</li>
-        <li>Move date: ${fmtDate(d.moveIn)}</li><li>Rent due date: ${esc(d.dueDay)}</li><li>Tenant(s): ${esc(d.tenants)}</li>
+        <li>Move Date: ${fmtDate(d.moveIn)}</li><li>Rent Due Date: ${esc(d.dueDay)}</li><li>Tenant(s): ${esc(d.tenants)}</li>
       </ul>
-      ${clausesHtml?`<p style="font-weight:700;margin:14px 0 4px">Additional terms</p>${clausesHtml}`:''}
-      ${d.extra?`<p style="font-weight:700;margin:14px 0 4px">Other terms</p><p>${esc(d.extra)}</p>`:''}
-      <p style="font-weight:700;margin:18px 0 4px">What happens next</p>
-      <ol style="padding-left:18px;line-height:1.8;font-size:13.5px">
-        <li><b>Referencing</b> — we'll be in touch to start your reference checks.</li>
-        <li><b>ID &amp; Right to Rent</b> — we'll ask you to provide ID so we can confirm your right to rent.</li>
-        <li><b>Contract signing</b> — your tenancy agreement will be sent to you to review and sign online.</li>
-        <li><b>Move-in payment</b> — first month's rent (${gbp(d.rent)}) + deposit (${gbp(d.deposit)}) less your holding deposit (${gbp(d.holding)}) = <b>${gbp(totalDue)}</b> total due, in cleared funds before keys are released.</li>
-        <li><b>Move-in day</b> — key collection at an agreed time.</li>
-      </ol>
-      <p>If you have any questions at any stage, just let us know — we're here to help.</p>
+      ${clausesHtml?`<p style="font-weight:700;margin:16px 0 2px;color:#0B1E3D">Additional Terms</p>${clausesHtml}`:''}
+      ${d.extra?`<p style="margin:10px 0">${esc(d.extra)}</p>`:''}
+      <p style="font-weight:700;margin:20px 0 8px;color:#0B1E3D;font-size:15px">The Move-In Process</p>
+      <p style="margin:0 0 4px"><b>1. Referencing</b></p>
+      <ul style="padding-left:18px;line-height:1.8;margin-top:2px">
+        <li>${d.refPartner?'Sent via '+esc(d.refPartner)+' ':'Sent to you '}after your holding deposit is paid</li>
+        <li>Please complete it within 72 hours</li>
+        <li>Check your spam/junk folder for the referencing email</li>
+        <li>Tell your employer and current landlord to expect contact from us</li>
+        ${d.refNote?`<li>${esc(d.refNote)}</li>`:''}
+      </ul>
+      <p style="margin:12px 0 4px"><b>2. ID &amp; Right to Rent</b></p>
+      <ul style="padding-left:18px;line-height:1.8;margin-top:2px">
+        ${b.address?`<li>Please provide ID so we can confirm your right to rent — in person at ${esc(b.address)}, or however we've arranged with you</li>`:`<li>Please provide ID so we can confirm your right to rent</li>`}
+        <li>Passport &amp; driving licence are ideal (ask us about alternatives)</li>
+        <li>Non-UK citizens: please provide your share code or Home Office reference</li>
+      </ul>
+      <p style="margin:12px 0 4px"><b>3. Contract Signing</b></p>
+      <ul style="padding-left:18px;line-height:1.8;margin-top:2px">
+        <li>Your tenancy agreement will be sent to you to review and sign online, from your phone or computer</li>
+        <li>Let us know if you need paper copies or any adjustments</li>
+      </ul>
+      <p style="margin:12px 0 4px"><b>4. Move-In Payment</b></p>
+      <p style="margin:2px 0 6px;font-size:13px">This must be received in cleared funds before keys are released. We recommend paying at least 3 working days before move-in.</p>
+      <table style="font-size:13px;width:100%;margin-bottom:6px">
+        <tr><td style="padding:2px 0;color:#7A8FA6">First month's rent</td><td style="padding:2px 0;text-align:right">${gbp(d.rent)}</td></tr>
+        <tr><td style="padding:2px 0;color:#7A8FA6">Deposit</td><td style="padding:2px 0;text-align:right">${gbp(d.deposit)}</td></tr>
+        <tr><td style="padding:2px 0;color:#7A8FA6">Less holding deposit</td><td style="padding:2px 0;text-align:right">− ${gbp(d.holding)}</td></tr>
+        <tr><td style="padding:4px 0;font-weight:700">Total due</td><td style="padding:4px 0;text-align:right;font-weight:700">${gbp(totalDue)}</td></tr>
+      </table>
+      <p style="margin:12px 0 4px"><b>5. Move-In Day</b></p>
+      <ul style="padding-left:18px;line-height:1.8;margin-top:2px"><li>Key collection at an agreed time</li><li>You'll receive all documents and guidance you need</li></ul>
+      ${d.utilities?`<p style="margin:12px 0 4px"><b>6. Utilities</b></p><p style="margin:2px 0;font-size:13px">You may be contacted by ${esc(d.utilities)} to help set up your utilities.${d.utilitiesNote?' '+esc(d.utilitiesNote):''}</p>`:''}
+      <p style="margin-top:18px">If you have any questions at any stage, just let us know — we're here to help.</p>
       <p>Kind regards,<br>${esc(b.name)}</p>
     </div></div>`;
 }
@@ -2435,10 +2462,17 @@ function downloadLegionellaSheet(pid){
   const blob=new Blob([legionellaSheetHtml(pid)],{type:'text/html'});
   window.open(URL.createObjectURL(blob),'_blank');
 }
-function _commitTenant(pid,info){
+function _advanceStage(pid,targetKey,who){
+  const tgtIdx=STAGES.findIndex(s=>s.k===targetKey); if(tgtIdx<0) return;
+  let tn=S.tenancies.find(t=>t.propertyId===pid);
+  if(!tn){ tn={id:uid('t'),who:who||P(pid).address||'',propertyId:pid,stage:targetKey}; S.tenancies.push(tn); }
+  else{ const curIdx=STAGES.findIndex(s=>s.k===tn.stage); if(tgtIdx<=curIdx) return; tn.stage=targetKey; }
+  save(); pushTenancy&&pushTenancy(tn);
+}
+function _commitTenant(pid,info,stage){
   const p=P(pid); if(!p.id||!info.name) return null;
   p.tenant={name:info.name,email:info.email||'',start:info.start||today(),occupants:info.occupants||[]};
-  let tn=S.tenancies.find(t=>t.propertyId===pid); if(tn)tn.stage='managed'; else { tn={id:uid('t'),who:p.address,propertyId:pid,stage:'managed'}; S.tenancies.push(tn); }
+  _advanceStage(pid,stage||'managed',p.address);
   let rec=tenantRecFor(pid);
   // A different name means a new tenant replacing the sitting one — close out the old record
   // instead of mutating it, so stale deposit/reference/contract docs from the outgoing tenant
@@ -2457,7 +2491,7 @@ function _commitTenant(pid,info){
   if(info.id2DocName){ rec.id2DocName=info.id2DocName; rec.id2DocUrl=info.id2DocUrl||rec.id2DocUrl; }
   if(info.addressProofDocs){ rec.addressProofDocs=info.addressProofDocs; rec.addressProofName=''; rec.addressProofUrl=''; }
   S.tenants=S.tenants||[]; if(isNew) S.tenants.push(rec);
-  save(); pushProperty(p); pushTenancy(tn); pushTenantRec(rec);
+  save(); pushProperty(p); pushTenantRec(rec);
   return rec;
 }
 async function saveTenant(pid){ const nm=val('tn-name'); if(!nm){toast('Enter tenant name',1);return;}
@@ -3343,6 +3377,7 @@ function saveReference(){
   if(!RF.applicant){toast('Enter applicant name',1);return;}
   const i=S.references.findIndex(r=>r.id===RF.id);
   if(i>=0) S.references[i]=RF; else S.references.push(RF);
+  if(RF.status==='green'&&RF.propertyId) _advanceStage(RF.propertyId,'contract');
   save(); pushReference(RF); closeModal(); go('referencing'); toast('✓ Reference saved');
 }
 
@@ -3552,7 +3587,7 @@ function agreementEmailHtml(l,agentName,link,service){
       <p>${esc(agentName)} at <b>${esc(b.name)}</b> has prepared your <b>${nm}</b> and signed it. It's ready for you to review and counter-sign.</p>
       <p style="text-align:center;margin:26px 0"><a href="${link}" style="background:#009970;color:#fff;text-decoration:none;font-weight:600;padding:13px 30px;border-radius:8px;display:inline-block">Review &amp; sign your agreement</a></p>
       <p style="font-size:12px;color:#7A8FA6">This is a secure, personal link. Electronic signatures are legally binding under the Electronic Communications Act 2000. Once signed, you'll receive a timestamped copy by email.</p>
-      <div style="margin-top:18px;padding-top:12px;border-top:1px solid #E4EAF1;font-size:10.5px;color:#7A8FA6">${esc(b.name)}${b.ico?' · ICO Reg. '+esc(b.ico):''} · secured by NexLet e-signature</div>
+      <div style="margin-top:18px;padding-top:12px;border-top:1px solid #E4EAF1;font-size:10.5px;color:#7A8FA6">${esc(b.name)}${b.ico?' · ICO Reg. '+esc(b.ico):''}</div>
     </div></div>`;
 }
 
@@ -3712,6 +3747,7 @@ async function sendTenancyAgreement(pid){
   const { error }=await sb.from('agency_tenancy_agreements').insert(row);
   if(error){ console.error(error); toast('⚠ Could not send — run tenancy-agreement-esign-migration.sql then retry',1); return; }
   S.tenancyAgreements=S.tenancyAgreements||[]; S.tenancyAgreements.push(row);
+  _advanceStage(pid,'contract');
   rec.email=rec.email||email; pushTenantRec(rec);
   const link=new URL('tenancy-esign.html?t='+encodeURIComponent(token), location.href).href;
   const mailBody=nm=>`<p>Hi ${esc(nm)},</p><p>Please review and sign your tenancy terms &amp; conditions for <b>${esc(p.address)}</b>.</p><p><a href="${link}">Sign your tenancy terms &amp; conditions</a></p>`;
@@ -3795,7 +3831,10 @@ async function pollTenancyAgreements(){
   if(!LIVE) return;
   try{ const {data}=await sb.from('agency_tenancy_agreements').select('*').eq('agency_id',window._agencyId);
     if(data){ const prevSigned=new Set((S.tenancyAgreements||[]).filter(a=>a.status==='signed').map(a=>a.id));
-      S.tenancyAgreements=data; if(data.some(a=>a.status==='signed'&&!prevSigned.has(a.id))) render(); } }catch(e){}
+      const newlySigned=data.filter(a=>a.status==='signed'&&!prevSigned.has(a.id));
+      S.tenancyAgreements=data;
+      newlySigned.forEach(a=>{ if(a.property_id) _advanceStage(a.property_id,'managed'); });
+      if(newlySigned.length) render(); } }catch(e){}
 }
 function signedCertHtml(a){
   const fmt=d=>d?new Date(d).toLocaleString('en-GB',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
@@ -3858,7 +3897,7 @@ function portalInviteHtml(l,link,login){ const b=agencyBrand();
       <p style="text-align:center;margin:24px 0"><a href="${login}" style="background:#009970;color:#fff;text-decoration:none;font-weight:600;padding:13px 30px;border-radius:8px;display:inline-block">Sign in to your portal</a></p>
       <p style="font-size:12.5px;color:#7A8FA6">Please sign in (or create your account) using <b>${esc(l.email)}</b> — the email we hold for you — so we can link you to your portfolio automatically. Once signed in you'll be taken straight to your dashboard.</p>
       <p style="font-size:11px;color:#7A8FA6">Direct link: <a href="${link}" style="color:#009970">${esc(link)}</a></p>
-      <div style="margin-top:18px;padding-top:12px;border-top:1px solid #E4EAF1;font-size:10.5px;color:#7A8FA6">${esc(b.name)}${b.ico?' · ICO Reg. '+esc(b.ico):''} · secured by NexLet</div>
+      <div style="margin-top:18px;padding-top:12px;border-top:1px solid #E4EAF1;font-size:10.5px;color:#7A8FA6">${esc(b.name)}${b.ico?' · ICO Reg. '+esc(b.ico):''}</div>
     </div></div>`;
 }
 function letterWrap(subject, inner){ const b=agencyBrand(); const foot=[b.name, b.ico?'ICO Reg. '+b.ico:'', b.redress?b.redress+(b.redressNo?' ('+b.redressNo+')':''):''].filter(Boolean).join(' · ');
@@ -3869,7 +3908,7 @@ function letterWrap(subject, inner){ const b=agencyBrand(); const foot=[b.name, 
     </div>
     <div style="border:1px solid #E4EAF1;border-top:3px solid #00C896;border-radius:0 0 8px 8px;padding:30px 30px 24px">
       <div style="font-size:15px;line-height:1.75">${inner}</div>
-      <div style="margin-top:26px;padding-top:14px;border-top:1px solid #E4EAF1;font-family:Arial,sans-serif;font-size:10.5px;color:#7A8FA6;line-height:1.6">${esc(foot)}<br>Issued by ${esc(b.name)} · secured by NexLet on ${new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}. This letter is a record held within the NexLet platform.</div>
+      <div style="margin-top:26px;padding-top:14px;border-top:1px solid #E4EAF1;font-family:Arial,sans-serif;font-size:10.5px;color:#7A8FA6;line-height:1.6">${esc(foot)}<br>Issued by ${esc(b.name)} on ${new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}.</div>
     </div></div>`; }
 function _money(n){ return '£'+(Math.round((+n||0)*100)/100).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function _dstr(d){ return d?new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}):'—'; }
