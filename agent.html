@@ -297,6 +297,8 @@ async function loadData(agency){
     if(po.data) S.payouts=po.data.map(r=>r.data);
     const ld=await sb.from('agency_landlord_leads').select('*').eq('agency_id',window._agencyId);
     if(ld.data) S.landlordLeads=ld.data.map(rowToLead);
+    try{ const ie=await sb.from('agency_inbound_enquiries').select('*').eq('agency_id',window._agencyId).eq('status','needs_review').order('created_at',{ascending:false});
+      if(ie.data) S.inboundEnquiries=ie.data; }catch(e){}
     const ta=await sb.from('agency_tenancy_agreements').select('*').eq('agency_id',window._agencyId);
     if(ta.data) S.tenancyAgreements=ta.data;
   }catch(e){ /* run sql-agency-lettings.sql to enable */ }
@@ -325,6 +327,7 @@ async function boot(){
   setInterval(pollAgreements, 20000);   // pick up landlord counter-signatures live
   setInterval(pollTenancyAgreements, 20000); // pick up tenant/occupant signatures live
   setInterval(pollMessages, 15000);     // pick up new landlord/tenant messages live
+  setInterval(pollInboundEnquiries, 20000); // pick up forwarded enquiry emails live
   restoreView();
   render();
 }
@@ -346,6 +349,7 @@ const SEED={
   inventories2:[],
   listings:[],
   applicants:[],
+  inboundEnquiries:[],
   viewings:[],
   offers:[],
   keys:[],
@@ -645,13 +649,52 @@ function vListingDetail(){
 function vApplicants(){
   const apps=(S.applicants||[]).filter(a=>a.status!=='archived');
   const upcoming=(S.viewings||[]).filter(v=>v.status==='scheduled').sort((a,b)=>new Date(a.when)-new Date(b.when));
+  const needsReview=(S.inboundEnquiries||[]).filter(e=>e.status==='needs_review');
   return `<h1 class="pg">Applicants &amp; Viewings</h1><div class="sub">Your enquiry inbox and viewing diary. Capture leads from the portals, book viewings, log feedback, and push hot applicants to an offer.</div>
+    ${needsReview.length?`<div class="panel"><div class="panel-hd"><h2>Needs review \u2014 emails forwarded into your inbox</h2><span class="faint" style="font-size:12px">${needsReview.length}</span></div>
+      ${needsReview.map(inboundEnquiryRow).join('')}
+    </div>`:''}
     ${upcoming.length?`<div class="panel"><div class="panel-hd"><h2>Upcoming viewings</h2><span class="faint" style="font-size:12px">${upcoming.length}</span></div>
       ${upcoming.map(v=>{ const a=(S.applicants||[]).find(x=>x.id===v.applicantId)||{}; const l=LST(v.listingId); return `<div class="row"><div class="av" style="background:var(--amber-bg);color:var(--amber)">${new Date(v.when).getDate()}</div><div style="flex:1"><div style="font-weight:600;font-size:13px;color:var(--navy)">${esc(a.name||'Applicant')} · ${esc(l.address||'')}</div><div class="faint" style="font-size:11.5px">${new Date(v.when).toLocaleString('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div></div><button class="btn sm" onclick="viewingDone('${v.id}')">Log feedback</button></div>`; }).join('')}
     </div>`:''}
     <div class="panel"><div class="panel-hd"><h2>Applicants</h2><span class="faint" style="font-size:12px">${apps.length} active</span></div>
       ${apps.length?apps.map(a=>applicantRow(a,false)).join(''):`<div class="empty" style="padding:30px;text-align:center"><div style="font-size:14px;font-weight:600;margin-bottom:4px">No applicants yet</div><div class="faint" style="font-size:12.5px;margin-bottom:14px">Log an enquiry when someone contacts you about a listing.</div><button class="btn navy" onclick="openApplicant()">＋ Add enquiry</button></div>`}
     </div>`;
+}
+function inboundEnquiryRow(e){
+  const x=e.extracted||{}; const looksReal=x.is_enquiry!==false;
+  return `<div class="row" style="align-items:flex-start">
+    <div class="av" style="background:${looksReal?'var(--blue-bg)':'var(--off)'};color:${looksReal?'var(--blue)':'#64748B'}">✉</div>
+    <div style="flex:1;min-width:0">
+      <div style="font-weight:600;font-size:13.5px;color:var(--navy)">${esc(x.name||e.from_email||'Unknown sender')} ${!looksReal?'<span class="faint" style="font-weight:400">(doesn\u2019t look like an enquiry)</span>':''}</div>
+      <div class="faint" style="font-size:11.5px;margin-bottom:6px">${esc(e.subject||'')} \u00b7 from ${esc(e.from_email||'')} \u00b7 ${fmtDate(e.created_at)}</div>
+      <div style="font-size:12.5px;color:var(--muted);margin-bottom:8px">${esc(x.summary||'')}</div>
+      <div class="grid2" style="gap:8px;max-width:520px">
+        <input id="ie-name-${e.id}" placeholder="Name" value="${esc(x.name||'')}">
+        <input id="ie-phone-${e.id}" placeholder="Phone" value="${esc(x.phone||'')}">
+        <input id="ie-email-${e.id}" placeholder="Email" value="${esc(x.email||'')}">
+        <input id="ie-budget-${e.id}" type="number" placeholder="Budget £/mo" value="${x.budget||''}">
+      </div>
+      <input id="ie-note-${e.id}" style="margin-top:8px;max-width:520px" placeholder="Property / area" value="${esc(x.property_or_area||'')}">
+    </div>
+    <div style="display:flex;gap:6px;flex-shrink:0">
+      <button class="btn sm navy" onclick="addInboundAsApplicant('${e.id}')">＋ Add as enquiry</button>
+      <button class="btn sm" style="color:var(--red)" onclick="dismissInboundEnquiry('${e.id}')">Dismiss</button>
+    </div>
+  </div>`;
+}
+function addInboundAsApplicant(id){
+  const e=(S.inboundEnquiries||[]).find(x=>x.id===id); if(!e) return;
+  const name=val('ie-name-'+id); if(!name){ toast('Enter a name first',1); return; }
+  const a={id:uid('app'),name,phone:val('ie-phone-'+id),email:val('ie-email-'+id),budget:parseFloat(val('ie-budget-'+id))||0,
+    source:(e.extracted&&e.extracted.source)||'Website',listingId:'',note:val('ie-note-'+id),status:'new',createdAt:new Date().toISOString()};
+  S.applicants=S.applicants||[]; S.applicants.push(a); save(); pushApplicant&&pushApplicant(a);
+  e.status='added'; if(LIVE) sb.from('agency_inbound_enquiries').update({status:'added'}).eq('id',id).then(()=>{});
+  S.inboundEnquiries=(S.inboundEnquiries||[]).filter(x=>x.id!==id); render(); toast('✓ Added as enquiry');
+}
+function dismissInboundEnquiry(id){
+  if(LIVE) sb.from('agency_inbound_enquiries').update({status:'dismissed'}).eq('id',id).then(()=>{});
+  S.inboundEnquiries=(S.inboundEnquiries||[]).filter(x=>x.id!==id); render(); toast('Dismissed');
 }
 function applicantRow(a,compact){
   const l=LST(a.listingId); const vs=_appViewings(a.id); const nextV=vs.find(v=>v.status==='scheduled');
@@ -1794,6 +1837,8 @@ function _notifications(){
   S.properties.filter(p=>p.tenant).forEach(p=>{ const cl=_tenancyChecklist(p); const missing=cl.items.filter(i=>!i.done&&!i.warn); if(missing.length) out.push({sev:'red',label:'Tenancy setup — '+(p.address||''),detail:'Missing: '+missing.map(i=>i.label).join(', '),go:`go('property','${p.id}')`}); });
   (S.agreements||[]).filter(a=>a.status==='sent').forEach(a=>{ const days=Math.floor((Date.now()-new Date(a.agent_signed_at||0).getTime())/86400000); if(days>=2){ const l=L(a.landlord_id); out.push({sev:days>=5?'red':'amber',label:'Instruction not signed — '+(l.name||a.landlord_name||''),detail:'Sent '+days+' day'+(days===1?'':'s')+' ago, still awaiting landlord signature',go:`sendAgreementReminder('${a.id}')`}); } });
   (S.tenancyAgreements||[]).filter(a=>a.status==='sent').forEach(a=>{ const days=Math.floor((Date.now()-new Date(a.agent_signed_at||0).getTime())/86400000); if(days>=2){ const p=P(a.property_id)||{}; out.push({sev:days>=5?'red':'amber',label:'Tenancy terms unsigned — '+(a.tenant_name||''),detail:(p.address?p.address+' — ':'')+'Sent '+days+' day'+(days===1?'':'s')+' ago, still awaiting signature',go:`sendTenancyReminder('${a.id}')`}); } });
+  const needsReview=(S.inboundEnquiries||[]).filter(e=>e.status==='needs_review');
+  if(needsReview.length) out.push({sev:'amber',label:needsReview.length+' forwarded email'+(needsReview.length>1?'s':'')+' need review',detail:'Confirm or dismiss on Applicants & Viewings',go:`go('applicants')`});
   return out.sort((a,b)=>(a.sev==='red'?0:1)-(b.sev==='red'?0:1));
 }
 function openNotifications(){
@@ -1867,7 +1912,7 @@ function vPropertyDetail(){
     </div>
     ${tstatus==='unsigned'?`<div class="note warn" style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
       <div><b>⚠ Instruction not yet signed.</b> Prep compliance certs now if you like, but hold off on marketing or a tenancy until the landlord has signed.</div>
-      <div style="display:flex;gap:8px">${(()=>{ const a=agreementFor(l.id); return a&&a.status==='sent'?`<button class="btn sm" style="border-color:var(--amber);color:var(--amber)" onclick="sendAgreementReminder('${a.id}')">Send reminder</button>`:''; })()}<button class="btn navy sm" onclick="openAgreement('${l.id}')">Send agreement to sign</button></div>
+      <div style="display:flex;gap:8px">${(()=>{ const a=agreementFor(l.id); return a&&a.status==='sent'?`<button class="btn sm" style="border-color:var(--amber);color:var(--amber)" onclick="sendAgreementReminder('${a.id}')">Send reminder</button><button class="btn sm" onclick="openAgreement('${l.id}')" title="Start over with a new agreement">Re-send agreement</button>`:`<button class="btn navy sm" onclick="openAgreement('${l.id}')">Send agreement to sign</button>`; })()}</div>
     </div>`:''}
     ${lifecycleStepper(p)}
     ${tenancyChecklistPanel(p)}
@@ -3979,6 +4024,11 @@ function viewTenancySigningReceipt(pid){
   const w=window.open('','_blank'); if(!w){ toast('Allow pop-ups to view',1); return; }
   w.document.write(`<html><head><title>Signing receipt</title><style>body{margin:24px auto;padding:0 20px}@media print{button{display:none}}</style></head><body><button onclick="print()" style="padding:10px 18px;background:#0B1E3D;color:#fff;border:none;border-radius:8px;cursor:pointer;margin-bottom:20px;font-family:Arial,sans-serif">Print / Save as PDF</button>${tenancySigningReceiptHtml(a,p)}</body></html>`);
   w.document.close();
+}
+async function pollInboundEnquiries(){
+  if(!LIVE) return;
+  try{ const {data}=await sb.from('agency_inbound_enquiries').select('*').eq('agency_id',window._agencyId).eq('status','needs_review').order('created_at',{ascending:false});
+    if(data){ const grew=data.length>(S.inboundEnquiries||[]).length; S.inboundEnquiries=data; if(grew) render(); } }catch(e){}
 }
 async function pollTenancyAgreements(){
   if(!LIVE) return;
