@@ -1861,7 +1861,7 @@ function vPropertyDetail(){
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">
       <div class="av" style="width:50px;height:50px;font-size:20px">⌂</div>
       <div style="flex:1"><h1 class="pg" style="margin:0">${esc(p.address)}</h1>
-        <div class="faint" style="font-size:13px">${esc(p.city||'')} · ${p.beds} bed · <b>${gbp(p.rent)}/mo</b> ${p.tenant?'achieved':'expected'} <a href="#" onclick="editPropRent('${p.id}');return false" style="color:var(--blue);font-size:12px;margin-left:2px">edit</a> · Managed for <a href="#" onclick="go('landlord','${l.id}');return false" style="color:var(--blue)">${esc(l.name||'—')}</a></div></div>
+        <div class="faint" style="font-size:13px">${esc(p.city||'')} · ${p.beds} bed · <b>${gbp(p.rent)}/mo</b> ${p.tenant?'achieved':'expected'} <a href="#" onclick="editPropRent('${p.id}');return false" style="color:var(--blue);font-size:12px;margin-left:2px">edit</a> · Managed for <a href="#" onclick="go('landlord','${l.id}');return false" style="color:var(--blue)">${esc(landlordName(l)||'—')}</a></div></div>
       <span class="pill" style="background:${comp.pct===100?'var(--green-bg)':'var(--amber-bg)'};color:${comp.pct===100?'var(--green)':'var(--amber)'}">Compliance ${comp.pct}%</span>
     </div>
     ${tstatus==='unsigned'?`<div class="note warn" style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
@@ -1985,7 +1985,7 @@ async function _sendFeeChangeLetter(p,l,oldFee,newFee){
   const b=agencyBrand();
   const subject=`Management fee update — ${p.address}`;
   const sig=b.agent&&b.agent!==b.name?`${esc(b.agent)}<br>${esc(b.name)}`:esc(b.name);
-  const body=`<p>Dear ${esc(l.name.split(' ')[0])},</p>
+  const body=`<p>Dear ${esc(landlordName(l))},</p>
     <p>I hope you're well. I'm writing to let you know about a change to the management fee for <b>${esc(p.address)}</b>, effective <b>${fmtDate(today())}</b>.</p>
     <p><b>Previous fee:</b> ${oldFee}% of gross monthly rent<br><b>New fee:</b> ${newFee}% of gross monthly rent (${gbp(p.rent*newFee/100)}/mo at the current rent)</p>
     <p>This new rate will apply to all rent collections and management invoices from this date onwards. Everything else in your management agreement stays exactly as it is.</p>
@@ -2124,7 +2124,7 @@ function propTenancyStatus(p){
   return 'vacant';
 }
 function startMarketingForProperty(pid){ const p=P(pid); if(propTenancyStatus(p)==='unsigned'){ toast('Send the agreement first — you can\'t market before the landlord signs',1); return; } openListing(null,pid); }
-function recordExistingTenant(pid){ const p=P(pid); if(propTenancyStatus(p)==='unsigned'){ toast('Send the agreement first — an instruction must be signed even for a sitting tenant',1); return; } setTenant(pid); }
+function recordExistingTenant(pid){ setTenant(pid); }
 function tnTab(name){
   ['details','docs'].forEach(t=>{
     const panel=document.getElementById('tn-tab-'+t); if(panel) panel.style.display=(t===name?'block':'none');
@@ -2657,7 +2657,7 @@ function vLandlordPortal(){
   return `
     <div class="back" onclick="go('landlord','${l.id}')">← Back to agent view</div>
     <div class="note" style="margin-bottom:16px">👁 <b>Landlord read-only portal preview</b> — this is what <b>${esc(l.name)}</b> sees when they log in. They can view their properties, compliance and documents, but cannot edit — you manage everything. (Phase 2: gated behind a landlord login.)</div>
-    <h1 class="pg">Hello, ${esc(l.name.split(' ')[0])}</h1><div class="sub">Your portfolio, managed by ${esc(S.agency.name||'your agent')}</div>
+    <h1 class="pg">Hello, ${esc(landlordName(l))}</h1><div class="sub">Your portfolio, managed by ${esc(S.agency.name||'your agent')}</div>
     <div class="grid3" style="margin-bottom:18px">
       <div class="kpi"><div class="l">Properties</div><div class="v">${props.length}</div></div>
       <div class="kpi"><div class="l">Monthly rent</div><div class="v">${gbp(rent)}<small>/mo</small></div></div>
@@ -2711,7 +2711,7 @@ function vInvoices(){
 function invRow(inv){ const l=L(inv.landlordId); const t=invTotal(inv);
   return `<div class="row" style="cursor:pointer" onclick="go('invoice','${inv.id}')">
     <div class="av">£</div>
-    <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:var(--navy)">${esc(inv.no)} · ${esc(l.name||'—')}</div>
+    <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:var(--navy)">${esc(inv.no)} · ${esc(landlordName(l)||'—')}</div>
       <div class="faint" style="font-size:12px">${esc(inv.periodLabel||'')} · issued ${fmtDate(inv.issued)}</div></div>
     <div style="width:90px;text-align:right;font-size:14px;font-weight:700;color:var(--navy)">${money2(t.gross)}</div>
     ${invStatusPill(inv.status)}</div>`;
@@ -3672,7 +3672,7 @@ function agreementEmailHtml(l,agentName,link,service){
   return `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#1A2B45">
     <div style="background:#0B1E3D;padding:20px 24px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:20px;font-weight:700">${esc(b.name)}</span>${b.ico?`<div style="font-size:10px;color:#7F9CC0;margin-top:2px">ICO Reg. ${esc(b.ico)}</div>`:''}</div>
     <div style="border:1px solid #E4EAF1;border-top:none;border-radius:0 0 10px 10px;padding:26px 24px">
-      <p>Dear ${esc(l.name)},</p>
+      <p>Dear ${esc(landlordName(l))},</p>
       <p>${esc(agentName)} at <b>${esc(b.name)}</b> has prepared your <b>${nm}</b> and signed it. It's ready for you to review and counter-sign.</p>
       <p style="text-align:center;margin:26px 0"><a href="${link}" style="background:#009970;color:#fff;text-decoration:none;font-weight:600;padding:13px 30px;border-radius:8px;display:inline-block">Review &amp; sign your agreement</a></p>
       <p style="font-size:12px;color:#7A8FA6">This is a secure, personal link. Electronic signatures are legally binding under the Electronic Communications Act 2000. Once signed, you'll receive a timestamped copy by email.</p>
@@ -3981,7 +3981,7 @@ function portalInviteHtml(l,link,login){ const b=agencyBrand();
   return `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#1A2B45">
     <div style="background:#0B1E3D;padding:20px 24px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:20px;font-weight:700">${esc(b.name)}</span>${b.ico?`<div style="font-size:10px;color:#7F9CC0;margin-top:2px">ICO Reg. ${esc(b.ico)}</div>`:''}</div>
     <div style="border:1px solid #E4EAF1;border-top:none;border-radius:0 0 10px 10px;padding:26px 24px">
-      <p>Dear ${esc(l.name)},</p>
+      <p>Dear ${esc(landlordName(l))},</p>
       <p>${esc(b.name)} has given you access to your own <b>online portfolio portal</b> — a secure, read-only view of your properties, compliance certificates, rent and management agreement.</p>
       <p style="text-align:center;margin:24px 0"><a href="${login}" style="background:#009970;color:#fff;text-decoration:none;font-weight:600;padding:13px 30px;border-radius:8px;display:inline-block">Sign in to your portal</a></p>
       <p style="font-size:12.5px;color:#7A8FA6">Please sign in (or create your account) using <b>${esc(l.email)}</b> — the email we hold for you — so we can link you to your portfolio automatically. Once signed in you'll be taken straight to your dashboard.</p>
@@ -4008,7 +4008,7 @@ function _thisMonth(){ return new Date().toLocaleDateString('en-GB',{month:'long
 const TEMPLATES=[
   {key:'welcome',group:'Onboarding',title:'Landlord welcome letter',icon:'👋',ai:true,needProp:false,auto:true,
     fields:[],
-    build:(l,p,b)=>({subject:`Welcome to ${b.name}`,body:`<p>Dear ${esc(l.name)},</p>
+    build:(l,p,b)=>({subject:`Welcome to ${b.name}`,body:`<p>Dear ${esc(landlordName(l))},</p>
       <p>Welcome to ${esc(b.name)} — thank you for instructing us to manage your property. We're delighted to be looking after your ${l.service==='letonly'?'letting':'property management'} and will act with care, transparency and full compliance at every step.</p>
       <p>Here's what happens next: we complete your compliance checks, prepare marketing (or begin management), and keep you updated throughout. Your dedicated point of contact is ${esc(b.agent)}, reachable at ${esc(b.email)}.</p>
       <p>You can expect clear monthly statements, prompt handling of maintenance, and proactive reminders before any certificate expires. We hold ${b.redress?('membership of '+esc(b.redress)):'approved redress-scheme membership'} for your protection.</p>
@@ -4018,7 +4018,7 @@ const TEMPLATES=[
       <p>Kind regards,<br>${(b.agent&&b.agent!==b.name)?esc(b.agent)+'<br>':''}${esc(b.name)}</p>`})},
   {key:'rent_statement',group:'Statements & requests',title:'Monthly rent statement / remittance',icon:'💷',ai:false,needProp:true,
     fields:[{k:'month',label:'Statement period',type:'text',def:()=>_thisMonth()},{k:'received',label:'Rent received (£)',type:'number',def:p=>p&&p.rent||0},{k:'deductions',label:'Deductions / fees (£)',type:'number',def:()=>''},{k:'note',label:'Note (optional)',type:'text',def:()=>''}],
-    build:(l,p,b,f)=>{const rec=+f.received||0, fee=f.deductions!==''&&f.deductions!=null?+f.deductions:(p?rec*propFee(p)/100:0), net=rec-fee; return {subject:`Rent statement — ${f.month} — ${p?p.address:''}`,body:`<p>Dear ${esc(l.name)},</p>
+    build:(l,p,b,f)=>{const rec=+f.received||0, fee=f.deductions!==''&&f.deductions!=null?+f.deductions:(p?rec*propFee(p)/100:0), net=rec-fee; return {subject:`Rent statement — ${f.month} — ${p?p.address:''}`,body:`<p>Dear ${esc(landlordName(l))},</p>
       <p>Please find your rent statement for <b>${esc(f.month)}</b> in respect of <b>${p?esc(p.address):'your property'}</b>.</p>
       <table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:14px;margin:14px 0">
         <tr><td style="padding:8px 0;border-bottom:1px solid #E4EAF1">Rent received</td><td style="padding:8px 0;border-bottom:1px solid #E4EAF1;text-align:right">${_money(rec)}</td></tr>
@@ -4029,7 +4029,7 @@ const TEMPLATES=[
       <p>Kind regards,<br>${esc(b.name)}</p>`}}},
   {key:'maintenance_auth',group:'Statements & requests',title:'Maintenance authorisation request',icon:'🔧',ai:false,needProp:true,
     fields:[{k:'item',label:'Work required',type:'text',def:()=>''},{k:'estimate',label:'Estimated cost (£)',type:'number',def:()=>''},{k:'contractor',label:'Proposed contractor',type:'text',def:()=>''}],
-    build:(l,p,b,f)=>({subject:`Authorisation needed — ${f.item||'maintenance'} — ${p?p.address:''}`,body:`<p>Dear ${esc(l.name)},</p>
+    build:(l,p,b,f)=>({subject:`Authorisation needed — ${f.item||'maintenance'} — ${p?p.address:''}`,body:`<p>Dear ${esc(landlordName(l))},</p>
       <p>We've identified maintenance required at <b>${p?esc(p.address):'your property'}</b> and need your authorisation to proceed.</p>
       <p><b>Work required:</b> ${esc(f.item||'—')}<br><b>Estimated cost:</b> ${f.estimate?_money(f.estimate):'to be confirmed'}${f.contractor?`<br><b>Proposed contractor:</b> ${esc(f.contractor)}`:''}</p>
       <p>Under your management agreement, works above your pre-authorised limit require your approval. Please reply to confirm you're happy for us to instruct this work, or let us know if you'd like to discuss.</p>
@@ -4037,14 +4037,14 @@ const TEMPLATES=[
       <p>Kind regards,<br>${esc(b.name)}</p>`})},
   {key:'compliance_reminder',group:'Statements & requests',title:'Compliance renewal reminder',icon:'📋',ai:false,needProp:true,
     fields:[{k:'cert',label:'Certificate',type:'select',opts:['Gas Safety (CP12)','EICR (Electrical)','EPC','Smoke/CO alarms'],def:()=>'Gas Safety (CP12)'},{k:'expiry',label:'Expiry / due date',type:'date',def:p=>p&&p.certs&&(p.certs.gas)||''}],
-    build:(l,p,b,f)=>({subject:`Action needed: ${f.cert} renewal — ${p?p.address:''}`,body:`<p>Dear ${esc(l.name)},</p>
+    build:(l,p,b,f)=>({subject:`Action needed: ${f.cert} renewal — ${p?p.address:''}`,body:`<p>Dear ${esc(landlordName(l))},</p>
       <p>This is a reminder that the <b>${esc(f.cert)}</b> certificate for <b>${p?esc(p.address):'your property'}</b> ${f.expiry?`is due to expire on <b>${_dstr(f.expiry)}</b>`:'is due for renewal'}.</p>
       <p>Keeping this certificate valid is a legal requirement for a let property. With your authorisation we'll arrange the inspection and renewal on your behalf and add the certificate to your compliance record.</p>
       <p>Please reply to confirm you'd like us to proceed, or advise if you'll arrange it directly so we can update our records.</p>
       <p>Kind regards,<br>${esc(b.name)}</p>`})},
   {key:'arrears_notice',group:'Notices',title:'Rent arrears notice to landlord',icon:'⚠️',ai:false,needProp:true,
     fields:[{k:'amount',label:'Amount in arrears (£)',type:'number',def:()=>''},{k:'periods',label:'Period(s) missed',type:'text',def:()=>''},{k:'since',label:'Arrears since',type:'date',def:()=>''}],
-    build:(l,p,b,f)=>({subject:`Rent arrears update — ${p?p.address:''}`,body:`<p>Dear ${esc(l.name)},</p>
+    build:(l,p,b,f)=>({subject:`Rent arrears update — ${p?p.address:''}`,body:`<p>Dear ${esc(landlordName(l))},</p>
       <p>We're writing to update you on a rent arrears situation at <b>${p?esc(p.address):'your property'}</b>.</p>
       <p><b>Amount outstanding:</b> ${f.amount?_money(f.amount):'—'}${f.periods?`<br><b>Period(s) missed:</b> ${esc(f.periods)}`:''}${f.since?`<br><b>Arrears since:</b> ${_dstr(f.since)}`:''}</p>
       <p>We have contacted the tenant and are following our arrears procedure. Our aim is always to recover the arrears and sustain the tenancy where possible. We'll keep you informed of progress and will advise you before any formal notice is served.</p>
@@ -4052,21 +4052,21 @@ const TEMPLATES=[
       <p>Kind regards,<br>${esc(b.name)}</p>`})},
   {key:'renewal_offer',group:'Notices',title:'Tenancy renewal offer',icon:'🔄',ai:true,needProp:true,
     fields:[{k:'term',label:'Proposed term',type:'text',def:()=>'12 months'},{k:'rent',label:'Proposed rent (£/mo)',type:'number',def:p=>p&&p.rent||0},{k:'start',label:'Renewal start date',type:'date',def:()=>''}],
-    build:(l,p,b,f)=>({subject:`Tenancy renewal — ${p?p.address:''}`,body:`<p>Dear ${esc(l.name)},</p>
+    build:(l,p,b,f)=>({subject:`Tenancy renewal — ${p?p.address:''}`,body:`<p>Dear ${esc(landlordName(l))},</p>
       <p>The current tenancy at <b>${p?esc(p.address):'your property'}</b> is approaching its review point, and we'd like your instructions on renewal.</p>
       <p><b>Proposed terms:</b> ${esc(f.term||'12 months')} at ${f.rent?_money(f.rent)+' per month':'the current rent'}${f.start?`, starting ${_dstr(f.start)}`:''}.</p>
       <p>The tenant has been a reliable occupant and renewing avoids void periods and re-letting costs. If you're happy to proceed on these terms, reply to confirm and we'll prepare the paperwork. If you'd prefer a different rent or term — or to end the tenancy — let us know and we'll advise on the correct process.</p>
       <p>Kind regards,<br>${esc(b.name)}</p>`})},
   {key:'checkout_notice',group:'Notices',title:'End-of-tenancy / check-out notice',icon:'📦',ai:false,needProp:true,
     fields:[{k:'endDate',label:'Tenancy end date',type:'date',def:()=>''},{k:'reason',label:'Reason (optional)',type:'text',def:()=>''}],
-    build:(l,p,b,f)=>({subject:`End of tenancy & check-out — ${p?p.address:''}`,body:`<p>Dear ${esc(l.name)},</p>
+    build:(l,p,b,f)=>({subject:`End of tenancy & check-out — ${p?p.address:''}`,body:`<p>Dear ${esc(landlordName(l))},</p>
       <p>We're writing to confirm that the tenancy at <b>${p?esc(p.address):'your property'}</b> is ending${f.endDate?` on <b>${_dstr(f.endDate)}</b>`:''}.${f.reason?` Reason: ${esc(f.reason)}.`:''}</p>
       <p>We'll carry out a check-out inspection against the original inventory, agree any deposit deductions in line with the tenancy deposit scheme rules, and return the property to you (or prepare it for re-letting, per your instructions).</p>
       <p>Please let us know whether you'd like us to re-market the property or hand it back. We'll send the check-out report and deposit summary once complete.</p>
       <p>Kind regards,<br>${esc(b.name)}</p>`})},
   {key:'termination',group:'Notices',title:'Agreement termination notice',icon:'🚪',ai:false,needProp:false,
     fields:[{k:'effective',label:'Termination effective date',type:'date',def:()=>_plus(30)},{k:'reason',label:'Reason (optional)',type:'text',def:()=>''}],
-    build:(l,p,b,f)=>({subject:`Management agreement — termination notice`,body:`<p>Dear ${esc(l.name)},</p>
+    build:(l,p,b,f)=>({subject:`Management agreement — termination notice`,body:`<p>Dear ${esc(landlordName(l))},</p>
       <p>This letter confirms the termination of the management agreement between yourself and ${esc(b.name)}, with effect from <b>${_dstr(f.effective)}</b>, in line with the notice terms of that agreement.${f.reason?` Reason: ${esc(f.reason)}.`:''}</p>
       <p>Before the effective date we will: reconcile and remit any rent held, provide a final statement, hand over all compliance certificates and tenancy documentation, and confirm the handover of tenant contact and deposit details.</p>
       <p>It has been a pleasure acting on your behalf. If there's anything we can do to assist with the transition, please let us know.</p>
@@ -4089,7 +4089,7 @@ function vTemplates(){
   const hist=sent.length?`<div class="panel"><div class="panel-hd"><h2>Recently sent</h2></div><div class="panel-bd" style="padding:0">
     ${sent.map(x=>{const l=L(x.landlord_id)||{}; return `<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line)">
       <div style="font-size:16px">✉</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${esc(x.subject||x.type)}</div>
-      <div class="faint" style="font-size:11px">${esc(l.name||x.landlord_id||'')} · ${new Date(x.created_at).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div></div>
+      <div class="faint" style="font-size:11px">${esc(landlordName(l)||x.landlord_id||'')} · ${new Date(x.created_at).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div></div>
       <span class="pill" style="background:var(--green-bg);color:var(--green)">Sent</span></div>`;}).join('')}
   </div></div>`:'';
   return `<h1 class="pg">Letters &amp; Templates</h1><div class="sub">Branded ${esc(agencyBrand().name)} comms — auto-filled from your data, timestamped and logged. Legal wording is fixed; warm letters can be AI-polished before sending.</div>
@@ -4111,7 +4111,7 @@ function _tplSeedFields(){ const t=tplByKey(TPL.key); const p=_tplProp(); TPL.f=
 function _tplBuild(){ const t=tplByKey(TPL.key); return t.build(_tplLandlord(),_tplProp(),agencyBrand(),TPL.f); }
 function _tplModal(){
   const t=tplByKey(TPL.key); const props=_tplProps();
-  const llSel=`<select id="tpl-ll" onchange="TPL.lid=this.value;TPL.pid='';_tplSeedFields();_tplModal()">${S.landlords.map(l=>`<option value="${l.id}" ${l.id===TPL.lid?'selected':''}>${esc(l.name)}</option>`).join('')}</select>`;
+  const llSel=`<select id="tpl-ll" onchange="TPL.lid=this.value;TPL.pid='';_tplSeedFields();_tplModal()">${S.landlords.map(l=>`<option value="${l.id}" ${l.id===TPL.lid?'selected':''}>${esc(landlordName(l))}</option>`).join('')}</select>`;
   const propSel=t.needProp?`<div class="fg"><label>Property</label><select id="tpl-prop" onchange="TPL.pid=this.value;_tplModal()">${props.length?props.map(p=>`<option value="${p.id}" ${p.id===(TPL.pid||(props[0]&&props[0].id))?'selected':''}>${esc(p.address)}</option>`).join(''):'<option>No property on file</option>'}</select></div>`:'';
   const fields=(t.fields||[]).map(fd=>{ const v=TPL.f[fd.k]??''; if(fd.type==='select'){ return `<div class="fg"><label>${fd.label}</label><select onchange="TPL.f['${fd.k}']=this.value;_tplPreview()">${fd.opts.map(o=>`<option ${o===v?'selected':''}>${o}</option>`).join('')}</select></div>`; } return `<div class="fg"><label>${fd.label}</label><input type="${fd.type==='number'?'number':fd.type==='date'?'date':'text'}" value="${esc(v)}" oninput="TPL.f['${fd.k}']=this.value;_tplPreview()"></div>`; }).join('');
   const built=_tplBuild();
