@@ -490,7 +490,7 @@ function landlordMonthlyFee(l){ return S.properties.filter(p=>p.landlordId===l.i
 // ════════════════════════════════════════════════════════════════════════════
 const LISTING_STATUS={ draft:['Draft','var(--off)','#64748B'], live:['Live','var(--green-bg)','var(--green)'], let:['Let Agreed','var(--blue-bg)','var(--blue)'], archived:['Archived','var(--off)','#94A3B8'] };
 const APP_STATUS={ new:['New enquiry','var(--blue-bg)','var(--blue)'], viewing:['Viewing booked','var(--amber-bg)','var(--amber)'], offer:['Offer made','var(--purple-bg)','var(--purple)'], referencing:['Referencing','var(--green-bg)','var(--green)'], placed:['Placed','var(--green-bg)','var(--green)'], archived:['Archived','var(--off)','#94A3B8'] };
-const OFFER_STATUS={ offered:['Offered','var(--amber-bg)','var(--amber)'], negotiating:['Negotiating','var(--blue-bg)','var(--blue)'], accepted:['Accepted','var(--green-bg)','var(--green)'], rejected:['Rejected','var(--red-bg)','var(--red)'], withdrawn:['Withdrawn','var(--off)','#94A3B8'] };
+const OFFER_STATUS={ offered:['Offered','var(--amber-bg)','var(--amber)'], negotiating:['Negotiating','var(--blue-bg)','var(--blue)'], accepted:['Accepted','var(--green-bg)','var(--green)'], withdrawn:['Withdrawn','var(--off)','#94A3B8'], rejected:['Rejected','var(--red-bg)','var(--red)'], withdrawn:['Withdrawn','var(--off)','#94A3B8'] };
 const SOURCES=['Rightmove','Zoopla','Website','Walk-in','Phone','Referral'];
 function _pill(map,k){ const v=map[k]||['—','var(--off)','#64748B']; return `<span class="pill" style="background:${v[1]};color:${v[2]}">${v[0]}</span>`; }
 function LST(id){ return (S.listings||[]).find(x=>x.id===id)||{}; }
@@ -749,7 +749,10 @@ function offerRow(o,full){
     <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13.5px;color:var(--navy)">${gbp(o.amount)}/mo — ${esc(a.name||'Applicant')} ${_pill(OFFER_STATUS,o.status)}</div>
       <div class="faint" style="font-size:11.5px">${full&&l.address?esc(l.address)+' · ':''}${o.moveIn?'move-in '+fmtDate(o.moveIn):''}${o.note?' · '+esc(o.note):''}</div></div>
     <div style="display:flex;gap:6px;flex-shrink:0">
-      ${o.status==='offered'||o.status==='negotiating'?`<button class="btn sm" style="color:var(--green)" onclick="openOfferAcceptedLetter('${o.id}')">Accept</button><button class="btn sm" style="color:var(--red)" onclick="offerAction('${o.id}','rejected')">Reject</button>`:''}
+      ${o.status==='offered'||o.status==='negotiating'?`<button class="btn sm" style="color:var(--green)" onclick="openOfferAcceptedLetter('${o.id}')">Accept</button>`:''}
+      ${o.status==='accepted'?`<button class="btn sm" onclick="resendOfferAcceptedLetter('${o.id}')">Resend letter</button>`:''}
+      ${o.status==='offered'||o.status==='negotiating'?`<button class="btn sm" style="color:var(--red)" onclick="offerAction('${o.id}','rejected')">Reject</button>`:''}
+      ${o.status==='offered'||o.status==='negotiating'||o.status==='accepted'?`<button class="btn sm" style="color:var(--red)" onclick="withdrawOffer('${o.id}')">Withdraw</button>`:''}
     </div>
   </div>`;
 }
@@ -770,6 +773,34 @@ function offerAction(oid,status){
   const o=(S.offers||[]).find(x=>x.id===oid); if(!o)return; o.status=status;
   toast('Offer '+status);
   save(); pushOffer&&pushOffer(o); render();
+}
+function withdrawOffer(oid){
+  const o=(S.offers||[]).find(x=>x.id===oid); if(!o) return;
+  const wasAccepted=o.status==='accepted'; o.status='withdrawn';
+  const a=(S.applicants||[]).find(x=>x.id===o.applicantId);
+  if(a){ a.status='viewing'; pushApplicant&&pushApplicant(a); }
+  const l=LST(o.listingId);
+  if(wasAccepted&&l&&l.id){
+    l.status='live'; pushListing&&pushListing(l);
+    if(l.propertyId){
+      const p=P(l.propertyId); if(p.id){ p.tenant=null; pushProperty(p); }
+      const tn=S.tenancies.find(t=>t.propertyId===l.propertyId);
+      if(tn&&(tn.stage==='referencing'||tn.stage==='contract')){ tn.stage='marketing'; pushTenancy&&pushTenancy(tn); }
+      const ll=p.landlordId?L(p.landlordId):null;
+      if(ll&&ll.id){ ll.comms=ll.comms||[]; ll.comms.push({id:uid('c'),date:today(),type:'Note',note:'Offer withdrawn for '+(a?a.name:'applicant')+' — '+(l.address||'')+'. Listing re-opened for marketing.'}); pushLandlord(ll); }
+    }
+  }
+  save(); pushOffer&&pushOffer(o); render(); toast('Offer withdrawn');
+}
+async function resendOfferAcceptedLetter(oid){
+  const o=(S.offers||[]).find(x=>x.id===oid); if(!o||!o.letterData){ toast('No saved letter to resend — use Accept again',1); return; }
+  const d=o.letterData;
+  if(!LIVE){ toast('Connect to Supabase to send live',1); return; }
+  const r=await agencyEmail(d.email,'Your offer has been accepted — '+d.address, offerAcceptedLetterHtml(d));
+  const l=LST(o.listingId)||{}; const landlordId=l.propertyId?P(l.propertyId).landlordId:null; const ll=landlordId?L(landlordId):null;
+  if(ll&&ll.id){ ll.comms=ll.comms||[]; ll.comms.push({id:uid('c'),date:today(),type:'Note',note:'Offer accepted letter re-sent to '+d.tenants+' ('+d.email+')'+(r.ok?'':' — failed: '+(r.error||'unknown'))}); pushLandlord(ll); }
+  render();
+  toast(r.ok?'✓ Letter re-sent':'⚠ Resend failed: '+(r.error||'try again'));
 }
 // Accepting hands off to Referencing AND sends the tenant an "offer accepted" letter — holding
 // deposit + bank details (entered fresh each time; the agency doesn't hold client money, so the
@@ -819,7 +850,7 @@ async function confirmOfferAccepted(oid){
     bankName:val('oa-bankname'), sortCode:val('oa-sortcode'), accNo:val('oa-accno'), bankRef:val('oa-bankref'),
     clauses:standardClauses().filter(c=>{ const el=document.getElementById('oa-cl-'+c.id); return el&&el.checked; }).map(c=>({title:c.title,body:val('oa-clbody-'+c.id)||c.body})),
     extra:val('oa-extra')||'', utilities:val('oa-utilities')||'', utilitiesNote:val('oa-utilitiesnote')||'', refPartner:val('oa-refpartner')||'', refNote:val('oa-refnote')||'' };
-  o.amount=data.rent; o.moveIn=data.moveIn; o.status='accepted';
+  o.amount=data.rent; o.moveIn=data.moveIn; o.status='accepted'; o.letterData=data;
   a.status='referencing'; pushApplicant&&pushApplicant(a);
   S.references=S.references||[]; S.references.push({id:uid('r'),applicant:a.name,propertyId:l.propertyId||'',income:0,docs:{},creditState:'not_requested',status:'none',note:'From accepted offer — '+gbp(data.rent)+'/mo'});
   if(l.id){ l.status='let'; pushListing&&pushListing(l);
@@ -3397,7 +3428,7 @@ async function agencyEmail(to,subject,html){
   const headers={'Content-Type':'application/json'};
   if(window._sessionToken) headers['Authorization']='Bearer '+window._sessionToken;
   try{
-    const res=await fetch(AG_EDGE,{method:'POST',headers,body:JSON.stringify({type:'send_email',to,subject,html,bcc:'beaconresidentials@gmail.com'})});
+    const res=await fetch(AG_EDGE,{method:'POST',headers,body:JSON.stringify({type:'send_email',to,subject,html,bcc:'beaconresidentials@gmail.com',from:agencyBrand().name+' <documents@nexlet.co.uk>'})});
     const data=await res.json().catch(()=>({}));
     if(!res.ok){ console.error('[agencyEmail] failed',res.status,data); return {ok:false,error:data.error||data.message||('HTTP '+res.status)}; }
     return {ok:true};
