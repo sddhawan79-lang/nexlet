@@ -802,86 +802,116 @@ function withdrawOffer(oid){
   }
   save(); pushOffer&&pushOffer(o); closeModal(); render(); toast('Offer withdrawn');
 }
-async function resendOfferAcceptedLetter(oid){
-  const o=(S.offers||[]).find(x=>x.id===oid); if(!o) return;
-  if(!o.letterData){ toast('No saved copy of this letter (accepted before this feature) — opening it fresh, review before sending',0); openOfferAcceptedLetter(oid); return; }
-  const d=o.letterData;
-  if(!LIVE){ toast('Connect to Supabase to send live',1); return; }
-  const r=await agencyEmail(d.email,'Your offer has been accepted — '+d.address, offerAcceptedLetterHtml(d));
-  const l=LST(o.listingId)||{}; const landlordId=l.propertyId?P(l.propertyId).landlordId:null; const ll=landlordId?L(landlordId):null;
-  if(ll&&ll.id){ ll.comms=ll.comms||[]; ll.comms.push({id:uid('c'),date:today(),type:'Note',note:'Offer accepted letter re-sent to '+d.tenants+' ('+d.email+')'+(r.ok?'':' — failed: '+(r.error||'unknown'))}); pushLandlord(ll); }
-  render();
-  toast(r.ok?'✓ Letter re-sent':'⚠ Resend failed: '+(r.error||'try again'));
-}
+async function resendOfferAcceptedLetter(oid){ openOfferAcceptedLetter(oid); }
 // Accepting hands off to Referencing AND sends the tenant an "offer accepted" letter — holding
 // deposit + bank details (entered fresh each time; the agency doesn't hold client money, so the
 // receiving account differs by landlord) + the agreed tenancy details + any standard clauses that
 // apply to this property (ticked per-letter, since properties differ — see openOfferAcceptedLetter).
+function _oaRecalcDeposit(){
+  const rent=parseFloat(val('oa-rent'))||0; const weeks=parseInt(val('oa-depositweeks'))||5;
+  const weekly=rent*12/52; const dep=Math.floor((weekly*weeks)/5)*5;
+  const el=document.getElementById('oa-deposit'); if(el) el.value=dep;
+}
 function openOfferAcceptedLetter(oid){
   const o=(S.offers||[]).find(x=>x.id===oid); if(!o) return;
-  const clash=(S.offers||[]).find(x=>x.id!==oid && x.listingId===o.listingId && x.status==='accepted');
-  if(clash){ const ca=(S.applicants||[]).find(x=>x.id===clash.applicantId); toast('This property already has an accepted offer for '+(ca?ca.name:'another applicant')+'. Withdraw it first if this applicant is replacing them.',1); return; }
+  const isResend=o.status==='accepted';
+  if(!isResend){
+    const clash=(S.offers||[]).find(x=>x.id!==oid && x.listingId===o.listingId && x.status==='accepted');
+    if(clash){ const ca=(S.applicants||[]).find(x=>x.id===clash.applicantId); toast('This property already has an accepted offer for '+(ca?ca.name:'another applicant')+'. Withdraw it first if this applicant is replacing them.',1); return; }
+  }
+  const ex=o.letterData||null;
   const a=(S.applicants||[]).find(x=>x.id===o.applicantId)||{};
   const l=LST(o.listingId)||{};
   const p=l.propertyId?P(l.propertyId):{};
-  const address=l.address||p.address||'';
-  const rent=o.amount||l.rent||p.rent||0;
+  const address=ex?ex.address:(l.address||p.address||'');
+  const rent=ex?ex.rent:(o.amount||l.rent||p.rent||0);
   const weekly=Math.round(rent*12/52);
-  const depositDefault=Math.round(weekly*5);
+  const depositDefault=ex?ex.deposit:Math.floor((weekly*5)/5)*5;
+  const holdingDefault=ex?ex.holding:weekly;
+  const occPrefill=(ex&&ex.occupants&&ex.occupants.length)?ex.occupants:[{name:a.name||'',email:a.email||''}];
   const clauses=standardClauses();
+  const exClauseByTitle={}; (ex&&ex.clauses||[]).forEach(c=>{ exClauseByTitle[c.title]=c.body; });
   const body=`
-    <div class="note" style="margin-bottom:12px"><b>${esc(a.name||'Applicant')}</b> · ${esc(address)} · offer ${gbp(rent)}/mo</div>
-    <div class="grid2" style="gap:10px"><div class="fg"><label>Tenant name(s)</label><input id="oa-tenants" value="${esc(a.name||'')}"></div><div class="fg"><label>Tenant email</label><input id="oa-email" value="${esc(a.email||'')}"></div></div>
-    <div class="grid3" style="gap:10px"><div class="fg"><label>Rent (£/mo)</label><input id="oa-rent" type="number" value="${rent}"></div><div class="fg"><label>Deposit (£)</label><input id="oa-deposit" type="number" value="${depositDefault}"></div><div class="fg"><label>Holding deposit (£)</label><input id="oa-holding" type="number" value="${weekly}"></div></div>
-    <div class="grid2" style="gap:10px"><div class="fg"><label>Move-in date</label><input id="oa-movein" type="date" value="${o.moveIn||''}"></div><div class="fg"><label>Rent due day</label><select id="oa-dueday">${_rentDayOpts(p.rentDueDay)}</select></div></div>
+    <div class="note" style="margin-bottom:12px"><b>${esc(a.name||'Applicant')}</b> · ${esc(address)} · offer ${gbp(rent)}/mo${isResend?' · <span style="color:var(--green)">already accepted — review before resending</span>':''}</div>
+    <div class="grid2" style="gap:10px"><div class="fg"><label>Tenant name(s) <span class="faint">(as shown on the letter)</span></label><input id="oa-tenants" value="${esc(ex?ex.tenants:(a.name||''))}"> <a href="#" onclick="_oaSyncTenantNames();return false" style="font-size:11.5px;color:var(--blue)">Use names from occupant list below →</a></div><div class="fg"><label>Tenant email</label><input id="oa-email" value="${esc(ex?ex.email:(a.email||''))}"></div></div>
+    <div class="grid3" style="gap:10px"><div class="fg"><label>Rent (£/mo)</label><input id="oa-rent" type="number" value="${rent}" oninput="_oaRecalcDeposit()"></div><div class="fg"><label>Deposit weeks <span class="faint">(5-week legal max)</span></label><select id="oa-depositweeks" onchange="_oaRecalcDeposit()"><option value="5" selected>5 weeks</option><option value="4">4 weeks</option></select></div><div class="fg"><label>Holding deposit (£)</label><input id="oa-holding" type="number" value="${holdingDefault}"></div></div>
+    <div class="fg"><label>Deposit (£) <span class="faint">(rounded down to the nearest £5, safely under the cap)</span></label><input id="oa-deposit" type="number" value="${depositDefault}"></div>
+    <div class="grid2" style="gap:10px"><div class="fg"><label>Move-in date</label><input id="oa-movein" type="date" value="${ex?ex.moveIn:(o.moveIn||'')}"></div><div class="fg"><label>Rent due day</label><select id="oa-dueday">${_rentDayOpts(ex?ex.dueDay:p.rentDueDay)}</select></div></div>
+    <div class="fg" style="margin-top:6px"><label style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--navy)">Everyone moving in (for referencing &amp; Right to Rent)</label></div>
+    <div class="hint" style="margin:-4px 0 8px;color:var(--faint)">Every adult who'll be living there needs their own reference check — not just whoever made the enquiry.${isResend?' Editing this list here won\'t change referencing already in progress.':''}</div>
+    <div id="oa-occ-rows">${[0,1,2,3,4,5].map(i=>{ const occ=occPrefill[i]; const visible=i<occPrefill.length;
+      return `<div class="grid3" style="gap:10px;margin-bottom:6px;${visible?'':'display:none'}" data-occ-row><input placeholder="Full name" class="oa-occ-name" value="${esc(occ?occ.name:'')}"><input placeholder="Email (optional)" class="oa-occ-email" value="${esc(occ?occ.email:'')}"><input placeholder="Phone (optional)" class="oa-occ-phone" value="${esc(occ?occ.phone:'')}"></div>`; }).join('')}</div>
+    <button type="button" class="btn sm" onclick="_oaAddOccupantRow()">＋ Add another occupant</button>
     <div class="fg" style="margin-top:6px"><label style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--navy)">Bank details for this tenancy's payments</label></div>
     <div class="hint" style="margin:-4px 0 8px;color:var(--faint)">Enter fresh each time — you don't hold client money, so this is whichever account this tenancy's funds go to.</div>
-    <div class="grid2" style="gap:10px"><div class="fg"><label>Account name</label><input id="oa-bankname" placeholder="e.g. the landlord's name"></div><div class="fg"><label>Reference</label><input id="oa-bankref" value="${esc(address)}"></div></div>
-    <div class="grid2" style="gap:10px"><div class="fg"><label>Sort code</label><input id="oa-sortcode" placeholder="00-00-00"></div><div class="fg"><label>Account number</label><input id="oa-accno" placeholder="12345678"></div></div>
+    <div class="grid2" style="gap:10px"><div class="fg"><label>Account name</label><input id="oa-bankname" value="${esc(ex?ex.bankName:'')}" placeholder="e.g. the landlord's name"></div><div class="fg"><label>Reference</label><input id="oa-bankref" value="${esc(ex?ex.bankRef:address)}"></div></div>
+    <div class="grid2" style="gap:10px"><div class="fg"><label>Sort code</label><input id="oa-sortcode" value="${esc(ex?ex.sortCode:'')}" placeholder="00-00-00"></div><div class="fg"><label>Account number</label><input id="oa-accno" value="${esc(ex?ex.accNo:'')}" placeholder="12345678"></div></div>
     <div class="fg" style="margin-top:6px"><label style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--navy)">Additional terms</label></div>
     <div class="hint" style="margin:-4px 0 8px;color:var(--faint)">Tick any that apply to this property and edit the wording if needed.</div>
     ${clauses.map(c=>`<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px">
-      <label style="display:flex;gap:8px;align-items:center;font-weight:600;font-size:13px;cursor:pointer"><input type="checkbox" id="oa-cl-${c.id}"> ${esc(c.title)}</label>
-      <textarea id="oa-clbody-${c.id}" rows="2" style="margin-top:6px;font-size:12px;width:100%">${esc(c.body)}</textarea>
+      <label style="display:flex;gap:8px;align-items:center;font-weight:600;font-size:13px;cursor:pointer"><input type="checkbox" id="oa-cl-${c.id}" ${exClauseByTitle[c.title]!==undefined?'checked':''}> ${esc(c.title)}</label>
+      <textarea id="oa-clbody-${c.id}" rows="2" style="margin-top:6px;font-size:12px;width:100%">${esc(exClauseByTitle[c.title]!==undefined?exClauseByTitle[c.title]:c.body)}</textarea>
     </div>`).join('')}
-    <div class="fg"><label>Other terms <span class="faint">(optional)</span></label><textarea id="oa-extra" rows="2" placeholder="Any other bespoke terms for this tenancy"></textarea></div>
+    <div class="fg"><label>Other terms <span class="faint">(optional)</span></label><textarea id="oa-extra" rows="2" placeholder="Any other bespoke terms for this tenancy">${esc(ex?ex.extra:'')}</textarea></div>
     <div class="fg" style="margin-top:6px"><label style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--navy)">Third parties mentioned in the move-in process</label></div>
     <div class="hint" style="margin:-4px 0 8px;color:var(--faint)">Editable per tenancy — swap the partner or add your referral/commission disclosure if it differs from your default.</div>
-    <div class="grid2" style="gap:10px"><div class="fg"><label>Referencing partner</label><input id="oa-refpartner" value="${esc(S.agency.refPartner||'')}" placeholder="e.g. Let Alliance"></div><div class="fg"><label>Referral/commission note <span class="faint">(optional)</span></label><input id="oa-refnote" placeholder="e.g. We may receive a referral fee from them"></div></div>
-    <div class="grid2" style="gap:10px"><div class="fg"><label>Utilities referral <span class="faint">(optional — blank skips this step)</span></label><input id="oa-utilities" placeholder="e.g. One Utility Bill"></div><div class="fg"><label>Referral/commission note <span class="faint">(optional)</span></label><input id="oa-utilitiesnote" placeholder="e.g. We receive a referral fee from them"></div></div>`;
-  modal('Offer accepted — send letter to tenant', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="confirmOfferAccepted('${oid}')">Send accepted letter &amp; move to referencing</button>`, true);
+    <div class="grid2" style="gap:10px"><div class="fg"><label>Referencing partner</label><input id="oa-refpartner" value="${esc(ex?ex.refPartner:(S.agency.refPartner||''))}" placeholder="e.g. Let Alliance"></div><div class="fg"><label>Referral/commission note <span class="faint">(optional)</span></label><input id="oa-refnote" value="${esc(ex?ex.refNote:'')}" placeholder="e.g. We may receive a referral fee from them"></div></div>
+    <div class="grid2" style="gap:10px"><div class="fg"><label>Utilities referral <span class="faint">(optional — blank skips this step)</span></label><input id="oa-utilities" value="${esc(ex?ex.utilities:'')}" placeholder="e.g. One Utility Bill"></div><div class="fg"><label>Referral/commission note <span class="faint">(optional)</span></label><input id="oa-utilitiesnote" value="${esc(ex?ex.utilitiesNote:'')}" placeholder="e.g. We receive a referral fee from them"></div></div>`;
+  modal(isResend?'Resend offer-accepted letter':'Offer accepted — send letter to tenant', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="confirmOfferAccepted('${oid}')">${isResend?'Resend accepted letter':'Send accepted letter &amp; move to referencing'}</button>`, true);
+}
+function _oaAddOccupantRow(){ const rows=[...document.querySelectorAll('#oa-occ-rows [data-occ-row]')]; const next=rows.find(r=>r.style.display==='none'); if(next) next.style.display='grid'; else toast('For more than 6, add extra names in "Other terms"',0); }
+function _oaSyncTenantNames(){
+  const rows=[...document.querySelectorAll('#oa-occ-rows [data-occ-row]')].filter(r=>r.style.display!=='none');
+  const names=rows.map(r=>(r.querySelector('.oa-occ-name').value||'').trim()).filter(Boolean);
+  if(!names.length){ toast('Add occupant names first',1); return; }
+  const joined=names.length<=1?names[0]:(names.length===2?names[0]+' and '+names[1]:names.slice(0,-1).join(', ')+' and '+names[names.length-1]);
+  const el=document.getElementById('oa-tenants'); if(el) el.value=joined;
 }
 async function confirmOfferAccepted(oid){
   const o=(S.offers||[]).find(x=>x.id===oid); if(!o) return;
-  const clash=(S.offers||[]).find(x=>x.id!==oid && x.listingId===o.listingId && x.status==='accepted');
-  if(clash){ toast('Another offer on this property was accepted moments ago — refresh and check before continuing',1); closeModal(); return; }
+  const isResend=o.status==='accepted';
+  if(!isResend){
+    const clash=(S.offers||[]).find(x=>x.id!==oid && x.listingId===o.listingId && x.status==='accepted');
+    if(clash){ toast('Another offer on this property was accepted moments ago — refresh and check before continuing',1); closeModal(); return; }
+  }
   const a=(S.applicants||[]).find(x=>x.id===o.applicantId); if(!a) return;
+  const rentVal=parseFloat(val('oa-rent'))||o.amount||0;
+  const depositVal=parseFloat(val('oa-deposit'))||0;
+  const legalCap=rentVal*12/52*5;
+  if(depositVal>legalCap+0.01){ toast('Deposit exceeds the 5-week legal cap (£'+Math.floor(legalCap)+') — reduce it before sending',1); return; }
   const l=LST(o.listingId)||{};
   const email=val('oa-email');
   if(!email){ toast('Enter a tenant email to send the letter to',1); return; }
+  const occRows=[...document.querySelectorAll('#oa-occ-rows [data-occ-row]')].filter(r=>r.style.display!=='none');
+  const occupants=occRows.map(r=>({name:(r.querySelector('.oa-occ-name').value||'').trim(), email:(r.querySelector('.oa-occ-email').value||'').trim(), phone:(r.querySelector('.oa-occ-phone').value||'').trim()})).filter(oc=>oc.name);
+  if(!occupants.length){ toast('Add at least one occupant moving in',1); return; }
   const data={ tenants:val('oa-tenants')||a.name||'', email, address:l.address||(l.propertyId?P(l.propertyId).address:'')||'',
     rent:parseFloat(val('oa-rent'))||o.amount||0, deposit:parseFloat(val('oa-deposit'))||0, holding:parseFloat(val('oa-holding'))||0,
-    moveIn:val('oa-movein')||o.moveIn||today(), dueDay:val('oa-dueday')||'1st',
+    moveIn:val('oa-movein')||o.moveIn||today(), dueDay:val('oa-dueday')||'1st', occupants,
     bankName:val('oa-bankname'), sortCode:val('oa-sortcode'), accNo:val('oa-accno'), bankRef:val('oa-bankref'),
     clauses:standardClauses().filter(c=>{ const el=document.getElementById('oa-cl-'+c.id); return el&&el.checked; }).map(c=>({title:c.title,body:val('oa-clbody-'+c.id)||c.body})),
     extra:val('oa-extra')||'', utilities:val('oa-utilities')||'', utilitiesNote:val('oa-utilitiesnote')||'', refPartner:val('oa-refpartner')||'', refNote:val('oa-refnote')||'' };
   o.amount=data.rent; o.moveIn=data.moveIn; o.status='accepted'; o.letterData=data;
-  a.status='referencing'; pushApplicant&&pushApplicant(a);
-  const rivals=(S.offers||[]).filter(x=>x.id!==oid && x.listingId===o.listingId && (x.status==='offered'||x.status==='negotiating'));
-  rivals.forEach(x=>{ x.status='rejected'; pushOffer&&pushOffer(x); });
-  S.references=S.references||[]; S.references.push({id:uid('r'),applicant:a.name,propertyId:l.propertyId||'',income:0,docs:{},creditState:'not_requested',status:'none',note:'From accepted offer — '+gbp(data.rent)+'/mo'});
-  if(l.id){ l.status='let'; pushListing&&pushListing(l);
-    if(l.propertyId){ _commitTenant(l.propertyId,{name:data.tenants,email:data.email,start:data.moveIn,deposit:data.deposit},'referencing'); const pp=P(l.propertyId); pp.rentDueDay=data.dueDay; save(); pushProperty(pp); }
+  let rivals=[];
+  if(!isResend){
+    a.status='referencing'; pushApplicant&&pushApplicant(a);
+    rivals=(S.offers||[]).filter(x=>x.id!==oid && x.listingId===o.listingId && (x.status==='offered'||x.status==='negotiating'));
+    rivals.forEach(x=>{ x.status='rejected'; pushOffer&&pushOffer(x); });
+    S.references=S.references||[];
+    occupants.forEach(occ=>{ S.references.push({id:uid('r'),applicant:occ.name,propertyId:l.propertyId||'',income:0,docs:{},creditState:'not_requested',status:'none',note:'From accepted offer — '+gbp(data.rent)+'/mo',offerId:o.id,email:occ.email||''}); });
+    if(l.id){ l.status='let'; pushListing&&pushListing(l);
+      if(l.propertyId){ _commitTenant(l.propertyId,{name:data.tenants,email:data.email,start:data.moveIn,deposit:data.deposit,occupants:occupants.slice(1)},'referencing'); const pp=P(l.propertyId); pp.rentDueDay=data.dueDay; save(); pushProperty(pp); }
+    }
   }
   save(); pushOffer&&pushOffer(o);
   let sent=false;
   if(LIVE){ const r=await agencyEmail(data.email,'Your offer has been accepted — '+data.address, offerAcceptedLetterHtml(data)); sent=r.ok;
-    if(!r.ok) toast('⚠ Accepted, but the letter failed to send: '+(r.error||'log it manually and retry'),1);
-  } else { toast('Connect to Supabase to send live — accepted &amp; logged locally',0); }
+    if(!r.ok) toast('⚠ '+(isResend?'Resend':'Accepted, but the letter')+' failed to send: '+(r.error||'log it manually and retry'),1);
+  } else { toast('Connect to Supabase to send live — '+(isResend?'not resent':'accepted & logged locally'),0); }
   const landlordId=l.propertyId?P(l.propertyId).landlordId:null; const ll=landlordId?L(landlordId):null;
-  if(ll&&ll.id){ ll.comms=ll.comms||[]; ll.comms.push({id:uid('c'),date:today(),type:'Note',note:'Offer accepted — accepted letter '+(sent?'emailed to ':'logged for ')+data.tenants+' ('+data.email+').'}); pushLandlord(ll); }
+  if(ll&&ll.id){ ll.comms=ll.comms||[]; ll.comms.push({id:uid('c'),date:today(),type:'Note',note:(isResend?'Offer accepted letter re-sent to ':'Offer accepted — accepted letter '+(sent?'emailed to ':'logged for '))+data.tenants+' ('+data.email+').'}); pushLandlord(ll); }
   closeModal(); render();
-  toast((sent?'✓ Accepted — letter sent & applicant moved to referencing':'✓ Accepted — applicant moved to referencing')+(rivals.length?' · '+rivals.length+' other offer'+(rivals.length>1?'s':'')+' on this property auto-rejected':''));
+  toast((sent?'✓ '+(isResend?'Letter re-sent':'Accepted — letter sent & applicant moved to referencing'):'✓ '+(isResend?'Logged (send failed, see above)':'Accepted — applicant moved to referencing'))+(rivals.length?' · '+rivals.length+' other offer'+(rivals.length>1?'s':'')+' on this property auto-rejected':''));
 }
 function offerAcceptedLetterHtml(d){ const b=agencyBrand(); const totalDue=(d.rent+d.deposit-d.holding);
   const clausesHtml=d.clauses.length?d.clauses.map(c=>`<p style="margin:10px 0"><b>${esc(c.title)}.</b> ${esc(c.body)}</p>`).join(''):'';
@@ -1694,7 +1724,7 @@ function refCard(r){
     <div class="av">${initials(r.applicant)}</div>
     <div style="flex:1;min-width:0">
       <div style="font-size:14px;font-weight:600;color:var(--navy)">${esc(r.applicant)}</div>
-      <div class="faint" style="font-size:12px;margin:2px 0 8px">${esc(P(r.propertyId).address||'—')} · ${gbp(rent)}/mo</div>
+      <div class="faint" style="font-size:12px;margin:2px 0 8px">${esc(P(r.propertyId).address||'—')} · ${gbp(rent)}/mo${r.offerId?(()=>{ const grp=(S.references||[]).filter(x=>x.offerId===r.offerId); const done=grp.filter(x=>x.status==='green').length; return grp.length>1?' · '+done+'/'+grp.length+' in this tenancy passed':''; })():''}</div>
       <div style="display:flex;gap:7px;flex-wrap:wrap">
         <span class="pill" style="background:var(--off);color:#475569">${got}/5 docs</span>
         ${r.income?`<span class="pill" style="background:${afford?'var(--green-bg)':'var(--amber-bg)'};color:${afford?'var(--green)':'var(--amber)'}">Affordability ${afford?'OK':'tight'} (${gbp(r.income)}/yr)</span>`:''}
@@ -2574,11 +2604,17 @@ async function saveTenant(pid){ const nm=val('tn-name'); if(!nm){toast('Enter te
   closeModal(); render();
   if(failed.length) toast('⚠ Saved, but file upload failed for: '+failed.join(', ')+' — re-attach and save again',1);
   else toast('✓ Tenant set up'); }
+function _allTenantNames(rec){
+  const names=[rec.name].concat((rec.occupants||[]).map(o=>o.name)).filter(Boolean);
+  if(names.length<=1) return names[0]||'';
+  if(names.length===2) return names[0]+' and '+names[1];
+  return names.slice(0,-1).join(', ')+' and '+names[names.length-1];
+}
 function tenantWelcomeLetterHtml(rec,p){ const b=agencyBrand();
   return `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#1A2B45">
     <div style="background:#0B1E3D;padding:20px 24px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:20px;font-weight:700">${esc(b.name)}</span></div>
     <div style="border:1px solid #E4EAF1;border-top:none;border-radius:0 0 10px 10px;padding:26px 24px">
-      <p>Dear ${esc(rec.name)},</p>
+      <p>Dear ${esc(_allTenantNames(rec))},</p>
       <p>We're writing to let you know that <b>${esc(b.name)}</b> is now managing <b>${esc(p.address)}</b> on behalf of your landlord. If your tenancy has just come under our management, nothing about your tenancy terms changes — this letter is simply to introduce ourselves and explain how things work going forward.</p>
       <p><b>Your point of contact</b><br>${esc(b.agent)}<br>${esc(b.email)}</p>
       <p><b>Reporting a maintenance issue</b><br>Please log any repairs or maintenance issues through your tenant portal, or email us directly — we'll acknowledge it and keep you updated on progress.</p>
@@ -2952,10 +2988,15 @@ function vSettings(){
 }
 function defaultClauses(){ return [
   {id:'car-parking',title:'Car Parking',body:'The tenant may only park in the location agreed with the landlord (if any). This tenancy does not grant any right to park in communal or visitor spaces, and neither the landlord nor the agent guarantees any entitlement to local council or privately run residential parking schemes.'},
+  {id:'garage',title:'Garage',body:'The garage at the property is not included in this tenancy and is not available for the tenant\u2019s use, unless otherwise agreed with the landlord in writing.'},
   {id:'pets',title:'Pets / No Pets',body:'No animal, bird, reptile, insect or other pet may be kept at the property without the landlord\u2019s prior written consent. Requests will be considered fairly and consent will not be unreasonably refused. The landlord may attach reasonable conditions, including end-of-tenancy cleaning.'},
   {id:'white-goods',title:'White Goods',body:'Any non-integrated appliances (other than an oven/hob/cooker) left at the property are provided as a gesture of goodwill only. The landlord accepts no responsibility for their repair or replacement. The tenant must tell the landlord or agent if any such appliance fails, and any item still working at the end of the tenancy must remain in the property.'}
 ]; }
-function standardClauses(){ if(!S.agency.standardClauses || !S.agency.standardClauses.length) S.agency.standardClauses=defaultClauses(); return S.agency.standardClauses; }
+function standardClauses(){
+  if(!S.agency.standardClauses || !S.agency.standardClauses.length) S.agency.standardClauses=defaultClauses();
+  else { const ids=new Set(S.agency.standardClauses.map(c=>c.id)); defaultClauses().forEach(d=>{ if(!ids.has(d.id)) S.agency.standardClauses.push(d); }); }
+  return S.agency.standardClauses;
+}
 function addClause(){ standardClauses().push({id:uid('cl'),title:'',body:''}); save(); if(LIVE) pushAgency(); render(); }
 function updateClause(id,field,value){ const c=standardClauses().find(x=>x.id===id); if(!c) return; c[field]=value; save(); if(LIVE) pushAgency(); }
 function removeClause(id){ S.agency.standardClauses=standardClauses().filter(x=>x.id!==id); save(); if(LIVE) pushAgency(); render(); }
@@ -3425,7 +3466,7 @@ function saveReference(){
   if(!RF.applicant){toast('Enter applicant name',1);return;}
   const i=S.references.findIndex(r=>r.id===RF.id);
   if(i>=0) S.references[i]=RF; else S.references.push(RF);
-  if(RF.status==='green'&&RF.propertyId) _advanceStage(RF.propertyId,'contract');
+  if(RF.status==='green'&&RF.propertyId){ const group=RF.offerId?(S.references||[]).filter(r=>r.offerId===RF.offerId):[RF]; if(group.every(r=>r.status==='green')) _advanceStage(RF.propertyId,'contract'); }
   save(); pushReference(RF); closeModal(); go('referencing'); toast('✓ Reference saved');
 }
 
