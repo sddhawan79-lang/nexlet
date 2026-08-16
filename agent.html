@@ -747,12 +747,12 @@ function offerRow(o,full){
   return `<div class="row">
     <div class="av" style="background:var(--purple-bg);color:var(--purple)">£</div>
     <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13.5px;color:var(--navy)">${gbp(o.amount)}/mo — ${esc(a.name||'Applicant')} ${_pill(OFFER_STATUS,o.status)}</div>
-      <div class="faint" style="font-size:11.5px">${full&&l.address?esc(l.address)+' · ':''}${o.moveIn?'move-in '+fmtDate(o.moveIn):''}${o.note?' · '+esc(o.note):''}</div></div>
+      <div class="faint" style="font-size:11.5px">${full&&l.address?esc(l.address)+' · ':''}${o.moveIn?'move-in '+fmtDate(o.moveIn):''}${o.note?' · '+esc(o.note):''}${o.status==='withdrawn'&&o.withdrawnReason?' · '+esc(o.withdrawnReason):''}</div></div>
     <div style="display:flex;gap:6px;flex-shrink:0">
       ${o.status==='offered'||o.status==='negotiating'?`<button class="btn sm" style="color:var(--green)" onclick="openOfferAcceptedLetter('${o.id}')">Accept</button>`:''}
       ${o.status==='accepted'?`<button class="btn sm" onclick="resendOfferAcceptedLetter('${o.id}')">Resend letter</button>`:''}
       ${o.status==='offered'||o.status==='negotiating'?`<button class="btn sm" style="color:var(--red)" onclick="offerAction('${o.id}','rejected')">Reject</button>`:''}
-      ${o.status==='offered'||o.status==='negotiating'||o.status==='accepted'?`<button class="btn sm" style="color:var(--red)" onclick="withdrawOffer('${o.id}')">Withdraw</button>`:''}
+      ${o.status==='offered'||o.status==='negotiating'||o.status==='accepted'?`<button class="btn sm" style="color:var(--red)" onclick="openWithdrawOffer('${o.id}')">Withdraw</button>`:''}
     </div>
   </div>`;
 }
@@ -774,9 +774,19 @@ function offerAction(oid,status){
   toast('Offer '+status);
   save(); pushOffer&&pushOffer(o); render();
 }
-function withdrawOffer(oid){
+function openWithdrawOffer(oid){
   const o=(S.offers||[]).find(x=>x.id===oid); if(!o) return;
-  const wasAccepted=o.status==='accepted'; o.status='withdrawn';
+  const a=(S.applicants||[]).find(x=>x.id===o.applicantId)||{}; const l=LST(o.listingId)||{};
+  const body=`<div class="note" style="margin-bottom:12px"><b>${esc(a.name||'Applicant')}</b> · ${esc(l.address||'')} · ${gbp(o.amount)}/mo</div>
+    <div class="fg"><label>Reason for withdrawing *</label><select id="wd-reason"><option value="">— Select —</option><option>Applicant pulled out</option><option>Failed referencing</option><option>Landlord changed mind</option><option>Entered in error</option><option>Gazumped by a better offer</option><option>Other</option></select></div>
+    <div class="fg"><label>Notes <span class="faint">(optional detail)</span></label><textarea id="wd-note" rows="2" placeholder="Any extra detail for the record"></textarea></div>`;
+  modal('Withdraw offer', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn" style="color:var(--red)" onclick="withdrawOffer('${oid}')">Withdraw offer</button>`, true);
+}
+function withdrawOffer(oid){
+  const reason=val('wd-reason'); if(!reason){ toast('Select a reason',1); return; }
+  const note=val('wd-note');
+  const o=(S.offers||[]).find(x=>x.id===oid); if(!o) return;
+  const wasAccepted=o.status==='accepted'; o.status='withdrawn'; o.withdrawnReason=reason+(note?' — '+note:'');
   const a=(S.applicants||[]).find(x=>x.id===o.applicantId);
   if(a){ a.status='viewing'; pushApplicant&&pushApplicant(a); }
   const l=LST(o.listingId);
@@ -787,13 +797,14 @@ function withdrawOffer(oid){
       const tn=S.tenancies.find(t=>t.propertyId===l.propertyId);
       if(tn&&(tn.stage==='referencing'||tn.stage==='contract')){ tn.stage='marketing'; pushTenancy&&pushTenancy(tn); }
       const ll=p.landlordId?L(p.landlordId):null;
-      if(ll&&ll.id){ ll.comms=ll.comms||[]; ll.comms.push({id:uid('c'),date:today(),type:'Note',note:'Offer withdrawn for '+(a?a.name:'applicant')+' — '+(l.address||'')+'. Listing re-opened for marketing.'}); pushLandlord(ll); }
+      if(ll&&ll.id){ ll.comms=ll.comms||[]; ll.comms.push({id:uid('c'),date:today(),type:'Note',note:'Offer withdrawn for '+(a?a.name:'applicant')+' — '+(l.address||'')+'. Reason: '+o.withdrawnReason+'. Listing re-opened for marketing.'}); pushLandlord(ll); }
     }
   }
-  save(); pushOffer&&pushOffer(o); render(); toast('Offer withdrawn');
+  save(); pushOffer&&pushOffer(o); closeModal(); render(); toast('Offer withdrawn');
 }
 async function resendOfferAcceptedLetter(oid){
-  const o=(S.offers||[]).find(x=>x.id===oid); if(!o||!o.letterData){ toast('No saved letter to resend — use Accept again',1); return; }
+  const o=(S.offers||[]).find(x=>x.id===oid); if(!o) return;
+  if(!o.letterData){ toast('No saved copy of this letter (accepted before this feature) — opening it fresh, review before sending',0); openOfferAcceptedLetter(oid); return; }
   const d=o.letterData;
   if(!LIVE){ toast('Connect to Supabase to send live',1); return; }
   const r=await agencyEmail(d.email,'Your offer has been accepted — '+d.address, offerAcceptedLetterHtml(d));
@@ -808,6 +819,8 @@ async function resendOfferAcceptedLetter(oid){
 // apply to this property (ticked per-letter, since properties differ — see openOfferAcceptedLetter).
 function openOfferAcceptedLetter(oid){
   const o=(S.offers||[]).find(x=>x.id===oid); if(!o) return;
+  const clash=(S.offers||[]).find(x=>x.id!==oid && x.listingId===o.listingId && x.status==='accepted');
+  if(clash){ const ca=(S.applicants||[]).find(x=>x.id===clash.applicantId); toast('This property already has an accepted offer for '+(ca?ca.name:'another applicant')+'. Withdraw it first if this applicant is replacing them.',1); return; }
   const a=(S.applicants||[]).find(x=>x.id===o.applicantId)||{};
   const l=LST(o.listingId)||{};
   const p=l.propertyId?P(l.propertyId):{};
@@ -840,6 +853,8 @@ function openOfferAcceptedLetter(oid){
 }
 async function confirmOfferAccepted(oid){
   const o=(S.offers||[]).find(x=>x.id===oid); if(!o) return;
+  const clash=(S.offers||[]).find(x=>x.id!==oid && x.listingId===o.listingId && x.status==='accepted');
+  if(clash){ toast('Another offer on this property was accepted moments ago — refresh and check before continuing',1); closeModal(); return; }
   const a=(S.applicants||[]).find(x=>x.id===o.applicantId); if(!a) return;
   const l=LST(o.listingId)||{};
   const email=val('oa-email');
@@ -852,6 +867,8 @@ async function confirmOfferAccepted(oid){
     extra:val('oa-extra')||'', utilities:val('oa-utilities')||'', utilitiesNote:val('oa-utilitiesnote')||'', refPartner:val('oa-refpartner')||'', refNote:val('oa-refnote')||'' };
   o.amount=data.rent; o.moveIn=data.moveIn; o.status='accepted'; o.letterData=data;
   a.status='referencing'; pushApplicant&&pushApplicant(a);
+  const rivals=(S.offers||[]).filter(x=>x.id!==oid && x.listingId===o.listingId && (x.status==='offered'||x.status==='negotiating'));
+  rivals.forEach(x=>{ x.status='rejected'; pushOffer&&pushOffer(x); });
   S.references=S.references||[]; S.references.push({id:uid('r'),applicant:a.name,propertyId:l.propertyId||'',income:0,docs:{},creditState:'not_requested',status:'none',note:'From accepted offer — '+gbp(data.rent)+'/mo'});
   if(l.id){ l.status='let'; pushListing&&pushListing(l);
     if(l.propertyId){ _commitTenant(l.propertyId,{name:data.tenants,email:data.email,start:data.moveIn,deposit:data.deposit},'referencing'); const pp=P(l.propertyId); pp.rentDueDay=data.dueDay; save(); pushProperty(pp); }
@@ -864,7 +881,7 @@ async function confirmOfferAccepted(oid){
   const landlordId=l.propertyId?P(l.propertyId).landlordId:null; const ll=landlordId?L(landlordId):null;
   if(ll&&ll.id){ ll.comms=ll.comms||[]; ll.comms.push({id:uid('c'),date:today(),type:'Note',note:'Offer accepted — accepted letter '+(sent?'emailed to ':'logged for ')+data.tenants+' ('+data.email+').'}); pushLandlord(ll); }
   closeModal(); render();
-  toast(sent?'✓ Accepted — letter sent & applicant moved to referencing':'✓ Accepted — applicant moved to referencing');
+  toast((sent?'✓ Accepted — letter sent & applicant moved to referencing':'✓ Accepted — applicant moved to referencing')+(rivals.length?' · '+rivals.length+' other offer'+(rivals.length>1?'s':'')+' on this property auto-rejected':''));
 }
 function offerAcceptedLetterHtml(d){ const b=agencyBrand(); const totalDue=(d.rent+d.deposit-d.holding);
   const clausesHtml=d.clauses.length?d.clauses.map(c=>`<p style="margin:10px 0"><b>${esc(c.title)}.</b> ${esc(c.body)}</p>`).join(''):'';
