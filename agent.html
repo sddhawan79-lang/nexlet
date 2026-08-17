@@ -378,7 +378,7 @@ const RAG={green:{label:'● Pass',bg:'var(--green-bg)',color:'var(--green)'},am
 const CREDIT={not_requested:{label:'Credit: not requested',bg:'var(--off)',color:'#94A3B8'},requested:{label:'Credit: requested',bg:'var(--blue-bg)',color:'var(--blue)'},in_progress:{label:'Credit: in progress',bg:'var(--amber-bg)',color:'var(--amber)'},complete:{label:'Credit: report attached',bg:'var(--green-bg)',color:'var(--green)'}};
 
 const NAV=[
-  {k:'dashboard',ic:'▦',t:'Agency Dashboard',grp:'Overview',pin:true},{k:'reports',ic:'◩',t:'Reports',grp:'Overview',pin:true},
+  {k:'dashboard',ic:'▦',t:'Agency Dashboard',grp:'Overview',pin:true},{k:'inbox',ic:'✉',t:'Inbox',grp:'Overview',pin:true},{k:'reports',ic:'◩',t:'Reports',grp:'Overview',pin:true},
   {k:'landlords',ic:'⚇',t:'Landlords',grp:'Instruction'},{k:'properties',ic:'⌂',t:'Properties',grp:'Instruction'},
   {k:'marketing',ic:'🏷',t:'Marketing',grp:'Marketing & Referencing'},{k:'applicants',ic:'◕',t:'Applicants & Viewings',grp:'Marketing & Referencing'},{k:'offers',ic:'£',t:'Offers',grp:'Marketing & Referencing'},{k:'referencing',ic:'◷',t:'Referencing',grp:'Marketing & Referencing'},{k:'pipeline',ic:'◫',t:'Tenancy Progression',grp:'Marketing & Referencing'},
   {k:'compliance',ic:'⌘',t:'Compliance',grp:'Tenancy Management'},{k:'inventory2',ic:'📄',t:'Inventory & Check-out',grp:'Tenancy Management'},{k:'rent',ic:'£',t:'Rent & Arrears',grp:'Tenancy Management'},{k:'maintenance',ic:'🔧',t:'Maintenance',grp:'Tenancy Management'},{k:'keys',ic:'🔑',t:'Key Register',grp:'Tenancy Management'},
@@ -439,7 +439,8 @@ function render(){
   window._navOpen=window._navOpen||{}; if(activeGrp) window._navOpen[activeGrp]=true;
   const pinned=NAV.filter(n=>n.pin), grouped=NAV.filter(n=>!n.pin);
   let lastGrp=null;
-  const pinnedHtml=pinned.map(n=>`<div class="nav ${n.k===view?'on':''}" onclick="go('${n.k}')"><span class="ic">${n.ic}</span>${n.t}</div>`).join('');
+  const inboxCount=(S.inboundEnquiries||[]).filter(e=>e.status==='needs_review').length;
+  const pinnedHtml=pinned.map(n=>`<div class="nav ${n.k===view?'on':''}" onclick="go('${n.k}')"><span class="ic">${n.ic}</span>${n.t}${n.k==='inbox'&&inboxCount?`<span class="pill" style="margin-left:auto;background:var(--amber-bg);color:var(--amber)">${inboxCount}</span>`:''}</div>`).join('');
   const groupedHtml=grouped.map(n=>{
     let hdr='';
     if(n.grp!==lastGrp){ const open=!!window._navOpen[n.grp]; hdr=`<div class="nav-grp" onclick="_toggleNavGrp('${n.grp}')">${n.grp}<span style="float:right">${open?'▾':'▸'}</span></div>`; lastGrp=n.grp; }
@@ -458,7 +459,7 @@ function render(){
   document.getElementById('tb-actions').innerHTML=topActions();
   document.getElementById('view').innerHTML=({
     dashboard:vDashboard, landlords:vLandlords, landlord:vLandlordDetail, valuation:vValuationDetail, valuationreport:vValuationReport, pipeline:vPipeline,
-    marketing:vMarketing, listing:vListingDetail, applicants:vApplicants, offers:vOffers,
+    marketing:vMarketing, listing:vListingDetail, applicants:vApplicants, offers:vOffers, inbox:vInbox,
     keys:vKeys, reports:vReports, clientmoney:vClientMoney,
     referencing:vReferencing, properties:vProperties, property:vPropertyDetail, llportal:vLandlordPortal, llproperty:vLandlordPortalProperty,
     invoices:vInvoices, invoice:vInvoiceDetail, settings:vSettings, templates:vTemplates, notices:vNotices, notice:vNoticeDetail, compliance:vCompliance,
@@ -649,17 +650,18 @@ function vListingDetail(){
 function vApplicants(){
   const apps=(S.applicants||[]).filter(a=>a.status!=='archived');
   const upcoming=(S.viewings||[]).filter(v=>v.status==='scheduled').sort((a,b)=>new Date(a.when)-new Date(b.when));
-  const needsReview=(S.inboundEnquiries||[]).filter(e=>e.status==='needs_review');
   return `<h1 class="pg">Applicants &amp; Viewings</h1><div class="sub">Your enquiry inbox and viewing diary. Capture leads from the portals, book viewings, log feedback, and push hot applicants to an offer.</div>
-    ${needsReview.length?`<div class="panel"><div class="panel-hd"><h2>Needs review \u2014 emails forwarded into your inbox</h2><span class="faint" style="font-size:12px">${needsReview.length}</span></div>
-      ${needsReview.map(inboundEnquiryRow).join('')}
-    </div>`:''}
     ${upcoming.length?`<div class="panel"><div class="panel-hd"><h2>Upcoming viewings</h2><span class="faint" style="font-size:12px">${upcoming.length}</span></div>
       ${upcoming.map(v=>{ const a=(S.applicants||[]).find(x=>x.id===v.applicantId)||{}; const l=LST(v.listingId); return `<div class="row"><div class="av" style="background:var(--amber-bg);color:var(--amber)">${new Date(v.when).getDate()}</div><div style="flex:1"><div style="font-weight:600;font-size:13px;color:var(--navy)">${esc(a.name||'Applicant')} · ${esc(l.address||'')}</div><div class="faint" style="font-size:11.5px">${new Date(v.when).toLocaleString('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div></div><button class="btn sm" onclick="viewingDone('${v.id}')">Log feedback</button></div>`; }).join('')}
     </div>`:''}
     <div class="panel"><div class="panel-hd"><h2>Applicants</h2><span class="faint" style="font-size:12px">${apps.length} active</span></div>
       ${apps.length?apps.map(a=>applicantRow(a,false)).join(''):`<div class="empty" style="padding:30px;text-align:center"><div style="font-size:14px;font-weight:600;margin-bottom:4px">No applicants yet</div><div class="faint" style="font-size:12.5px;margin-bottom:14px">Log an enquiry when someone contacts you about a listing.</div><button class="btn navy" onclick="openApplicant()">＋ Add enquiry</button></div>`}
     </div>`;
+}
+function vInbox(){
+  const needsReview=(S.inboundEnquiries||[]).filter(e=>e.status==='needs_review');
+  return `<h1 class="pg">Inbox</h1><div class="sub">Emails forwarded from beaconresidentials@gmail.com land here automatically. Confirm to add as an enquiry, or dismiss.</div>
+    <div class="panel">${needsReview.length?needsReview.map(inboundEnquiryRow).join(''):`<div class="empty">Nothing waiting \u2014 forwarded emails will show up here within a few seconds of arriving.</div>`}</div>`;
 }
 function inboundEnquiryRow(e){
   const x=e.extracted||{}; const looksReal=x.is_enquiry!==false;
@@ -1838,7 +1840,7 @@ function _notifications(){
   (S.agreements||[]).filter(a=>a.status==='sent').forEach(a=>{ const days=Math.floor((Date.now()-new Date(a.agent_signed_at||0).getTime())/86400000); if(days>=2){ const l=L(a.landlord_id); out.push({sev:days>=5?'red':'amber',label:'Instruction not signed — '+(l.name||a.landlord_name||''),detail:'Sent '+days+' day'+(days===1?'':'s')+' ago, still awaiting landlord signature',go:`sendAgreementReminder('${a.id}')`}); } });
   (S.tenancyAgreements||[]).filter(a=>a.status==='sent').forEach(a=>{ const days=Math.floor((Date.now()-new Date(a.agent_signed_at||0).getTime())/86400000); if(days>=2){ const p=P(a.property_id)||{}; out.push({sev:days>=5?'red':'amber',label:'Tenancy terms unsigned — '+(a.tenant_name||''),detail:(p.address?p.address+' — ':'')+'Sent '+days+' day'+(days===1?'':'s')+' ago, still awaiting signature',go:`sendTenancyReminder('${a.id}')`}); } });
   const needsReview=(S.inboundEnquiries||[]).filter(e=>e.status==='needs_review');
-  if(needsReview.length) out.push({sev:'amber',label:needsReview.length+' forwarded email'+(needsReview.length>1?'s':'')+' need review',detail:'Confirm or dismiss on Applicants & Viewings',go:`go('applicants')`});
+  if(needsReview.length) out.push({sev:'amber',label:needsReview.length+' forwarded email'+(needsReview.length>1?'s':'')+' need review',detail:'Confirm or dismiss in Inbox',go:`go('inbox')`});
   return out.sort((a,b)=>(a.sev==='red'?0:1)-(b.sev==='red'?0:1));
 }
 function openNotifications(){
