@@ -1666,7 +1666,7 @@ function vLandlordDetail(){
         :!l.invitedAt?`<button class="btn navy" onclick="inviteToPortal('${l.id}')">📧 Invite landlord to portal — next step</button>`
         :`<span class="faint" style="font-size:12.5px;align-self:center">✓ Portal invited ${fmtDate(l.invitedAt)}</span><button class="btn sm" onclick="inviteToPortal('${l.id}')">Resend invite</button>`}
       ${(()=>{ const a=agreementFor(l.id);
-        if(l.agreement) return `<button class="btn" onclick="viewSignedAgreement('${l.id}')">✔ View signed agreement</button><button class="btn sm" onclick="viewSigningReceipt('${l.id}')">🧾 Signing receipt</button><button class="btn sm" onclick="openAgreement('${l.id}')" title="Issue a new agreement to sign — e.g. renewal or amended terms">Send new agreement</button>`;
+        if(l.agreement) return `<button class="btn" onclick="viewSignedAgreement('${l.id}')">✔ View signed agreement</button>${a?`<button class="btn sm" onclick="viewSigningReceipt('${l.id}')">🧾 Signing receipt</button>`:''}<button class="btn sm" onclick="openAgreement('${l.id}')" title="Issue a new agreement to sign — e.g. renewal or amended terms">Send new agreement</button>`;
         if(a&&a.status==='sent') return `<button class="btn" onclick="sendAgreementReminder('${a.id}')" style="border-color:var(--amber);color:var(--amber)">⏳ Awaiting landlord signature · send reminder</button><button class="btn sm" onclick="openAgreement('${l.id}')" title="Start over with a new agreement">Re-send agreement</button>`;
         if(a&&a.status==='declined') return `<button class="btn" onclick="openAgreement('${l.id}')" style="border-color:var(--red);color:var(--red)">✕ Declined · re-send agreement</button>`;
         return `<button class="btn navy" onclick="openAgreement('${l.id}')">✍️ Send agreement to sign</button>`;
@@ -3223,9 +3223,15 @@ function obAddAnotherProp(){ const p=_obDraftToProp(); if(!p){toast('Enter an ad
 function obRemoveProp(i){ OB.properties.splice(i,1); renderOnboard(); }
 async function obFinish(){
   const id=uid('l');
+  let agreementDocName='',agreementDocUrl='';
+  if(OB.agreement&&OB._file_&&OB._file_.agreementDoc){
+    const f=OB._file_.agreementDoc; const ext=(f.name.split('.').pop()||'pdf');
+    const url=await _storageUpload(f,id+'/agreement-'+Date.now()+'.'+ext,'property-documents');
+    agreementDocName=f.name; agreementDocUrl=url||'';
+  }
   const ll={id,name:OB.name,joint:OB.joint||'',jointEmail:OB.jointEmail||'',entity:OB.entity||'individual',email:OB.email,phone:OB.phone,address:OB.address,nrl:OB.nrl,prsReg:OB.prsReg,contactPref:OB.contactPref,
     aml:OB.aml,ownership:OB.ownership,service:OB.service,agencyType:OB.agencyType||'sole',feePct:OB.feePct,letWeeks:OB.letWeeks,agreement:OB.agreement,status:OB.agreement?'active':'pending',
-    docs:{id:OB.idDoc||'',address:OB.addrDoc||'',ownership:OB.ownDoc||'',agreement:OB.agreement?'Signed offline':'',
+    docs:{id:OB.idDoc||'',address:OB.addrDoc||'',ownership:OB.ownDoc||'',agreement:agreementDocName||(OB.agreement?'Signed offline':''),agreementUrl:agreementDocUrl,agreementDate:OB.agreement?today():'',
       idDate:OB.idDoc?today():'',addressDate:OB.addrDoc?today():'',ownershipDate:OB.ownDoc?today():'',amlDate:OB.aml?today():'',
       incorporation:OB.incorpDoc||'',directorId:OB.dirIdDoc||'',directors:(OB.extraDirectors||[]).filter(d=>d.fileName).map(d=>({name:d.name,fileName:d.fileName})),
       id2:OB.idDoc2||'',address2:OB.addrDoc2||'',id2Date:OB.idDoc2?today():'',address2Date:OB.addrDoc2?today():'',
@@ -3445,7 +3451,8 @@ function renderOnboard(){
       ${OB.addr?esc(OB.addr)+'<br>':''}Docs: ID ${OB.idDoc?'✓':'✗'} · Address ${OB.addrDoc?'✓':'✗'} · Sanctions ${OB.sanctions?'✓':'✗'} · Ownership ${OB.ownDoc?'✓':'✗'}${OB.isCompany?' · Company ✓':''}${OB.isMortgaged?' · Mortgage consent '+(OB.mortgageConsentDoc?'✓':'⚠'):''}${OB.isLeasehold?' · Freeholder consent '+(OB.freeholderConsentDoc?'✓':'⚠'):''}<br>
       Redress: ${S.agency.redress||'pending'} · Tenant pays landlord directly · no client money held</div>
     ${outstanding.length?`<div class="note" style="background:var(--amber-bg);border-color:var(--amber);color:var(--amber);margin-bottom:14px">⚠ Outstanding before marketing: ${outstanding.join(', ')}. You can still onboard — chase these before the property goes live.</div>`:''}
-    <div class="chk ${OB.agreement?'on':''}" onclick="OB.agreement=!OB.agreement;renderOnboard()"><div class="box">${OB.agreement?'✓':''}</div><div><div style="font-weight:600;font-size:13px">Agreement already signed offline</div><div class="faint" style="font-size:11px">Only tick if you already hold a wet-ink/PDF agreement. Otherwise leave unticked and e-sign from their record.</div></div></div>`;
+    <div class="chk ${OB.agreement?'on':''}" onclick="OB.agreement=!OB.agreement;renderOnboard()"><div class="box">${OB.agreement?'✓':''}</div><div><div style="font-weight:600;font-size:13px">Agreement already signed offline</div><div class="faint" style="font-size:11px">Only tick if you already hold a wet-ink/PDF agreement. Otherwise leave unticked and e-sign from their record.</div></div></div>
+    ${OB.agreement?obDoc('agreementDoc','Signed agreement document','Upload the signed contract — kept on file and downloadable later if a dispute arises'):''}`;
   }
   const ft = s<6
     ? `<button class="btn" onclick="obBack()">${s===1?'Cancel':'Back'}</button>${(s===2||s===3)?`<button class="btn" onclick="obSkipDocs()" style="color:var(--muted)">Skip for now</button>`:''}<button class="btn navy" onclick="obNext()">Next →</button>`
@@ -4139,7 +4146,8 @@ function emailSignedAgreement(a,l){
   if(a.agent_email) agencyEmail(a.agent_email,'Signed: '+(l.name||'landlord')+' — agreement complete',full);
 }
 function viewSignedAgreement(id){
-  const a=agreementFor(id); if(!a){ toast('No agreement on file',1); return; }
+  const a=agreementFor(id);
+  if(!a){ const l=L(id); if(l&&l.docs&&l.docs.agreementUrl){ window.open(l.docs.agreementUrl,'_blank'); return; } toast('No agreement on file',1); return; }
   const w=window.open('','_blank'); if(!w){ toast('Allow pop-ups to view',1); return; }
   w.document.write(`<html><head><title>Signed Agreement</title><style>body{font-family:Arial,sans-serif;max-width:760px;margin:24px auto;padding:0 20px;color:#1A2B45;line-height:1.7}h2{font-family:Georgia,serif}img{max-height:60px}@media print{button{display:none}}</style></head><body><button onclick="print()" style="padding:10px 18px;background:#0B1E3D;color:#fff;border:none;border-radius:8px;cursor:pointer;margin-bottom:16px">Print / Save as PDF</button>${signedCertHtml(a)}<hr style="margin:24px 0;border:none;border-top:1px solid #E4EAF1">${a.document_html}</body></html>`);
   w.document.close();
