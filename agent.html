@@ -671,7 +671,10 @@ function inboundEnquiryRow(e){
     <div style="flex:1;min-width:0">
       <div style="font-weight:600;font-size:13.5px;color:var(--navy)">${esc(x.name||e.from_email||'Unknown sender')} ${!looksReal?'<span class="faint" style="font-weight:400">(doesn\u2019t look like an enquiry)</span>':''}</div>
       <div class="faint" style="font-size:11.5px;margin-bottom:6px">${esc(e.subject||'')} \u00b7 from ${esc(e.from_email||'')} \u00b7 ${fmtDate(e.created_at)}</div>
-      <div style="font-size:12.5px;color:var(--muted);margin-bottom:8px">${esc(x.summary||'')}</div>
+      <div style="font-size:12.5px;color:var(--muted);margin-bottom:6px">${esc(x.summary||'')}</div>
+      <details style="margin-bottom:8px"><summary style="cursor:pointer;font-size:12px;color:var(--blue)">View original email</summary>
+        <div style="white-space:pre-wrap;font-size:12.5px;color:var(--muted);background:var(--off);border-radius:6px;padding:10px;margin-top:6px;max-height:260px;overflow-y:auto">${esc(e.raw_text||'(no content)')}</div>
+      </details>
       <div class="grid2" style="gap:8px;max-width:520px">
         <input id="ie-name-${e.id}" placeholder="Name" value="${esc(x.name||'')}">
         <input id="ie-phone-${e.id}" placeholder="Phone" value="${esc(x.phone||'')}">
@@ -4226,7 +4229,30 @@ const TEMPLATES=[
       <p>This letter confirms the termination of the management agreement between yourself and ${esc(b.name)}, with effect from <b>${_dstr(f.effective)}</b>, in line with the notice terms of that agreement.${f.reason?` Reason: ${esc(f.reason)}.`:''}</p>
       <p>Before the effective date we will: reconcile and remit any rent held, provide a final statement, hand over all compliance certificates and tenancy documentation, and confirm the handover of tenant contact and deposit details.</p>
       <p>It has been a pleasure acting on your behalf. If there's anything we can do to assist with the transition, please let us know.</p>
-      <p>Kind regards,<br>${esc(b.name)}</p>`})}
+      <p>Kind regards,<br>${esc(b.name)}</p>`})},
+  {key:'deposit_received',group:'Move-in',title:'Holding deposit received — next steps',icon:'\u2713',ai:true,needProp:true,audience:'tenant',
+    fields:[{k:'amount',label:'Holding deposit received (£)',type:'number',def:p=>p?Math.round(p.rent*12/52):0}],
+    build:(l,p,b,f)=>{ const rec=p&&tenantRecFor(p.id); const name=rec?_allTenantNames(rec):'there'; return {subject:`Holding Deposit Received — ${p?p.address:''}`,body:`<p>Dear ${esc(name)},</p>
+      <p>We are pleased to confirm receipt of your holding deposit of ${gbp(+f.amount||0)} in respect of <b>${p?esc(p.address):''}</b>. The property is now reserved on your behalf, subject to satisfactory references and contract.</p>
+      <p style="font-weight:700;margin:16px 0 4px;color:#0B1E3D">Next Step 1: Referencing</p>
+      <p>In order to proceed with referencing, we require the following details for each prospective occupant aged 18 or over: full name, email address, and contact telephone number. Upon receipt, these details will be passed to our referencing partner${S.agency.refPartner?' ('+esc(S.agency.refPartner)+')':''}, who will contact each applicant directly to complete identity verification, credit history, employment and landlord references, and an affordability assessment.</p>
+      <p style="font-weight:700;margin:16px 0 4px;color:#0B1E3D">Next Step 2: Right to Rent — documents required from you directly</p>
+      <p>Separately, we are required by law to verify your right to rent in the UK before the tenancy begins. Please email us the following for each occupant aged 18 or over:</p>
+      <ul style="padding-left:18px;line-height:1.8">
+        <li>UK/Irish passport, or Biometric Residence Permit (BRP), current visa, or Home Office share code (non-UK/Irish nationals)</li>
+        <li>One additional proof of address (utility bill or bank statement, dated within the last 3 months)</li>
+      </ul>
+      <p style="font-weight:700;margin:16px 0 4px;color:#0B1E3D">Please note</p>
+      <ul style="padding-left:18px;line-height:1.8">
+        <li>Each applicant will receive a referencing link directly from our partner, typically within 24 hours</li>
+        <li>We would ask that this is completed within 72 hours of receipt</li>
+        <li>Please advise your current employer and landlord that they may be contacted for a reference</li>
+        <li>We recommend checking your junk or spam folder should the referencing email not arrive in your inbox</li>
+      </ul>
+      <p style="font-weight:700;margin:16px 0 4px;color:#0B1E3D">Holding Deposit Terms</p>
+      <p>Your holding deposit is fully refundable, save in the following circumstances, in accordance with the Tenant Fees Act 2019: where you withdraw from the tenancy in writing; where false or misleading information is provided; where a Right to Rent check is not satisfied; or where reasonable steps are not taken to enter into the tenancy by the agreed move-in date. Should we determine that any part of the deposit is to be withheld, written confirmation of the reason will be provided to you within seven days.</p>
+      <p>Should you have any queries in the meantime, please do not hesitate to contact us.</p>
+      <p>Yours sincerely,<br>${esc(b.name)}</p>`};}},
 ];
 function tplByKey(k){ return TEMPLATES.find(t=>t.key===k); }
 
@@ -4261,6 +4287,7 @@ function openTemplate(key){
   _tplModal();
 }
 function _tplLandlord(){ return L(TPL.lid)||{}; }
+function _tplRecipient(){ const t=tplByKey(TPL.key); if(t.audience==='tenant'){ const p=_tplProp(); const rec=p&&tenantRecFor(p.id); return {email:rec&&rec.email||'',name:rec?_allTenantNames(rec):''}; } const l=_tplLandlord(); return {email:l.email||'',name:landlordName(l)}; }
 function _tplProps(){ return S.properties.filter(p=>p.landlordId===TPL.lid); }
 function _tplProp(){ return TPL.pid?P(TPL.pid):(_tplProps()[0]||null); }
 function _tplSeedFields(){ const t=tplByKey(TPL.key); const p=_tplProp(); TPL.f={}; (t.fields||[]).forEach(fd=>{ TPL.f[fd.k]= typeof fd.def==='function'?fd.def(p):(fd.def||''); }); if(t.needProp&&!TPL.pid){ const p0=_tplProps()[0]; if(p0)TPL.pid=p0.id; } }
@@ -4271,9 +4298,10 @@ function _tplModal(){
   const propSel=t.needProp?`<div class="fg"><label>Property</label><select id="tpl-prop" onchange="TPL.pid=this.value;_tplModal()">${props.length?props.map(p=>`<option value="${p.id}" ${p.id===(TPL.pid||(props[0]&&props[0].id))?'selected':''}>${esc(p.address)}</option>`).join(''):'<option>No property on file</option>'}</select></div>`:'';
   const fields=(t.fields||[]).map(fd=>{ const v=TPL.f[fd.k]??''; if(fd.type==='select'){ return `<div class="fg"><label>${fd.label}</label><select onchange="TPL.f['${fd.k}']=this.value;_tplPreview()">${fd.opts.map(o=>`<option ${o===v?'selected':''}>${o}</option>`).join('')}</select></div>`; } return `<div class="fg"><label>${fd.label}</label><input type="${fd.type==='number'?'number':fd.type==='date'?'date':'text'}" value="${esc(v)}" oninput="TPL.f['${fd.k}']=this.value;_tplPreview()"></div>`; }).join('');
   const built=_tplBuild();
-  const body=`<div class="fg"><label>Landlord (recipient)</label>${llSel}</div>${propSel}
+  const recip=_tplRecipient();
+  const body=`<div class="fg"><label>${t.audience==='tenant'?'Property (recipient is the tenant on this property)':'Landlord (recipient)'}</label>${t.audience==='tenant'?'':llSel}</div>${propSel}
     ${fields?`<div class="grid2" style="gap:10px">${fields}</div>`:''}
-    <div class="fg"><label>Preview — sent to ${esc(_tplLandlord().email||'landlord (no email on file)')}</label>
+    <div class="fg"><label>Preview — sent to ${esc(recip.name?recip.name+' — ':'')}${esc(recip.email||'(no email on file)')}</label>
       <div id="tpl-prev" style="max-height:300px;overflow-y:auto;border:1px solid #E4EAF1;border-radius:8px;background:#F6F8FB;padding:6px">${letterWrap(built.subject,built.body)}</div></div>
     ${t.ai?`<div style="margin-bottom:6px"><button class="btn" id="tpl-ai" onclick="tplPolish()">✦ Polish tone with AI</button> <span class="faint" style="font-size:11px">Rewrites wording warmer/clearer — you review before sending.</span></div>`:''}`;
   const foot=`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn" onclick="tplCopy()">Copy text</button><button class="btn navy" onclick="tplSend()">Send via NexLet</button>`;
@@ -4300,16 +4328,17 @@ async function tplPolish(){
 function _tplFinalBody(){ const built=_tplBuild(); return { subject:built.subject, body:_tplAiBody||built.body }; }
 function tplCopy(){ const f=_tplFinalBody(); const tmp=document.createElement('textarea'); tmp.value=f.body.replace(/<[^>]+>/g,'\n').replace(/\n{2,}/g,'\n\n').trim(); document.body.appendChild(tmp); tmp.select(); try{document.execCommand('copy');toast('Copied');}catch(e){} tmp.remove(); }
 async function tplSend(){
-  const l=_tplLandlord(); if(!l.email){ toast('No email on file for '+l.name+' — add one first',1); return; }
-  const t=tplByKey(TPL.key); const p=_tplProp(); const f=_tplFinalBody();
+  const t=tplByKey(TPL.key); const l=_tplLandlord(); const recip=_tplRecipient();
+  if(!recip.email){ toast('No email on file for '+(recip.name||'recipient')+' — add one first',1); return; }
+  const p=_tplProp(); const f=_tplFinalBody();
   const html=letterWrap(f.subject,f.body);
   if(LIVE){ const row={id:uid('lt'),agency_id:window._agencyId,landlord_id:l.id,property_id:p?p.id:null,type:t.key,subject:f.subject,body_html:html,status:'sent'};
     const { error }=await sb.from('agency_letters').insert(row); if(error){ console.error(error); }
     S.letters=S.letters||[]; S.letters.unshift({...row,created_at:new Date().toISOString()});
-    await agencyEmail(l.email, f.subject, html);
+    await agencyEmail(recip.email, f.subject, html);
   } else { toast('Connect to send live — logged locally',0); S.letters=S.letters||[]; S.letters.unshift({id:uid('lt'),landlord_id:l.id,type:t.key,subject:f.subject,created_at:new Date().toISOString(),status:'sent'}); }
-  l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Letter',note:t.title+' sent · '+f.subject}); pushLandlord(l);
-  closeModal(); render(); toast('✓ '+t.title+' sent to '+l.name);
+  l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Letter',note:t.title+' sent · '+f.subject+' (to '+(recip.name||recip.email)+')'}); pushLandlord(l);
+  closeModal(); render(); toast('✓ '+t.title+' sent to '+(recip.name||recip.email));
 }
 
 // Auto welcome letter when a landlord's agreement completes (deterministic, no modal).
