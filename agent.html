@@ -1209,10 +1209,15 @@ function vDashboard(){
     </div>
     ${newLeads?`<div class="note warn" style="margin-bottom:10px">📥 <b>${newLeads} new landlord enquir${newLeads>1?'ies':'y'}</b> came in — <a href="#" onclick="go('landlords');return false" style="color:inherit;text-decoration:underline">review &amp; onboard</a>.</div>`:''}
     ${pending?`<div class="note warn" style="margin-bottom:18px">⏳ <b>${pending} landlord${pending>1?'s':''}</b> awaiting a signed management agreement — you can market once it's signed, not before.</div>`:''}
-    ${(()=>{ const items=_notifications(); if(!items.length) return ''; const shown=items.slice(0,8);
+    ${(()=>{ const items=_notifications(); if(!items.length) return '';
+      const {groups,other}=_groupNotifications(items);
+      const itemRow=n=>`<div class="doc" style="padding:9px 0;cursor:pointer" onclick="${n.go}"><div class="di" style="background:${n.sev==='red'?'var(--red-bg)':'var(--amber-bg)'};color:${n.sev==='red'?'var(--red)':'var(--amber)'}">!</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${esc(n.taskLabel||n.label)}</div><div class="faint" style="font-size:11.5px">${esc(n.detail)}</div></div><span style="font-size:11px;color:var(--blue);font-weight:600">Action →</span></div>`;
+      const groupHtml=groups.map(g=>`<details ${g.hasRed?'open':''} class="tree-node" style="border-bottom:1px solid var(--border)"><summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;padding:10px 2px;font-size:13.5px;font-weight:600;color:var(--navy)"><span class="tree-caret">▸</span>${esc(g.address)}<span class="pill" style="background:${g.hasRed?'var(--red-bg)':'var(--amber-bg)'};color:${g.hasRed?'var(--red)':'var(--amber)'};margin-left:auto">${g.items.length}</span></summary>
+        <div style="padding-left:20px">${g.items.map(itemRow).join('')}</div></details>`).join('');
+      const otherHtml=other.length?`<details open class="tree-node" style="border-bottom:1px solid var(--border)"><summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;padding:10px 2px;font-size:13.5px;font-weight:600;color:var(--navy)"><span class="tree-caret">▸</span>Other tasks<span class="pill" style="background:${other.some(n=>n.sev==='red')?'var(--red-bg)':'var(--amber-bg)'};color:${other.some(n=>n.sev==='red')?'var(--red)':'var(--amber)'};margin-left:auto">${other.length}</span></summary>
+        <div style="padding-left:20px">${other.map(itemRow).join('')}</div></details>`:'';
       return `<div class="panel" style="margin-bottom:18px"><div class="panel-hd"><h2>Needs attention</h2><span class="pill" style="background:${items.some(n=>n.sev==='red')?'var(--red-bg)':'var(--amber-bg)'};color:${items.some(n=>n.sev==='red')?'var(--red)':'var(--amber)'}">${items.length}</span></div>
-        ${shown.map(n=>`<div class="doc" style="padding:9px 0;cursor:pointer" onclick="${n.go}"><div class="di" style="background:${n.sev==='red'?'var(--red-bg)':'var(--amber-bg)'};color:${n.sev==='red'?'var(--red)':'var(--amber)'}">!</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${esc(n.label)}</div><div class="faint" style="font-size:11.5px">${esc(n.detail)}</div></div><span style="font-size:11px;color:var(--blue);font-weight:600">Action →</span></div>`).join('')}
-        ${items.length>8?`<div style="text-align:center;padding-top:6px"><a href="#" onclick="openNotifications();return false" style="font-size:12px;color:var(--blue)">View all ${items.length}</a></div>`:''}
+        <div class="panel-bd" style="padding:4px 20px 8px">${groupHtml}${otherHtml}</div>
       </div>`; })()}
     <div class="panel">
       <div class="panel-hd"><h2>Your landlords</h2><span class="faint" style="font-size:12px">Click a landlord to open their record</span></div>
@@ -1875,16 +1880,25 @@ function _nextMidCheckDue(v){
 }
 function _notifications(){
   const out=[];
-  S.properties.forEach(p=>{ _fullCertItems(p).forEach(it=>{ const r=_itemRag(it); if(it[3]==='exp'&&(r.k==='expired'||r.k==='soon')) out.push({sev:r.k==='expired'?'red':'amber',label:it[1]+' — '+(p.address||''),detail:r.label,go:`go('property','${p.id}')`}); }); });
-  (S.inventories2||[]).forEach(v=>{ const due=_nextMidCheckDue(v); if(due&&(due.overdue||due.days<=14)){ const p=P(v.propertyId)||{}; out.push({sev:due.overdue?'red':'amber',label:'Mid-tenancy check — '+(p.address||''),detail:due.overdue?'Overdue since '+fmtDate(due.next):'Due '+fmtDate(due.next),go:`go('inventorydetail','${v.id}')`}); } });
-  S.properties.filter(p=>p.tenant).forEach(p=>{ const rd=_rentIncreaseDue(p); if(rd) out.push({sev:'amber',label:'Rent review — '+(p.address||''),detail:rd.overdue?'Eligible to increase since '+fmtDate(rd.nextEligible)+' — start the 2-month notice now':'Eligible to increase from '+fmtDate(rd.nextEligible)+' — start preparing now to give full notice',go:`openNotice('${p.id}')`}); });
-  (_nextInvoiceReminders()||[]).forEach(r=>{ out.push({sev:r.days<0?'red':'amber',label:'Invoice — '+r.l.name,detail:r.days<0?'Overdue by '+(-r.days)+' days':'Due in '+r.days+' days',go:`go('invoices')`}); });
-  S.properties.filter(p=>p.tenant).forEach(p=>{ const cl=_tenancyChecklist(p); const missing=cl.items.filter(i=>!i.done&&!i.warn); if(missing.length) out.push({sev:'red',label:'Tenancy setup — '+(p.address||''),detail:'Missing: '+missing.map(i=>i.label).join(', '),go:`go('property','${p.id}')`}); });
-  (S.agreements||[]).filter(a=>a.status==='sent').forEach(a=>{ const days=Math.floor((Date.now()-new Date(a.agent_signed_at||0).getTime())/86400000); if(days>=2){ const l=L(a.landlord_id); out.push({sev:days>=5?'red':'amber',label:'Instruction not signed — '+(l.name||a.landlord_name||''),detail:'Sent '+days+' day'+(days===1?'':'s')+' ago, still awaiting landlord signature',go:`sendAgreementReminder('${a.id}')`}); } });
-  (S.tenancyAgreements||[]).filter(a=>a.status==='sent').forEach(a=>{ const days=Math.floor((Date.now()-new Date(a.agent_signed_at||0).getTime())/86400000); if(days>=2){ const p=P(a.property_id)||{}; out.push({sev:days>=5?'red':'amber',label:'Tenancy terms unsigned — '+(a.tenant_name||''),detail:(p.address?p.address+' — ':'')+'Sent '+days+' day'+(days===1?'':'s')+' ago, still awaiting signature',go:`sendTenancyReminder('${a.id}')`}); } });
+  S.properties.forEach(p=>{ _fullCertItems(p).forEach(it=>{ const r=_itemRag(it); if(it[3]==='exp'&&(r.k==='expired'||r.k==='soon')) out.push({sev:r.k==='expired'?'red':'amber',pid:p.id,label:it[1]+' — '+(p.address||''),taskLabel:it[1],detail:r.label,go:`go('property','${p.id}')`}); }); });
+  (S.inventories2||[]).forEach(v=>{ const due=_nextMidCheckDue(v); if(due&&(due.overdue||due.days<=14)){ const p=P(v.propertyId)||{}; out.push({sev:due.overdue?'red':'amber',pid:p.id,label:'Mid-tenancy check — '+(p.address||''),taskLabel:'Mid-tenancy check',detail:due.overdue?'Overdue since '+fmtDate(due.next):'Due '+fmtDate(due.next),go:`go('inventorydetail','${v.id}')`}); } });
+  S.properties.filter(p=>p.tenant).forEach(p=>{ const rd=_rentIncreaseDue(p); if(rd) out.push({sev:'amber',pid:p.id,label:'Rent review — '+(p.address||''),taskLabel:'Rent review',detail:rd.overdue?'Eligible to increase since '+fmtDate(rd.nextEligible)+' — start the 2-month notice now':'Eligible to increase from '+fmtDate(rd.nextEligible)+' — start preparing now to give full notice',go:`openNotice('${p.id}')`}); });
+  (_nextInvoiceReminders()||[]).forEach(r=>{ out.push({sev:r.days<0?'red':'amber',pid:null,label:'Invoice — '+r.l.name,taskLabel:'Invoice due',detail:r.days<0?'Overdue by '+(-r.days)+' days':'Due in '+r.days+' days',go:`go('invoices')`}); });
+  S.properties.filter(p=>p.tenant).forEach(p=>{ const cl=_tenancyChecklist(p); const missing=cl.items.filter(i=>!i.done&&!i.warn); if(missing.length) out.push({sev:'red',pid:p.id,label:'Tenancy setup — '+(p.address||''),taskLabel:'Tenancy setup',detail:'Missing: '+missing.map(i=>i.label).join(', '),go:`go('property','${p.id}')`}); });
+  (S.agreements||[]).filter(a=>a.status==='sent').forEach(a=>{ const days=Math.floor((Date.now()-new Date(a.agent_signed_at||0).getTime())/86400000); if(days>=2){ const l=L(a.landlord_id); out.push({sev:days>=5?'red':'amber',pid:null,label:'Instruction not signed — '+(l.name||a.landlord_name||''),taskLabel:'Instruction not signed',detail:'Sent '+days+' day'+(days===1?'':'s')+' ago, still awaiting landlord signature',go:`sendAgreementReminder('${a.id}')`}); } });
+  (S.tenancyAgreements||[]).filter(a=>a.status==='sent').forEach(a=>{ const days=Math.floor((Date.now()-new Date(a.agent_signed_at||0).getTime())/86400000); if(days>=2){ const p=P(a.property_id)||{}; out.push({sev:days>=5?'red':'amber',pid:p.id,label:'Tenancy terms unsigned — '+(a.tenant_name||''),taskLabel:'Tenancy terms unsigned',detail:(p.address?p.address+' — ':'')+'Sent '+days+' day'+(days===1?'':'s')+' ago, still awaiting signature',go:`sendTenancyReminder('${a.id}')`}); } });
   const needsReview=(S.inboundEnquiries||[]).filter(e=>e.status==='needs_review');
-  if(needsReview.length) out.push({sev:'amber',label:needsReview.length+' forwarded email'+(needsReview.length>1?'s':'')+' need review',detail:'Confirm or dismiss in Inbox',go:`go('inbox')`});
+  if(needsReview.length) out.push({sev:'amber',pid:null,label:needsReview.length+' forwarded email'+(needsReview.length>1?'s':'')+' need review',taskLabel:'Inbox review',detail:'Confirm or dismiss in Inbox',go:`go('inbox')`});
   return out.sort((a,b)=>(a.sev==='red'?0:1)-(b.sev==='red'?0:1));
+}
+// Groups notifications by property (address) for the dashboard — items with no
+// property (landlord-level, invoices, inbox) fall into a single "Other tasks" bucket.
+function _groupNotifications(items){
+  const byPid={}; const order=[]; const other=[];
+  items.forEach(n=>{ if(!n.pid){ other.push(n); return; } if(!byPid[n.pid]){ byPid[n.pid]=[]; order.push(n.pid); } byPid[n.pid].push(n); });
+  const groups=order.map(pid=>{ const p=P(pid)||{}; const its=byPid[pid]; return {pid,address:p.address||'—',items:its,hasRed:its.some(i=>i.sev==='red')}; });
+  groups.sort((a,b)=>(b.hasRed?1:0)-(a.hasRed?1:0)||b.items.length-a.items.length);
+  return {groups,other};
 }
 function openNotifications(){
   const items=_notifications();
