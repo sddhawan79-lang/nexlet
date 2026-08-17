@@ -425,6 +425,7 @@ function _fullCertItems(p){ const c=p.certs||{}; const rec=tenantRecFor(p.id);
     items.push(['htr','How to Rent guide',c.htr,'decl']);
     if(rec&&rec.start&&new Date(rec.start)<new Date('2026-05-01')) items.push(['infosheet','RRA Information Sheet (existing tenancy)',c.infosheet,'decl']);
     if(rec&&rec.deposit) items.push(['deposit','Deposit protection',null,'custom',_depositRAG(rec)]);
+    if(rec&&rec.deposit) items.push(['depositconfirm','Landlord confirmed deposit protection (in writing)',null,'custom',rec.landlordDepositConfirmedAt?{k:'ok',label:'Confirmed',bg:'var(--green-bg)',color:'var(--green)'}:{k:'bad',label:'Not confirmed',bg:'var(--red-bg)',color:'var(--red)'}]);
   }
   if(c.hmoApplicable) items.push(['hmo','HMO licence',c.hmo,'exp']);
   return items;
@@ -975,6 +976,10 @@ function offerAcceptedLetterHtml(d){ const b=agencyBrand(); const totalDue=(d.re
         <p style="margin:0 0 10px">Please make payment of the holding deposit (equal to one week's rent) to begin the process. This will be deducted from your move-in balance.</p>
         <table style="font-size:13px;width:100%">${bankRows}</table>
         <p style="margin:10px 0 0;font-size:12.5px">Please confirm once payment has been made.</p>
+      </div>
+      <div style="background:#FBF6EC;border-radius:8px;padding:14px 18px;margin:0 0 18px;font-size:12.5px;color:#5C4A1A">
+        <p style="margin:0 0 8px;font-weight:700;color:#0B1E3D">What happens to your holding deposit</p>
+        <p style="margin:0 0 8px">This is refundable in full unless one of the following applies (Tenant Fees Act 2019): you provide false or misleading information that affects our decision to let to you; you withdraw from the tenancy in writing before it starts; you fail a Right to Rent check; or you fail to take reasonable steps to enter into the tenancy by the agreed move-in date. If we decide to retain it, we'll write to you within 7 days setting out which of these applies and why. If the tenancy goes ahead, it's deducted from your move-in balance as shown below.</p>
       </div>
       <p style="font-weight:700;margin-bottom:4px;color:#0B1E3D">Please check your tenancy details carefully</p>
       <p style="font-size:13px;color:#475569;margin-top:0">These details will go into your tenancy agreement. You must tell us within 24 hours if anything is incorrect.</p>
@@ -1757,8 +1762,11 @@ function advance(id){ const t=S.tenancies.find(x=>x.id===id); const i=STAGES.fin
 // ── REFERENCING ──
 function vReferencing(){
   const partner=S.agency.refPartner;
-  return `<h1 class="pg">Tenant Referencing</h1><div class="sub">Collect documents, assess affordability, and record the outcome. Credit/Open-Banking checks run via your referencing partner.</div>
-    <div class="note" style="margin-bottom:16px"><b>How this works (no FCA licence needed):</b> NexLet runs the full in-house workflow — employer & previous-landlord references, proof of income, ID, Right-to-Rent — plus an affordability test (income ≥ 30× monthly rent). The regulated <b>credit search</b> (CCJs, score) and Open-Banking income come from a referencing partner${partner?` — yours is set to <b>${esc(partner)}</b>`:` (set one in Agency Settings)`}. The "Request credit check" button is the API hook your developer connects; until then you run it in the partner portal and attach the result.</div>
+  const note=partner
+    ? `<b>How this works:</b> Referencing is handled by your partner, <b>${esc(partner)}</b> — once you've captured an applicant's name, email and phone (done automatically when an offer is accepted), hand these off to them and they run ID, Right to Rent, credit, employer and landlord checks directly with the applicant. Record the outcome here (pass/fail/conditional) so it's visible against the tenancy — no need to collect documents yourself.`
+    : `<b>How this works (no FCA licence needed):</b> NexLet runs the full in-house workflow — employer & previous-landlord references, proof of income, ID, Right-to-Rent — plus an affordability test (income ≥ 30× monthly rent). The regulated <b>credit search</b> (CCJs, score) and Open-Banking income come from a referencing partner (set one in Agency Settings to switch to the hand-off model above).`;
+  return `<h1 class="pg">Tenant Referencing</h1><div class="sub">Track referencing status per applicant and record the outcome.</div>
+    <div class="note" style="margin-bottom:16px">${note}</div>
     <div class="panel">${S.references.length?S.references.map(refCard).join(''):`<div class="empty">No references yet. Click "New reference".</div>`}</div>`;
 }
 function refCard(r){
@@ -1793,13 +1801,45 @@ function vProperties(){
 }
 
 // ── PROPERTY DETAIL — compliance tab + tenancy (reuses NexLet's engine) ──
+function openLandlordDepositConfirm(pid){
+  const p=P(pid); const l=L(p.landlordId); const rec=tenantRecFor(pid); if(!rec) return;
+  const body=`<div class="note" style="margin-bottom:12px">Deposit protection must be confirmed by the landlord in writing — this closes the "who's responsible" gap if the 30-day protection deadline is later challenged.</div>
+    <div class="kv"><span class="k">Property</span><span class="v">${esc(p.address||'')}</span></div>
+    <div class="kv"><span class="k">Deposit</span><span class="v">${gbp(rec.deposit||0)}</span></div>
+    ${rec.landlordDepositConfirmedAt?`<div class="note" style="margin-top:10px;color:var(--green)">✓ Confirmed ${fmtDate(rec.landlordDepositConfirmedAt)}</div>`:`<div class="fg" style="margin-top:10px"><label>Landlord's email</label><input id="ldc-email" value="${esc(l.email||'')}" placeholder="landlord@email.com"></div>`}`;
+  const footer=rec.landlordDepositConfirmedAt
+    ? `<button class="btn" onclick="closeModal()">Close</button>`
+    : `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn" onclick="requestLandlordDepositConfirm('${pid}')">Email landlord to confirm</button><button class="btn navy" onclick="markLandlordDepositConfirmed('${pid}')">Mark confirmed now</button>`;
+  modal('Landlord deposit confirmation', body, footer, true);
+}
+async function requestLandlordDepositConfirm(pid){
+  const p=P(pid); const l=L(p.landlordId); const rec=tenantRecFor(pid); const email=val('ldc-email')||l.email;
+  if(!email){ toast('Enter the landlord\u2019s email',1); return; }
+  const b=agencyBrand();
+  const html=`<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#1A2B45">
+    <div style="background:#0B1E3D;padding:20px 24px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:20px;font-weight:700">${esc(b.name)}</span></div>
+    <div style="border:1px solid #E4EAF1;border-top:none;border-radius:0 0 10px 10px;padding:26px 24px">
+      <p>Dear ${esc(landlordName(l))},</p>
+      <p>We're protecting the deposit of ${gbp(rec.deposit||0)} for <b>${esc(p.address)}</b>. Please reply to confirm you're aware this has been received and is being protected in a government-approved scheme, with prescribed information served on the tenant within 30 days.</p>
+      <p>Kind regards,<br>${esc(b.name)}</p>
+    </div></div>`;
+  if(LIVE){ const r=await agencyEmail(email,'Please confirm — deposit protection for '+p.address, html); if(!r.ok){ toast('⚠ Send failed: '+(r.error||'try again'),1); return; } }
+  if(l.id){ l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:'Requested written confirmation of deposit protection for '+p.address}); pushLandlord(l); }
+  closeModal(); toast('✓ Confirmation request sent');
+}
+function markLandlordDepositConfirmed(pid){
+  const rec=tenantRecFor(pid); if(!rec) return; const p=P(pid); const l=L(p.landlordId);
+  rec.landlordDepositConfirmedAt=new Date().toISOString(); pushTenantRec(rec);
+  if(l&&l.id){ l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:'Landlord confirmed deposit protection in writing for '+p.address}); pushLandlord(l); }
+  closeModal(); render(); toast('✓ Marked confirmed');
+}
 function _tenancyChecklist(p){
   const l=L(p.landlordId);
   const items=[{k:'agreement',label:'Landlord agreement signed',done:!!l.agreement,go:`openAgreement('${l.id}')`},
     {k:'tenant',label:'Tenant record set up',done:!!p.tenant,go:`setTenant('${p.id}')`}];
   if(p.tenant){
     _fullCertItems(p).forEach(it=>{ const r=_itemRag(it); const k=it[0];
-      const go=k==='rtr'?`rtrWizard('${p.id}')`:k==='deposit'?`setTenant('${p.id}')`:`editCert('${p.id}','${k}')`;
+      const go=k==='rtr'?`rtrWizard('${p.id}')`:k==='deposit'?`setTenant('${p.id}')`:k==='depositconfirm'?`openLandlordDepositConfirm('${p.id}')`:`editCert('${p.id}','${k}')`;
       items.push({k,label:it[1],done:r.k==='ok'||r.k==='soon',warn:r.k==='soon',go}); });
     const rec=tenantRecFor(p.id);
     const ta=rec&&tenancyAgreementFor(rec.id);
