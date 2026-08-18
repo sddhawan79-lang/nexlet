@@ -1993,6 +1993,11 @@ function vPropertyDetail(){
   const p=P(sel); if(!p.id) return vProperties();
   const l=L(p.landlordId); const comp=propCompliance(p); const c=p.certs||{};
   const tstatus=propTenancyStatus(p); const lst=_listingForProp(p.id);
+  const _rec0=tenantRecFor(p.id);
+  const _grpIssue1=certRAG(c.gas).k!=='ok'||certRAG(c.eicr).k!=='ok'||certRAG(c.epc).k!=='ok'||c.epcRating==='F'||c.epcRating==='G'||declStatus(c.smoke).k!=='ok'||(!c.coNA&&declStatus(c.co).k!=='ok');
+  const _grpIssue2=!!p.tenant&&((_rec0&&_rtrRAG(_rec0).k!=='ok')||(_rec0&&_rec0.deposit&&!_rec0.depositCertName)||(_rec0&&!_rec0.moveInPackSentAt));
+  const _grpIssue3=(c.hmoApplicable&&certRAG(c.hmo).k!=='ok')||certRAG(c.legionella).k!=='ok';
+  const _grpHead=(label,isOpen)=>`<details ${isOpen?'open':''} class="tree-node" style="margin:0 0 8px;border-color:#C7CEDA"><summary style="background:#F8FAFC"><span class="tree-caret">▸</span><span style="flex:1;font-weight:700;font-size:11px;color:var(--navy);text-transform:uppercase;letter-spacing:.4px">${label}</span></summary><div class="tree-children" style="padding:10px 14px">`;
   const certRow=(key,label,date,docUrl)=>{const r=certRAG(date);return `<div class="doc"><div class="di" style="background:${r.bg};color:${r.color}">⛨</div>
     <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${label}</div><div class="faint" style="font-size:11.5px">${date?'Expires '+fmtDate(date):'No certificate on file'}</div></div>
     <span class="pill" style="background:${r.bg};color:${r.color}">${r.label}</span>
@@ -2019,7 +2024,7 @@ function vPropertyDetail(){
     ${lifecycleStepper(p)}
     ${tenancyChecklistPanel(p)}
     <div class="grid2">
-      <div class="panel"><div class="panel-hd"><h2>Compliance &amp; documents</h2></div><div class="panel-bd"><details open style="margin-bottom:2px"><summary style="cursor:pointer;font-weight:700;font-size:11px;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;padding:6px 0">Safety certificates</summary><div style="padding-top:2px">
+      <div class="panel"><div class="panel-hd"><h2>Compliance &amp; documents</h2></div><div class="panel-bd">${_grpHead('Safety certificates',_grpIssue1)}
         ${certRow('gas','Gas Safety (annual)',c.gas,c.gasDocUrl)}
         ${certRow('eicr','EICR (every 5 years)',c.eicr,c.eicrDocUrl)}
         ${certRow('epc','EPC'+(c.epcRating?' · rated '+c.epcRating:''),c.epc,c.epcDocUrl)}
@@ -2028,7 +2033,7 @@ function vPropertyDetail(){
         ${declRow('smoke','Smoke alarms','Fit a working smoke alarm on every floor',c.smoke,c.smokeDoc,c.smokeDocUrl)}
         ${c.coNA?`<div class="doc"><div class="di" style="background:var(--off);color:#94A3B8">⛨</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">CO alarm</div><div class="faint" style="font-size:11.5px">Marked not applicable — no fixed combustion appliance</div></div><span class="pill" style="background:var(--off);color:#94A3B8">N/A</span><a href="#" onclick="toggleCoNA('${p.id}');return false" style="font-size:11px;color:var(--blue)">Applies</a></div>`:declRow('co','CO alarm','Required in any room with a fixed combustion appliance (boiler cupboard, gas fire, log burner, etc.)',c.co,c.coDoc,c.coDocUrl)}
         </div></details>
-        <details open style="margin-bottom:2px"><summary style="cursor:pointer;font-weight:700;font-size:11px;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;padding:6px 0">Tenancy &amp; right-to-rent documents</summary><div style="padding-top:2px">${p.tenant?(()=>{ const rec=tenantRecFor(p.id); const r=_rtrRAG(rec); return `<div class="doc"><div class="di" style="background:${r.bg};color:${r.color}">⛨</div>
+        ${_grpHead('Tenancy &amp; right-to-rent documents',_grpIssue2)}${p.tenant?(()=>{ const rec=tenantRecFor(p.id); const r=_rtrRAG(rec); return `<div class="doc"><div class="di" style="background:${r.bg};color:${r.color}">⛨</div>
           <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Right to Rent check</div><div class="faint" style="font-size:11.5px">${rec&&rec.rtrCheckDate?'Checked '+fmtDate(rec.rtrCheckDate)+(rec.rtrResult?' · '+esc(rec.rtrResult):'')+(rec.rtrExpiry?' · expires '+fmtDate(rec.rtrExpiry):'')+(rec.rtrCheckMethod?' · via '+esc(rec.rtrCheckMethod):''):'Check before the tenancy starts'}</div></div>
           <span class="pill" style="background:${r.bg};color:${r.color}">${r.label}</span>
           ${rec&&rec.rtrDocUrl?`<button class="btn sm" onclick="viewDoc('${rec.rtrDocUrl}','Right to Rent evidence')">View${(rec.rtrDocs&&rec.rtrDocs.length>1)?' ('+rec.rtrDocs.length+')':''}</button>`:''}
@@ -2047,7 +2052,7 @@ function vPropertyDetail(){
           <span class="pill" style="background:${sent?'var(--green-bg)':'var(--amber-bg)'};color:${sent?'var(--green)':'var(--amber)'}">${sent?'Sent':'Not sent'}</span>
           <button class="btn sm" onclick="openMoveInPack('${p.id}')">${sent?'Resend / manage':'Send pack'}</button></div>`; })():''}
         </div></details>
-        <details open style="margin-bottom:2px"><summary style="cursor:pointer;font-weight:700;font-size:11px;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;padding:6px 0">Licensing &amp; risk assessments</summary><div style="padding-top:2px"><div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
+        ${_grpHead('Licensing &amp; risk assessments',_grpIssue3)}<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;flex:1"><input type="checkbox" style="width:auto" ${c.hmoApplicable?'checked':''} onchange="toggleHmoApplicable('${p.id}',this.checked)"> HMO / selective-licensing property <span class="faint" style="font-weight:400">(most properties don’t need this — only tick if it’s a licensed HMO or your council runs selective licensing in that area)</span></label>
         </div>
         ${c.hmoApplicable?certRow('hmo','HMO / selective licence'+(c.hmoNo?' · '+esc(c.hmoNo):''),c.hmo,c.hmoDocUrl):''}
@@ -2062,7 +2067,7 @@ function vPropertyDetail(){
           ${c.legionellaReportHtml?`<button class="btn sm" onclick="viewLegionellaReport('${p.id}')">View assessment</button>`:''}
         </div>
         </div></details>
-        <details open style="margin-bottom:2px"><summary style="cursor:pointer;font-weight:700;font-size:11px;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;padding:6px 0">Tenant documents on file</summary><div style="padding-top:2px">${(()=>{ const rec=tenantRecFor(p.id); if(!rec) return '';
+        ${_grpHead('Tenant documents on file',false)}${(()=>{ const rec=tenantRecFor(p.id); if(!rec) return '';
           return `${rec.refDocName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">📄</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Reference report</div><div class="faint" style="font-size:11.5px">${esc(rec.refDocName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.refDocUrl?`<button class="btn sm" onclick="viewDoc('${rec.refDocUrl}','Reference report')">View</button>`:''}</div>`:''}
     ${(()=>{ const ta=tenancyAgreementFor(rec.id); if(!ta) return '';
       if(ta.status==='signed') return `<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">✍</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Tenancy terms &amp; conditions (e-signed)</div><div class="faint" style="font-size:11.5px">Signed ${fmtDate(ta.tenant_signed_at)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">Signed</span><button class="btn sm" onclick="viewSignedTenancyAgreement('${p.id}')">View</button></div>`;
@@ -2073,7 +2078,7 @@ function vPropertyDetail(){
           ${rec.id2DocName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">🪪</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Photo ID — 2 of 2</div><div class="faint" style="font-size:11.5px">${esc(rec.id2DocName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.id2DocUrl?`<button class="btn sm" onclick="viewDoc('${rec.id2DocUrl}','Photo ID')">View</button>`:''}</div>`:''}
           ${(rec.addressProofDocs&&rec.addressProofDocs.length)?rec.addressProofDocs.map((d,i)=>`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">🏠</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Proof of address${rec.addressProofDocs.length>1?' ('+(i+1)+' of '+rec.addressProofDocs.length+')':''}</div><div class="faint" style="font-size:11.5px">${esc(d.name)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${d.url?`<button class="btn sm" onclick="viewDoc('${d.url}','Proof of address')">View</button>`:''}</div>`).join(''):''}`; })()}
         </div></details>
-        <details style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><summary style="cursor:pointer;font-size:11px;font-weight:700;letter-spacing:.4px;color:var(--faint);text-transform:uppercase">Advisory — not legally required</summary><div style="padding-top:8px">
+        ${_grpHead('Advisory — not legally required',false)}
           ${advisoryDocRow(p,'pat','PAT testing (appliances)','No blanket legal requirement in England — evidence of duty of care if the landlord has it done')}
           ${advisoryDocRow(p,'pest','Pest control treatment','Landlord-arranged treatment record, if any — evidences the property was handed over pest-free')}
         </div></details>
