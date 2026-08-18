@@ -998,6 +998,7 @@ function offerAcceptedLetterHtml(d){ const b=agencyBrand(); const totalDue=(d.re
         <li>${d.refPartner?'Sent via '+esc(d.refPartner)+' ':'Sent to you '}after your holding deposit is paid</li>
         <li>Please complete it within 72 hours</li>
         <li>Check your spam/junk folder for the referencing email</li>
+        <li>Please be honest about any credit issues — this rarely stops an application, but false or withheld information can</li>
         <li>Tell your employer and current landlord to expect contact from us</li>
         ${d.refNote?`<li>${esc(d.refNote)}</li>`:''}
       </ul>
@@ -1020,9 +1021,11 @@ function offerAcceptedLetterHtml(d){ const b=agencyBrand(); const totalDue=(d.re
         <tr><td style="padding:2px 0;color:#7A8FA6">Less holding deposit</td><td style="padding:2px 0;text-align:right">− ${gbp(d.holding)}</td></tr>
         <tr><td style="padding:4px 0;font-weight:700">Total due</td><td style="padding:4px 0;text-align:right;font-weight:700">${gbp(totalDue)}</td></tr>
       </table>
-      <p style="margin:12px 0 4px"><b>5. Move-In Day</b></p>
+      <p style="margin:12px 0 4px"><b>5. Deposit Protection</b></p>
+      <p style="margin:2px 0;font-size:13px">Once received, your deposit will be protected in a government-approved tenancy deposit scheme within 30 days, and you'll be sent the prescribed information confirming this.</p>
+      <p style="margin:12px 0 4px"><b>6. Move-In Day</b></p>
       <ul style="padding-left:18px;line-height:1.8;margin-top:2px"><li>Key collection at an agreed time</li><li>You'll receive all documents and guidance you need</li></ul>
-      ${d.utilities?`<p style="margin:12px 0 4px"><b>6. Utilities</b></p><p style="margin:2px 0;font-size:13px">You may be contacted by ${esc(d.utilities)} to help set up your utilities.${d.utilitiesNote?' '+esc(d.utilitiesNote):''}</p>`:''}
+      ${d.utilities?`<p style="margin:12px 0 4px"><b>7. Utilities</b></p><p style="margin:2px 0;font-size:13px">You may be contacted by ${esc(d.utilities)} to help set up your utilities.${d.utilitiesNote?' '+esc(d.utilitiesNote):''}</p>`:''}
       <p style="margin-top:18px">If you have any questions at any stage, just let us know — we're here to help.</p>
       <p>Kind regards,<br>${esc(b.name)}</p>
     </div></div>`;
@@ -1076,6 +1079,7 @@ function vReports(){
         <div class="kv"><span class="k">Monthly management fees (run-rate)</span><span class="v">${gbp(monthlyFee)}</span></div>
         <div class="kv"><span class="k">Annualised</span><span class="v">${gbp(monthlyFee*12)}</span></div>
         <div class="kv" style="border:none"><span class="k">Invoices paid (to date)</span><span class="v">${gbp(invoiced)}</span></div>
+        ${(()=>{ const ic=_totalInsuranceCommission(); return ic>0?`<div class="kv" style="border-top:1px solid var(--border);padding-top:10px;margin-top:4px"><span class="k">Insurance commission (active, /yr)</span><span class="v" style="color:var(--green)">${gbp(ic)}</span></div>`:''; })()}
       </div></div>
     </div>
     <div class="panel"><div class="panel-hd"><h2>Compliance calendar — next 90 days</h2><span class="faint" style="font-size:12px">${cal.length}</span></div>
@@ -1946,6 +1950,45 @@ function tenancyChecklistPanel(p){
     </div>
   </div></div>`;
 }
+function _insuranceDefaults(){ return [
+  {key:'rentguarantee',label:'Rent Guarantee & Legal Expenses',hint:'Covers rent arrears and legal costs of recovering possession'},
+  {key:'landlord',label:'Landlord Insurance (Buildings & Contents)',hint:'Buildings cover is usually a mortgage condition — worth checking it is in place'},
+  {key:'boiler',label:'Boiler & Home Emergency Cover',hint:'Boiler service/breakdown cover, where the landlord doesn\'t already have their own'},
+  {key:'tenantcontents',label:'Tenant Contents Insurance',hint:'Protects the tenant\'s own belongings — not the landlord\'s responsibility'}
+]; }
+function _insuranceList(p){ const c=p.certs||{}; return [..._insuranceDefaults(), ...(c.insCustom||[])]; }
+function _insData(p,key){ const c=p.certs||{}; return (c.insurances||{})[key]||{}; }
+function _insCommission(d){ return (parseFloat(d.premium)||0)*(parseFloat(d.commissionPct)||0)/100; }
+function _insStatusPill(st){ return st==='active'?{bg:'var(--green-bg)',color:'var(--green)',label:'Active'}:st==='offered'?{bg:'var(--amber-bg)',color:'var(--amber)',label:'Offered'}:st==='declined'?{bg:'var(--off)',color:'#94A3B8',label:'Declined'}:{bg:'var(--off)',color:'#94A3B8',label:'Not offered'}; }
+function _totalInsuranceCommission(){ let sum=0; (S.properties||[]).forEach(p=>{ _insuranceList(p).forEach(it=>{ const d=_insData(p,it.key); if(d.status==='active') sum+=_insCommission(d); }); }); return sum; }
+function insuranceRow(p,item){ const d=_insData(p,item.key); const st=_insStatusPill(d.status); const comm=_insCommission(d); const isCustom=!_insuranceDefaults().some(x=>x.key===item.key);
+  return `<div class="doc"><div class="di" style="background:${st.bg};color:${st.color}">☂</div>
+    <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${esc(item.label)}</div><div class="faint" style="font-size:11.5px">${d.provider?esc(d.provider)+(d.premium?' · '+gbp(d.premium)+'/yr':''):(item.hint||'')}</div></div>
+    ${(d.status==='active'&&comm>0)?`<span class="pill" style="background:var(--green-bg);color:var(--green)">+${gbp(comm)}/yr</span>`:''}
+    <span class="pill" style="background:${st.bg};color:${st.color}">${st.label}</span>
+    <button class="btn sm" onclick="editInsurance('${p.id}','${item.key}')">${d.status?'Edit':'Add'}</button>
+    ${isCustom?`<button class="btn sm" style="color:var(--red)" onclick="removeCustomInsurance('${p.id}','${item.key}')">Remove</button>`:''}</div>`; }
+function insurancePanel(p){ const list=_insuranceList(p); let total=0; list.forEach(it=>{ const d=_insData(p,it.key); if(d.status==='active') total+=_insCommission(d); });
+  return `<div class="panel" style="margin-top:18px"><div class="panel-hd"><h2>Insurances &amp; add-ons</h2>${total>0?`<span class="pill" style="background:var(--green-bg);color:var(--green)">${gbp(total)}/yr commission</span>`:''}</div><div class="panel-bd">
+    <div class="faint" style="font-size:11.5px;margin-bottom:10px">Cover offered on this tenancy, and any referral commission you earn on it — for your own records; not shown to the tenant or landlord.</div>
+    ${list.map(it=>insuranceRow(p,it)).join('')}
+    <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:4px"><button class="btn sm" onclick="addCustomInsurance('${p.id}')">+ Add another line</button></div>
+  </div></div>`; }
+function editInsurance(pid,key){ const p=P(pid); const item=_insuranceList(p).find(x=>x.key===key)||{label:key}; const d=_insData(p,key);
+  const body=`<div class="fg"><label>Status</label><select id="ins-status"><option value="none" ${!d.status||d.status==='none'?'selected':''}>Not offered</option><option value="offered" ${d.status==='offered'?'selected':''}>Offered — awaiting decision</option><option value="active" ${d.status==='active'?'selected':''}>Active — policy in place</option><option value="declined" ${d.status==='declined'?'selected':''}>Declined by client</option></select></div>
+    <div class="fg"><label>Provider</label><input id="ins-provider" value="${esc(d.provider||'')}" placeholder="e.g. Let Alliance"></div>
+    <div class="grid2"><div class="fg"><label>Annual premium (£)</label><input id="ins-premium" type="number" value="${d.premium||''}"></div>
+    <div class="fg"><label>Your commission (%)</label><input id="ins-pct" type="number" value="${d.commissionPct||''}"></div></div>
+    <div class="fg"><label>Renewal date</label><input id="ins-renewal" type="date" value="${d.renewalDate||''}"></div>
+    <div class="faint" style="font-size:11.5px">Commission only counts toward your totals while status is "Active".</div>`;
+  modal('Insurance — '+esc(item.label), body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveInsurance('${pid}','${key}')">Save</button>`, true); }
+function saveInsurance(pid,key){ const p=P(pid); p.certs=p.certs||{}; p.certs.insurances=p.certs.insurances||{};
+  p.certs.insurances[key]={status:val('ins-status'),provider:val('ins-provider'),premium:parseFloat(val('ins-premium'))||0,commissionPct:parseFloat(val('ins-pct'))||0,renewalDate:val('ins-renewal')||''};
+  save(); pushProperty(p); closeModal(); render(); toast('✓ Saved'); }
+function addCustomInsurance(pid){ const body=`<div class="fg"><label>Cover type</label><input id="ins-new-label" placeholder="e.g. Home Emergency Cover"></div>`;
+  modal('Add insurance line', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="confirmAddCustomInsurance('${pid}')">Add</button>`, true); }
+function confirmAddCustomInsurance(pid){ const label=val('ins-new-label'); if(!label){toast('Enter a name',1);return;} const p=P(pid); p.certs=p.certs||{}; p.certs.insCustom=p.certs.insCustom||[]; const key=uid('ins'); p.certs.insCustom.push({key,label,hint:''}); save(); pushProperty(p); closeModal(); editInsurance(pid,key); }
+function removeCustomInsurance(pid,key){ const p=P(pid); p.certs=p.certs||{}; p.certs.insCustom=(p.certs.insCustom||[]).filter(x=>x.key!==key); if(p.certs.insurances) delete p.certs.insurances[key]; save(); pushProperty(p); render(); toast('Removed'); }
 function vPropertyDetail(){
   const p=P(sel); if(!p.id) return vProperties();
   const l=L(p.landlordId); const comp=propCompliance(p); const c=p.certs||{};
@@ -1976,7 +2019,7 @@ function vPropertyDetail(){
     ${lifecycleStepper(p)}
     ${tenancyChecklistPanel(p)}
     <div class="grid2">
-      <div class="panel"><div class="panel-hd"><h2>Compliance &amp; documents</h2></div><div class="panel-bd">
+      <div class="panel"><div class="panel-hd"><h2>Compliance &amp; documents</h2></div><div class="panel-bd"><details open style="margin-bottom:2px"><summary style="cursor:pointer;font-weight:700;font-size:11px;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;padding:6px 0">Safety certificates</summary><div style="padding-top:2px">
         ${certRow('gas','Gas Safety (annual)',c.gas,c.gasDocUrl)}
         ${certRow('eicr','EICR (every 5 years)',c.eicr,c.eicrDocUrl)}
         ${certRow('epc','EPC'+(c.epcRating?' · rated '+c.epcRating:''),c.epc,c.epcDocUrl)}
@@ -1984,7 +2027,8 @@ function vPropertyDetail(){
         ${(c.epcRating==='D'||c.epcRating==='E')?`<div class="note warn" style="margin-top:6px">EPC rated ${c.epcRating} — legal to let now, but EPC C becomes the minimum on 1 Oct 2030. Flag to the landlord to plan works.</div>`:''}
         ${declRow('smoke','Smoke alarms','Fit a working smoke alarm on every floor',c.smoke,c.smokeDoc,c.smokeDocUrl)}
         ${c.coNA?`<div class="doc"><div class="di" style="background:var(--off);color:#94A3B8">⛨</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">CO alarm</div><div class="faint" style="font-size:11.5px">Marked not applicable — no fixed combustion appliance</div></div><span class="pill" style="background:var(--off);color:#94A3B8">N/A</span><a href="#" onclick="toggleCoNA('${p.id}');return false" style="font-size:11px;color:var(--blue)">Applies</a></div>`:declRow('co','CO alarm','Required in any room with a fixed combustion appliance (boiler cupboard, gas fire, log burner, etc.)',c.co,c.coDoc,c.coDocUrl)}
-        ${p.tenant?(()=>{ const rec=tenantRecFor(p.id); const r=_rtrRAG(rec); return `<div class="doc"><div class="di" style="background:${r.bg};color:${r.color}">⛨</div>
+        </div></details>
+        <details open style="margin-bottom:2px"><summary style="cursor:pointer;font-weight:700;font-size:11px;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;padding:6px 0">Tenancy &amp; right-to-rent documents</summary><div style="padding-top:2px">${p.tenant?(()=>{ const rec=tenantRecFor(p.id); const r=_rtrRAG(rec); return `<div class="doc"><div class="di" style="background:${r.bg};color:${r.color}">⛨</div>
           <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Right to Rent check</div><div class="faint" style="font-size:11.5px">${rec&&rec.rtrCheckDate?'Checked '+fmtDate(rec.rtrCheckDate)+(rec.rtrResult?' · '+esc(rec.rtrResult):'')+(rec.rtrExpiry?' · expires '+fmtDate(rec.rtrExpiry):'')+(rec.rtrCheckMethod?' · via '+esc(rec.rtrCheckMethod):''):'Check before the tenancy starts'}</div></div>
           <span class="pill" style="background:${r.bg};color:${r.color}">${r.label}</span>
           ${rec&&rec.rtrDocUrl?`<button class="btn sm" onclick="viewDoc('${rec.rtrDocUrl}','Right to Rent evidence')">View${(rec.rtrDocs&&rec.rtrDocs.length>1)?' ('+rec.rtrDocs.length+')':''}</button>`:''}
@@ -2002,7 +2046,8 @@ function vPropertyDetail(){
           <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Move-in document pack</div><div class="faint" style="font-size:11.5px">${sent?'Sent '+fmtDate(rec.moveInPackSentAt)+(rec.moveInPackConfirmedAt?' · tenant confirmed receipt '+fmtDate(rec.moveInPackConfirmedAt):' · awaiting confirmation of receipt'):'Gas Safety, EICR, EPC, deposit protection info (+ RTR/Information Sheet where applicable) — bundle and send'}</div></div>
           <span class="pill" style="background:${sent?'var(--green-bg)':'var(--amber-bg)'};color:${sent?'var(--green)':'var(--amber)'}">${sent?'Sent':'Not sent'}</span>
           <button class="btn sm" onclick="openMoveInPack('${p.id}')">${sent?'Resend / manage':'Send pack'}</button></div>`; })():''}
-        <div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
+        </div></details>
+        <details open style="margin-bottom:2px"><summary style="cursor:pointer;font-weight:700;font-size:11px;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;padding:6px 0">Licensing &amp; risk assessments</summary><div style="padding-top:2px"><div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;flex:1"><input type="checkbox" style="width:auto" ${c.hmoApplicable?'checked':''} onchange="toggleHmoApplicable('${p.id}',this.checked)"> HMO / selective-licensing property <span class="faint" style="font-weight:400">(most properties don’t need this — only tick if it’s a licensed HMO or your council runs selective licensing in that area)</span></label>
         </div>
         ${c.hmoApplicable?certRow('hmo','HMO / selective licence'+(c.hmoNo?' · '+esc(c.hmoNo):''),c.hmo,c.hmoDocUrl):''}
@@ -2016,7 +2061,8 @@ function vPropertyDetail(){
           <button class="btn sm" onclick="legionellaWizard('${p.id}')">🧪 Self-assess</button>
           ${c.legionellaReportHtml?`<button class="btn sm" onclick="viewLegionellaReport('${p.id}')">View assessment</button>`:''}
         </div>
-        ${(()=>{ const rec=tenantRecFor(p.id); if(!rec) return '';
+        </div></details>
+        <details open style="margin-bottom:2px"><summary style="cursor:pointer;font-weight:700;font-size:11px;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;padding:6px 0">Tenant documents on file</summary><div style="padding-top:2px">${(()=>{ const rec=tenantRecFor(p.id); if(!rec) return '';
           return `${rec.refDocName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">📄</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Reference report</div><div class="faint" style="font-size:11.5px">${esc(rec.refDocName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.refDocUrl?`<button class="btn sm" onclick="viewDoc('${rec.refDocUrl}','Reference report')">View</button>`:''}</div>`:''}
     ${(()=>{ const ta=tenancyAgreementFor(rec.id); if(!ta) return '';
       if(ta.status==='signed') return `<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">✍</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Tenancy terms &amp; conditions (e-signed)</div><div class="faint" style="font-size:11.5px">Signed ${fmtDate(ta.tenant_signed_at)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">Signed</span><button class="btn sm" onclick="viewSignedTenancyAgreement('${p.id}')">View</button></div>`;
@@ -2026,11 +2072,11 @@ function vPropertyDetail(){
           ${rec.id1DocName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">🪪</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Photo ID — 1 of 2</div><div class="faint" style="font-size:11.5px">${esc(rec.id1DocName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.id1DocUrl?`<button class="btn sm" onclick="viewDoc('${rec.id1DocUrl}','Photo ID')">View</button>`:''}</div>`:''}
           ${rec.id2DocName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">🪪</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Photo ID — 2 of 2</div><div class="faint" style="font-size:11.5px">${esc(rec.id2DocName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.id2DocUrl?`<button class="btn sm" onclick="viewDoc('${rec.id2DocUrl}','Photo ID')">View</button>`:''}</div>`:''}
           ${(rec.addressProofDocs&&rec.addressProofDocs.length)?rec.addressProofDocs.map((d,i)=>`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">🏠</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Proof of address${rec.addressProofDocs.length>1?' ('+(i+1)+' of '+rec.addressProofDocs.length+')':''}</div><div class="faint" style="font-size:11.5px">${esc(d.name)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${d.url?`<button class="btn sm" onclick="viewDoc('${d.url}','Proof of address')">View</button>`:''}</div>`).join(''):''}`; })()}
-        <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
-          <div style="font-size:11px;font-weight:700;letter-spacing:.4px;color:var(--faint);text-transform:uppercase;margin-bottom:8px">Advisory — not legally required</div>
+        </div></details>
+        <details style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><summary style="cursor:pointer;font-size:11px;font-weight:700;letter-spacing:.4px;color:var(--faint);text-transform:uppercase">Advisory — not legally required</summary><div style="padding-top:8px">
           ${advisoryDocRow(p,'pat','PAT testing (appliances)','No blanket legal requirement in England — evidence of duty of care if the landlord has it done')}
           ${advisoryDocRow(p,'pest','Pest control treatment','Landlord-arranged treatment record, if any — evidences the property was handed over pest-free')}
-        </div>
+        </div></details>
       </div></div>
       <div class="panel"><div class="panel-hd"><h2>Tenancy</h2></div><div class="panel-bd">
         ${L(p.landlordId).service==='full'?`<div class="kv"><span class="k">Management fee</span><span class="v"><b>${propFee(p)}%</b> of rent · ${gbp(p.rent*propFee(p)/100)}/mo <a href="#" onclick="editPropFee('${p.id}');return false" style="color:var(--blue);font-weight:600;margin-left:6px">edit</a></span></div>`:''}
@@ -2054,6 +2100,7 @@ function vPropertyDetail(){
             </div>`}
       </div></div>
       ${(()=>{ const rec=tenantRecFor(p.id); return rec?msgPanel('tenant',rec.id):''; })()}
+      ${insurancePanel(p)}
       ${propDocTrailPanel(p)}
       ${pastTenanciesPanel(p)}
     </div>`;
@@ -2785,7 +2832,7 @@ function tenantWelcomeLetterHtml(rec,p){ const b=agencyBrand();
       <p>Dear ${esc(_allTenantNames(rec))},</p>
       <p>We're writing to let you know that <b>${esc(b.name)}</b> is now managing <b>${esc(p.address)}</b> on behalf of your landlord. If your tenancy has just come under our management, nothing about your tenancy terms changes — this letter is simply to introduce ourselves and explain how things work going forward.</p>
       <p><b>Your point of contact</b><br>${esc(b.agent)}<br>${esc(b.email)}</p>
-      <p><b>Reporting a maintenance issue</b><br>Please log any repairs or maintenance issues through your tenant portal, or email us directly — we'll acknowledge it and keep you updated on progress.</p>
+      <p><b>Reporting a maintenance issue</b><br>You'll receive a separate email with a link to your tenant portal, where you can log any repairs or maintenance issues directly (please keep an eye on your inbox and junk folder). You're also welcome to email us — we'll acknowledge it and keep you updated on progress.</p>
       <p><b>Rent and other queries</b><br>Your rent amount and due date are unchanged. For anything else — rent, your tenancy, or general questions — just get in touch using the details above.</p>
       <p>We look forward to looking after your home.</p>
       <p>Kind regards,<br>${(b.agent&&b.agent!==b.name)?esc(b.agent)+'<br>':''}${esc(b.name)}</p>
@@ -3675,8 +3722,10 @@ function agreementFor(lid){ return (S.agreements||[]).filter(a=>a.landlord_id===
 async function agencyEmail(to,subject,html,attachmentUrls){
   const headers={'Content-Type':'application/json'};
   if(window._sessionToken) headers['Authorization']='Bearer '+window._sessionToken;
+  const brand=agencyBrand().name;
+  const taggedSubject=(brand&&subject&&!subject.startsWith('['+brand+']'))?`[${brand}] ${subject}`:subject;
   try{
-    const res=await fetch(AG_EDGE,{method:'POST',headers,body:JSON.stringify({type:'send_email',to,subject,html,bcc:'beaconresidentials@gmail.com',from:agencyBrand().name+' <documents@nexlet.co.uk>',...(attachmentUrls&&attachmentUrls.length?{attachment_urls:attachmentUrls}:{})})});
+    const res=await fetch(AG_EDGE,{method:'POST',headers,body:JSON.stringify({type:'send_email',to,subject:taggedSubject,html,bcc:'beaconresidentials@gmail.com',from:brand+' <documents@nexlet.co.uk>',...(attachmentUrls&&attachmentUrls.length?{attachment_urls:attachmentUrls}:{})})});
     const data=await res.json().catch(()=>({}));
     if(!res.ok){ console.error('[agencyEmail] failed',res.status,data); return {ok:false,error:data.error||data.message||('HTTP '+res.status)}; }
     return {ok:true};
@@ -4204,13 +4253,24 @@ function _thisMonth(){ return new Date().toLocaleDateString('en-GB',{month:'long
 const TEMPLATES=[
   {key:'welcome',group:'Onboarding',title:'Landlord welcome letter',icon:'👋',ai:true,needProp:false,auto:true,
     fields:[],
-    build:(l,p,b)=>({subject:`Welcome to ${b.name}`,body:`<p>Dear ${esc(landlordName(l))},</p>
-      <p>Welcome to ${esc(b.name)} — thank you for instructing us to manage your property. We're delighted to be looking after your ${l.service==='letonly'?'letting':'property management'} and will act with care, transparency and full compliance at every step.</p>
-      <p>Here's what happens next: we complete your compliance checks, prepare marketing (or begin management), and keep you updated throughout. Your dedicated point of contact is ${esc(b.agent)}, reachable at ${esc(b.email)}.</p>
-      <p>You can expect clear monthly statements, prompt handling of maintenance, and proactive reminders before any certificate expires. We hold ${b.redress?('membership of '+esc(b.redress)):'approved redress-scheme membership'} for your protection.</p>
-      <p>One thing to flag now so it's never a surprise later: move-in and move-out inventory reports are billed separately from your management fee (set out in Clause 5b), at roughly 65% of what an independent inventory clerk would charge — we run them in-house with photographic evidence and AI-assisted condition comparison.</p>
-      <p>Two optional items worth knowing about: PAT testing of appliances and pest control treatment aren't legally required for standard lets, but if you already have them done, we're happy to keep the records on file alongside your other certificates — just let us know.</p>
-      <p>If you have any questions at all, simply reply to this email. We look forward to a long and successful working relationship.</p>
+    build:(l,p,b)=>({subject:`Welcome to ${b.name} — what happens next`,body:`<p>Dear ${esc(landlordName(l))},</p>
+      <p>Welcome to ${esc(b.name)} — thank you for instructing us to manage your ${l.service==='letonly'?'letting':'property'}. Your dedicated point of contact is <b>${esc(b.agent)}</b>, reachable at ${esc(b.email)}. We hold ${b.redress?('membership of '+esc(b.redress)):'approved redress-scheme membership'} for your protection.</p>
+      <p style="font-weight:700;margin:18px 0 8px;color:#0B1E3D">What happens next</p>
+      <p style="margin:0 0 4px"><b>1. Compliance certificates</b></p>
+      <ul style="padding-left:18px;line-height:1.8;margin-top:2px"><li>We'll gather or arrange the certificates the property needs before it's marketed or handed over — EPC, Gas Safety Certificate (where applicable), EICR, and working smoke/CO alarms</li><li>We'll flag anything missing or close to expiry, and remind you well ahead of renewal dates</li></ul>
+      <p style="margin:12px 0 4px"><b>2. Marketing &amp; finding a tenant</b> <span style="font-weight:400;color:#7A8FA6">(if the property needs a tenant)</span></p>
+      <ul style="padding-left:18px;line-height:1.8;margin-top:2px"><li>Professional listing across the major portals, accompanied viewings, and a right to rent check plus full referencing on any applicant</li><li>You'll be kept updated on interest and offers as they come in</li></ul>
+      <p style="margin:12px 0 4px"><b>3. Tenancy agreement &amp; move-in</b></p>
+      <ul style="padding-left:18px;line-height:1.8;margin-top:2px"><li>Once a tenant is approved, we prepare and send the tenancy agreement for e-signature</li><li>The deposit is protected in a government-approved scheme within 30 days of receipt, and rent is collected before keys are released</li></ul>
+      <p style="margin:12px 0 4px"><b>4. Ongoing management</b></p>
+      <ul style="padding-left:18px;line-height:1.8;margin-top:2px"><li>Clear monthly statements, rent collection, and prompt coordination of any maintenance</li><li>Proactive reminders before certificates expire, so nothing lapses unnoticed</li></ul>
+      <p style="margin:12px 0 4px"><b>5. Your legal responsibilities</b></p>
+      <ul style="padding-left:18px;line-height:1.8;margin-top:2px"><li>We'll check whether your property needs to be registered on the Private Rented Sector Database, and confirm once it is</li><li>Where we hold client money on your behalf, we're covered by Client Money Protection — we'll confirm the scheme and certificate</li><li>We'll arrange a Legionella risk assessment as part of your compliance checks — a duty of care, not just a certificate</li><li>If the property is a licensed HMO or falls under selective licensing in its area, we'll confirm the licence is in place before letting</li></ul>
+      <p style="margin:12px 0 4px"><b>6. Fees</b></p>
+      <ul style="padding-left:18px;line-height:1.8;margin-top:2px"><li>Management fee as agreed in your terms of business</li><li>Move-in and move-out inventory reports are billed separately (Clause 5b), at roughly 65% of what an independent inventory clerk would charge — run in-house with photographic evidence and AI-assisted condition comparison</li></ul>
+      <p style="margin:12px 0 4px"><b>7. We're here to help — including with cover</b></p>
+      <ul style="padding-left:18px;line-height:1.8;margin-top:2px"><li>PAT testing and pest control treatment aren't legally required for standard lets — if you already have them done, we'll keep the records on file alongside your other certificates</li><li>If it's useful, we can also put you in touch with providers for rent guarantee &amp; legal expenses cover, landlord buildings/contents insurance, or boiler cover — just ask, no obligation</li><li>We're not a regulated financial adviser, so we can put you in touch with a provider but can't advise on which policy suits you best. As with any introduction of this kind, we may receive a referral fee from the provider concerned</li></ul>
+      <p style="margin-top:18px">If you have any questions at any stage, simply reply to this email. We look forward to a long and successful working relationship.</p>
       <p>Kind regards,<br>${(b.agent&&b.agent!==b.name)?esc(b.agent)+'<br>':''}${esc(b.name)}</p>`})},
   {key:'rent_statement',group:'Statements & requests',title:'Monthly rent statement / remittance',icon:'💷',ai:false,needProp:true,
     fields:[{k:'month',label:'Statement period',type:'text',def:()=>_thisMonth()},{k:'received',label:'Rent received (£)',type:'number',def:p=>p&&p.rent||0},{k:'deductions',label:'Deductions / fees (£)',type:'number',def:()=>''},{k:'note',label:'Note (optional)',type:'text',def:()=>''}],
