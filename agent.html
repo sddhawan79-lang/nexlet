@@ -5043,7 +5043,8 @@ function _resizeImg(file,maxW){ return new Promise((res)=>{ const img=new Image(
 // Fetches a photo (storage URL, or a legacy inline data: URL from before storage upload) as base64 for the AI proxy.
 async function _urlToB64(url){
   if(url.startsWith('data:')){ return {b64:url.split(',')[1], mime:url.split(';')[0].split(':')[1]}; }
-  const res=await fetch(url); const blob=await res.blob();
+  const signed=await _signedUrlFor(url);
+  const res=await fetch(signed||url); const blob=await res.blob();
   const b64=await new Promise(r=>{ const fr=new FileReader(); fr.onload=()=>r(String(fr.result).split(',')[1]); fr.readAsDataURL(blob); });
   return {b64, mime:blob.type||'image/jpeg'};
 }
@@ -5051,9 +5052,10 @@ async function _imgPart(u){ const {b64,mime}=await _urlToB64(u); return {type:'i
 function openInventory(){
   const ts=_activeTenants(); if(!ts.length){ toast('Set up a tenant first',1); return; }
   const opts=ts.map(t=>`<option value="${t.id}">${esc(t.name)} — ${esc((P(t.propertyId)||{}).address||'')}</option>`).join('');
-  modal('New inventory', `<div class="fg"><label>Tenancy</label><select id="iv2-t">${opts}</select></div><div class="fg"><label>Deposit held (£)</label><input id="iv2-dep" type="number"></div>`,
+  modal('New inventory', `<div class="fg"><label>Tenancy</label><select id="iv2-t" onchange="_iv2FillDeposit()">${opts}</select></div><div class="fg"><label>Deposit held (£)</label><input id="iv2-dep" type="number" value="${ts[0]?ts[0].deposit||'':''}"><div class="faint" style="font-size:11px;margin-top:2px">Auto-filled from the tenancy record — adjust if it's changed</div></div>`,
     `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="createInventory2()">Create</button>`, true);
 }
+function _iv2FillDeposit(){ const t=(S.tenants||[]).find(x=>x.id===val('iv2-t'))||{}; document.getElementById('iv2-dep').value=t.deposit||''; }
 function _chargeInvFee(kind,p,l){ const fee=kind==='movein'?(S.agency||{}).invMoveinFee:(S.agency||{}).invMoveoutFee; if(!fee||!l||!l.id) return;
   l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:(kind==='movein'?'Move-in inventory & check-in':'Move-out & check-out')+' report fee of '+gbp(fee)+' charged — '+(p.address||'')+' (per Clause 5b of the management agreement)'});
   pushLandlord(l);
@@ -5295,9 +5297,16 @@ async function generateInvReport(vid,type){
         promptTxt=`UK tenancy deposit adjudicator, writing evidence for a possible dispute. Compare CHECK-IN vs ${cmpLabel.toUpperCase()} photos for "${r.room} — ${r.item}". Notes: check-in "${r.checkin.note||'none'}", ${cmpLabel} "${toSet.note||'none'}". Classify as fair_wear|damage|cleaning. Name the SPECIFIC change observed (not "some wear" or "looks worse") — what changed, where, and how that goes beyond (or stays within) fair wear and tear for the tenancy length. ${(type==='moveout'||type==='precheckout')?'Do NOT calculate any final charge — that is computed separately, deterministically, from your cost/age estimate (apportioned by remaining useful life, never full replacement cost).':''} Return ONLY JSON: {"classification":"fair_wear|damage|cleaning","summary":"one to three specific, factual sentences an adjudicator could act on"${costAsk}}`;
         content=[...(await Promise.all(r.checkin.photos.map(_imgPart))),{type:'text',text:'CHECK-IN above.'},...(await Promise.all(toSet.photos.map(_imgPart))),{type:'text',text:cmpLabel.toUpperCase()+' above.\n\n'+promptTxt}];
       }
-      const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:280,messages:[{role:'user',content}]})});
-      if(res.status===402){ quotaHit=true; toast('AI allowance reached partway through — report saved for the rooms already analysed',1); break; }
-      const data=await res.json();
+      let res,data;
+      for(let attempt=0;attempt<3;attempt++){
+        res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:280,messages:[{role:'user',content}]})});
+        if(res.status===402){ quotaHit=true; break; }
+        if(res.ok){ data=await res.json(); break; }
+        data=await res.json().catch(()=>({}));
+        if(res.status>=500&&attempt<2){ await new Promise(rs=>setTimeout(rs,800*(attempt+1))); continue; }
+        break;
+      }
+      if(quotaHit){ toast('AI allowance reached partway through — report saved for the rooms already analysed',1); break; }
       if(!res.ok){ console.error('generateInvReport error',res.status,data); results.push({room:r.room,item:r.item,classification:type==='movein'?'baseline':'fair_wear',charge:0,summary:'AI error ('+res.status+') — review manually.',checkinPhotos:r.checkin.photos.slice(0,2),checkinNote:r.checkin.note||'',stagePhotos:toSet?toSet.photos.slice(0,2):[],stageNote:toSet?toSet.note||'':'',stageLabel:cmpLabel}); continue; }
       const txt=((data.content&&data.content[0]&&data.content[0].text)||'').replace(/```json|```/g,'').trim();
       let parsed; try{ parsed=JSON.parse(txt); }catch(pe){ console.error('generateInvReport: bad JSON',txt); parsed=null; }
