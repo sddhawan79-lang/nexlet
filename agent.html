@@ -128,6 +128,7 @@ h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px
 .kv .v{color:var(--txt);font-weight:500}
 .feebox{display:flex;align-items:center;gap:8px;background:var(--off);border:1px solid var(--border);border-radius:9px;padding:6px 10px}
 .feebox input{width:64px;border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-family:inherit;font-size:14px;font-weight:700;text-align:center;color:var(--navy)}
+@keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
@@ -3184,7 +3185,7 @@ function vSettings(){
         <div class="fg"><label>Move-in inventory &amp; check-in report (£)</label><input id="set-invmoveinfee" type="number" value="${a.invMoveinFee||''}" placeholder="e.g. 75"></div>
         <div class="fg"><label>Move-out &amp; check-out report (£)</label><input id="set-invmoveoutfee" type="number" value="${a.invMoveoutFee||''}" placeholder="e.g. 65"></div>
       </div>
-      <div class="hint" style="margin:-6px 0 14px;color:var(--faint)">Independent AIIC clerks typically charge £110–120 for a move-in inventory/check-in and £95–100 for a move-out check-out. These defaults price the agency's photo + AI-assisted report at roughly 65% of that market rate.</div>
+      <div class="hint" style="margin:-6px 0 14px;color:var(--faint)">Independent AIIC clerks charge £110–120 for a move-in inventory/check-in and £95–100 for a move-out check-out — these defaults price the agency's report at that same professional market rate, reflecting the full photographic and written schedule of condition it now produces.</div>
       <div class="hint" style="margin:-6px 0 14px;color:var(--faint)">These ancillary fees are itemised in Clause 5b of the management agreement so they're contractually agreed upfront. Leave any at £0 to omit it from the contract. The notice-serving fee is charged automatically to the landlord each time you generate a Section 8 or Section 13 notice.</div>
       <div class="fg"><label>Tenant referencing partner</label><select id="set-ref">${partnerOpts}</select>
         <div class="hint">Powers the credit/Open-Banking checks. ~£15–25 per tenant, usually passed to the landlord. No FCA licence needed on your side — the partner is the regulated party.</div></div>
@@ -4272,7 +4273,7 @@ const TEMPLATES=[
       <p style="margin:12px 0 4px"><b>5. Your legal responsibilities</b></p>
       <ul style="padding-left:18px;line-height:1.8;margin-top:2px"><li>We'll check whether your property needs to be registered on the Private Rented Sector Database, and confirm once it is</li><li>Where we hold client money on your behalf, we're covered by Client Money Protection — we'll confirm the scheme and certificate</li><li>We'll arrange a Legionella risk assessment as part of your compliance checks — a duty of care, not just a certificate</li><li>If the property is a licensed HMO or falls under selective licensing in its area, we'll confirm the licence is in place before letting</li></ul>
       <p style="margin:12px 0 4px"><b>6. Fees</b></p>
-      <ul style="padding-left:18px;line-height:1.8;margin-top:2px"><li>Management fee as agreed in your terms of business</li><li>Move-in and move-out inventory reports are billed separately (Clause 5b), at roughly 65% of what an independent inventory clerk would charge — run in-house with photographic evidence and AI-assisted condition comparison</li></ul>
+      <ul style="padding-left:18px;line-height:1.8;margin-top:2px"><li>Management fee as agreed in your terms of business</li><li>Move-in and move-out inventory reports are billed separately (Clause 5b), at standard industry market rates — a full room-by-room schedule of condition with photographic evidence, meter readings, key handover, and tenant acknowledgement</li></ul>
       <p style="margin:12px 0 4px"><b>7. We're here to help — including with cover</b></p>
       <ul style="padding-left:18px;line-height:1.8;margin-top:2px"><li>PAT testing and pest control treatment aren't legally required for standard lets — if you already have them done, we'll keep the records on file alongside your other certificates</li><li>If it's useful, we can also put you in touch with providers for rent guarantee &amp; legal expenses cover, landlord buildings/contents insurance, or boiler cover — just ask, no obligation</li><li>We're not a regulated financial adviser, so we can put you in touch with a provider but can't advise on which policy suits you best. As with any introduction of this kind, we may receive a referral fee from the provider concerned</li></ul>
       <p style="margin-top:18px">If you have any questions at any stage, simply reply to this email. We look forward to a long and successful working relationship.</p>
@@ -5113,6 +5114,35 @@ function _apportionCharge(classification,estCost,ageAtCheckin,lifeYears,tenancyM
 function _invActiveTab(vid){ window._invTabs=window._invTabs||{}; return window._invTabs[vid]||0; }
 function _invSetTab(vid,i){ window._invTabs=window._invTabs||{}; window._invTabs[vid]=i; render(); }
 function _toggleFieldMode(vid){ window._invField=window._invField||{}; window._invField[vid]=!window._invField[vid]; render(); }
+function _invMetaPanel(v){
+  const m=v.meters||{}; const k=v.keyHandover||{}; const ack=v.tenantAck||{};
+  return `<details class="tree-node" style="margin:0 0 14px"><summary><span class="tree-caret">▸</span><span style="flex:1;font-weight:700;font-size:11px;color:var(--navy);text-transform:uppercase;letter-spacing:.4px">Meter readings, keys &amp; tenant sign-off</span>${ack.confirmed?'<span class="pill" style="background:var(--green-bg);color:var(--green)">✓ Tenant confirmed</span>':''}</summary>
+    <div class="tree-children" style="padding:12px 14px">
+      <div class="faint" style="font-size:11px;margin-bottom:10px">Recorded at check-in — adjudicators treat meter readings and key handover as evidence points that prevent end-of-tenancy disputes.</div>
+      <div class="grid3" style="margin-bottom:10px">
+        <div class="fg"><label>Gas meter</label><input value="${esc(m.gas||'')}" onchange="_setInvMeta('${v.id}','meters','gas',this.value)"></div>
+        <div class="fg"><label>Electricity meter</label><input value="${esc(m.electricity||'')}" onchange="_setInvMeta('${v.id}','meters','electricity',this.value)"></div>
+        <div class="fg"><label>Water meter</label><input value="${esc(m.water||'')}" onchange="_setInvMeta('${v.id}','meters','water',this.value)"></div>
+      </div>
+      <div class="grid2" style="margin-bottom:10px">
+        <div class="fg"><label>Keys/fobs handed over</label><input value="${esc(k.count||'')}" placeholder="e.g. 2 front door, 1 fob" onchange="_setInvMeta('${v.id}','keyHandover','count',this.value)"></div>
+        <div class="fg"><label>Handover note</label><input value="${esc(k.note||'')}" onchange="_setInvMeta('${v.id}','keyHandover','note',this.value)"></div>
+      </div>
+      <div style="border-top:1px solid var(--border);padding-top:10px">
+        <div class="faint" style="font-size:11px;margin-bottom:6px">Tenant acknowledgement of the move-in condition report — a signed/logged acknowledgement close to move-in is the single strongest piece of evidence at adjudication.</div>
+        ${ack.confirmed?`<div class="note" style="font-size:12px">✓ Confirmed by <b>${esc(ack.name||'tenant')}</b> via ${esc(ack.method||'—')} on ${fmtDate(ack.date)} <a href="javascript:void(0)" onclick="_clearTenantAck('${v.id}')" style="margin-left:8px">undo</a></div>`
+          :`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+            <div class="fg" style="margin:0"><label>Tenant name</label><input id="ack-name-${v.id}" style="width:160px"></div>
+            <div class="fg" style="margin:0"><label>Confirmed via</label><select id="ack-method-${v.id}"><option>Email reply</option><option>In person</option><option>Phone</option><option>Portal</option></select></div>
+            <button class="btn sm navy" onclick="_logTenantAck('${v.id}')">Log confirmation</button>
+          </div>`}
+      </div>
+    </div></details>`;
+}
+function _setInvMeta(vid,group,key,value){ const v=(S.inventories2||[]).find(x=>x.id===vid); v[group]=v[group]||{}; v[group][key]=value; pushInv2(v); }
+function _logTenantAck(vid){ const v=(S.inventories2||[]).find(x=>x.id===vid); const name=val('ack-name-'+vid); if(!name){ toast('Enter the tenant\'s name',1); return; }
+  v.tenantAck={confirmed:true,name,method:val('ack-method-'+vid),date:today()}; pushInv2(v); render(); toast('✓ Logged'); }
+function _clearTenantAck(vid){ const v=(S.inventories2||[]).find(x=>x.id===vid); v.tenantAck={}; pushInv2(v); render(); }
 function _photoStrip(vid,i,stage,visitIdx,photos,big){
   const key=vid+'|'+i+'|'+stage+'|'+visitIdx; window._invPhotoExpand=window._invPhotoExpand||{};
   const list=photos||[]; const LIMIT=8; const expanded=window._invPhotoExpand[key]||list.length<=LIMIT;
@@ -5188,7 +5218,9 @@ function vInventoryDetail(){
       <div class="kpi"><div class="l">Return to tenant</div><div class="v" style="color:var(--green)">${money2(ret)}</div></div>
       <div class="kpi"><div class="l">Rooms</div><div class="v">${v.rooms.length}</div></div>
     </div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${tabs}${fieldOn?'':`<button class="btn sm" onclick="addRoom('${v.id}')">＋ Room</button>`}</div>
+    ${_invMetaPanel(v)}
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${tabs}${fieldOn?'':`<button class="btn sm" onclick="addRoom('${v.id}')">＋ Item</button>`}</div>
+    ${fieldOn?'':'<div class="faint" style="font-size:11px;margin:-6px 0 10px">For a defensible schedule of condition, add a separate item per fixture/surface — walls &amp; ceiling, flooring, each appliance — not just one entry per room.</div>'}
     <div style="display:flex;justify-content:flex-end;margin-bottom:6px"><button class="btn sm" onclick="_toggleFieldMode('${v.id}')">${fieldOn?'💻 Desktop view':'📱 Field mode — easier on phone'}</button></div>
     <div class="panel"><div class="panel-bd">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:12px">
@@ -5212,19 +5244,21 @@ function vInventoryDetail(){
         <button class="btn sm" onclick="removeRoom('${v.id}',${activeIdx})" style="color:var(--red)">Remove room</button>
       </div>
     </div></div>
+    ${(window._invGenProgress&&window._invGenProgress.vid===v.id)?`<div class="note" style="margin-top:14px;display:flex;align-items:center;gap:8px"><span class="spin" style="width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--navy);border-radius:50%;display:inline-block;animation:spin .8s linear infinite"></span>Generating ${window._invGenProgress.stageLabel} report — analysing room ${window._invGenProgress.i} of ${window._invGenProgress.total}…</div>`:''}
     <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
-      <button class="btn navy" ${_invHasCheckin(v)?'':'disabled title="Add check-in photos first"'} onclick="generateInvReport('${v.id}','movein')">✦ Move-in report</button>
-      <button class="btn navy" ${_invHasVisit(v)?'':'disabled title="Add mid-tenancy check photos first"'} onclick="generateInvReport('${v.id}','midterm')">✦ Mid-tenancy report</button>
-      <button class="btn" ${(_invHasVisit(v)||_invHasCheckout(v))?'':'disabled title="Add a visit or check-out photos first"'} onclick="generateInvReport('${v.id}','precheckout')" title="Advisory snag list, sent before the final check-out — gives the tenant a chance to fix issues and avoid being charged">📸 Pre-checkout snag check</button>
-      <button class="btn navy" ${_invHasCheckout(v)?'':'disabled title="Add check-out photos first"'} onclick="generateInvReport('${v.id}','moveout')">✦ Move-out report</button>
+      <button class="btn navy" ${(_invHasCheckin(v)&&!_invGenBusy(v.id))?'':'disabled title="Add check-in photos first"'} onclick="generateInvReport('${v.id}','movein')">✦ Move-in report</button>
+      <button class="btn navy" ${(_invHasVisit(v)&&!_invGenBusy(v.id))?'':'disabled title="Add mid-tenancy check photos first"'} onclick="generateInvReport('${v.id}','midterm')">✦ Mid-tenancy report</button>
+      <button class="btn" ${((_invHasVisit(v)||_invHasCheckout(v))&&!_invGenBusy(v.id))?'':'disabled title="Add a visit or check-out photos first"'} onclick="generateInvReport('${v.id}','precheckout')" title="Advisory snag list, sent before the final check-out — gives the tenant a chance to fix issues and avoid being charged">📸 Pre-checkout snag check</button>
+      <button class="btn navy" ${(_invHasCheckout(v)&&!_invGenBusy(v.id))?'':'disabled title="Add check-out photos first"'} onclick="generateInvReport('${v.id}','moveout')">✦ Move-out report</button>
       ${v.reports&&v.reports.length?`<button class="btn" onclick="viewInvReports('${v.id}')">View reports (${v.reports.length})</button>`:''}
     </div>`;
 }
+function _invGenBusy(vid){ return !!(window._invGenProgress&&window._invGenProgress.vid===vid); }
 function _invHasCheckin(v){ return v.rooms.some(r=>_ensureRoomShape(r).checkin.photos.length); }
 function _invHasVisit(v){ return v.rooms.some(r=>{ _ensureRoomShape(r); return r.checkin.photos.length&&r.visits.length&&r.visits[r.visits.length-1].photos.length; }); }
 function _invHasCheckout(v){ return v.rooms.some(r=>{ _ensureRoomShape(r); const lv=r.visits.length?r.visits[r.visits.length-1]:null; return r.checkin.photos.length&&((lv&&lv.photos.length)||r.checkout.photos.length); }); }
-function addRoom(vid){ const v=(S.inventories2||[]).find(x=>x.id===vid); const room=prompt('Room (e.g. Living room)'); if(!room)return; const item=prompt('Item (e.g. Carpet)')||'Item';
-  v.rooms.push({room,item,checkin:{photos:[],note:''},checkout:{photos:[],note:''},visits:[],classification:'',charge:0,reasoning:'',breakdown:'',estCost:0,ageAtCheckin:0,lifeYears:_usefulLife(item)});
+function addRoom(vid){ const v=(S.inventories2||[]).find(x=>x.id===vid); const room=prompt('Room (e.g. Living room)'); if(!room)return; const item=prompt('Item or surface (e.g. Carpet, Walls & ceiling, Sofa) — add one entry per item/surface for a full schedule of condition')||'Item';
+  v.rooms.push({room,item,checkin:{photos:[],note:'',condition:''},checkout:{photos:[],note:''},visits:[],classification:'',charge:0,reasoning:'',breakdown:'',estCost:0,ageAtCheckin:0,lifeYears:_usefulLife(item)});
   window._invTabs=window._invTabs||{}; window._invTabs[vid]=v.rooms.length-1; pushInv2(v); render(); }
 function removeRoom(vid,i){ const v=(S.inventories2||[]).find(x=>x.id===vid); v.rooms.splice(i,1);
   window._invTabs=window._invTabs||{}; if(window._invTabs[vid]>=v.rooms.length) window._invTabs[vid]=Math.max(0,v.rooms.length-1);
@@ -5272,6 +5306,7 @@ async function aiCompareItem(vid,i){
 async function generateInvReport(vid,type){
   const v=(S.inventories2||[]).find(x=>x.id===vid); if(!v) return;
   if(!window._sessionToken){ toast('AI report needs a live login',1); return; }
+  if(_invGenBusy(vid)){ toast('A report is already generating for this inventory',1); return; }
   const p=P(v.propertyId)||{}; const t=(S.tenants||[]).find(x=>x.id===v.tenantId)||{};
   v.rooms.forEach(_ensureRoomShape);
   let eligible,stageLabel;
@@ -5281,8 +5316,10 @@ async function generateInvReport(vid,type){
   else { eligible=v.rooms.filter(r=>{ const lv=r.visits.length?r.visits[r.visits.length-1]:null; return r.checkin.photos.length&&((lv&&lv.photos.length)||r.checkout.photos.length); }); stageLabel='move-out'; }
   if(!eligible.length){ toast(type==='movein'?'Add check-in photos to at least one room first':'Add photos for this stage to at least one room first',1); return; }
   toast('✦ Generating '+stageLabel+' report — this can take a moment…');
+  window._invGenProgress={vid,type,stageLabel,i:0,total:eligible.length}; render();
   const results=[]; let quotaHit=false;
   for(const r of eligible){
+    window._invGenProgress={vid,type,stageLabel,i:results.length+1,total:eligible.length}; render();
     if(quotaHit) break;
     const lv=r.visits.length?r.visits[r.visits.length-1]:null;
     const toSet=type==='movein'?null:(type==='midterm'?lv:((lv&&lv.photos.length)?lv:r.checkout));
@@ -5290,7 +5327,7 @@ async function generateInvReport(vid,type){
     try{
       let content,promptTxt;
       if(type==='movein'){
-        promptTxt=`UK letting agent move-in condition report, written as evidence for a future deposit dispute. Describe the condition of "${r.room} — ${r.item}" from these ${r.checkin.photos.length} check-in photo(s). Note: "${r.checkin.note||'none'}". Be specific and factual — name the material/colour/finish where visible, and explicitly record any existing marks, wear, damage or cleanliness issues visible in the photos (so the tenant is not later charged for them). Avoid vague filler like "good condition" or "as expected" with no detail — an adjudicator needs a description precise enough to compare against the check-out. Return ONLY JSON: {"summary":"one or two sentences, specific and evidential"}`;
+        promptTxt=`UK letting agent move-in condition report, written as evidence for a future deposit dispute. Describe the condition of "${r.room} — ${r.item}" from these ${r.checkin.photos.length} check-in photo(s). Note: "${r.checkin.note||'none'}". Be specific and factual — name the material/colour/finish where visible, and explicitly record any existing marks, wear, damage or cleanliness issues visible in the photos (so the tenant is not later charged for them). Avoid vague filler like "good condition" or "as expected" with no detail — an adjudicator needs a description precise enough to compare against the check-out. Rate overall condition using ONLY one of these standard terms: "New", "Good", "Fair wear and tear", "Worn", "Damaged". Return ONLY JSON: {"condition":"one of the terms above","summary":"one or two sentences, specific and evidential"}`;
         content=[...(await Promise.all(r.checkin.photos.map(_imgPart))),{type:'text',text:promptTxt}];
       } else {
         const costAsk=(type==='moveout'||type==='precheckout')?', "estimatedCost":number (like-for-like repair/replacement cost in GBP, only if damage/cleaning), "ageAtCheckinYears":number (how old the item looked AT CHECK-IN, 0=new)':'';
@@ -5321,23 +5358,24 @@ async function generateInvReport(vid,type){
         charge=ap.charge; breakdown=ap.breakdown;
         if(type==='moveout'){ r.lifeYears=lifeYears; r.ageAtCheckin=ageAtCheckin; r.estCost=estCost; }
       }
-      const entry={room:r.room,item:r.item,classification:cls,summary:(parsed&&parsed.summary)||'Could not read AI response — review manually.',charge,breakdown,checkinPhotos:r.checkin.photos.slice(0,2),checkinNote:r.checkin.note||'',stagePhotos:toSet?toSet.photos.slice(0,2):[],stageNote:toSet?toSet.note||'':'',stageLabel:cmpLabel};
+      const entry={room:r.room,item:r.item,classification:cls,condition:(parsed&&parsed.condition)||'',summary:(parsed&&parsed.summary)||'Could not read AI response — review manually.',charge,breakdown,checkinPhotos:r.checkin.photos.slice(0,2),checkinNote:r.checkin.note||'',stagePhotos:toSet?toSet.photos.slice(0,2):[],stageNote:toSet?toSet.note||'':'',stageLabel:cmpLabel};
       results.push(entry);
       if(type==='moveout'){ r.classification=entry.classification; r.charge=entry.charge; r.reasoning=entry.summary; r.breakdown=breakdown; }
     }catch(e){ console.error('generateInvReport exception',e); results.push({room:r.room,item:r.item,classification:'fair_wear',charge:0,summary:'Could not analyse ('+(e.message||e)+').',checkinPhotos:r.checkin.photos.slice(0,2),checkinNote:r.checkin.note||'',stagePhotos:toSet?toSet.photos.slice(0,2):[],stageNote:toSet?toSet.note||'':'',stageLabel:cmpLabel}); }
   }
-  if(!results.length){ toast('AI report failed — check the console for details',1); return; }
+  if(!results.length){ toast('AI report failed — check the console for details',1); window._invGenProgress=null; render(); return; }
   if(type==='moveout') v.totalDeduction=v.rooms.reduce((s,x)=>s+(x.charge||0),0);
   const indicativeTotal=results.reduce((s,x)=>s+(x.charge||0),0);
   v.reports=v.reports||[];
   v.reports.unshift({id:uid('ir'),type,date:today(),results,totalDeduction:type==='moveout'?v.totalDeduction:(type==='precheckout'?indicativeTotal:0),depositHeld:v.depositHeld||0,checkinDate:t.start||'',remedyDeadline:type==='precheckout'?(t.end||''):''});
   if(type==='movein'&&v.status==='draft') v.status='in-progress';
   if(type==='moveout'){ v.status='complete'; const p2=P(v.propertyId)||{}; _chargeInvFee('moveout',p2,L(p2.landlordId)); }
+  window._invGenProgress=null;
   pushInv2(v); render();
   toast('✓ '+({movein:'Move-in',midterm:'Mid-tenancy',precheckout:'Pre-checkout snag',moveout:'Move-out'}[type])+' report generated');
 }
 function _monthsBetween(a,b){ if(!a||!b) return null; return Math.max(0,Math.round((new Date(b)-new Date(a))/(1000*60*60*24*30))); }
-function _invReportHtml(r,p,t){
+function _invReportHtml(r,p,t,v){
   const clsLabel={fair_wear:'Fair wear & tear',damage:'Tenant damage',cleaning:'Cleaning needed',baseline:'Noted'};
   const clsColor={fair_wear:'#1B7A4B',damage:'#C0392B',cleaning:'#D98324',baseline:'#5B6473'};
   const typeTitle={movein:'Move-in condition report',midterm:'Mid-tenancy inspection report',precheckout:'Pre-checkout snag list',moveout:'Move-out & deposit deduction schedule'}[r.type];
@@ -5347,6 +5385,11 @@ function _invReportHtml(r,p,t){
     ?`<div>Recorded: <b style="color:#fff">${fmtDate(r.date)}</b></div>`
     :`<div>Check-in: <b style="color:#fff">${r.checkinDate?fmtDate(r.checkinDate):'—'}</b></div><div>${r.type==='moveout'?'Check-out':r.type==='precheckout'?'Inspected':'Inspection'}: <b style="color:#fff">${fmtDate(r.date)}</b></div>${months!=null?`<div>Tenancy length: <b style="color:#fff">${months} months</b></div>`:''}`;
   const remedyBanner=(r.type==='precheckout')?`<div style="background:#FEF2E7;border-bottom:1px solid #E2E5EA;padding:12px 24px;font-size:11.5px;color:#B86E20;line-height:1.6"><b>Advisory only — not a final deduction.</b> These items can still be fixed by the tenant${r.remedyDeadline?' before <b>'+fmtDate(r.remedyDeadline)+'</b>':' before check-out'} to avoid being charged at move-out.</div>`:'';
+  const metaBanner=(r.type==='movein'&&v)?(()=>{ const m=v.meters||{}; const k=v.keyHandover||{}; const ack=v.tenantAck||{};
+    const parts=[]; if(m.gas||m.electricity||m.water) parts.push('Meters — '+[m.gas&&'Gas: '+esc(m.gas),m.electricity&&'Electricity: '+esc(m.electricity),m.water&&'Water: '+esc(m.water)].filter(Boolean).join(' · '));
+    if(k.count) parts.push('Keys handed over — '+esc(k.count)+(k.note?' ('+esc(k.note)+')':''));
+    if(!parts.length&&!ack.confirmed) return '';
+    return `<div style="padding:12px 24px;border-bottom:1px solid #EEF1F5;font-size:11.5px;color:#475569;line-height:1.6">${parts.map(x=>'<div>'+x+'</div>').join('')}${ack.confirmed?`<div style="margin-top:4px;color:#1B7A4B;font-weight:700">✓ Tenant confirmed accurate — ${esc(ack.name)}, via ${esc(ack.method)}, ${fmtDate(ack.date)}</div>`:`<div style="margin-top:4px;color:#B86E20">Awaiting tenant acknowledgement of this report</div>`}</div>`; })():'';
   const money=(r.type==='moveout'||r.type==='precheckout')?`<div style="display:grid;grid-template-columns:repeat(3,1fr);background:#F4F6F9;border-bottom:1px solid #E2E5EA">
       <div style="padding:16px 20px;border-right:1px solid #E2E5EA"><div style="font-size:10px;font-weight:700;letter-spacing:.5px;color:#94A3B8;text-transform:uppercase">Deposit held</div><div style="font-size:20px;font-weight:700;color:#0B1E3D;margin-top:4px">${money2(r.depositHeld)}</div></div>
       <div style="padding:16px 20px;border-right:1px solid #E2E5EA"><div style="font-size:10px;font-weight:700;letter-spacing:.5px;color:#94A3B8;text-transform:uppercase">${r.type==='precheckout'?'Indicative deduction':'Proposed deduction'}</div><div style="font-size:20px;font-weight:700;color:#C0392B;margin-top:4px">${money2(r.totalDeduction)}</div><div style="font-size:10px;color:#94A3B8;margin-top:1px">${r.results.length} item${r.results.length===1?'':'s'} assessed</div></div>
@@ -5361,7 +5404,10 @@ function _invReportHtml(r,p,t){
   const rows=r.results.map(x=>{
     if(r.type==='movein'){
       return `<div style="padding:14px 0;border-bottom:1px solid #EEF1F5">
-        <div style="font-size:10px;font-weight:700;letter-spacing:.5px;color:#94A3B8;text-transform:uppercase">${esc(x.room)}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.5px;color:#94A3B8;text-transform:uppercase">${esc(x.room)}</div>
+          ${x.condition?`<span style="font-size:9.5px;font-weight:700;color:#fff;background:#5B6473;padding:2px 8px;border-radius:8px">${esc(x.condition)}</span>`:''}
+        </div>
         <div style="font-size:14px;font-weight:700;color:#0B1E3D;margin:1px 0 8px">${esc(x.item)}</div>
         <div style="display:flex;gap:8px;margin-bottom:8px">${photoStrip(x.checkinPhotos)}</div>
         <div style="font-size:11.5px;color:#64748B;line-height:1.5">${esc(x.summary)}</div>
@@ -5394,24 +5440,29 @@ function _invReportHtml(r,p,t){
         <div style="text-align:right;font-size:11px;color:rgba(255,255,255,.75);line-height:1.6">${dateBlock}</div>
       </div>
     </div>
-    ${money}${remedyBanner}${legend}
+    ${money}${remedyBanner}${metaBanner}${legend}
     <div style="padding:4px 24px 8px;background:#fff">${rows}</div>
     ${footer}
   </div>`;
 }
+async function _signPhotoArr(arr){ if(!arr||!arr.length) return arr; return Promise.all(arr.map(async u=>(await _signedUrlFor(u))||u)); }
+async function _signReportPhotos(r){ const copy={...r,results:await Promise.all(r.results.map(async x=>({...x,checkinPhotos:await _signPhotoArr(x.checkinPhotos),stagePhotos:await _signPhotoArr(x.stagePhotos)})))}; return copy; }
 function viewInvReports(vid){
   const v=(S.inventories2||[]).find(x=>x.id===vid); if(!v||!v.reports||!v.reports.length) return;
   const p=P(v.propertyId)||{}; const l=L(p.landlordId)||{}; const t=(S.tenants||[]).find(x=>x.id===v.tenantId)||{};
   const typeLabel={movein:'Move-in',midterm:'Mid-tenancy',precheckout:'Pre-checkout',moveout:'Move-out'};
-  const body=v.reports.map(r=>`<div style="margin-bottom:18px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px">
-      <b style="font-size:12.5px;color:var(--navy)">${typeLabel[r.type]} · ${fmtDate(r.date)}</b>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-        ${l.email?`<button class="btn sm ${r.sentLandlordAt?'':'navy'}" onclick="emailInvReport('${vid}','${r.id}','landlord')">${r.sentLandlordAt?'✓ Sent to landlord '+fmtDate(r.sentLandlordAt):'Send to landlord'}</button>`:''}
-        ${t.email?`<button class="btn sm ${r.sentTenantAt?'':'navy'}" onclick="emailInvReport('${vid}','${r.id}','tenant')">${r.sentTenantAt?'✓ Sent to tenant '+fmtDate(r.sentTenantAt):'Send to tenant'}</button>`:''}
-        <button class="btn sm" onclick="deleteInvReport('${vid}','${r.id}')" style="color:var(--red)">Delete</button>
-      </div></div>${_invReportHtml(r,p,t)}</div>`).join('');
-  modal('Inventory reports',body,`<button class="btn" onclick="closeModal()">Close</button>`);
+  modal('Inventory reports','<div class="faint" style="padding:20px;text-align:center">Loading photos…</div>',`<button class="btn" onclick="closeModal()">Close</button>`);
+  Promise.all(v.reports.map(r=>_signReportPhotos(r))).then(signedReports=>{
+    const body=signedReports.map(r=>`<div style="margin-bottom:18px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px">
+        <b style="font-size:12.5px;color:var(--navy)">${typeLabel[r.type]} · ${fmtDate(r.date)}</b>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          ${l.email?`<button class="btn sm ${r.sentLandlordAt?'':'navy'}" onclick="emailInvReport('${vid}','${r.id}','landlord')">${r.sentLandlordAt?'✓ Sent to landlord '+fmtDate(r.sentLandlordAt):'Send to landlord'}</button>`:''}
+          ${t.email?`<button class="btn sm ${r.sentTenantAt?'':'navy'}" onclick="emailInvReport('${vid}','${r.id}','tenant')">${r.sentTenantAt?'✓ Sent to tenant '+fmtDate(r.sentTenantAt):'Send to tenant'}</button>`:''}
+          <button class="btn sm" onclick="deleteInvReport('${vid}','${r.id}')" style="color:var(--red)">Delete</button>
+        </div></div>${_invReportHtml(r,p,t,v)}</div>`).join('');
+    modal('Inventory reports',body,`<button class="btn" onclick="closeModal()">Close</button>`);
+  });
 }
 function deleteInvReport(vid,rid){
   if(!confirm('Delete this report? This cannot be undone.')) return;
@@ -5426,9 +5477,12 @@ function emailInvReport(vid,rid,recipient){
   const to=recipient==='landlord'?l.email:t.email;
   if(!to){ toast('No '+recipient+' email on file',1); return; }
   const typeTitle={movein:'Move-in condition report',midterm:'Mid-tenancy inspection report',precheckout:'Pre-checkout snag list',moveout:'Move-out & deposit report'}[r.type];
-  agencyEmail(to,typeTitle+' — '+(p.address||''),`<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#1A2B45">${_invReportHtml(r,p,t)}</div>`);
-  if(recipient==='landlord') r.sentLandlordAt=new Date().toISOString(); else r.sentTenantAt=new Date().toISOString();
-  pushInv2(v); render(); toast('✓ Report emailed to '+to);
+  toast('Sending report…');
+  _signReportPhotos(r).then(signed=>{
+    agencyEmail(to,typeTitle+' — '+(p.address||''),`<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#1A2B45">${_invReportHtml(signed,p,t,v)}</div>`);
+    if(recipient==='landlord') r.sentLandlordAt=new Date().toISOString(); else r.sentTenantAt=new Date().toISOString();
+    pushInv2(v); render(); toast('✓ Report emailed to '+recipient);
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
