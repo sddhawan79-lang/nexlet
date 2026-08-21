@@ -403,6 +403,18 @@ function declStatus(d){ return d?{k:'ok',label:'Confirmed',bg:'var(--green-bg)',
 // Every named adult on a tenancy needs their OWN Right to Rent check (Immigration Act 2014) —
 // this view unifies the lead tenant (fields live on rec) with occupants (fields on rec.occupants[i])
 // so status can be rolled up per-tenancy while still being tracked per-person.
+// The dashboard/checklist shortcut always used to open the RTR wizard for the LEAD tenant
+// only (personIdx defaulted to 0) even on a multi-tenant property — so ticking it off there could
+// silently record against the wrong person while an occupant's tab still showed "Missing".
+// Routing through the same tabbed tenant modal instead makes it one wired path everywhere.
+function rtrFromChecklist(pid){
+  const rec=tenantRecFor(pid); if(!rec){ toast('Set up the tenant first',1); return; }
+  const people=_tnPeopleView(rec).filter(pp=>pp.name);
+  const needsIt=people.find(pp=>{ const r=_rtrPersonRAG(pp); return r.k!=='ok'&&r.k!=='soon'; });
+  setTenant(pid);
+  if(needsIt&&needsIt.idx>0) tnTab('person-'+needsIt.idx);
+  else if(needsIt) rtrWizard(pid,0);
+}
 function _tnPeopleView(rec){
   if(!rec) return [];
   const lead={idx:0,isLead:true,name:rec.name||'',rtrResult:rec.rtrResult||'',rtrExpiry:rec.rtrExpiry||'',rtrCheckDate:rec.rtrCheckDate||'',_occ:rec};
@@ -1873,7 +1885,7 @@ function _tenancyChecklist(p){
     {k:'tenant',label:'Tenant record set up',done:!!p.tenant,go:`setTenant('${p.id}')`}];
   if(p.tenant){
     _fullCertItems(p).forEach(it=>{ const r=_itemRag(it); const k=it[0];
-      const go=k==='rtr'?`rtrWizard('${p.id}')`:k==='deposit'?`setTenant('${p.id}')`:k==='depositconfirm'?`openLandlordDepositConfirm('${p.id}')`:`editCert('${p.id}','${k}')`;
+      const go=k==='rtr'?`rtrFromChecklist('${p.id}')`:k==='deposit'?`setTenant('${p.id}')`:k==='depositconfirm'?`openLandlordDepositConfirm('${p.id}')`:`editCert('${p.id}','${k}')`;
       items.push({k,label:it[1],done:r.k==='ok'||r.k==='soon',warn:r.k==='soon',go}); });
     const rec=tenantRecFor(p.id);
     const ta=rec&&tenancyAgreementFor(rec.id);
@@ -2098,10 +2110,13 @@ function vPropertyDetail(){
       if(ta.status==='sent') return `<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--amber-bg);color:var(--amber)">⏳</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Tenancy terms &amp; conditions (e-signed)</div><div class="faint" style="font-size:11.5px">Awaiting tenant signature</div></div><span class="pill" style="background:var(--amber-bg);color:var(--amber)">Sent</span><button class="btn sm" onclick="sendTenancyReminder('${ta.id}')">Send reminder</button></div>`;
       return ''; })()}
           ${rec.origContractName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">📄</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Original tenancy agreement</div><div class="faint" style="font-size:11.5px">${esc(rec.origContractName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.origContractUrl?`<button class="btn sm" onclick="viewDoc('${rec.origContractUrl}','Original tenancy agreement')">View</button>`:''}</div>`:''}
-          ${rec.id1DocName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">🪪</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Photo ID — 1 of 2</div><div class="faint" style="font-size:11.5px">${esc(rec.id1DocName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.id1DocUrl?`<button class="btn sm" onclick="viewDoc('${rec.id1DocUrl}','Photo ID')">View</button>`:''}</div>`:''}
-          ${rec.id2DocName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">🪪</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Photo ID — 2 of 2</div><div class="faint" style="font-size:11.5px">${esc(rec.id2DocName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.id2DocUrl?`<button class="btn sm" onclick="viewDoc('${rec.id2DocUrl}','Photo ID')">View</button>`:''}</div>`:''}
-          ${(rec.addressProofDocs&&rec.addressProofDocs.length)?rec.addressProofDocs.map((d,i)=>`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">🏠</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Proof of address${rec.addressProofDocs.length>1?' ('+(i+1)+' of '+rec.addressProofDocs.length+')':''}</div><div class="faint" style="font-size:11.5px">${esc(d.name)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${d.url?`<button class="btn sm" onclick="viewDoc('${d.url}','Proof of address')">View</button>`:''}</div>`).join(''):''}`; })()}
-        </div></details>
+          ${_tnPeopleView(rec).filter(pp=>pp.name).map(pp=>{ const src=pp._occ; const rows=[];
+            if(src.id1DocName) rows.push(`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">🪪</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Photo ID — 1 of 2 (${esc(pp.name)})</div><div class="faint" style="font-size:11.5px">${esc(src.id1DocName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${src.id1DocUrl?`<button class="btn sm" onclick="viewDoc('${src.id1DocUrl}','Photo ID')">View</button>`:''}</div>`);
+            if(src.id2DocName) rows.push(`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">🪪</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Photo ID — 2 of 2 (${esc(pp.name)})</div><div class="faint" style="font-size:11.5px">${esc(src.id2DocName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${src.id2DocUrl?`<button class="btn sm" onclick="viewDoc('${src.id2DocUrl}','Photo ID')">View</button>`:''}</div>`);
+            (src.addressProofDocs||[]).forEach((d,i)=>rows.push(`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">🏠</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Proof of address (${esc(pp.name)})${src.addressProofDocs.length>1?' · '+(i+1)+' of '+src.addressProofDocs.length:''}</div><div class="faint" style="font-size:11.5px">${esc(d.name)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${d.url?`<button class="btn sm" onclick="viewDoc('${d.url}','Proof of address')">View</button>`:''}</div>`));
+            if(src.guarantor&&(src.guarantor.name||src.guarantor.email)) rows.push(`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--blue-bg);color:var(--blue)">🤝</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Guarantor for ${esc(pp.name)}</div><div class="faint" style="font-size:11.5px">${esc(src.guarantor.name||'')}${src.guarantor.email?' · '+esc(src.guarantor.email):''}${(src.guarantor.docs&&src.guarantor.docs.length)?' · '+src.guarantor.docs.length+' document'+(src.guarantor.docs.length>1?'s':''):''}</div></div></div>`);
+            return rows.join(''); }).join('')}
+        </div></details>`; })()}
         ${_grpHead('Advisory — not legally required',false)}
           ${advisoryDocRow(p,'pat','PAT testing (appliances)','No blanket legal requirement in England — evidence of duty of care if the landlord has it done')}
           ${advisoryDocRow(p,'pest','Pest control treatment','Landlord-arranged treatment record, if any — evidences the property was handed over pest-free')}
@@ -2344,17 +2359,21 @@ function _tnTabBarHtml(){
     return btn('person-'+idx, esc(per.name||(idx===0?'Tenant':'Person '+(idx+1))), rag.k!=='ok'); }).join('');
   return `<div style="display:flex;border-bottom:1px solid var(--border);margin-bottom:18px;overflow-x:auto">${btn('tenancy','Tenancy')}${personTabs}<button type="button" onclick="tnAddPerson()" style="background:none;border:none;color:var(--blue);font-size:13px;font-weight:600;cursor:pointer;padding:8px 4px;white-space:nowrap">+ Add person</button></div>`;
 }
+function _stepDivider(n,label){ return `<div style="display:flex;align-items:center;gap:8px;margin:${n>1?'18px':'2px'} 0 8px;${n>1?'padding-top:14px;border-top:1px solid var(--border)':''}"><span style="width:20px;height:20px;border-radius:50%;background:var(--navy);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${n}</span><span style="font-size:11.5px;font-weight:700;color:var(--navy)">${esc(label)}</span></div>`; }
 function _tnTenancyTabHtml(pid){ const rec=tenantRecFor(pid); const d=window._tnCore;
   return `<div class="grid2" style="gap:10px"><div class="fg"><label>Tenancy start</label><input id="tn-start" type="date" value="${esc(d.start)}"></div>
   <div class="fg"><label>Deposit held (£)</label><input id="tn-deposit" type="number" value="${esc(d.deposit)}"></div></div>
   <div style="background:#F6F8FB;border:1px solid var(--border);border-radius:10px;padding:16px;margin-top:6px">
     <div style="font-size:12.5px;font-weight:700;color:var(--navy)">📁 Tenancy documents</div>
     <div class="faint" style="font-size:11.5px;margin-bottom:10px">Deposit, referencing &amp; the signed agreement</div>
-    ${_docSlotHtml('deposit','Deposit certificate','(custodial/insured scheme cert or Prescribed Information)',d.depositCertName,d.depositCertUrl,'aiScanDeposit')}
+    ${_stepDivider(1,'Deposit certificate')}
+    ${_docSlotHtml('deposit','File','(custodial/insured scheme cert or Prescribed Information)',d.depositCertName,d.depositCertUrl,'aiScanDeposit')}
     <div class="fg" style="margin-top:-8px"><label>Protection covers tenancy until <span class="faint">(only for a fixed-term cert with an "ending on or after" date — leave blank for a periodic tenancy, no re-protection needed on renewal or rent increase)</span></label><div style="display:flex;gap:8px;align-items:center"><input id="tn-deposit-expiry" type="date" value="${esc(d.depositCertExpiry)}" style="flex:1"><a href="#" onclick="event.preventDefault();document.getElementById('tn-deposit-expiry').value=''">Clear</a></div></div>
     <div id="tn-deposit-scan-status" class="faint" style="font-size:11px;margin-top:-8px"></div>
-    ${_docSlotHtml('ref','Reference report','(employer/previous-landlord reference or credit check)',d.refDocName,d.refDocUrl)}
-    <div class="fg"><label>Tenancy terms &amp; conditions <span class="faint">(e-sign with the tenant — recommended for new tenancies; skip if uploading an already-signed contract below)</span></label>
+    ${_stepDivider(2,'Reference report')}
+    ${_docSlotHtml('ref','File','(employer/previous-landlord reference or credit check)',d.refDocName,d.refDocUrl)}
+    ${_stepDivider(3,'Tenancy terms & conditions')}
+    <div class="fg"><label class="faint">(e-sign with the tenant — recommended for new tenancies; skip if uploading an already-signed contract below)</label>
     ${(()=>{ if(!rec||!rec.id) return '<div class="hint">Save once to enable e-signature.</div>';
       const ta=tenancyAgreementFor(rec.id);
       if(ta&&ta.status==='signed') return `<div class="doc" style="border:1px solid var(--border);border-radius:8px;padding:8px 10px"><div class="di" style="background:var(--green-bg);color:var(--green)">✓</div><div style="flex:1;font-size:12.5px">Signed ${fmtDate(ta.tenant_signed_at)}</div><button class="btn sm" onclick="viewSignedTenancyAgreement('${pid}')">View</button><button class="btn sm" onclick="viewTenancySigningReceipt('${pid}')">Receipt</button></div>`;
@@ -2362,7 +2381,8 @@ function _tnTenancyTabHtml(pid){ const rec=tenantRecFor(pid); const d=window._tn
       return `<button type="button" class="btn sm" onclick="openTenancyAgreement('${pid}')">✨ Generate &amp; send for e-signature</button>`;
     })()}
     </div>
-    ${_docSlotHtml('origcontract','Original signed tenancy agreement','(if this tenancy was already running when NexLet took over management — stays legally valid; no need to reissue, even after the 1 May 2026 conversion to a periodic tenancy)',d.origContractName,d.origContractUrl)}
+    ${_stepDivider(4,'Original signed tenancy agreement')}
+    ${_docSlotHtml('origcontract','File','(if this tenancy was already running when NexLet took over management — stays legally valid; no need to reissue, even after the 1 May 2026 conversion to a periodic tenancy)',d.origContractName,d.origContractUrl)}
   </div>
   <div class="hint" style="margin-top:14px">Each person's tab holds their ID, address proof and Right to Rent check. Save the tenancy here once everyone's done.</div>`;
 }
@@ -2374,17 +2394,20 @@ function _tnPersonTabHtml(idx){
   <div class="fg"><label>Date of birth</label><input id="tn-p${idx}-dob" type="date" value="${esc(per.dob)}"></div></div>
   ${isLead?'':`<div style="text-align:right;margin:-4px 0 8px"><a href="#" onclick="event.preventDefault();tnRemovePerson(${idx})" style="font-size:11.5px;color:var(--red)">Remove this person</a></div>`}
   <div style="background:#F6F8FB;border:1px solid var(--border);border-radius:10px;padding:14px;margin-top:6px">
-    <div style="font-size:12.5px;font-weight:700;color:var(--navy)">🪪 Identity &amp; address</div>
+    <div style="font-size:12.5px;font-weight:700;color:var(--navy)">① 🪪 Identity &amp; address</div>
     <div class="faint" style="font-size:11.5px;margin-bottom:10px">Safeguarding — optional but recommended</div>
-    ${_docSlotHtml('id1-'+idx,'Photo ID — 1 of 2','(passport or driving licence)',per.id1DocName,per.id1DocUrl)}
-    ${_docSlotHtml('id2-'+idx,'Photo ID — 2 of 2','(a second form: passport, driving licence, or national ID card)',per.id2DocName,per.id2DocUrl)}
-    <div class="fg"><label>Proof of address <span class="faint">(utility bill, council tax bill, or bank statement — dated within the last 3 months; attach as many as needed)</span></label>
+    ${_stepDivider('1a','Photo ID — first document')}
+    ${_docSlotHtml('id1-'+idx,'File','(passport or driving licence)',per.id1DocName,per.id1DocUrl)}
+    ${_stepDivider('1b','Photo ID — second document')}
+    ${_docSlotHtml('id2-'+idx,'File','(a second form: passport, driving licence, or national ID card)',per.id2DocName,per.id2DocUrl)}
+    ${_stepDivider('1c','Proof of address')}
+    <div class="fg"><label class="faint">(utility bill, council tax bill, or bank statement — dated within the last 3 months; attach as many as needed)</label>
     <div id="tn-docs-address-${idx}" style="display:flex;flex-direction:column;gap:4px">${_docBucketHtml('address-'+idx)}</div>
     <label style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer;font-size:12.5px;font-weight:600;margin-top:6px">+ Add document<input type="file" accept="application/pdf,image/*" style="display:none" multiple onchange="tnDocAdd('address-${idx}',this)"></label>
     </div>
   </div>
   <div style="background:#F6F8FB;border:1px solid var(--border);border-radius:10px;padding:14px;margin-top:10px">
-    <div style="font-size:12.5px;font-weight:700;color:var(--navy)">🛂 Right to Rent</div>
+    <div style="font-size:12.5px;font-weight:700;color:var(--navy)">② 🛂 Right to Rent</div>
     <div class="faint" style="font-size:11.5px;margin-bottom:10px">Required by law before this person moves in — checked individually, not shared across the household</div>
     <div class="doc" style="border:1px solid var(--border);border-radius:8px;padding:8px 10px">
       <div style="flex:1"><div style="font-size:12.5px;font-weight:600">${per.rtrCheckDate?'Checked '+fmtDate(per.rtrCheckDate)+(per.rtrResult?' · '+esc(per.rtrResult):''):'Not checked yet'}</div>${per.rtrExpiry?`<div class="faint" style="font-size:11px">Expires ${fmtDate(per.rtrExpiry)}</div>`:''}</div>
@@ -2393,7 +2416,7 @@ function _tnPersonTabHtml(idx){
       <button class="btn sm" onclick="tnSyncPerson(${idx});rtrWizard(window._tnPid,${idx})">${per.rtrCheckDate?'Update':'Check'}</button></div>
     <div class="faint" style="font-size:11px;margin-top:6px">Checked by an external referencing company instead? <a href="#" onclick="event.preventDefault();tnSyncPerson(${idx});rtrExternal(window._tnPid,${idx})">Upload their report</a></div>
   </div>
-  <div class="fg" style="margin-top:10px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="tn-p${idx}-hasg" ${hasG?'checked':''} onchange="document.getElementById('tn-p${idx}-gbox').style.display=this.checked?'grid':'none'"> Has a guarantor</label>
+  <div class="fg" style="margin-top:10px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer">③ <input type="checkbox" id="tn-p${idx}-hasg" ${hasG?'checked':''} onchange="document.getElementById('tn-p${idx}-gbox').style.display=this.checked?'grid':'none'"> Has a guarantor</label>
   <div id="tn-p${idx}-gbox" class="grid2" style="gap:10px;display:${hasG?'grid':'none'};margin-top:6px">
     <input id="tn-p${idx}-gname" placeholder="Guarantor name" value="${esc(per.guarantor.name)}" style="grid-column:1/-1">
     <input id="tn-p${idx}-gemail" placeholder="Guarantor email" value="${esc(per.guarantor.email)}">
@@ -5799,7 +5822,7 @@ function vCompliance(){
       const pIssues=items3.filter(it=>_itemRag(it).k!=='ok').length;
       const rec3=tenantRecFor(p.id); const dc=p.certs||{};
       const docUrlOf=k=>({gas:dc.gasDocUrl,eicr:dc.eicrDocUrl,epc:dc.epcDocUrl,legionella:dc.legionellaDocUrl,hmo:dc.hmoDocUrl,smoke:dc.smokeDocUrl,co:dc.coDocUrl,deposit:rec3&&rec3.depositCertUrl,rtr:rec3&&rec3.rtrDocUrl}[k]);
-      const certHtml=items3.map(it=>{ const [k,lab,d,kind]=it; const r=_itemRag(it); const action=k==='rtr'?`rtrWizard('${p.id}')`:k==='deposit'?`setTenant('${p.id}')`:`editCert('${p.id}','${k}')`; const docUrl=docUrlOf(k); return `<div class="tree-leaf">
+      const certHtml=items3.map(it=>{ const [k,lab,d,kind]=it; const r=_itemRag(it); const action=k==='rtr'?`rtrFromChecklist('${p.id}')`:k==='deposit'?`setTenant('${p.id}')`:`editCert('${p.id}','${k}')`; const docUrl=docUrlOf(k); return `<div class="tree-leaf">
           <span class="tree-dot" style="background:${r.color}"></span>
           <span style="flex:1;font-size:12.5px">${lab}</span>
           <span class="faint" style="font-size:11.5px;margin-right:8px">${kind==='custom'?r.label:d?(kind==='decl'?'Confirmed '+fmtDate(d):fmtDate(d)):(kind==='decl'?'Not confirmed':'No certificate')}</span>
