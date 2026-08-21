@@ -2577,6 +2577,18 @@ function _rtrWizStepBar(step){
   return `<div style="display:flex;border-radius:8px;overflow:hidden;border:1px solid var(--border);margin-bottom:14px">${steps.map((s,i)=>`<div style="flex:1;padding:8px 6px;text-align:center;font-size:11px;font-weight:600;background:${step===i+1?'var(--navy)':step>i+1?'var(--green-bg)':'var(--off)'};color:${step===i+1?'#fff':step>i+1?'var(--green)':'#94A3B8'}">${step>i+1?'✓ ':''}${s}</div>`).join('')}</div>`;
 }
 function _rtrWizMethodChange(v){ window._rtrWiz.method=v; _rtrWizRender(); }
+// Guidance shown live as the agent picks a document — tells them whether it's enough on its
+// own (List A), needs pairing with a second document (List A Group 2), or is time-limited and
+// will need a repeat check later (List B) — so they can course-correct before saving.
+function _rtrDocGuidance(docCode){
+  if(!docCode) return '<div class="hint">Select the document the tenant showed you.</div>';
+  const group=docCode.split(':')[0];
+  if(group==='A1') return '<div class="note" style="background:var(--green-bg);border-color:var(--green)">✓ This alone is enough — establishes an ongoing right to rent with no follow-up check needed.</div>';
+  if(group==='A2') return '<div class="note" style="background:var(--amber-bg);border-color:var(--amber)">⚠ On its own this isn\'t enough — pair it with the second document below. Together they establish an ongoing right to rent, no follow-up needed.</div>';
+  if(group==='B') return '<div class="note" style="background:var(--amber-bg);border-color:var(--amber)">⏳ This only gives a time-limited right to rent. You\'ll need to repeat the check before it expires — set the expiry date on the next step so NexLet reminds you.</div>';
+  return '<div class="note">If they can\'t produce a passport, ask whether they have any Home Office digital status instead — a share code check (previous screen) is usually simpler than the paper alternatives.</div>';
+}
+function _rtrWizRender2(){ window._rtrWiz.docCode=val('rtr-doctype')||document.getElementById('rtr-doctype').value; _rtrWizRender(); }
 function _rtrWizRender(){
   const w=window._rtrWiz; const per=_tnPersonSrc(w.pid,w.personIdx);
   let body=_rtrWizStepBar(w.step);
@@ -2586,19 +2598,37 @@ function _rtrWizRender(){
         <option value="manual" ${w.method==='manual'?'selected':''}>Manual document check (British/Irish passport or other original ID)</option>
       </select></div>
       ${w.method==='manual'?`
-      <div class="fg"><label>Document(s) seen</label><select id="rtr-doctype">
-        <option ${w.docType==='British/Irish passport'?'selected':''}>British/Irish passport</option>
-        <option ${w.docType==='Full birth/adoption certificate + NI number document'?'selected':''}>Full birth/adoption certificate + NI number document</option>
-        <option ${w.docType==='Other original document(s) from the Home Office list'?'selected':''}>Other original document(s) from the Home Office list</option>
+      <div class="fg"><label>Document seen <span class="faint">(pick what they actually have — the guidance below tells you if that's enough on its own)</span></label><select id="rtr-doctype" onchange="_rtrWizRender2()">
+        <optgroup label="Single document — fully covers it, no follow-up needed">
+          <option value="A1:British/Irish passport (current or expired)" ${w.docCode==='A1:British/Irish passport (current or expired)'?'selected':''}>British/Irish passport (current or expired)</option>
+          <option value="A1:Passport/travel document showing right of abode, ILR, or \\u2018no time limit\\u2019" ${w.docCode&&w.docCode.startsWith('A1:Passport/travel')?'selected':''}>Passport/travel document showing right of abode, ILR, or 'no time limit'</option>
+          <option value="A1:Home Office immigration status document (no time limit endorsement)" ${w.docCode&&w.docCode.startsWith('A1:Home Office immigration status document (no')?'selected':''}>Home Office immigration status document (no time limit endorsement)</option>
+          <option value="A1:Certificate of registration/naturalisation as a British citizen" ${w.docCode&&w.docCode.startsWith('A1:Certificate of registration')?'selected':''}>Certificate of registration/naturalisation as a British citizen</option>
+        </optgroup>
+        <optgroup label="No passport? — needs a second document too">
+          <option value="A2:Full UK/CI/IoM/Irish birth or adoption certificate" ${w.docCode&&w.docCode.startsWith('A2:Full UK')?'selected':''}>Full UK/CI/IoM/Irish birth or adoption certificate</option>
+        </optgroup>
+        <optgroup label="Time-limited status — will need a follow-up check before it expires">
+          <option value="B:Passport/travel document with a time-limited visa or entry clearance endorsement" ${w.docCode&&w.docCode.startsWith('B:Passport')?'selected':''}>Passport/travel document with a time-limited visa or entry clearance endorsement</option>
+          <option value="B:Home Office immigration status document (time-limited endorsement)" ${w.docCode&&w.docCode.startsWith('B:Home Office')?'selected':''}>Home Office immigration status document (time-limited endorsement)</option>
+          <option value="B:Application Registration Card (ARC)" ${w.docCode&&w.docCode.startsWith('B:Application')?'selected':''}>Application Registration Card (ARC)</option>
+          <option value="B:Certificate of Application + Positive Verification Notice from the Home Office" ${w.docCode&&w.docCode.startsWith('B:Certificate of Application')?'selected':''}>Certificate of Application + Positive Verification Notice from the Home Office</option>
+        </optgroup>
+        <option value="OTHER:Other original document(s) from the Home Office list" ${w.docCode&&w.docCode.startsWith('OTHER:')?'selected':''}>Other/not sure — I'll check the full list</option>
       </select></div>
+      <div id="rtr-doc-guidance">${_rtrDocGuidance(w.docCode)}</div>
+      <div id="rtr-doc2-wrap" style="display:${w.docCode&&w.docCode.startsWith('A2:')?'block':'none'}"><div class="fg"><label>Second document <span class="faint">(needed alongside the birth/adoption certificate)</span></label><select id="rtr-doctype2">
+        <option value="A document showing their National Insurance number (e.g. letter from HMRC, DWP or an employer)" ${w.docCode2==='A document showing their National Insurance number (e.g. letter from HMRC, DWP or an employer)'?'selected':''}>A document showing their National Insurance number (e.g. letter from HMRC, DWP or an employer)</option>
+      </select></div></div>
       <div class="hint">Check the original document in person (or on a live video call), confirm the photo matches, and keep a copy as evidence.</div>`:`
       <div class="fg"><label>Share code</label><input id="rtr-code" value="${esc(w.code)}" placeholder="R-XXX-XXX-XXX" style="text-transform:uppercase;font-family:monospace"></div>
       <div class="fg"><label>Date of birth</label><input id="rtr-dob" type="date" value="${esc(w.dob)}"></div>`}
       <div class="faint" style="font-size:11.5px;margin-top:8px">Checked by an external referencing company instead? <a href="#" onclick="event.preventDefault();closeModal();rtrExternal(window._rtrWiz.pid,window._rtrWiz.personIdx)">Upload their report instead</a></div>`;
     modal('Right to Rent check — step 1 of 3',body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="_rtrWizNext()">Next</button>`,true);
   } else if(w.step===2){
+    if(w.method==='manual'&&w.docGroup==='B'&&!w.result) w.result='Time-limited';
     body+=`<div class="hint" style="margin-bottom:10px">${w.method==='manual'?'Record what the document(s) showed.':'Check the code on GOV.UK, then record the result here.'}</div>
-      ${w.method==='manual'?'':'<a class="btn navy sm" href="https://www.gov.uk/view-right-to-rent" target="_blank" style="margin-bottom:12px;display:inline-flex">Open GOV.UK checker ↗</a>'}
+      ${w.method==='manual'?(w.docGroup==='B'?'<div class="note" style="background:var(--amber-bg);border-color:var(--amber)">This document only gives a time-limited right to rent — set the expiry below so a follow-up check gets reminded before it lapses.</div>':''):'<a class="btn navy sm" href="https://www.gov.uk/view-right-to-rent" target="_blank" style="margin-bottom:12px;display:inline-flex">Open GOV.UK checker ↗</a>'}
       <div class="fg"><label>Result</label><select id="rtr-result" onchange="document.getElementById('rtr-expiry-wrap').style.display=this.value==='Time-limited'?'block':'none'">
         <option value="">Select…</option><option value="Valid" ${w.result==='Valid'?'selected':''}>Valid</option><option value="Time-limited" ${w.result==='Time-limited'?'selected':''}>Time-limited</option><option value="Invalid" ${w.result==='Invalid'?'selected':''}>Invalid</option></select></div>
       <div id="rtr-expiry-wrap" style="display:${w.result==='Time-limited'?'block':'none'}"><div class="fg"><label>Right to rent expires</label><input id="rtr-expiry" type="date" value="${esc(w.expiry)}"></div></div>
@@ -2619,8 +2649,13 @@ function _rtrWizNext(){
   const w=window._rtrWiz;
   if(w.step===1){
     w.method=val('rtr-method')||'sharecode';
-    if(w.method==='manual'){ w.docType=val('rtr-doctype'); w.code=''; w.dob=''; }
-    else { w.code=val('rtr-code'); w.dob=val('rtr-dob'); if(!w.code){toast('Enter the share code',1);return;} w.docType=''; }
+    if(w.method==='manual'){
+      w.docCode=val('rtr-doctype'); if(!w.docCode){toast('Select the document seen',1);return;}
+      const group=w.docCode.split(':')[0]; const label=w.docCode.split(':').slice(1).join(':');
+      w.docCode2=group==='A2'?val('rtr-doctype2'):'';
+      w.docType=label+(w.docCode2?' + '+w.docCode2:''); w.docGroup=group; w.code=''; w.dob='';
+    }
+    else { w.code=val('rtr-code'); w.dob=val('rtr-dob'); if(!w.code){toast('Enter the share code',1);return;} w.docType=''; w.docGroup=''; }
     w.step=2;
   } else if(w.step===2){ w.result=val('rtr-result'); if(!w.result){toast('Select a result',1);return;} w.expiry=w.result==='Time-limited'?val('rtr-expiry'):''; w.checkDate=val('rtr-checkdate')||today(); w.step=3; }
   _rtrWizRender();
@@ -3430,7 +3465,7 @@ function saveSettings(){ S.agency.name=val('set-name'); S.agency.address=val('se
 
 // ── ONBOARDING WIZARD ──
 let OB=null;
-function openOnboard(){ OB={step:1,name:'',joint:'',jointEmail:'',entity:'individual',email:'',phone:'',address:'',nrl:false,prsReg:'',contactPref:'Email',idDoc:'',ownDoc:'',aml:false,ownership:false,service:'full',feePct:DEF_FEE,letWeeks:DEF_WEEKS,addr:'',city:'',rent:'',beds:'2',agreement:false,
+function openOnboard(){ OB={step:1,name:'',joint:'',jointEmail:'',entity:'individual',email:'',phone:'',address:'',nrl:false,prsReg:'',contactPref:'Email',idDoc:'',ownDoc:'',ownDocType:'',aml:false,ownership:false,service:'full',feePct:DEF_FEE,letWeeks:DEF_WEEKS,addr:'',city:'',rent:'',beds:'2',agreement:false,
   addrDoc:'',idDoc2:'',addrDoc2:'',sanctions:false,isCompany:false,incorpDoc:'',dirIdDoc:'',extraDirectors:[],isMortgaged:false,mortgageConsentDoc:'',isLeasehold:false,freeholderConsentDoc:'',
   addr:'',pc:'',city:'',ptype:'Flat',rent:'',beds:'',baths:'',furnished:'Unfurnished',epc:'',rentDueDay:'1st',avail:'',feat:'',desc:'',featChips:[],properties:[],agencyType:'sole'};
   OB._file_={}; renderOnboard(); }
@@ -3572,6 +3607,17 @@ function obLogManualSanctionsCheck(){
   else toast('✓ Manual check logged');
   renderOnboard();
 }
+// Live guidance while picking the ownership-proof type — mirrors the RTR document guidance:
+// tells the agent whether what the landlord has is strong enough on its own, matches Land
+// Registry records is the gold standard, and when to also chase lender/freeholder consent.
+function _obOwnershipGuidance(t){
+  if(!t) return '<div class="hint">Select the document the landlord can provide.</div>';
+  if(t==='title') return '<div class="note" style="background:var(--green-bg);border-color:var(--green)">✓ Best option — the definitive record. Check the registered proprietor\'s name matches the landlord\'s ID exactly (or shows their company/trust).</div>';
+  if(t==='mortgage') return '<div class="note" style="background:var(--green-bg);border-color:var(--green)">✓ Acceptable — confirms the landlord as the account holder at this address. Ask for the whole statement, not just a summary page.</div>';
+  if(t==='deed') return '<div class="note" style="background:var(--green-bg);border-color:var(--green)">✓ Acceptable, though older properties may only have a paper deed rather than a Land Registry entry — that\'s fine.</div>';
+  if(t==='consent') return '<div class="note" style="background:var(--amber-bg);border-color:var(--amber)">⚠ This proves the lender has approved letting, not ownership itself — pair it with a title register or mortgage statement if possible.</div>';
+  return '<div class="note" style="background:var(--amber-bg);border-color:var(--amber)">⚠ Weakest evidence — a council tax bill only shows who\'s liable to pay, not who owns the property. Use only if nothing stronger is available, and note that on file.</div>';
+}
 function renderOnboard(){
   const s=OB.step;
   const labels=['Details','Identity & AML','Ownership & consent','Property','Service & fee','Agreement'];
@@ -3628,7 +3674,16 @@ function renderOnboard(){
     </div></div>
     <div class="chk ${OB.aml?'on':''}" onclick="OB.aml=!OB.aml;renderOnboard()"><div class="box">${OB.aml?'✓':''}</div><div><div style="font-weight:600;font-size:13px">Identity &amp; AML check passed</div><div class="faint" style="font-size:11px">Confirm once you've reviewed the ID, address proof and sanctions result above</div></div></div>`;
   if(s===3) body=`<div class="note" style="margin-bottom:14px">Confirm the landlord is legally entitled to let — and that any lender or freeholder permits letting. Title register, mortgage statement or council tax bill.</div>
-    ${obDoc('ownDoc','Proof of ownership <span class="faint">(title register / mortgage statement / council tax)</span>','e.g. title_register.pdf')}
+    <div class="fg"><label>Which proof do they have? <span class="faint">(pick one — guidance below)</span></label><select id="ob-own-doctype" onchange="OB.ownDocType=this.value;renderOnboard()">
+      <option value="">Select…</option>
+      <option value="title" ${OB.ownDocType==='title'?'selected':''}>HM Land Registry title register/plan</option>
+      <option value="mortgage" ${OB.ownDocType==='mortgage'?'selected':''}>Recent mortgage statement</option>
+      <option value="deed" ${OB.ownDocType==='deed'?'selected':''}>Official title deed</option>
+      <option value="consent" ${OB.ownDocType==='consent'?'selected':''}>Lender's written consent-to-let letter</option>
+      <option value="counciltax" ${OB.ownDocType==='counciltax'?'selected':''}>Council tax bill (weakest — only if nothing else available)</option>
+    </select></div>
+    ${_obOwnershipGuidance(OB.ownDocType)}
+    ${obDoc('ownDoc','Proof of ownership file','e.g. title_register.pdf')}
     ${OB.ownDoc?`<div style="margin:-6px 0 12px;font-size:11.5px">${OB.ownAiChecked?(OB.ownAiMatch?'<span style="color:var(--green)">✓ AI read: owner '+esc(OB.ownAiName||'')+' — matches landlord name</span>':'<span style="color:var(--red)">⚠ AI read: owner '+esc(OB.ownAiName||'unreadable')+' — does not match '+esc(OB.name)+', review manually</span>'):'<button class="btn" style="font-size:11px;padding:4px 10px" onclick="obVerifyOwnership(this)">✦ Verify with AI</button>'}</div>`:''}
     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;margin:2px 0 12px"><input type="checkbox" style="width:auto" ${OB.isMortgaged?'checked':''} onchange="OB.isMortgaged=this.checked;renderOnboard()"> Property is mortgaged</label>
     ${OB.isMortgaged?`<div class="note" style="margin-bottom:10px">Obtaining the lender's consent-to-let is the <b>landlord's own responsibility</b>, not the agency's — this doesn't need to be in place to send the instruction. Attach it here if the landlord has it, for your records.</div>`+obDoc('mortgageConsentDoc','Mortgage lender consent-to-let (optional)','e.g. consent_to_let.pdf'):''}
