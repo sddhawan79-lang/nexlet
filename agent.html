@@ -185,8 +185,8 @@ let LIVE=false;                 // set true only after the auth gateway passes
 window._agencyId=null;          // every LIVE query is scoped to this agency
 
 // ── row ⇄ in-memory-object mappers (snake_case DB ⇄ camelCase S) ──
-const rowToAgency=r=>({name:r.name||'',address:r.address||'',companyNo:r.company_no||'',bankName:r.bank_name||'',bankAccName:r.bank_acc_name||'',bankSortCode:r.bank_sort_code||'',bankAccNo:r.bank_acc_no||'',rentGuide:r.rent_guide||[],marketComps:r.market_comps||[],standardClauses:r.standard_clauses||[],redress:r.redress_scheme||'',redressNo:r.redress_no||'',cmp:r.cmp_scheme||'Not holding client money',cmpNo:r.cmp_no||'',refPartner:r.ref_partner||'',icoNo:r.ico_no||'',vatRegistered:!!r.vat_registered,vatNumber:r.vat_number||'',invoiceSeq:r.invoice_seq||0,paymentTerms:r.payment_terms||14,abortiveFee:r.abortive_fee??250,noticeFee:r.notice_fee??75,renewalFee:r.renewal_fee??60,arrearsFee:r.arrears_fee??30,keyFee:r.key_fee??60,insuranceFee:r.insurance_fee??50,disputeFee:r.dispute_fee??75,invMoveinFee:r.inv_movein_fee??75,invMoveoutFee:r.inv_moveout_fee??65});
-const agencyToRow=a=>({name:a.name,address:a.address,company_no:a.companyNo||null,bank_name:a.bankName||null,bank_acc_name:a.bankAccName||null,bank_sort_code:a.bankSortCode||null,bank_acc_no:a.bankAccNo||null,rent_guide:a.rentGuide||[],market_comps:a.marketComps||[],standard_clauses:a.standardClauses||[],redress_scheme:a.redress,redress_no:a.redressNo,cmp_scheme:a.cmp,cmp_no:a.cmpNo,ref_partner:a.refPartner,ico_no:a.icoNo,vat_registered:!!a.vatRegistered,vat_number:a.vatNumber,invoice_seq:a.invoiceSeq||0,payment_terms:a.paymentTerms||14,abortive_fee:a.abortiveFee||0,notice_fee:a.noticeFee||0,renewal_fee:a.renewalFee||0,arrears_fee:a.arrearsFee||0,key_fee:a.keyFee||0,insurance_fee:a.insuranceFee||0,dispute_fee:a.disputeFee||0,inv_movein_fee:a.invMoveinFee||0,inv_moveout_fee:a.invMoveoutFee||0,updated_at:new Date().toISOString()});
+const rowToAgency=r=>({name:r.name||'',address:r.address||'',companyNo:r.company_no||'',bankName:r.bank_name||'',bankAccName:r.bank_acc_name||'',bankSortCode:r.bank_sort_code||'',bankAccNo:r.bank_acc_no||'',rentGuide:r.rent_guide||[],marketComps:r.market_comps||[],standardClauses:r.standard_clauses||[],bizDocs:r.biz_docs||[],bizExpenses:r.biz_expenses||[],redress:r.redress_scheme||'',redressNo:r.redress_no||'',cmp:r.cmp_scheme||'Not holding client money',cmpNo:r.cmp_no||'',refPartner:r.ref_partner||'',icoNo:r.ico_no||'',vatRegistered:!!r.vat_registered,vatNumber:r.vat_number||'',invoiceSeq:r.invoice_seq||0,paymentTerms:r.payment_terms||14,abortiveFee:r.abortive_fee??250,noticeFee:r.notice_fee??75,renewalFee:r.renewal_fee??60,arrearsFee:r.arrears_fee??30,keyFee:r.key_fee??60,insuranceFee:r.insurance_fee??50,disputeFee:r.dispute_fee??75,invMoveinFee:r.inv_movein_fee??75,invMoveoutFee:r.inv_moveout_fee??65});
+const agencyToRow=a=>({name:a.name,address:a.address,company_no:a.companyNo||null,bank_name:a.bankName||null,bank_acc_name:a.bankAccName||null,bank_sort_code:a.bankSortCode||null,bank_acc_no:a.bankAccNo||null,rent_guide:a.rentGuide||[],market_comps:a.marketComps||[],standard_clauses:a.standardClauses||[],biz_docs:a.bizDocs||[],biz_expenses:a.bizExpenses||[],redress_scheme:a.redress,redress_no:a.redressNo,cmp_scheme:a.cmp,cmp_no:a.cmpNo,ref_partner:a.refPartner,ico_no:a.icoNo,vat_registered:!!a.vatRegistered,vat_number:a.vatNumber,invoice_seq:a.invoiceSeq||0,payment_terms:a.paymentTerms||14,abortive_fee:a.abortiveFee||0,notice_fee:a.noticeFee||0,renewal_fee:a.renewalFee||0,arrears_fee:a.arrearsFee||0,key_fee:a.keyFee||0,insurance_fee:a.insuranceFee||0,dispute_fee:a.disputeFee||0,inv_movein_fee:a.invMoveinFee||0,inv_moveout_fee:a.invMoveoutFee||0,updated_at:new Date().toISOString()});
 const rowToLandlord=r=>({id:r.id,name:r.name||'',joint:r.joint||'',jointEmail:r.joint_email||'',entity:r.entity||'individual',boardOptOut:!!(r.docs&&r.docs.boardOptOut),email:r.email||'',phone:r.phone||'',address:r.address||'',nrl:!!r.nrl,prsReg:r.prs_reg||'',payout:r.payout||'',contactPref:r.contact_pref||'Email',aml:!!r.aml_verified,ownership:!!r.ownership_verified,service:r.service||'full',feePct:r.fee_pct,letWeeks:r.let_weeks,agreement:!!r.agreement_signed,status:r.status||'pending',docs:r.docs||{},comms:r.comms||[],inviteToken:r.invite_token||'',invitedAt:r.invited_at||''});
 const landlordToRow=l=>({id:l.id,agency_id:window._agencyId,name:l.name,joint:l.joint||null,joint_email:l.jointEmail||null,entity:l.entity||'individual',email:l.email,phone:l.phone,address:l.address,nrl:!!l.nrl,prs_reg:l.prsReg,payout:l.payout,contact_pref:l.contactPref,aml_verified:!!l.aml,ownership_verified:!!l.ownership,service:l.service,fee_pct:l.feePct,let_weeks:l.letWeeks,agreement_signed:!!l.agreement,status:l.status,docs:l.docs||{},comms:l.comms||[],invite_token:l.inviteToken||null,invited_at:l.invitedAt||null,updated_at:new Date().toISOString()});
 // Bill-to / statement name — a company landlord shows the company name; joint owners
@@ -385,7 +385,7 @@ const NAV=[
   {k:'marketing',ic:'🏷',t:'Marketing',grp:'Marketing & Referencing'},{k:'applicants',ic:'◕',t:'Applicants & Viewings',grp:'Marketing & Referencing'},{k:'offers',ic:'£',t:'Offers',grp:'Marketing & Referencing'},{k:'referencing',ic:'◷',t:'Referencing',grp:'Marketing & Referencing'},{k:'pipeline',ic:'◫',t:'Tenancy Progression',grp:'Marketing & Referencing'},
   {k:'compliance',ic:'⌘',t:'Compliance',grp:'Tenancy Management'},{k:'inventory2',ic:'📄',t:'Inventory & Check-out',grp:'Tenancy Management'},{k:'rent',ic:'£',t:'Rent & Arrears',grp:'Tenancy Management'},{k:'maintenance',ic:'🔧',t:'Maintenance',grp:'Tenancy Management'},{k:'keys',ic:'🔑',t:'Key Register',grp:'Tenancy Management'},
   {k:'notices',ic:'⚖',t:'Possession & Notices',grp:'End of Tenancy'},
-  {k:'invoices',ic:'£',t:'Invoices',grp:'Money & Documents'},{k:'templates',ic:'✉',t:'Letters & Templates',grp:'Money & Documents'},{k:'clientmoney',ic:'◐',t:'Client Money',grp:'Money & Documents'},
+  {k:'invoices',ic:'£',t:'Invoices',grp:'Money & Documents'},{k:'business',ic:'🏢',t:'Business',grp:'Money & Documents'},{k:'templates',ic:'✉',t:'Letters & Templates',grp:'Money & Documents'},{k:'clientmoney',ic:'◐',t:'Client Money',grp:'Money & Documents'},
   {k:'settings',ic:'⚙',t:'Agency Settings',grp:'Agency'}
 ];
 let view='dashboard', sel=null, llView=false;
@@ -497,7 +497,7 @@ function render(){
     marketing:vMarketing, listing:vListingDetail, applicants:vApplicants, offers:vOffers, inbox:vInbox,
     keys:vKeys, reports:vReports, clientmoney:vClientMoney,
     referencing:vReferencing, properties:vProperties, property:vPropertyDetail, llportal:vLandlordPortal, llproperty:vLandlordPortalProperty,
-    invoices:vInvoices, invoice:vInvoiceDetail, settings:vSettings, templates:vTemplates, notices:vNotices, notice:vNoticeDetail, compliance:vCompliance,
+    invoices:vInvoices, invoice:vInvoiceDetail, business:vBusiness, settings:vSettings, templates:vTemplates, notices:vNotices, notice:vNoticeDetail, compliance:vCompliance,
     rent:vRentArrears, maintenance:vMaintenance, inventory2:vInventoryList, inventorydetail:vInventoryDetail, statement:vStatement
   }[view]||vDashboard)();
 }
@@ -3371,6 +3371,75 @@ function vInvoiceDetail(){
     </div>`;
 }
 
+// ── BUSINESS — the agency's own documents (licensing, insurance, incorporation, domain) and
+// bills/invoices it pays (as opposed to landlord/tenant invoices tracked elsewhere). One place
+// so redress, CMP, PII insurance and domain paperwork don't scatter across laptops/email.
+const BIZ_DOC_SUGGESTIONS=['Professional indemnity insurance','Redress scheme certificate','CMP certificate','Certificate of incorporation','ICO registration certificate','Domain registration receipt','AML supervision certificate'];
+function vBusiness(){
+  const a=S.agency; const docs=a.bizDocs||[]; const exps=(a.bizExpenses||[]).slice().sort((x,y)=>(y.date||'').localeCompare(x.date||''));
+  const totalYtd=exps.filter(e=>(e.date||'').slice(0,4)===String(new Date().getFullYear())).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+  return `<h1 class="pg">Business</h1><div class="sub">Your agency's own documents and bills — licensing, insurance, domain, redress/CMP paperwork — separate from landlord and tenant invoices.</div>
+    <div class="panel" style="max-width:700px"><div class="panel-hd"><h2>Business documents</h2><span class="faint" style="font-size:12px">${docs.length} on file</span></div>
+      <div class="panel-bd">
+        ${docs.length?docs.map(d=>`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">📄</div>
+          <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${esc(d.label)}</div><div class="faint" style="font-size:11.5px">${esc(d.name)}${d.expiry?' · expires '+fmtDate(d.expiry):''}${d.addedAt?' · added '+fmtDate(d.addedAt):''}</div></div>
+          <span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>
+          ${d.url?`<button class="btn sm" onclick="viewDoc('${d.url}','${esc(d.label)}')">View</button>`:''}
+          <button class="btn sm" style="color:var(--red)" onclick="bizDocRemove('${d.id}')">Remove</button></div>`).join(''):'<div class="empty" style="padding:16px;text-align:center"><span class="faint" style="font-size:12.5px">No business documents yet.</span></div>'}
+        <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px">
+          <div class="fg"><label>Document type <span class="faint">(pick a common one, or type your own below)</span></label>
+            <select id="biz-doc-suggest" onchange="document.getElementById('biz-doc-label').value=this.value==='__other'?'':this.value">
+              <option value="">Select…</option>${BIZ_DOC_SUGGESTIONS.map(s=>`<option>${s}</option>`).join('')}<option value="__other">Other — type below</option>
+            </select></div>
+          <div class="grid2" style="gap:10px"><div class="fg"><label>Label</label><input id="biz-doc-label" placeholder="e.g. Professional indemnity insurance"></div>
+          <div class="fg"><label>Expiry date <span class="faint">(if it renews)</span></label><input id="biz-doc-expiry" type="date"></div></div>
+          <label style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer;font-size:12.5px;font-weight:600">📄 Attach file<input type="file" accept="application/pdf,image/*" style="display:none" onchange="bizDocFile(this)"></label>
+          <div id="biz-doc-file-status" class="faint" style="font-size:11.5px;margin-top:4px"></div>
+          <button class="btn navy sm" style="margin-top:10px" onclick="bizDocAdd()">＋ Add document</button>
+        </div>
+      </div>
+    </div>
+    <div class="panel" style="max-width:700px;margin-top:16px"><div class="panel-hd"><h2>Business invoices &amp; bills</h2><span class="faint" style="font-size:12px">${gbp(totalYtd)} spent this year</span></div>
+      <div class="panel-bd">
+        ${exps.length?exps.map(e=>`<div class="row" style="padding:8px 0;border-top:1px solid var(--border)"><div style="flex:1"><b style="font-size:13px">${esc(e.what)}</b><div class="faint" style="font-size:11.5px">${esc(e.category||'')}${e.date?' · '+fmtDate(e.date):''}</div></div>
+          <span style="font-size:13px;font-weight:700;color:var(--navy)">${gbp(e.amount)}</span>
+          ${e.url?`<button class="btn sm" onclick="viewDoc('${e.url}','${esc(e.what)}')">Receipt</button>`:''}
+          <button class="btn sm" style="color:var(--red)" onclick="bizExpenseRemove('${e.id}')">Remove</button></div>`).join(''):'<div class="empty" style="padding:16px;text-align:center"><span class="faint" style="font-size:12.5px">No bills logged yet.</span></div>'}
+        <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px">
+          <div class="grid2" style="gap:10px"><div class="fg"><label>What for</label><input id="biz-exp-what" placeholder="e.g. Domain renewal, PII premium, CMP fee"></div>
+          <div class="fg"><label>Category</label><select id="biz-exp-cat"><option>Insurance</option><option>Licensing / redress / CMP</option><option>Domain / hosting / software</option><option>Marketing</option><option>Other</option></select></div></div>
+          <div class="grid2" style="gap:10px"><div class="fg"><label>Amount (£)</label><input id="biz-exp-amount" type="number" step="0.01"></div>
+          <div class="fg"><label>Date</label><input id="biz-exp-date" type="date" value="${today()}"></div></div>
+          <label style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer;font-size:12.5px;font-weight:600">📄 Attach receipt/invoice (optional)<input type="file" accept="application/pdf,image/*" style="display:none" onchange="bizExpFile(this)"></label>
+          <div id="biz-exp-file-status" class="faint" style="font-size:11.5px;margin-top:4px"></div>
+          <button class="btn navy sm" style="margin-top:10px" onclick="bizExpenseAdd()">＋ Add bill</button>
+        </div>
+      </div>
+    </div>`;
+}
+function bizDocFile(input){ const f=input.files[0]; if(!f) return; window._bizDocFile=f;
+  const st=document.getElementById('biz-doc-file-status'); if(st) st.innerHTML='<span style="color:var(--blue)">✦ '+esc(f.name)+' attached</span>'; }
+async function bizDocAdd(){
+  const label=val('biz-doc-label'); if(!label){ toast('Enter or pick a document type',1); return; }
+  const expiry=val('biz-doc-expiry'); let url='', name='';
+  if(window._bizDocFile){ const f=window._bizDocFile; name=f.name; const ext=(f.name.split('.').pop()||'pdf');
+    url=await _storageUpload(f,'agency/biz-doc-'+Date.now()+'.'+ext,'property-documents')||''; }
+  S.agency.bizDocs=S.agency.bizDocs||[]; S.agency.bizDocs.push({id:uid('bd'),label,name:name||label,url,expiry,addedAt:today()});
+  window._bizDocFile=null; save(); if(LIVE) pushAgency(); render(); toast('✓ Document added');
+}
+function bizDocRemove(id){ S.agency.bizDocs=(S.agency.bizDocs||[]).filter(d=>d.id!==id); save(); if(LIVE) pushAgency(); render(); }
+function bizExpFile(input){ const f=input.files[0]; if(!f) return; window._bizExpFile=f;
+  const st=document.getElementById('biz-exp-file-status'); if(st) st.innerHTML='<span style="color:var(--blue)">✦ '+esc(f.name)+' attached</span>'; }
+async function bizExpenseAdd(){
+  const what=val('biz-exp-what'); const amount=parseFloat(val('biz-exp-amount'))||0;
+  if(!what){ toast('Enter what the bill is for',1); return; }
+  const category=val('biz-exp-cat'); const date=val('biz-exp-date')||today(); let url='';
+  if(window._bizExpFile){ const f=window._bizExpFile; const ext=(f.name.split('.').pop()||'pdf');
+    url=await _storageUpload(f,'agency/biz-exp-'+Date.now()+'.'+ext,'property-documents')||''; }
+  S.agency.bizExpenses=S.agency.bizExpenses||[]; S.agency.bizExpenses.push({id:uid('be'),what,amount,category,date,url});
+  window._bizExpFile=null; save(); if(LIVE) pushAgency(); render(); toast('✓ Bill logged');
+}
+function bizExpenseRemove(id){ S.agency.bizExpenses=(S.agency.bizExpenses||[]).filter(e=>e.id!==id); save(); if(LIVE) pushAgency(); render(); }
 // ── SETTINGS ──
 function vSettings(){
   const a=S.agency;
