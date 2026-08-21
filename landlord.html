@@ -745,8 +745,9 @@ async function aiProxy(payload, { maxRetries = 3, label = 'AI' } = {}) {
       // 402 = AI allowance reached / credit exhausted. Do NOT retry — surface so the
       // caller can fall back to manual entry (see aiUnavailable / isAIQuotaError).
       if (res.status === 402) {
-        const err = new Error(`${label} allowance reached`);
-        err.code = 'ai_quota'; err.status = 402; err.overQuota = true;
+        let body = null; try { body = await res.clone().json(); } catch(e){}
+        const err = new Error(body?.message || `${label} unavailable`);
+        err.code = body?.error || 'ai_quota'; err.status = 402; err.overQuota = true;
         throw err;
       }
       if (res.status === 429 || res.status >= 500) {
@@ -1803,8 +1804,12 @@ function isAIQuotaError(resOrErr, body){
 
 // Call from any AI-scan path. Shows a clear, non-scary message + keeps the manual form
 // usable. Never blocks the underlying form.
-function aiUnavailable({ overQuota=false, feature='AI scan' } = {}){
-  if (overQuota){
+function aiUnavailable({ overQuota=false, code='', feature='AI scan' } = {}){
+  if (code === 'ai_credit'){
+    toast('AI is out of credit on the account — enter the details manually below.', true);
+  } else if (code === 'ai_global_cap'){
+    toast('AI is at capacity for everyone right now — enter the details manually, or try again later.', true);
+  } else if (overQuota){
     toast('AI allowance reached for this month — you can still enter the details manually below.', true);
   } else {
     toast(feature + ' is busy right now — enter the details manually, or try again in a moment.', true);
@@ -1822,7 +1827,7 @@ async function aiScanFetch(payload, { feature = 'AI scan' } = {}){
   });
   if (res.status === 402){
     let body = null; try { body = await res.clone().json(); } catch(e){}
-    aiUnavailable({ overQuota: true, feature });
+    aiUnavailable({ overQuota: true, code: body?.error, feature });
   } else if (!res.ok){
     aiUnavailable({ overQuota: false, feature });
   }
@@ -4567,10 +4572,6 @@ function moTenant(pid) {
 
 // Open moTenant pre-set to co-tenant tab for a specific property
 function _moCoTenant(pid) {
-  // Clear any leftover draft first — drafts are only meant to resume an
-  // interrupted lead-tenant entry, not to be offered/reused when adding a
-  // co-tenant, which was causing stale name/email to leak into this form.
-  _clearTenantDraft();
   moTenant(pid);
   // Switch to co-tenant tab after modal opens
   setTimeout(() => toggleTenantType('co'), 80);
@@ -18873,7 +18874,7 @@ Include fair_wear items too (charge 0) so the landlord sees what was correctly N
       method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+(window._sbToken||'')},
       body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:3500,messages:[{role:'user',content}]})
     });
-    if(res.status===402){ aiUnavailable({overQuota:true,feature:'Check-out comparison'}); btn.disabled=false; btn.innerHTML='✦ Generate report'; return; }
+    if(res.status===402){ const _b=await res.clone().json().catch(()=>null); aiUnavailable({overQuota:true,code:_b?.error,feature:'Check-out comparison'}); btn.disabled=false; btn.innerHTML='✦ Generate report'; return; }
     const data=await res.json();
     let raw=data.content?.[0]?.text||'';
     let parsed=null;
@@ -19834,28 +19835,87 @@ function buildWrittenStatement(f){
   const terms = (f.terms||'').trim();
   const occ = (f.occupants||[]).filter(o=>o.name && String(o.name).trim());
   const H = (n,t)=>`<h3 style="font-size:14px;font-weight:700;color:#0B1E3D;margin:18px 0 6px">${n}. ${t}</h3>`;
-  const furnishedClauses = furnished!=='Unfurnished' ? `${H(13,'Furnishings')}<p>The property is let <strong>${furnished.toLowerCase()}</strong>. A full inventory of landlord-owned items is attached as Schedule 1 and forms part of this agreement. The tenant must keep all such items in the same condition as at the start of the tenancy (fair wear and tear excepted), must not remove or dispose of any item without the landlord\u2019s written consent, and must report any damage promptly in writing.</p>` : '';
+  const Hg = t => `<h4 style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#5A6B82;margin:26px 0 4px;border-top:1px solid #E2E5EA;padding-top:14px">${t}</h4>`;
+  const Li = arr => `<ul style="margin:4px 0 0;padding-left:20px">${arr.map(x=>`<li style="margin-bottom:4px">${x}</li>`).join('')}</ul>`;
+  const furnishedClauses = furnished!=='Unfurnished' ? `${H(28,'Furnishings')}<p>The property is let <strong>${furnished.toLowerCase()}</strong>. A full inventory of landlord-owned items is attached as Schedule 1 and forms part of this agreement. The tenant must keep all such items in the same condition as at the start of the tenancy (fair wear and tear excepted), must not remove or dispose of any item without the landlord\u2019s written consent, and must report any damage promptly in writing.</p>` : '';
   const nF = furnished!=='Unfurnished';
   return `<h2 style="font-size:18px;font-weight:700;color:#0B1E3D;margin:0 0 4px;text-align:center">Written Statement of Terms</h2>
   <p style="text-align:center;color:#5A6B82;margin:0 0 4px">Assured Tenancy under the Renters\u2019 Rights Act 2025</p>
   <p style="text-align:center;color:#5A6B82;font-size:12px;margin:0 0 16px">Statement prepared ${today}</p>
-  <p style="font-size:12px;color:#5A6B82;border:1px solid #E2E5EA;border-radius:6px;padding:8px 10px;background:#F8FAFC">This document is the written statement of terms the landlord is required by law to give the tenant. It records the terms of the tenancy and the information prescribed under the Renters\u2019 Rights Act 2025.</p>
-  ${H(1,'Parties')}<p><strong>Landlord:</strong> ${ll}<br><strong>Address for service of notices on the landlord</strong> (in England and Wales): ${llAddr}<br><strong>Tenant:</strong> ${tn}</p>
+  <p style="font-size:12px;color:#5A6B82;border:1px solid #E2E5EA;border-radius:6px;padding:8px 10px;background:#F8FAFC">This document is the written statement of terms the landlord is required by law to give the tenant. It records the terms of the tenancy, the information prescribed under the Renters\u2019 Rights Act 2025, and additional terms agreed between the parties.</p>
+  ${H(1,'Parties')}<p><strong>Landlord:</strong> ${ll}<br><strong>Address for service of notices on the landlord</strong> (in England and Wales): ${llAddr}<br><strong>Tenant:</strong> ${tn}</p><p>Where there is more than one tenant, they are jointly and severally liable for all obligations under this agreement \u2014 each is responsible both individually and together with the others, including for breaches caused by a visitor or person they allow into the property, and this liability continues until all sums due are paid and any breach is put right.</p>
   ${occ.length?`<p><strong>Permitted occupiers</strong> (not tenants; do not sign):</p><ul>${occ.map(o=>`<li>${e(o.name)}${o.age?`, age ${e(o.age)}`:''}${o.age>=18?' \u2014 adult; Right to Rent check required before the tenancy begins':''}</li>`).join('')}</ul>`:''}
-  ${H(2,'Property')}<p>The dwelling-house let under this tenancy is: <strong>${prop}</strong>.</p>
+  ${H(2,'Property')}<p>The dwelling-house let under this tenancy is: <strong>${prop}</strong>, together with the fixtures and fittings recorded in the check-in inventory and schedule of condition. <strong>Licensing:</strong> ${e(f.licenceClause)||'Property licensing status to be confirmed by the landlord.'}</p>
   ${H(3,'Type of tenancy and possession')}<p>This is an <strong>assured periodic tenancy</strong> under the Housing Act 1988 as amended by the Renters\u2019 Rights Act 2025. There is no fixed term and no end date \u2014 the tenancy runs on a periodic (rolling) basis. The tenant is first entitled to possession on <strong>${start}</strong>.</p>
-  ${H(4,'Rent')}<p>The rent is <strong>\u00a3${rent} per month</strong>, payable in advance on the <strong>${rentDay}</strong> day of each month. Rent may only be increased once in any 12-month period, by the landlord serving the prescribed notice under <strong>section 13 of the Housing Act 1988</strong> giving at least two months\u2019 notice. The tenant may not be required to pay more than one month\u2019s rent in advance.</p>
-  ${H(5,'Bills and council tax')}<p>Except as stated here, the tenant is responsible for council tax, gas, electricity, water and communications/TV licence for the property. Bills included in the rent: <strong>${bills}</strong>.</p>
-  ${H(6,'Deposit')}<p>A tenancy deposit of <strong>\u00a3${deposit}</strong> is payable. It will be protected in the <strong>${scheme}</strong> within 30 days of receipt, and the prescribed information given to the tenant within the same period. The deposit may not exceed five weeks\u2019 rent (six weeks\u2019 where annual rent is \u00a350,000 or more).</p>
-  ${H(7,'Ending the tenancy')}<p>The tenant may end the tenancy at any time by giving the landlord at least <strong>two months\u2019 written notice</strong>, ending on a rent payment day. The landlord cannot evict using a \u201csection 21\u201d notice (abolished). The landlord may only end the tenancy by obtaining a <strong>court order for possession</strong> on one or more grounds in Schedule 2 to the Housing Act 1988, having first served the prescribed notice specifying the ground(s) relied on.</p>
-  ${H(8,'Landlord\u2019s obligations')}<p>The landlord must keep the structure, exterior and installations for water, gas, electricity, sanitation and heating in repair and working order (section 11, Landlord and Tenant Act 1985); ensure the property is fit for human habitation; maintain a valid Gas Safety Certificate (annually) and EICR (every five years); and comply with <strong>Awaab\u2019s Law</strong> \u2014 investigating reported hazards within 14 days and beginning emergency repairs within 24 hours where required.</p>
-  ${H(9,'Tenant\u2019s obligations')}<p>The tenant must pay the rent; use the property as their only or principal home in a tenant-like manner; not cause damage or nuisance; allow access for inspections and repairs on 24 hours\u2019 written notice (except emergencies); and not make alterations without the landlord\u2019s written consent.</p>
-  ${H(10,'Quiet enjoyment and access')}<p>The tenant is entitled to quiet enjoyment free from harassment. The landlord, agents or contractors may enter only with at least <strong>24 hours\u2019 written notice</strong> at a reasonable time, except in an emergency.</p>
-  ${H(11,'Subletting')}<p>The tenant must not sublet or part with possession of the whole or any part of the property without the landlord\u2019s prior written consent.</p>
-  ${H(12,'Pets, parking and licensing')}<p><strong>Pets:</strong> ${pets}. The landlord must not unreasonably refuse a request to keep a pet. <strong>Parking:</strong> ${parking}. <strong>Licensing:</strong> ${f.licenceClause||'Property licensing status to be confirmed by the landlord.'}</p>
+  ${H(4,'Rent')}<p>The rent is <strong>\u00a3${rent} per month</strong>, payable in advance on the <strong>${rentDay}</strong> day of each month. Rent may only be increased once in any 12-month period, by the landlord serving the prescribed notice under <strong>section 13 of the Housing Act 1988</strong> giving at least two months\u2019 notice. The tenant may not be required to pay more than one month\u2019s rent in advance. If rent remains unpaid for more than 14 days after it is due, interest accrues on the unpaid amount at 3% above the Bank of England base rate from the end of that 14-day period until paid in full. The tenant must not withhold any rent on the ground that the landlord holds the deposit, and must meet the reasonable cost of a contractor call-out requested by the tenant where no fault is found, or the fault is found to be caused by the tenant.</p>
+  ${H(5,'Council tax, bills and utilities')}<p>Except as stated here, the tenant is responsible for council tax and for gas, electricity, water, telecommunications/broadband and TV licence charges at the property, including a fair share of any standing charge for the period the tenancy is in force. Bills included in the rent: <strong>${bills}</strong>.</p>
+  ${Li([
+    'Notify each utility supplier and the local authority that the tenancy has started and put the accounts for services used into the tenant\u2019s name(s).',
+    'Give the meter readings taken at check-in to the relevant suppliers, and take final readings at the end of the tenancy.',
+    'Not tamper with, alter or add to any meter or its installation, including fitting a pre-payment meter.',
+    'Give a forwarding address to the utility suppliers and local authority at the end of the tenancy.'
+  ])}
+  ${H(6,'Deposit')}<p>A tenancy deposit of <strong>\u00a3${deposit}</strong> is payable. It will be protected in the <strong>${scheme}</strong> within 30 days of receipt, and the prescribed information given to the tenant within the same period. The deposit may not exceed five weeks\u2019 rent (six weeks\u2019 where annual rent is \u00a350,000 or more) and yields no interest to the tenant.</p><p>At the end of the tenancy the landlord will set out in writing any proposed deductions within 14 days. The landlord may deduct from the deposit, or claim as compensation, reasonable and evidenced amounts for:</p>
+  ${Li([
+    'damage to the property or its fixtures and fittings caused by the tenant, their household or visitors, beyond fair wear and tear;',
+    'cleaning required to return the property to the standard recorded at check-in;',
+    'damage or cleaning arising from a pet kept at the property;',
+    'any other breach of this agreement;',
+    'unpaid rent, council tax or utility charges arising during the tenancy; and',
+    'any other sum properly due under this agreement.'
+  ])}
+  <p>Where the tenant disagrees with a proposed deduction, the disputed amount is resolved through the free dispute resolution service of the deposit scheme, or by agreement or court order. Where there is more than one tenant, they are jointly and severally liable and any one of them may act on behalf of the others in the dispute process, and the landlord may discharge the deposit by paying any one, some or all of the tenants.</p>
+  ${H(7,'Condition, repairs and cleaning')}<p>The tenant must:</p>
+  ${Li([
+    'keep the interior and the landlord\u2019s fixtures and fittings in the same decorative order and condition as recorded at check-in, fair wear and tear excepted, and report promptly anything falling within the landlord\u2019s repairing obligations (clause 18);',
+    'use the property in a tenant-like manner and keep it clean to the standard recorded at check-in, meeting reasonable professional cleaning costs if it is not returned to that standard;',
+    'clean windows, blinds and curtains as needed and within one month of the tenancy ending (excluding the outside of upper-floor windows in flats), clean taps and shower heads at least monthly to prevent limescale, and clean any chimney flue in use annually and at the end of the tenancy;',
+    'keep smoke and carbon monoxide alarms in working order, replacing batteries as needed and reporting any fault promptly, and replace broken glass, blown bulbs, tubes and fuses promptly;',
+    'take reasonable precautions against frost damage to pipes and against overloading electrical circuits, and, if the property is left vacant for 7 days or more, run all taps for several minutes before first use afterwards;',
+    'take reasonable steps to heat and ventilate the property to minimise condensation, and report any damp or mould promptly \u2014 the landlord is responsible for investigating and remedying this under clause 18, save that where an independent inspection shows the damp or mould resulted from the tenant\u2019s breach of these obligations, the tenant meets the reasonable, evidenced cost of remedy; and',
+    'keep extractor fans, vents and ducts clear, and report any damage to communal areas.'
+  ])}
+  ${H(8,'Use of the property')}<p>The tenant must:</p>
+  ${Li([
+    'use the property as a private residence for the named tenant and any declared dependants only, and not run a business from it or register a company at the address (this does not restrict working from home);',
+    'not use the property for any illegal purpose, hold an auction there, or use or permit any unlawfully held drug or substance there;',
+    'avoid noise audible outside the property, particularly music or audio equipment before 10am or after 11pm, and not otherwise cause a nuisance to neighbours;',
+    'not decorate, alter the property, remove any landlord\u2019s fixtures or fittings, or fix anything to the walls beyond a reasonable number of picture hooks, without the landlord\u2019s prior written consent (not to be unreasonably withheld), and make good any resulting damage;',
+    'not erect an aerial, satellite dish, sign or similar without consent, meeting the cost of installation, removal and any resulting damage;',
+    'dry laundry only in permitted areas, take reasonable precautions against pest infestation (meeting treatment costs if caused by the tenant), remove rubbish regularly, and not put oil, grease or corrosive substances down sinks or drains;',
+    'leave the landlord\u2019s furniture and effects in their original rooms at the end of the tenancy; and',
+    'may request the landlord\u2019s consent to reasonable disability-related alterations under section 190 of the Equality Act 2010; such consent will not be unreasonably withheld.'
+  ])}
+  ${H(9,'Insurance')}<p>The tenant must not do anything that would invalidate the landlord\u2019s buildings insurance, and must meet any additional premium, excess or cost caused by a breach of this clause. Any fire, theft, loss or damage must be reported to the police where appropriate and to the landlord as soon as possible, with written details to follow. The tenant\u2019s own possessions are not covered by the landlord\u2019s insurance; the tenant is responsible for insuring their own belongings.</p>
+  ${H(10,'Locks, keys and security')}<p>The tenant must secure all locks, bolts and any alarm when leaving the property or at night, and not change an alarm code, fit, remove or change a lock, without the landlord\u2019s prior written consent (except in an emergency), providing the landlord a set of keys to any new lock. The tenant must notify the landlord in writing of the number of any additional keys cut for the existing locks. All keys, fobs, permits and security devices must be returned at the end of the tenancy; the tenant is liable for the cost of replacing any not returned.</p>
+  ${H(11,'Garden (if applicable)')}<p>The tenant must keep any garden, driveway, patio or balcony in the same condition as at the start of the tenancy, free of weeds, with grass cut regularly, and must not remove established planting without the landlord\u2019s consent.</p>
+  ${H(12,'Leaving the property vacant')}<p>The tenant must notify the landlord in writing before leaving the property vacant for 14 days or more, comply with any requirement of the landlord\u2019s insurance relating to unoccupied property, and meet reasonable costs of keeping the property secure while empty.</p>
+  ${H(13,'Access, inspections and viewings')}<p>The tenant must allow the landlord, their agent or contractors to enter to inspect, maintain or repair the property at reasonable times, normally on at least 24 hours\u2019 written notice, except in an emergency. This includes periodic inspections (typically every three months, or more often where there is cause for concern) by appointment, and \u2014 in the period before the tenancy is due to end \u2014 reasonable viewings by prospective tenants or buyers by appointment, and display of \u201cTo Let\u201d or \u201cFor Sale\u201d boards for a minimum of 14 days from the start of the tenancy; the tenant is liable for the reasonable cost of replacing or resiting a board they remove or damage within that period.</p>
+  ${H(14,'Subletting, lodgers and additional occupiers')}<p>The tenant must not assign, sublet or share possession of the property, take in lodgers, or allow anyone other than the named tenant and declared occupiers to live there \u2014 nor allow it to become a licensable House in Multiple Occupation \u2014 without the landlord\u2019s prior written consent.</p>
+  ${H(15,'Parking and storage')}<p>Parking provision: <strong>${parking}</strong>. The tenant must park only in any space allocated to the property, must not store a caravan, boat or commercial vehicle without consent, and this tenancy carries no entitlement to a local authority residents\u2019 parking permit.</p>
+  ${H(16,'Pets')}<p>${pets}. Any request to keep a pet is considered under section 16A of the Housing Act 1988 (as amended) and will not be unreasonably refused; the landlord may attach reasonable conditions, such as a professional clean at the end of the tenancy if a pet has been kept.</p>
+  ${H(17,'Ending the tenancy, inventory and check-out')}<p>The tenant may end the tenancy at any time by giving the landlord at least <strong>two months\u2019 written notice</strong>, ending on a rent payment day. The landlord cannot evict using a \u201csection 21\u201d notice (abolished) and may only end the tenancy by obtaining a <strong>court order for possession</strong> on one or more grounds in Schedule 2 to the Housing Act 1988 (as amended by the Renters\u2019 Rights Act 2025), having first served the prescribed notice specifying the ground(s) relied on. The tenant must complete and sign the check-in inventory and schedule of condition; if the tenant leaves belongings at the property after the tenancy ends, the landlord may dispose of them after 14 days and recover any reasonable costs from the proceeds.</p>
+  ${Hg('Landlord\u2019s obligations')}
+  ${H(18,'Repair and safety')}<p>The landlord must:</p>
+  ${Li([
+    'keep in repair the structure and exterior of the property, and the installations for water, gas, electricity, sanitation and heating (section 11, Landlord and Tenant Act 1985), save where disrepair arises from the tenant\u2019s misuse or negligence;',
+    'ensure the property is fit for human habitation at the start of the tenancy and throughout (section 9A, Landlord and Tenant Act 1985);',
+    'maintain a valid Gas Safety Certificate (checked annually) and EICR (every five years), and \u2014 where the property is furnished \u2014 ensure furniture and furnishings meet the Furniture and Furnishings (Fire) (Safety) Regulations 1988;',
+    'ensure smoke and carbon monoxide alarms meet the Smoke and Carbon Monoxide Alarm (England) Regulations 2015; and',
+    'comply with <strong>Awaab\u2019s Law</strong> \u2014 investigating reported hazards within 14 days and beginning emergency repairs within 24 hours where required \u2014 and pay all outgoings for the property other than those that are the tenant\u2019s responsibility under this agreement.'
+  ])}
+  ${H(19,'Quiet enjoyment and access')}<p>The tenant is entitled to quiet enjoyment free from harassment. The landlord, agents or contractors may enter only with at least <strong>24 hours\u2019 written notice</strong> at a reasonable time, except in an emergency.</p>
+  ${H(20,'Right to make disability-related improvements')}<p>Under section 190 of the Equality Act 2010, the tenant may request consent to make reasonable improvements to assist a disabled occupier. The landlord must not unreasonably withhold consent.</p>
+  ${Hg('General')}
+  ${H(21,'Data protection')}<p>The landlord and their agent will process and retain personal data relating to the tenant in accordance with the UK GDPR and Data Protection Act 2018, and may share it where necessary and lawful with utility providers, referencing agencies, contractors, legal and debt-recovery advisers, and other parties involved in managing this tenancy.</p>
+  ${H(22,'Notices')}<p>Notices may be served by first-class post (deemed served two working days after posting) or by email (deemed served the same day if sent before 4.30pm on a business day, otherwise the next business day), to the tenant\u2019s last-known address or email, or to the landlord at the address for service given in clause 1.</p>
+  ${H(23,'Head lease')}<p>Where the property is held under a superior lease, the tenant is bound by its terms once given notice of them, and the landlord will take reasonable steps to ensure the superior landlord\u2019s own obligations under that lease are met.</p>
+  ${H(24,'Interruption to the tenancy')}<p>If the property is destroyed or made uninhabitable by fire or another risk covered by the landlord\u2019s insurance, rent stops being payable until the property is reinstated, unless the insurance money is withheld because of something the tenant or their visitors did or failed to do. If the property is not made habitable again within one month, either party may end this agreement immediately by written notice to the other.</p>
+  ${H(25,'Agent\u2019s declaration')}<p>Where this tenancy is arranged through a managing agent, the agent confirms that neither the agent nor any person connected with the agent (as defined in the Estate Agents Act 1979) has a personal interest in the property, other than as disclosed to the parties in writing.</p>
+  ${H(26,'Smoking')}<p>Smoking is not permitted inside the property, and the tenant must not allow visitors or guests to smoke inside it. Where this clause is breached, the tenant is responsible for the reasonable cost of any fumigation or redecoration needed to return the property to the condition recorded at check-in.</p>
+  ${H(27,'Non-integrated appliances')}<p>Any non-integrated kitchen appliance left at the property by the landlord (other than an oven, hob or cooker) is provided for the tenant\u2019s use as a goodwill gesture only. The landlord is not responsible for repairing or replacing it. If the tenant chooses to replace a faulty item at their own cost, the replacement belongs to the tenant and may be removed at the end of the tenancy; any landlord-supplied item still working at that point must remain at the property.</p>
   ${furnishedClauses}
-  ${H(nF?14:13,'Right to make disability-related improvements')}<p>Under section 190 of the Equality Act 2010, the tenant may request consent to make reasonable improvements to assist a disabled occupier. The landlord must not unreasonably withhold consent.</p>
-  ${terms?`${H(nF?15:14,'Additional terms agreed between the parties')}<p>${e(terms).replace(/\n/g,'<br>')}</p>`:''}
+  ${terms?`${H(nF?29:28,'Additional terms agreed between the parties')}<p>${e(terms).replace(/\n/g,'<br>')}</p>`:''}
   <p style="font-size:12px;color:#5A6B82;border:1px solid #E2E5EA;border-radius:6px;padding:8px 10px;background:#F8FAFC;margin-top:14px">Any term of this agreement that conflicts with the tenant\u2019s statutory rights, or is otherwise unlawful or unfair under the Consumer Rights Act 2015, is void and unenforceable. All other terms remain in full force.</p>
   <h3 style="font-size:14px;font-weight:700;color:#0B1E3D;margin:22px 0 10px">Signatures</h3>
   <table style="width:100%;border-collapse:collapse"><tr>
@@ -20711,15 +20771,8 @@ function scanPropEPC(input) {
       if (parsed.rating) {
         const r = parsed.rating.toUpperCase().charAt(0);
         const sel = document.getElementById('p-epc');
-        if (sel) { for (const opt of sel.options) { if (opt.value.startsWith(r)) { sel.value = opt.value; break; } } }
-      }
-      _scanBoxSuccess('p-epc-scan-box', file, parsed);
-      toast('✓ EPC scanned — check fields below');
-    } catch(e) {
-      _scanBoxError('p-epc-scan-box', file);
-    }
-  };
-  reader.readAsDataURL(file);
+        if (sel) { for (const opt of sel.options) { if (opt.value.startsWith(r)) { sel.value = opt.value; break;     }
+  }
 }
 
 // ── TRIAL STATE ──
@@ -20915,6 +20968,15 @@ async function sendTrialEmail(type) {
       })
     });
   } catch(e) { /* non-critical */ }
+}
+      }
+      _scanBoxSuccess('p-epc-scan-box', file, parsed);
+      toast('✓ EPC scanned — check fields below');
+    } catch(e) {
+      _scanBoxError('p-epc-scan-box', file);
+    }
+  };
+  reader.readAsDataURL(file);
 }
 
 // ── AI SCAN: DEPOSIT CERTIFICATE (moAddProp Step 5) ──

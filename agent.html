@@ -595,7 +595,7 @@ async function generateListingDescription(){
   const prompt=`You are a UK letting agent writing a property listing description for Rightmove, Zoopla and OpenRent. Write ONE paragraph (60-90 words) in the polished, matter-of-fact style top London agents use — a short opening hook, then flowing sentences on layout and condition. No bullet points, no ALL CAPS, no made-up features, no exaggerated claims (e.g. don't invent a view or a renovation that wasn't mentioned). Plain text only, no markdown, no heading.\n\nProperty details:\n- Type: ${ptype||'property'}, ${beds||'?'} bed, ${baths||'?'} bath, ${furn||''}\n- Address/area: ${addr||''}${pc?', '+pc:''}\n- Rent: £${rent||'?'}/month\n- EPC rating: ${epc||'not specified'}\n- Features: ${feat||'none listed'}`;
   try{
     const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:300,messages:[{role:'user',content:prompt}]})});
-    if(res.status===402){ toast('AI allowance reached — write it manually for now',1); }
+    if(res.status===402){ toast(await aiFailMsg(res,'write it manually for now'),1); }
     else{
       const data=await res.json(); const txt=((data.content&&data.content[0]&&data.content[0].text)||'').trim();
       if(txt){ const ta=document.getElementById('ls-desc'); if(ta) ta.value=txt; toast('✦ Draft added — review before publishing'); }
@@ -1371,7 +1371,7 @@ async function extractComparablesFromPaste(vid){
   const prompt=`The text below was copied from one or more UK property-to-rent listings (Rightmove, Zoopla, OpenRent, etc). Extract EVERY distinct listing you can find. Return ONLY a JSON array, no prose: [{"address":"as specific as given","beds":number or null,"rent":number (monthly GBP — if a weekly figure is given, convert: weekly*52/12, rounded to nearest 5),"dateLet":"YYYY-MM-DD or null if not stated"}]. Skip anything that isn't clearly a property listing with a price.\n\nTEXT:\n${text}`;
   try{
     const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:1200,messages:[{role:'user',content:prompt}]})});
-    if(res.status===402){ toast('AI allowance reached — enter these manually for now',1); }
+    if(res.status===402){ toast(await aiFailMsg(res,'enter these manually for now'),1); }
     else{
       const data=await res.json(); let txt=((data.content&&data.content[0]&&data.content[0].text)||'').replace(/```json|```/g,'').trim();
       const arr=JSON.parse(txt||'[]').filter(x=>x&&x.address&&x.rent);
@@ -2250,7 +2250,7 @@ async function aiScanCert(pid,key,input){
       ? [{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:prompt}]
       : [{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},{type:'text',text:prompt}];
     const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:200,messages:[{role:'user',content}]})});
-    if(res.status===402){ if(st)st.textContent='AI allowance reached — enter the date manually.'; return; }
+    if(res.status===402){ if(st)st.textContent=await aiFailMsg(res,'enter the date manually.'); return; }
     const data=await res.json();
     if(!res.ok){ console.error('aiScanCert error',res.status,data); if(st)st.textContent='AI scan failed ('+res.status+': '+(data.error||data.message||'unknown')+') — enter the date manually.'; return; }
     const txt=((data.content&&data.content[0]&&data.content[0].text)||'{}').replace(/```json|```/g,'').trim();
@@ -2449,7 +2449,7 @@ async function aiScanDeposit(input){
       ? [{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:prompt}]
       : [{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},{type:'text',text:prompt}];
     const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:200,messages:[{role:'user',content}]})});
-    if(res.status===402){ if(st)st.textContent='AI allowance reached — enter the date manually.'; return; }
+    if(res.status===402){ if(st)st.textContent=await aiFailMsg(res,'enter the date manually.'); return; }
     const data=await res.json();
     if(!res.ok){ console.error('aiScanDeposit error',res.status,data); if(st)st.textContent='AI scan failed — enter the date manually.'; return; }
     const txt=((data.content&&data.content[0]&&data.content[0].text)||'{}').replace(/```json|```/g,'').trim();
@@ -2535,7 +2535,7 @@ async function rtrExtDocAdd(pid,input){
     const prompt='This is a UK Right to Rent referencing report from an external checking company. Return ONLY JSON, no prose: {"checkDate":"YYYY-MM-DD or null","satisfied":true|false}. "satisfied" = true if the report clears the tenant to rent.';
     const content=isImg?[{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:prompt}]:[{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},{type:'text',text:prompt}];
     const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:150,messages:[{role:'user',content}]})});
-    if(res.status===402){ if(st) st.textContent='AI allowance reached — enter the date manually.'; return; }
+    if(res.status===402){ if(st) st.textContent=await aiFailMsg(res,'enter the date manually.'); return; }
     const data=await res.json(); const txt=((data.content&&data.content[0]&&data.content[0].text)||'{}').replace(/```json|```/g,'').trim();
     let parsed; try{ parsed=JSON.parse(txt); }catch(e){ parsed=null; }
     if(parsed&&parsed.checkDate){ const el=document.getElementById('rtr-ext-date'); if(el) el.value=parsed.checkDate; }
@@ -3720,6 +3720,15 @@ function saveReference(){
 // Talks ONLY to agency_agreements — never esign_requests / the tenancy flow.
 // ═══════════════════════════════════════════════════════════════════════════
 const AG_EDGE='https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy';
+// Reads the ai-proxy 402 body to show the real cause instead of a generic message.
+async function aiFailMsg(res,fallback){
+  let d={}; try{ d=await res.clone().json(); }catch(e){}
+  const code=d&&d.error;
+  if(code==='ai_credit') return 'AI is out of credit on the account — '+fallback;
+  if(code==='ai_global_cap') return 'AI is at capacity for everyone right now — '+fallback;
+  if(code==='ai_quota') return (d.message||'AI allowance reached for this month')+' — '+fallback;
+  return 'AI is unavailable right now — '+fallback;
+}
 const SIGN_EDGE='https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/sign-doc';
 let _agSigPad=null;
 
@@ -4027,22 +4036,102 @@ function viewSigningReceipt(id){
 function tenancyAgreementFor(tid){ return (S.tenancyAgreements||[]).filter(a=>a.tenant_id===tid).sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0))[0]; }
 function buildTenancyAgreementHtml(p,rec,l){
   const b=agencyBrand();
-  const occNames=(rec.occupants||[]).map(o=>o.name).filter(Boolean);
+  const c=p.compliance||{};
+  const occ=(rec.occupants||[]).filter(o=>o.name);
+  const occNames=occ.map(o=>o.name);
   const tenantNames=[rec.name,...occNames].filter(Boolean).join(', ');
   const depositScheme=rec.scheme||'a government-approved tenancy deposit scheme (to be confirmed within 30 days of receipt)';
-  return `<h2 style="font-family:Georgia,serif;font-size:19px;color:#0B1E3D;margin-bottom:4px">Tenancy Terms &amp; Conditions</h2>
-    <p style="color:#7A8FA6;font-size:12px;margin-bottom:18px">An assured tenancy under the Housing Act 1988, as amended by the Renters’ Rights Act — periodic from the outset, with no fixed term.</p>
-    <p><b>Parties.</b> Landlord: <b>${esc(landlordName(l))}</b>, acting through their managing agent <b>${esc(b.name)}</b>${b.address?' of '+esc(b.address):''}. Tenant(s): <b>${esc(tenantNames)}</b>. Property: <b>${esc(p.address)}${p.city?', '+esc(p.city):''}${p.postcode?' '+esc(p.postcode):''}</b>.</p>
-    <p><b>1. Tenancy type and term.</b> This is a periodic assured tenancy starting <b>${fmtDate(rec.start)}</b>, running from period to period with no fixed end date. There is no Section 21 route for the Landlord to end this tenancy — it can only be ended by the Tenant giving notice, or by the Landlord relying on a statutory ground under Section 8 of the Housing Act 1988 through the courts.</p>
-    <p><b>2. Rent.</b> ${gbp(rec.rent||p.rent)} per month, due on the ${esc(p.rentDueDay||'1st')} of each period. Rent can only be increased once every 12 months, by the Landlord serving a statutory Section 13 notice giving at least 2 months’ notice — never by any other mechanism — and the Tenant may refer an increase they consider above market rent to the First-tier Tribunal.</p>
-    <p><b>3. Deposit.</b> ${gbp(rec.deposit||0)} held as a deposit, protected in ${esc(depositScheme)}. Any dispute about deductions at the end of the tenancy is resolved through that scheme’s free adjudication service — the Landlord cannot unilaterally withhold funds.</p>
-    <p><b>4. Right to Rent.</b> It is a continuing condition of this tenancy that every adult occupier maintains a Right to Rent under the Immigration Act 2014. Where an occupier’s right is time-limited, the Tenant must provide evidence of its renewal when it falls due.</p>
-    <p><b>5. Tenant’s responsibilities.</b> The Tenant will: pay the rent on time; keep the Property reasonably clean and undamaged, fair wear and tear excepted; report repairs promptly; allow the Landlord or Agent access with at least 24 hours’ written notice (except genuine emergencies); test smoke and carbon monoxide alarms regularly and report any fault; help control the risk of Legionella by running taps after any absence and not tampering with the boiler’s thermostat; tell the Landlord before leaving the Property unoccupied for more than 28 days; not sub-let or assign the tenancy; and, at the end of the tenancy, remove all belongings — anything left for more than 14 days afterwards may be treated as abandoned. Where there is more than one Tenant, each is jointly and severally responsible for the whole of these obligations.</p>
-    <p><b>6. Pets.</b> The Tenant may request permission to keep a pet. The Landlord cannot unreasonably refuse and must respond within 28 days; reasonable conditions (such as pet damage insurance) may be attached to any consent given.</p>
-    <p><b>7. Landlord’s responsibilities.</b> The Landlord will: keep the structure, exterior, and installations for water, gas, electricity, heating and sanitation in repair; keep the Property to the Decent Homes Standard; investigate and act on reports of damp or mould within the timescales required by Awaab’s Law; maintain a valid EPC, Gas Safety record (where applicable) and EICR, and give the Tenant a copy of each; and not interfere with the Tenant’s quiet enjoyment of the Property.</p>
-    <p><b>8. Insurance.</b> The Landlord’s insurance (where held) does not cover the Tenant’s own belongings — the Tenant is responsible for insuring their own possessions.</p>
-    <p><b>9. Ending the tenancy.</b> The Tenant may end the tenancy at any time by giving at least 2 months’ written notice. The Landlord may only recover possession by serving a valid notice under Section 8 relying on a statutory ground, and, if the Tenant does not leave, by obtaining a court order.</p>
-    <p style="color:#7A8FA6;font-size:11.5px;margin-top:16px">This statement satisfies the Landlord’s obligation to give the Tenant written terms. It does not remove any right either party has under the Housing Act 1988, the Renters’ Rights Act, or other legislation in force.</p>`;
+  const prop=[p.address,p.city,p.postcode].filter(Boolean).map(esc).join(', ');
+  const rentDay=esc(p.rentDueDay||'1st');
+  const furnished=p.furnished||'Unfurnished';
+  const nF=furnished!=='Unfurnished';
+  const parking=p.parking||'Not included';
+  const pets=rec.pets||'Not permitted without the landlord\u2019s written consent';
+  const licenceClause=c.hmoApplicable?('HMO / selective licence'+(c.hmoNo?': '+esc(c.hmoNo):' \u2014 reference to be confirmed by the landlord.')):'No HMO or selective licence applies to this property.';
+  const H=(n,t)=>`<h3 style="font-size:14px;font-weight:700;color:#0B1E3D;margin:18px 0 6px">${n}. ${t}</h3>`;
+  const Hg=t=>`<h4 style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#5A6B82;margin:26px 0 4px;border-top:1px solid #E2E5EA;padding-top:14px">${t}</h4>`;
+  const Li=arr=>`<ul style="margin:4px 0 0;padding-left:20px">${arr.map(x=>`<li style="margin-bottom:4px">${x}</li>`).join('')}</ul>`;
+  const letterhead=`<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px;gap:20px;border-bottom:2px solid #0B1E3D;padding-bottom:14px">
+    <div><div style="font-family:var(--disp);font-size:22px;color:#0B1E3D;line-height:1.15">${esc((b.name||'Beacon Residentials').split(' ')[0])} <span style="color:#009970;font-weight:400">${esc((b.name||'Beacon Residentials').split(' ').slice(1).join(' ')||'Residentials')}</span></div>
+      <div class="faint" style="font-size:11.5px;line-height:1.6;margin-top:4px;white-space:pre-line">${esc(b.address||'')}${b.redressNo?'<br>Redress: '+esc(b.redress||'')+' \u00b7 '+esc(b.redressNo):''}</div></div>
+    <div style="text-align:right;flex-shrink:0"><div style="font-family:var(--disp);font-size:17px;color:#0B1E3D;white-space:nowrap">TENANCY AGREEMENT</div><div class="faint" style="font-size:11px;margin-top:2px">${fmtDate(today())}</div></div>
+  </div>`;
+  const furnishedClauses=nF?`${H(28,'Furnishings')}<p>The property is let <strong>${esc(furnished).toLowerCase()}</strong>. A full inventory of landlord-owned items is attached as Schedule 1 and forms part of this agreement. The tenant must keep all such items in the same condition as at the start of the tenancy (fair wear and tear excepted), must not remove or dispose of any item without the landlord\u2019s written consent, and must report any damage promptly in writing.</p>`:'';
+  return `${letterhead}
+  <p style="text-align:center;color:#5A6B82;margin:0 0 16px">Assured Tenancy under the Renters\u2019 Rights Act 2025 \u2014 prepared by ${esc(b.name)} on behalf of the landlord</p>
+  ${H(1,'Parties')}<p><strong>Landlord:</strong> ${esc(landlordName(l))}, acting through their managing agent <strong>${esc(b.name)}</strong>${b.address?' of '+esc(b.address):''}.<br><strong>Tenant:</strong> ${esc(tenantNames)}</p><p>Where there is more than one tenant, they are jointly and severally liable for all obligations under this agreement \u2014 each is responsible both individually and together with the others, including for breaches caused by a visitor or person they allow into the property, and this liability continues until all sums due are paid and any breach is put right.</p>
+  ${occ.length?`<p><strong>Permitted occupiers</strong> (not tenants; do not sign):</p><ul>${occ.map(o=>`<li>${esc(o.name)}${o.age?`, age ${esc(o.age)}`:''}${o.age>=18?' \u2014 adult; Right to Rent check required before the tenancy begins':''}</li>`).join('')}</ul>`:''}
+  ${H(2,'Property')}<p>The dwelling-house let under this tenancy is: <strong>${prop}</strong>, together with the fixtures and fittings recorded in the check-in inventory and schedule of condition. <strong>Licensing:</strong> ${licenceClause}</p>
+  ${H(3,'Type of tenancy and possession')}<p>This is an <strong>assured periodic tenancy</strong> under the Housing Act 1988 as amended by the Renters\u2019 Rights Act 2025. There is no fixed term and no end date \u2014 the tenancy runs on a periodic (rolling) basis. The tenant is first entitled to possession on <strong>${fmtDate(rec.start)}</strong>.</p>
+  ${H(4,'Rent')}<p>The rent is <strong>${gbp(rec.rent||p.rent)} per month</strong>, payable in advance on the <strong>${rentDay}</strong> day of each month. Rent may only be increased once in any 12-month period, by the landlord serving the prescribed notice under <strong>section 13 of the Housing Act 1988</strong> giving at least two months\u2019 notice. The tenant may not be required to pay more than one month\u2019s rent in advance. If rent remains unpaid for more than 14 days after it is due, interest accrues on the unpaid amount at 3% above the Bank of England base rate from the end of that 14-day period until paid in full. The tenant must not withhold any rent on the ground that the landlord holds the deposit, and must meet the reasonable cost of a contractor call-out requested by the tenant where no fault is found, or the fault is found to be caused by the tenant.</p>
+  ${H(5,'Council tax, bills and utilities')}<p>Except as stated here, the tenant is responsible for council tax and for gas, electricity, water, telecommunications/broadband and TV licence charges at the property, including a fair share of any standing charge for the period the tenancy is in force.</p>
+  ${Li([
+    'Notify each utility supplier and the local authority that the tenancy has started and put the accounts for services used into the tenant\u2019s name(s).',
+    'Give the meter readings taken at check-in to the relevant suppliers, and take final readings at the end of the tenancy.',
+    'Not tamper with, alter or add to any meter or its installation, including fitting a pre-payment meter.',
+    'Give a forwarding address to the utility suppliers and local authority at the end of the tenancy.'
+  ])}
+  ${H(6,'Deposit')}<p>A tenancy deposit of <strong>${gbp(rec.deposit||0)}</strong> is payable. It will be protected in <strong>${esc(depositScheme)}</strong> within 30 days of receipt, and the prescribed information given to the tenant within the same period. The deposit may not exceed five weeks\u2019 rent (six weeks\u2019 where annual rent is \u00a350,000 or more) and yields no interest to the tenant.</p><p>At the end of the tenancy the landlord will set out in writing any proposed deductions within 14 days. The landlord may deduct from the deposit, or claim as compensation, reasonable and evidenced amounts for:</p>
+  ${Li([
+    'damage to the property or its fixtures and fittings caused by the tenant, their household or visitors, beyond fair wear and tear;',
+    'cleaning required to return the property to the standard recorded at check-in;',
+    'damage or cleaning arising from a pet kept at the property;',
+    'any other breach of this agreement;',
+    'unpaid rent, council tax or utility charges arising during the tenancy; and',
+    'any other sum properly due under this agreement.'
+  ])}
+  <p>Where the tenant disagrees with a proposed deduction, the disputed amount is resolved through the free dispute resolution service of the deposit scheme, or by agreement or court order. Where there is more than one tenant, they are jointly and severally liable and any one of them may act on behalf of the others in the dispute process, and the landlord may discharge the deposit by paying any one, some or all of the tenants.</p>
+  ${H(7,'Condition, repairs and cleaning')}<p>The tenant must:</p>
+  ${Li([
+    'keep the interior and the landlord\u2019s fixtures and fittings in the same decorative order and condition as recorded at check-in, fair wear and tear excepted, and report promptly anything falling within the landlord\u2019s repairing obligations (clause 18);',
+    'use the property in a tenant-like manner and keep it clean to the standard recorded at check-in, meeting reasonable professional cleaning costs if it is not returned to that standard;',
+    'clean windows, blinds and curtains as needed and within one month of the tenancy ending (excluding the outside of upper-floor windows in flats), clean taps and shower heads at least monthly to prevent limescale, and clean any chimney flue in use annually and at the end of the tenancy;',
+    'keep smoke and carbon monoxide alarms in working order, replacing batteries as needed and reporting any fault promptly, and replace broken glass, blown bulbs, tubes and fuses promptly;',
+    'take reasonable precautions against frost damage to pipes and against overloading electrical circuits, and, if the property is left vacant for 7 days or more, run all taps for several minutes before first use afterwards;',
+    'take reasonable steps to heat and ventilate the property to minimise condensation, and report any damp or mould promptly \u2014 the landlord is responsible for investigating and remedying this under clause 18, save that where an independent inspection shows the damp or mould resulted from the tenant\u2019s breach of these obligations, the tenant meets the reasonable, evidenced cost of remedy; and',
+    'keep extractor fans, vents and ducts clear, and report any damage to communal areas.'
+  ])}
+  ${H(8,'Use of the property')}<p>The tenant must:</p>
+  ${Li([
+    'use the property as a private residence for the named tenant and any declared dependants only, and not run a business from it or register a company at the address (this does not restrict working from home);',
+    'not use the property for any illegal purpose, hold an auction there, or use or permit any unlawfully held drug or substance there;',
+    'avoid noise audible outside the property, particularly music or audio equipment before 10am or after 11pm, and not otherwise cause a nuisance to neighbours;',
+    'not decorate, alter the property, remove any landlord\u2019s fixtures or fittings, or fix anything to the walls beyond a reasonable number of picture hooks, without the landlord\u2019s prior written consent (not to be unreasonably withheld), and make good any resulting damage;',
+    'not erect an aerial, satellite dish, sign or similar without consent, meeting the cost of installation, removal and any resulting damage;',
+    'dry laundry only in permitted areas, take reasonable precautions against pest infestation (meeting treatment costs if caused by the tenant), remove rubbish regularly, and not put oil, grease or corrosive substances down sinks or drains;',
+    'leave the landlord\u2019s furniture and effects in their original rooms at the end of the tenancy; and',
+    'may request the landlord\u2019s consent to reasonable disability-related alterations under section 190 of the Equality Act 2010; such consent will not be unreasonably withheld.'
+  ])}
+  ${H(9,'Insurance')}<p>The tenant must not do anything that would invalidate the landlord\u2019s buildings insurance, and must meet any additional premium, excess or cost caused by a breach of this clause. Any fire, theft, loss or damage must be reported to the police where appropriate and to the landlord as soon as possible, with written details to follow. The tenant\u2019s own possessions are not covered by the landlord\u2019s insurance; the tenant is responsible for insuring their own belongings.</p>
+  ${H(10,'Locks, keys and security')}<p>The tenant must secure all locks, bolts and any alarm when leaving the property or at night, and not change an alarm code, fit, remove or change a lock, without the landlord\u2019s prior written consent (except in an emergency), providing the landlord a set of keys to any new lock. The tenant must notify the landlord in writing of the number of any additional keys cut for the existing locks. All keys, fobs, permits and security devices must be returned at the end of the tenancy; the tenant is liable for the cost of replacing any not returned.</p>
+  ${H(11,'Garden (if applicable)')}<p>The tenant must keep any garden, driveway, patio or balcony in the same condition as at the start of the tenancy, free of weeds, with grass cut regularly, and must not remove established planting without the landlord\u2019s consent.</p>
+  ${H(12,'Leaving the property vacant')}<p>The tenant must notify the landlord in writing before leaving the property vacant for 14 days or more, comply with any requirement of the landlord\u2019s insurance relating to unoccupied property, and meet reasonable costs of keeping the property secure while empty.</p>
+  ${H(13,'Access, inspections and viewings')}<p>The tenant must allow the landlord, their agent or contractors to enter to inspect, maintain or repair the property at reasonable times, normally on at least 24 hours\u2019 written notice, except in an emergency. This includes periodic inspections (typically every three months, or more often where there is cause for concern) by appointment, and \u2014 in the period before the tenancy is due to end \u2014 reasonable viewings by prospective tenants or buyers by appointment, and display of \u201cTo Let\u201d or \u201cFor Sale\u201d boards for a minimum of 14 days from the start of the tenancy; the tenant is liable for the reasonable cost of replacing or resiting a board they remove or damage within that period.</p>
+  ${H(14,'Subletting, lodgers and additional occupiers')}<p>The tenant must not assign, sublet or share possession of the property, take in lodgers, or allow anyone other than the named tenant and declared occupiers to live there \u2014 nor allow it to become a licensable House in Multiple Occupation \u2014 without the landlord\u2019s prior written consent.</p>
+  ${H(15,'Parking and storage')}<p>Parking provision: <strong>${esc(parking)}</strong>. The tenant must park only in any space allocated to the property, must not store a caravan, boat or commercial vehicle without consent, and this tenancy carries no entitlement to a local authority residents\u2019 parking permit.</p>
+  ${H(16,'Pets')}<p>${esc(pets)}. Any request to keep a pet is considered under section 16A of the Housing Act 1988 (as amended) and will not be unreasonably refused; the landlord may attach reasonable conditions, such as a professional clean at the end of the tenancy if a pet has been kept.</p>
+  ${H(17,'Ending the tenancy, inventory and check-out')}<p>The tenant may end the tenancy at any time by giving the landlord at least <strong>two months\u2019 written notice</strong>, ending on a rent payment day. The landlord cannot evict using a \u201csection 21\u201d notice (abolished) and may only end the tenancy by obtaining a <strong>court order for possession</strong> on one or more grounds in Schedule 2 to the Housing Act 1988 (as amended by the Renters\u2019 Rights Act 2025), having first served the prescribed notice specifying the ground(s) relied on. The tenant must complete and sign the check-in inventory and schedule of condition; if the tenant leaves belongings at the property after the tenancy ends, the landlord may dispose of them after 14 days and recover any reasonable costs from the proceeds.</p>
+  ${Hg('Landlord\u2019s obligations')}
+  ${H(18,'Repair and safety')}<p>The landlord must:</p>
+  ${Li([
+    'keep in repair the structure and exterior of the property, and the installations for water, gas, electricity, sanitation and heating (section 11, Landlord and Tenant Act 1985), save where disrepair arises from the tenant\u2019s misuse or negligence;',
+    'ensure the property is fit for human habitation at the start of the tenancy and throughout (section 9A, Landlord and Tenant Act 1985);',
+    'maintain a valid Gas Safety Certificate (checked annually) and EICR (every five years), and \u2014 where the property is furnished \u2014 ensure furniture and furnishings meet the Furniture and Furnishings (Fire) (Safety) Regulations 1988;',
+    'ensure smoke and carbon monoxide alarms meet the Smoke and Carbon Monoxide Alarm (England) Regulations 2015; and',
+    'comply with <strong>Awaab\u2019s Law</strong> \u2014 investigating reported hazards within 14 days and beginning emergency repairs within 24 hours where required \u2014 and pay all outgoings for the property other than those that are the tenant\u2019s responsibility under this agreement.'
+  ])}
+  ${H(19,'Quiet enjoyment and access')}<p>The tenant is entitled to quiet enjoyment free from harassment. The landlord, agents or contractors may enter only with at least <strong>24 hours\u2019 written notice</strong> at a reasonable time, except in an emergency.</p>
+  ${H(20,'Right to make disability-related improvements')}<p>Under section 190 of the Equality Act 2010, the tenant may request consent to make reasonable improvements to assist a disabled occupier. The landlord must not unreasonably withhold consent.</p>
+  ${Hg('General')}
+  ${H(21,'Data protection')}<p>The landlord and their agent will process and retain personal data relating to the tenant in accordance with the UK GDPR and Data Protection Act 2018, and may share it where necessary and lawful with utility providers, referencing agencies, contractors, legal and debt-recovery advisers, and other parties involved in managing this tenancy.</p>
+  ${H(22,'Notices')}<p>Notices may be served by first-class post (deemed served two working days after posting) or by email (deemed served the same day if sent before 4.30pm on a business day, otherwise the next business day), to the tenant\u2019s last-known address or email, or to the landlord\u2019s agent at ${b.address?esc(b.address):'the address given above'}.</p>
+  ${H(23,'Head lease')}<p>Where the property is held under a superior lease, the tenant is bound by its terms once given notice of them, and the landlord will take reasonable steps to ensure the superior landlord\u2019s own obligations under that lease are met.</p>
+  ${H(24,'Interruption to the tenancy')}<p>If the property is destroyed or made uninhabitable by fire or another risk covered by the landlord\u2019s insurance, rent stops being payable until the property is reinstated, unless the insurance money is withheld because of something the tenant or their visitors did or failed to do. If the property is not made habitable again within one month, either party may end this agreement immediately by written notice to the other.</p>
+  ${H(25,'Agent\u2019s declaration')}<p>${esc(b.name)} confirms that neither the agent nor any person connected with the agent (as defined in the Estate Agents Act 1979) has a personal interest in the property, other than as disclosed to the parties in writing.</p>
+  ${H(26,'Smoking')}<p>Smoking is not permitted inside the property, and the tenant must not allow visitors or guests to smoke inside it. Where this clause is breached, the tenant is responsible for the reasonable cost of any fumigation or redecoration needed to return the property to the condition recorded at check-in.</p>
+  ${H(27,'Non-integrated appliances')}<p>Any non-integrated kitchen appliance left at the property by the landlord (other than an oven, hob or cooker) is provided for the tenant\u2019s use as a goodwill gesture only. The landlord is not responsible for repairing or replacing it. If the tenant chooses to replace a faulty item at their own cost, the replacement belongs to the tenant and may be removed at the end of the tenancy; any landlord-supplied item still working at that point must remain at the property.</p>
+  ${furnishedClauses}
+  <p style="font-size:12px;color:#5A6B82;border:1px solid #E2E5EA;border-radius:6px;padding:8px 10px;background:#F8FAFC;margin-top:14px">Any term of this agreement that conflicts with the tenant\u2019s statutory rights, or is otherwise unlawful or unfair under the Consumer Rights Act 2015, is void and unenforceable. All other terms remain in full force. This document satisfies the landlord\u2019s obligation to give the tenant written terms and does not remove any right either party has under the Housing Act 1988, the Renters\u2019 Rights Act 2025, or other legislation in force.</p>`;
 }
 let _tnAgSigPad=null;
 function openTenancyAgreement(pid){
@@ -4420,7 +4509,7 @@ async function tplPolish(){
   const prompt=`You are a senior UK letting agent at ${agencyBrand().name}. Rewrite the letter below to be warmer, clearer and professional, keeping ALL facts, names, figures and dates identical. Keep it concise. Return ONLY the letter body as simple HTML <p> paragraphs (no markdown, no subject line, no signature change).\n\nLETTER:\n${plain}`;
   try{
     const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:900,messages:[{role:'user',content:prompt}]})});
-    if(res.status===402){ toast('AI allowance reached — sending as-is is fine',1); if(btn){btn.disabled=false;btn.innerHTML='✦ Polish tone with AI';} return; }
+    if(res.status===402){ const m=await aiFailMsg(res,'sending as-is is fine'); toast(m,1); if(btn){btn.disabled=false;btn.innerHTML='✦ Polish tone with AI';} return; }
     const data=await res.json(); let txt=(data.content&&data.content[0]&&data.content[0].text)||'';
     txt=txt.replace(/```html|```/g,'').trim();
     if(txt){ _tplAiBody=txt; const el=document.getElementById('tpl-prev'); if(el) el.innerHTML=letterWrap(built.subject,txt); toast('✦ Polished — review & send'); }
@@ -5288,7 +5377,7 @@ async function aiCompareItem(vid,i){
     const stageParts=await Promise.all(toSet.photos.map(_imgPart));
     const content=[...checkinParts,{type:'text',text:'CHECK-IN photos above.'},...stageParts,{type:'text',text:toLabel.toUpperCase()+' photos above.\n\n'+prompt}];
     const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:300,messages:[{role:'user',content}]})});
-    if(res.status===402){ toast('AI allowance reached — try again next month',1); return; }
+    if(res.status===402){ toast(await aiFailMsg(res,'try again next month'),1); return; }
     const data=await res.json();
     if(!res.ok){ console.error('aiCompareItem error',res.status,data); toast('AI compare failed ('+res.status+': '+(data.error||data.message||'unknown')+')',1); return; }
     const txt=((data.content&&data.content[0]&&data.content[0].text)||'').replace(/```json|```/g,'').trim();
@@ -5317,7 +5406,7 @@ async function generateInvReport(vid,type){
   if(!eligible.length){ toast(type==='movein'?'Add check-in photos to at least one room first':'Add photos for this stage to at least one room first',1); return; }
   toast('✦ Generating '+stageLabel+' report — this can take a moment…');
   window._invGenProgress={vid,type,stageLabel,i:0,total:eligible.length}; render();
-  const results=[]; let quotaHit=false;
+  const results=[]; let quotaHit=false; let quotaMsg='';
   for(const r of eligible){
     window._invGenProgress={vid,type,stageLabel,i:results.length+1,total:eligible.length}; render();
     if(quotaHit) break;
@@ -5337,13 +5426,13 @@ async function generateInvReport(vid,type){
       let res,data;
       for(let attempt=0;attempt<3;attempt++){
         res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:280,messages:[{role:'user',content}]})});
-        if(res.status===402){ quotaHit=true; break; }
+        if(res.status===402){ quotaHit=true; quotaMsg=await aiFailMsg(res,'report saved for the rooms already analysed'); break; }
         if(res.ok){ data=await res.json(); break; }
         data=await res.json().catch(()=>({}));
         if(res.status>=500&&attempt<2){ await new Promise(rs=>setTimeout(rs,800*(attempt+1))); continue; }
         break;
       }
-      if(quotaHit){ toast('AI allowance reached partway through — report saved for the rooms already analysed',1); break; }
+      if(quotaHit){ toast(quotaMsg||'AI allowance reached partway through — report saved for the rooms already analysed',1); break; }
       if(!res.ok){ console.error('generateInvReport error',res.status,data); results.push({room:r.room,item:r.item,classification:type==='movein'?'baseline':'fair_wear',charge:0,summary:'AI error ('+res.status+') — review manually.',checkinPhotos:r.checkin.photos.slice(0,2),checkinNote:r.checkin.note||'',stagePhotos:toSet?toSet.photos.slice(0,2):[],stageNote:toSet?toSet.note||'':'',stageLabel:cmpLabel}); continue; }
       const txt=((data.content&&data.content[0]&&data.content[0].text)||'').replace(/```json|```/g,'').trim();
       let parsed; try{ parsed=JSON.parse(txt); }catch(pe){ console.error('generateInvReport: bad JSON',txt); parsed=null; }
