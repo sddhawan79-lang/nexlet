@@ -6,14 +6,15 @@
 <title>NexLet — Agency Portal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600;700&family=Dancing+Script:wght@600;700&family=Caveat:wght@600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=Playfair+Display:ital@1&family=DM+Sans:wght@300;400;500;600;700&family=Dancing+Script:wght@600;700&family=Caveat:wght@600;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --navy:#0B1E3D; --navy2:#16305a; --orange:#E8923A; --green:#1B7A4B; --green-bg:#EAF6EF;
+  /* Beacon Residentials brand kit — agent side only */
+  --navy:#1B2F4A; --navy2:#0F1F32; --orange:#C8892A; --orange-hover:#DFA24C; --green:#1B7A4B; --green-bg:#EAF6EF;
   --amber:#B86E20; --amber-bg:#FEF2E7; --red:#C0392B; --red-bg:#FBEAE8; --blue:#2A6FDB; --blue-bg:#E9F2FF;
-  --purple:#7C3AED; --purple-bg:#F3EAFB; --txt:#1A2332; --muted:#64748B; --faint:#94A3B8;
-  --border:#E2E5EA; --off:#F4F6F9; --bg:#EAEEF5;
-  --font:'DM Sans',system-ui,sans-serif; --disp:'DM Serif Display',Georgia,serif;
+  --purple:#7C3AED; --purple-bg:#F3EAFB; --txt:#6B5F52; --muted:#8A7D6E; --faint:#A89C8C;
+  --border:#E3D9C8; --off:#FDFAF6; --bg:#F5EDE0;
+  --font:'DM Sans',system-ui,sans-serif; --disp:'Cormorant Garamond',Georgia,serif; --quote:'Playfair Display',Georgia,serif;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:var(--font);background:var(--bg);color:var(--txt)}
@@ -40,7 +41,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--txt)}
 .content{padding:26px 30px 90px;max-width:1120px}
 h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px;font-weight:400}
 .sub{font-size:13px;color:var(--muted);margin-bottom:20px}
-.btn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border);background:#fff;color:#475569;border-radius:9px;padding:9px 15px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:all .12s}
+.btn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border);background:#fff;color:#8A7D6E;border-radius:9px;padding:9px 15px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:all .12s}
 .btn:hover{border-color:#c5d0dd}
 .btn.navy{background:var(--navy);color:#fff;border-color:transparent}
 .btn.navy:hover{background:var(--navy2)}
@@ -59,7 +60,7 @@ h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px
 .panel-hd{padding:15px 20px;border-bottom:1px solid #EEF1F5;display:flex;align-items:center;justify-content:space-between}
 .panel-hd h2{font-size:14px;font-weight:700;color:var(--navy)}
 .panel-bd{padding:18px 20px}
-.row{display:flex;align-items:center;gap:14px;padding:15px 20px;border-bottom:1px solid #F1F3F6}
+.row{display:flex;align-items:center;gap:14px;padding:15px 20px;border-bottom:1px solid #F1E8D8}
 .row:last-child{border-bottom:none}
 .av{width:40px;height:40px;border-radius:50%;background:var(--bg);color:var(--navy);font-weight:700;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
 .pill{font-size:10.5px;font-weight:700;padding:3px 10px;border-radius:100px;white-space:nowrap;display:inline-block}
@@ -106,7 +107,7 @@ h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px
 .tree-node .tree-ic{width:26px;height:26px;border-radius:7px;background:var(--off);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
 .tree-children{padding:6px 14px 10px 40px;background:#FBFCFE}
 .tree-node .tree-node{margin:8px 0}
-.tree-leaf{display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid #F1F3F6}
+.tree-leaf{display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid #F1E8D8}
 .tree-leaf:last-child{border-bottom:none}
 .tree-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 .chk.on .box{background:var(--green);border-color:var(--green)}
@@ -134,7 +135,7 @@ h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px
 <body>
 <div class="app">
   <aside class="sb">
-    <div class="sb-logo"><div class="nm" style="font-size:20px;line-height:1.15">Beacon <b style="color:var(--green);font-weight:400">Residentials</b></div><div style="font-size:10.5px;color:rgba(255,255,255,.45);margin-top:3px">Powered by Nex<span style="color:var(--orange)">Let</span></div><div class="sb-badge">AGENCY MODE</div></div>
+    <div class="sb-logo"><div class="nm" style="font-size:20px;line-height:1.15">Beacon <b style="font-weight:400">Residentials</b></div><div style="font-size:10.5px;color:rgba(255,255,255,.45);margin-top:3px">Powered by Nex<span style="color:var(--orange)">Let</span></div><div class="sb-badge">AGENCY MODE</div></div>
     <nav class="sb-nav" id="nav"></nav>
     <div class="sb-foot">
       <div id="scheme-foot" style="margin:0 0 12px;padding:10px 12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px"></div>
@@ -369,13 +370,13 @@ function gbp(n){ return '£'+Math.round(n||0).toLocaleString(); }
 function today(){ return new Date().toISOString().slice(0,10); }
 
 const STAGES=[
-  {k:'instructed',t:'Instructed',c:'#64748B'},{k:'marketing',t:'Marketing',c:'#2A6FDB'},
+  {k:'instructed',t:'Instructed',c:'#8A7D6E'},{k:'marketing',t:'Marketing',c:'#2A6FDB'},
   {k:'referencing',t:'Referencing',c:'#D98324'},{k:'contract',t:'Contract & e-sign',c:'#7C3AED'},
   {k:'movein',t:'Move-in',c:'#0E7490'},{k:'managed',t:'Managed',c:'#1B7A4B'}
 ];
-const SVC={full:{label:'Full management',bg:'var(--green-bg)',color:'var(--green)'},letonly:{label:'Let-only',bg:'var(--off)',color:'#475569'}};
+const SVC={full:{label:'Full management',bg:'var(--green-bg)',color:'var(--green)'},letonly:{label:'Let-only',bg:'var(--off)',color:'#8A7D6E'}};
 const STATUS={active:{label:'Active',bg:'var(--green-bg)',color:'var(--green)'},pending:{label:'Agreement pending',bg:'var(--amber-bg)',color:'var(--amber)'}};
-const RAG={green:{label:'● Pass',bg:'var(--green-bg)',color:'var(--green)'},amber:{label:'● Caution',bg:'var(--amber-bg)',color:'var(--amber)'},red:{label:'● Fail',bg:'var(--red-bg)',color:'var(--red)'},none:{label:'Not started',bg:'var(--off)',color:'#475569'}};
+const RAG={green:{label:'● Pass',bg:'var(--green-bg)',color:'var(--green)'},amber:{label:'● Caution',bg:'var(--amber-bg)',color:'var(--amber)'},red:{label:'● Fail',bg:'var(--red-bg)',color:'var(--red)'},none:{label:'Not started',bg:'var(--off)',color:'#8A7D6E'}};
 const CREDIT={not_requested:{label:'Credit: not requested',bg:'var(--off)',color:'#94A3B8'},requested:{label:'Credit: requested',bg:'var(--blue-bg)',color:'var(--blue)'},in_progress:{label:'Credit: in progress',bg:'var(--amber-bg)',color:'var(--amber)'},complete:{label:'Credit: report attached',bg:'var(--green-bg)',color:'var(--green)'}};
 
 const NAV=[
@@ -495,11 +496,11 @@ function landlordMonthlyFee(l){ return S.properties.filter(p=>p.landlordId===l.i
 //  viewings/offers (see sql-agency-lettings.sql). Accepting an offer hands off to
 //  the existing Referencing module.
 // ════════════════════════════════════════════════════════════════════════════
-const LISTING_STATUS={ draft:['Draft','var(--off)','#64748B'], live:['Live','var(--green-bg)','var(--green)'], let:['Let Agreed','var(--blue-bg)','var(--blue)'], archived:['Archived','var(--off)','#94A3B8'] };
+const LISTING_STATUS={ draft:['Draft','var(--off)','#8A7D6E'], live:['Live','var(--green-bg)','var(--green)'], let:['Let Agreed','var(--blue-bg)','var(--blue)'], archived:['Archived','var(--off)','#94A3B8'] };
 const APP_STATUS={ new:['New enquiry','var(--blue-bg)','var(--blue)'], viewing:['Viewing booked','var(--amber-bg)','var(--amber)'], offer:['Offer made','var(--purple-bg)','var(--purple)'], referencing:['Referencing','var(--green-bg)','var(--green)'], placed:['Placed','var(--green-bg)','var(--green)'], archived:['Archived','var(--off)','#94A3B8'] };
 const OFFER_STATUS={ offered:['Offered','var(--amber-bg)','var(--amber)'], negotiating:['Negotiating','var(--blue-bg)','var(--blue)'], accepted:['Accepted','var(--green-bg)','var(--green)'], withdrawn:['Withdrawn','var(--off)','#94A3B8'], rejected:['Rejected','var(--red-bg)','var(--red)'], withdrawn:['Withdrawn','var(--off)','#94A3B8'] };
 const SOURCES=['Rightmove','Zoopla','Website','Walk-in','Phone','Referral'];
-function _pill(map,k){ const v=map[k]||['—','var(--off)','#64748B']; return `<span class="pill" style="background:${v[1]};color:${v[2]}">${v[0]}</span>`; }
+function _pill(map,k){ const v=map[k]||['—','var(--off)','#8A7D6E']; return `<span class="pill" style="background:${v[1]};color:${v[2]}">${v[0]}</span>`; }
 function LST(id){ return (S.listings||[]).find(x=>x.id===id)||{}; }
 function _listingApps(id){ return (S.applicants||[]).filter(a=>a.listingId===id); }
 function _appViewings(id){ return (S.viewings||[]).filter(v=>v.applicantId===id).sort((a,b)=>new Date(a.when)-new Date(b.when)); }
@@ -668,7 +669,7 @@ function vInbox(){
 function inboundEnquiryRow(e){
   const x=e.extracted||{}; const looksReal=x.is_enquiry!==false;
   return `<div class="row" style="align-items:flex-start">
-    <div class="av" style="background:${looksReal?'var(--blue-bg)':'var(--off)'};color:${looksReal?'var(--blue)':'#64748B'}">✉</div>
+    <div class="av" style="background:${looksReal?'var(--blue-bg)':'var(--off)'};color:${looksReal?'var(--blue)':'#8A7D6E'}">✉</div>
     <div style="flex:1;min-width:0">
       <div style="font-weight:600;font-size:13.5px;color:var(--navy)">${esc(x.name||e.from_email||'Unknown sender')} ${!looksReal?'<span class="faint" style="font-weight:400">(doesn\u2019t look like an enquiry)</span>':''}</div>
       <div class="faint" style="font-size:11.5px;margin-bottom:6px">${esc(e.subject||'')} \u00b7 from ${esc(e.from_email||'')} \u00b7 ${fmtDate(e.created_at)}</div>
@@ -965,35 +966,35 @@ async function confirmOfferAccepted(oid){
 }
 function offerAcceptedLetterHtml(d){ const b=agencyBrand(); const totalDue=(d.rent+d.deposit-d.holding);
   const clausesHtml=d.clauses.length?d.clauses.map(c=>`<p style="margin:10px 0"><b>${esc(c.title)}.</b> ${esc(c.body)}</p>`).join(''):'';
-  const bankRows=`<tr><td style="padding:3px 0;color:#7A8FA6">Amount</td><td style="padding:3px 0;text-align:right;font-weight:700">${gbp(d.holding)}</td></tr>
-    <tr><td style="padding:3px 0;color:#7A8FA6">Reference</td><td style="padding:3px 0;text-align:right">${esc(d.bankRef||d.address)}</td></tr>
-    <tr><td style="padding:3px 0;color:#7A8FA6">Account name</td><td style="padding:3px 0;text-align:right">${esc(d.bankName||'—')}</td></tr>
-    <tr><td style="padding:3px 0;color:#7A8FA6">Sort code</td><td style="padding:3px 0;text-align:right">${esc(d.sortCode||'—')}</td></tr>
-    <tr><td style="padding:3px 0;color:#7A8FA6">Account number</td><td style="padding:3px 0;text-align:right">${esc(d.accNo||'—')}</td></tr>`;
-  return `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#1A2B45">
-    <div style="background:#0B1E3D;padding:20px 24px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:20px;font-weight:700">${esc(b.name)}</span></div>
-    <div style="border:1px solid #E4EAF1;border-top:none;border-radius:0 0 10px 10px;padding:26px 24px">
+  const bankRows=`<tr><td style="padding:3px 0;color:#8A7D6E">Amount</td><td style="padding:3px 0;text-align:right;font-weight:700">${gbp(d.holding)}</td></tr>
+    <tr><td style="padding:3px 0;color:#8A7D6E">Reference</td><td style="padding:3px 0;text-align:right">${esc(d.bankRef||d.address)}</td></tr>
+    <tr><td style="padding:3px 0;color:#8A7D6E">Account name</td><td style="padding:3px 0;text-align:right">${esc(d.bankName||'—')}</td></tr>
+    <tr><td style="padding:3px 0;color:#8A7D6E">Sort code</td><td style="padding:3px 0;text-align:right">${esc(d.sortCode||'—')}</td></tr>
+    <tr><td style="padding:3px 0;color:#8A7D6E">Account number</td><td style="padding:3px 0;text-align:right">${esc(d.accNo||'—')}</td></tr>`;
+  return `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#4A4038">
+    <div style="background:#1B2F4A;padding:20px 24px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:20px;font-weight:700">${esc(b.name)}</span></div>
+    <div style="border:1px solid #E3D9C8;border-top:none;border-radius:0 0 10px 10px;padding:26px 24px">
       <p>Hi ${esc(d.tenants)},</p>
       <p>Congratulations — your offer has been accepted (subject to references and contract) for:<br><b>${esc(d.address)}</b></p>
-      <div style="background:#F5F8FC;border-radius:8px;padding:16px 18px;margin:18px 0">
-        <div style="font-weight:700;margin-bottom:8px;color:#0B1E3D">Holding Deposit (required to secure the property)</div>
+      <div style="background:#FBF3E7;border-radius:8px;padding:16px 18px;margin:18px 0">
+        <div style="font-weight:700;margin-bottom:8px;color:#1B2F4A">Holding Deposit (required to secure the property)</div>
         <p style="margin:0 0 10px">Please make payment of the holding deposit (equal to one week's rent) to begin the process. This will be deducted from your move-in balance.</p>
         <table style="font-size:13px;width:100%">${bankRows}</table>
         <p style="margin:10px 0 0;font-size:12.5px">Please confirm once payment has been made.</p>
       </div>
       <div style="background:#FBF6EC;border-radius:8px;padding:14px 18px;margin:0 0 18px;font-size:12.5px;color:#5C4A1A">
-        <p style="margin:0 0 8px;font-weight:700;color:#0B1E3D">What happens to your holding deposit</p>
+        <p style="margin:0 0 8px;font-weight:700;color:#1B2F4A">What happens to your holding deposit</p>
         <p style="margin:0 0 8px">This is refundable in full unless one of the following applies (Tenant Fees Act 2019): you provide false or misleading information that affects our decision to let to you; you withdraw from the tenancy in writing before it starts; you fail a Right to Rent check; or you fail to take reasonable steps to enter into the tenancy by the agreed move-in date. If we decide to retain it, we'll write to you within 7 days setting out which of these applies and why. If the tenancy goes ahead, it's deducted from your move-in balance as shown below.</p>
       </div>
-      <p style="font-weight:700;margin-bottom:4px;color:#0B1E3D">Please check your tenancy details carefully</p>
-      <p style="font-size:13px;color:#475569;margin-top:0">These details will go into your tenancy agreement. You must tell us within 24 hours if anything is incorrect.</p>
+      <p style="font-weight:700;margin-bottom:4px;color:#1B2F4A">Please check your tenancy details carefully</p>
+      <p style="font-size:13px;color:#8A7D6E;margin-top:0">These details will go into your tenancy agreement. You must tell us within 24 hours if anything is incorrect.</p>
       <ul style="padding-left:18px;line-height:1.9">
         <li>Rent: ${gbp(d.rent)}</li><li>Frequency: Monthly</li><li>Deposit: ${gbp(d.deposit)}</li>
         <li>Move Date: ${fmtDate(d.moveIn)}</li><li>Rent Due Date: ${esc(d.dueDay)}</li><li>Tenant(s): ${esc(d.tenants)}</li>
       </ul>
-      ${clausesHtml?`<p style="font-weight:700;margin:16px 0 2px;color:#0B1E3D">Additional Terms</p>${clausesHtml}`:''}
+      ${clausesHtml?`<p style="font-weight:700;margin:16px 0 2px;color:#1B2F4A">Additional Terms</p>${clausesHtml}`:''}
       ${d.extra?`<p style="margin:10px 0">${esc(d.extra)}</p>`:''}
-      <p style="font-weight:700;margin:20px 0 8px;color:#0B1E3D;font-size:15px">The Move-In Process</p>
+      <p style="font-weight:700;margin:20px 0 8px;color:#1B2F4A;font-size:15px">The Move-In Process</p>
       <p style="margin:0 0 4px"><b>1. Referencing</b></p>
       <ul style="padding-left:18px;line-height:1.8;margin-top:2px">
         <li>${d.refPartner?'Sent via '+esc(d.refPartner)+' ':'Sent to you '}after your holding deposit is paid</li>
@@ -1017,9 +1018,9 @@ function offerAcceptedLetterHtml(d){ const b=agencyBrand(); const totalDue=(d.re
       <p style="margin:12px 0 4px"><b>4. Move-In Payment</b></p>
       <p style="margin:2px 0 6px;font-size:13px">This must be received in cleared funds before keys are released. We recommend paying at least 3 working days before move-in.</p>
       <table style="font-size:13px;width:100%;margin-bottom:6px">
-        <tr><td style="padding:2px 0;color:#7A8FA6">First month's rent</td><td style="padding:2px 0;text-align:right">${gbp(d.rent)}</td></tr>
-        <tr><td style="padding:2px 0;color:#7A8FA6">Deposit</td><td style="padding:2px 0;text-align:right">${gbp(d.deposit)}</td></tr>
-        <tr><td style="padding:2px 0;color:#7A8FA6">Less holding deposit</td><td style="padding:2px 0;text-align:right">− ${gbp(d.holding)}</td></tr>
+        <tr><td style="padding:2px 0;color:#8A7D6E">First month's rent</td><td style="padding:2px 0;text-align:right">${gbp(d.rent)}</td></tr>
+        <tr><td style="padding:2px 0;color:#8A7D6E">Deposit</td><td style="padding:2px 0;text-align:right">${gbp(d.deposit)}</td></tr>
+        <tr><td style="padding:2px 0;color:#8A7D6E">Less holding deposit</td><td style="padding:2px 0;text-align:right">− ${gbp(d.holding)}</td></tr>
         <tr><td style="padding:4px 0;font-weight:700">Total due</td><td style="padding:4px 0;text-align:right;font-weight:700">${gbp(totalDue)}</td></tr>
       </table>
       <p style="margin:12px 0 4px"><b>5. Deposit Protection</b></p>
@@ -1490,7 +1491,7 @@ function vValuationDetail(){
     <h1 class="pg">Valuation — ${esc(lead.name||'Landlord')}</h1>
     <div class="sub">Work out an achievable rent from comparable lettings, then turn it into a proposal for the landlord.</div>
 
-    <div class="panel" style="margin-bottom:16px"><div class="panel-hd"><h2>Property &amp; visit</h2>${v.status==='sent'?'<span class="pill" style="background:var(--green-bg);color:var(--green)">Sent to landlord</span>':'<span class="pill" style="background:var(--off);color:#64748B">Draft</span>'}</div>
+    <div class="panel" style="margin-bottom:16px"><div class="panel-hd"><h2>Property &amp; visit</h2>${v.status==='sent'?'<span class="pill" style="background:var(--green-bg);color:var(--green)">Sent to landlord</span>':'<span class="pill" style="background:var(--off);color:#8A7D6E">Draft</span>'}</div>
       <div class="panel-bd">
         <div class="fg"><label>Property address</label><input id="vv-addr" value="${esc(v.propertyAddress)}" placeholder="e.g. 12 Elm Street, Harrow"></div>
         <div id="vv-ballpark" style="background:var(--off);border-radius:8px;padding:10px 14px;margin-bottom:12px">${ballparkInnerHtml(computeBallpark(v.postcode,v.beds))}</div>
@@ -1571,7 +1572,7 @@ function vValuationDetail(){
         <div style="display:flex;gap:8px;flex-shrink:0;align-items:center">
           <button class="btn" onclick="go('valuationreport','${leadId}')">Open report</button>
           ${v.status==='sent'?`<span class="pill" style="background:var(--green-bg);color:var(--green)">✓ Sent ${fmtDate(v.sentAt||v.createdAt)}</span>`:`<button class="btn navy" onclick="emailValuationReport('${v.id}')">✉ Email report to landlord</button><a href="javascript:void(0)" onclick="markValuationSent('${v.id}')" style="font-size:11.5px">sent it another way</a>`}
-          ${existingLandlord?`<span class="pill" style="background:var(--off);color:#64748B">Already onboarded</span><button class="btn navy" onclick="go('landlord','${existingLandlord.id}')">View landlord record</button>`:`<button class="btn navy" onclick="convertFromValuation('${v.id}')">Landlord's on board → send agreement</button>`}
+          ${existingLandlord?`<span class="pill" style="background:var(--off);color:#8A7D6E">Already onboarded</span><button class="btn navy" onclick="go('landlord','${existingLandlord.id}')">View landlord record</button>`:`<button class="btn navy" onclick="convertFromValuation('${v.id}')">Landlord's on board → send agreement</button>`}
         </div>
       </div>
       ${(lead.comms&&lead.comms.length)?`<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">${lead.comms.slice().reverse().map(c=>`<div class="faint" style="font-size:11.5px;padding:2px 0">${fmtDate(c.date)} — ${esc(c.note)}</div>`).join('')}</div>`:''}
@@ -1615,13 +1616,13 @@ function valuationReportBodyHtml(v,lead){
 }
 function valuationEmailHtml(v,lead){
   const b=agencyBrand();
-  return `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#1A2B45">
-    <div style="background:#0B1E3D;padding:20px 24px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:20px;font-weight:700">${esc(b.name)}</span><div style="font-size:11px;color:#7F9CC0;margin-top:2px">Rental valuation &amp; letting proposal</div></div>
-    <div style="border:1px solid #E4EAF1;border-top:none;border-radius:0 0 10px 10px;padding:26px 24px">
+  return `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#4A4038">
+    <div style="background:#1B2F4A;padding:20px 24px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:20px;font-weight:700">${esc(b.name)}</span><div style="font-size:11px;color:#C9B99E;margin-top:2px">Rental valuation &amp; letting proposal</div></div>
+    <div style="border:1px solid #E3D9C8;border-top:none;border-radius:0 0 10px 10px;padding:26px 24px">
       <p>Dear ${esc(lead.name||'')},</p>
       <p>Thank you for the opportunity to value your property. Here's our proposal:</p>
       ${valuationReportBodyHtml(v,lead)}
-      <p style="font-size:12px;color:#7A8FA6;margin-top:14px">Any questions, just reply to this email — happy to talk it through.</p>
+      <p style="font-size:12px;color:#8A7D6E;margin-top:14px">Any questions, just reply to this email — happy to talk it through.</p>
     </div></div>`;
 }
 function vValuationReport(){
@@ -1707,7 +1708,7 @@ function vLandlordDetail(){
       </div>
       <div>
         <div class="panel"><div class="panel-hd"><h2>Properties (${props.length})</h2></div>
-          ${props.length?props.map(p=>`<div class="row" style="cursor:pointer" onclick="go('property','${p.id}')"><div class="av">⌂</div><div style="flex:1"><div style="font-size:13.5px;font-weight:600;color:var(--navy)">${esc(p.address)}</div><div class="faint" style="font-size:12px">${esc(p.city||'')} · ${gbp(p.rent)}/mo · ${l.service==='full'?'fee '+propFee(p)+'% · '+gbp(p.rent*propFee(p)/100)+'/mo':'let-only'} · Compliance ${propCompliance(p).pct}%</div></div><span class="pill" style="background:var(--off);color:#475569">Manage →</span></div>`).join(''):`<div class="empty">No properties yet. <a href="#" onclick="addProperty('${l.id}');return false" style="color:var(--blue);font-weight:600">Add one</a></div>`}
+          ${props.length?props.map(p=>`<div class="row" style="cursor:pointer" onclick="go('property','${p.id}')"><div class="av">⌂</div><div style="flex:1"><div style="font-size:13.5px;font-weight:600;color:var(--navy)">${esc(p.address)}</div><div class="faint" style="font-size:12px">${esc(p.city||'')} · ${gbp(p.rent)}/mo · ${l.service==='full'?'fee '+propFee(p)+'% · '+gbp(p.rent*propFee(p)/100)+'/mo':'let-only'} · Compliance ${propCompliance(p).pct}%</div></div><span class="pill" style="background:var(--off);color:#8A7D6E">Manage →</span></div>`).join(''):`<div class="empty">No properties yet. <a href="#" onclick="addProperty('${l.id}');return false" style="color:var(--blue);font-weight:600">Add one</a></div>`}
           ${props.length?`<div style="padding:12px 20px"><button class="btn sm" onclick="addProperty('${l.id}')">＋ Add property</button></div>`:''}
         </div>
         <div class="panel"><div class="panel-hd"><h2>Communications</h2><span class="faint" style="font-size:12px">Keep in touch</span></div><div class="panel-bd">
@@ -1749,9 +1750,9 @@ function _landlordDocs(l){
 }
 function docTrailPanel(l){
   const docs=_landlordDocs(l);
-  const pillColor={Signed:['var(--green-bg)','var(--green)'],Served:['var(--amber-bg)','var(--amber)'],Sent:['var(--blue-bg)','var(--blue)'],'Sent — awaiting signature':['var(--amber-bg)','var(--amber)'],Archived:['var(--off)','#94A3B8'],Declined:['var(--red-bg)','var(--red)'],Draft:['var(--off)','#475569']};
+  const pillColor={Signed:['var(--green-bg)','var(--green)'],Served:['var(--amber-bg)','var(--amber)'],Sent:['var(--blue-bg)','var(--blue)'],'Sent — awaiting signature':['var(--amber-bg)','var(--amber)'],Archived:['var(--off)','#94A3B8'],Declined:['var(--red-bg)','var(--red)'],Draft:['var(--off)','#8A7D6E']};
   return `<div class="panel"><div class="panel-hd"><h2>Documents</h2><span class="faint" style="font-size:12px">Sent, signed &amp; archived — full trail</span></div>
-    ${docs.length?docs.map(d=>{ const c=pillColor[d.status]||['var(--off)','#475569']; return `<div class="row"><div class="av" style="font-size:15px">${d.type==='Agreement'?'✍️':d.type==='Notice'?'⚖':'✉'}</div><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:var(--navy)">${esc(d.label)}</div><div class="faint" style="font-size:11.5px">${d.type} · ${d.date?fmtDate(d.date):'—'}</div></div><span class="pill" style="background:${c[0]};color:${c[1]}">${d.status}</span></div>`; }).join(''):`<div class="empty">No documents yet.</div>`}
+    ${docs.length?docs.map(d=>{ const c=pillColor[d.status]||['var(--off)','#8A7D6E']; return `<div class="row"><div class="av" style="font-size:15px">${d.type==='Agreement'?'✍️':d.type==='Notice'?'⚖':'✉'}</div><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:var(--navy)">${esc(d.label)}</div><div class="faint" style="font-size:11.5px">${d.type} · ${d.date?fmtDate(d.date):'—'}</div></div><span class="pill" style="background:${c[0]};color:${c[1]}">${d.status}</span></div>`; }).join(''):`<div class="empty">No documents yet.</div>`}
   </div>`;
 }
 
@@ -1792,7 +1793,7 @@ function refCard(r){
       <div style="font-size:14px;font-weight:600;color:var(--navy)">${esc(r.applicant)}</div>
       <div class="faint" style="font-size:12px;margin:2px 0 8px">${esc(P(r.propertyId).address||'—')} · ${gbp(rent)}/mo${r.offerId?(()=>{ const grp=(S.references||[]).filter(x=>x.offerId===r.offerId); const done=grp.filter(x=>x.status==='green').length; return grp.length>1?' · '+done+'/'+grp.length+' in this tenancy passed':''; })():''}</div>
       <div style="display:flex;gap:7px;flex-wrap:wrap">
-        <span class="pill" style="background:var(--off);color:#475569">${got}/5 docs</span>
+        <span class="pill" style="background:var(--off);color:#8A7D6E">${got}/5 docs</span>
         ${r.income?`<span class="pill" style="background:${afford?'var(--green-bg)':'var(--amber-bg)'};color:${afford?'var(--green)':'var(--amber)'}">Affordability ${afford?'OK':'tight'} (${gbp(r.income)}/yr)</span>`:''}
         <span class="pill" style="background:${cr.bg};color:${cr.color}">${cr.label}</span>
       </div>
@@ -1829,9 +1830,9 @@ async function requestLandlordDepositConfirm(pid){
   const p=P(pid); const l=L(p.landlordId); const rec=tenantRecFor(pid); const email=val('ldc-email')||l.email;
   if(!email){ toast('Enter the landlord\u2019s email',1); return; }
   const b=agencyBrand();
-  const html=`<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#1A2B45">
-    <div style="background:#0B1E3D;padding:20px 24px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:20px;font-weight:700">${esc(b.name)}</span></div>
-    <div style="border:1px solid #E4EAF1;border-top:none;border-radius:0 0 10px 10px;padding:26px 24px">
+  const html=`<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#4A4038">
+    <div style="background:#1B2F4A;padding:20px 24px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:20px;font-weight:700">${esc(b.name)}</span></div>
+    <div style="border:1px solid #E3D9C8;border-top:none;border-radius:0 0 10px 10px;padding:26px 24px">
       <p>Dear ${esc(landlordName(l))},</p>
       <p>We're protecting the deposit of ${gbp(rec.deposit||0)} for <b>${esc(p.address)}</b>. Please reply to confirm you're aware this has been received and is being protected in a government-approved scheme, with prescribed information served on the tenant within 30 days.</p>
       <p>Kind regards,<br>${esc(b.name)}</p>
@@ -2115,9 +2116,9 @@ function vPropertyDetail(){
 function propDocTrailPanel(p){
   const docs=(S.notices||[]).filter(n=>n.propertyId===p.id).map(n=>({label:(n.kind==='section13'?'Section 13 rent increase':'Section 8 notice'),date:n.served||n.createdAt,status:n.status==='served'?'Served — received by tenant':n.status==='withdrawn'?'Archived':'Draft (not yet sent)'})).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
   if(!docs.length) return '';
-  const pillColor={'Served — received by tenant':['var(--amber-bg)','var(--amber)'],Archived:['var(--off)','#94A3B8'],'Draft (not yet sent)':['var(--off)','#475569']};
+  const pillColor={'Served — received by tenant':['var(--amber-bg)','var(--amber)'],Archived:['var(--off)','#94A3B8'],'Draft (not yet sent)':['var(--off)','#8A7D6E']};
   return `<div class="panel"><div class="panel-hd"><h2>Documents sent to this tenant</h2><span class="faint" style="font-size:12px">Sent, received &amp; archived</span></div>
-    ${docs.map(d=>{ const c=pillColor[d.status]||['var(--off)','#475569']; return `<div class="row"><div class="av" style="font-size:15px">⚖</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${esc(d.label)}</div><div class="faint" style="font-size:11.5px">${d.date?fmtDate(d.date):'—'}</div></div><span class="pill" style="background:${c[0]};color:${c[1]}">${d.status}</span></div>`; }).join('')}
+    ${docs.map(d=>{ const c=pillColor[d.status]||['var(--off)','#8A7D6E']; return `<div class="row"><div class="av" style="font-size:15px">⚖</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${esc(d.label)}</div><div class="faint" style="font-size:11.5px">${d.date?fmtDate(d.date):'—'}</div></div><span class="pill" style="background:${c[0]};color:${c[1]}">${d.status}</span></div>`; }).join('')}
   </div>`;
 }
 function _rentDayOpts(sel){ const ord=n=>n+(n%10===1&&n!==11?'st':n%10===2&&n!==12?'nd':n%10===3&&n!==13?'rd':'th');
@@ -2627,7 +2628,7 @@ function _legWizSave(){
   const p=P(w.pid); const c=p.certs||(p.certs={}); const {flags,risk}=_legRisk(w);
   const systemLabel={combi:'Combi boiler (no stored water)',tank:'Hot water cylinder / storage tank',other:'Other / shared system'}[w.system];
   const html=`<h3 style="margin-top:0">Legionella risk assessment — ${esc(p.address||'')}</h3>
-    <p style="font-size:12.5px;color:#7A8FA6">Self-assessment (HSE ACOP L8 domestic checklist) · ${fmtDate(w.date)}</p>
+    <p style="font-size:12.5px;color:#8A7D6E">Self-assessment (HSE ACOP L8 domestic checklist) · ${fmtDate(w.date)}</p>
     <div class="note" style="margin:10px 0"><b>Overall risk rating: ${risk}</b></div>
     <table style="width:100%;font-size:12.5px;border-collapse:collapse;margin-bottom:10px">
       <tr><td style="padding:4px 6px;font-weight:600">Water system</td><td style="padding:4px 6px">${esc(systemLabel)}</td></tr>
@@ -2652,7 +2653,7 @@ function legionellaSheetHtml(pid){
   const p=P(pid); const b=agencyBrand();
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Legionella Risk Assessment — ${esc(p.address||'')}</title>
   <style>
-    body{font-family:Arial,sans-serif;color:#1A2332;max-width:720px;margin:30px auto;padding:0 20px;line-height:1.5}
+    body{font-family:Arial,sans-serif;color:#4A4038;max-width:720px;margin:30px auto;padding:0 20px;line-height:1.5}
     h1{font-size:20px;margin-bottom:2px} h2{font-size:14px;margin:22px 0 8px;border-bottom:1px solid #ccc;padding-bottom:4px}
     table{width:100%;border-collapse:collapse;margin-bottom:10px;font-size:13px}
     td,th{border:1px solid #999;padding:6px 8px;text-align:left;vertical-align:top}
@@ -2814,9 +2815,9 @@ async function sendMoveInPack(pid){
   if(blocking.length){ toast('Missing required items: '+blocking.map(i=>i.label).join(', '),1); return; }
   const included=items.filter(i=>i.url);
   const b=agencyBrand();
-  const html=`<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#1A2B45">
-    <div style="background:#0B1E3D;padding:20px 24px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:20px;font-weight:700">${esc(b.name)}</span></div>
-    <div style="border:1px solid #E4EAF1;border-top:none;border-radius:0 0 10px 10px;padding:26px 24px">
+  const html=`<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#4A4038">
+    <div style="background:#1B2F4A;padding:20px 24px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:20px;font-weight:700">${esc(b.name)}</span></div>
+    <div style="border:1px solid #E3D9C8;border-top:none;border-radius:0 0 10px 10px;padding:26px 24px">
       <p>Hi ${esc(_allTenantNames(rec))},</p>
       <p>Please find your move-in document pack for <b>${esc(p.address)}</b> attached. This includes:</p>
       <ul style="padding-left:18px;line-height:1.8">${items.map(i=>`<li>${esc(i.label)}${!i.url?' (on file with us \u2014 ask if you\'d like a copy)':''}</li>`).join('')}</ul>
@@ -2832,9 +2833,9 @@ async function sendMoveInPack(pid){
 }
 function confirmMoveInPackReceipt(pid){ const rec=tenantRecFor(pid); if(!rec) return; rec.moveInPackConfirmedAt=new Date().toISOString(); pushTenantRec(rec); closeModal(); render(); toast('✓ Receipt confirmed'); }
 function tenantWelcomeLetterHtml(rec,p){ const b=agencyBrand();
-  return `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#1A2B45">
-    <div style="background:#0B1E3D;padding:20px 24px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:20px;font-weight:700">${esc(b.name)}</span></div>
-    <div style="border:1px solid #E4EAF1;border-top:none;border-radius:0 0 10px 10px;padding:26px 24px">
+  return `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#4A4038">
+    <div style="background:#1B2F4A;padding:20px 24px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:20px;font-weight:700">${esc(b.name)}</span></div>
+    <div style="border:1px solid #E3D9C8;border-top:none;border-radius:0 0 10px 10px;padding:26px 24px">
       <p>Dear ${esc(_allTenantNames(rec))},</p>
       <p>We're writing to let you know that <b>${esc(b.name)}</b> is now managing <b>${esc(p.address)}</b> on behalf of your landlord. If your tenancy has just come under our management, nothing about your tenancy terms changes — this letter is simply to introduce ourselves and explain how things work going forward.</p>
       <p><b>Your point of contact</b><br>${esc(b.agent)}<br>${esc(b.email)}</p>
@@ -2860,13 +2861,13 @@ function inviteTenantToPortal(pid){
   rec.invited=true; pushTenantRec(rec); toast('✓ Portal invite sent to '+rec.name);
 }
 function tenantPortalInviteHtml(rec,p,login){ const b=agencyBrand();
-  return `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#1A2B45">
-    <div style="background:#0B1E3D;padding:20px 24px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:20px;font-weight:700">${esc(b.name)}</span></div>
-    <div style="border:1px solid #E4EAF1;border-top:none;border-radius:0 0 10px 10px;padding:26px 24px">
+  return `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#4A4038">
+    <div style="background:#1B2F4A;padding:20px 24px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:20px;font-weight:700">${esc(b.name)}</span></div>
+    <div style="border:1px solid #E3D9C8;border-top:none;border-radius:0 0 10px 10px;padding:26px 24px">
       <p>Hi ${esc(rec.name)},</p>
       <p>${esc(b.name)} has set up your <b>tenancy portal</b> for <b>${esc(p.address)}</b> — a place to view your tenancy details and report any maintenance issues.</p>
-      <p style="text-align:center;margin:24px 0"><a href="${login}" style="background:#009970;color:#fff;text-decoration:none;font-weight:600;padding:13px 30px;border-radius:8px;display:inline-block">Sign in to your portal</a></p>
-      <p style="font-size:12.5px;color:#7A8FA6">Please sign in using <b>${esc(rec.email)}</b> so we can link your account automatically.</p>
+      <p style="text-align:center;margin:24px 0"><a href="${login}" style="background:#C8892A;color:#fff;text-decoration:none;font-weight:600;padding:13px 30px;border-radius:8px;display:inline-block">Sign in to your portal</a></p>
+      <p style="font-size:12.5px;color:#8A7D6E">Please sign in using <b>${esc(rec.email)}</b> so we can link your account automatically.</p>
     </div></div>`;
 }
 
@@ -2910,7 +2911,7 @@ function vLandlordPortalProperty(){
 // ── INVOICING (built-in, free; quarterly-upfront; VAT-ready) ──
 function nextInvoiceNo(){ const n=(S.agency.invoiceSeq||0)+1; S.agency.invoiceSeq=n; return 'INV-'+String(n).padStart(4,'0'); }
 function invTotal(inv){ const net=(inv.lines||[]).reduce((s,l)=>s+(parseFloat(l.net)||0),0); const vat=inv.vat?net*0.2:0; return {net,vat,gross:net+vat}; }
-function invStatusPill(s){ const m={draft:['Draft','var(--off)','#475569'],sent:['Sent','var(--blue-bg)','var(--blue)'],paid:['Paid','var(--green-bg)','var(--green)'],overdue:['Overdue','var(--red-bg)','var(--red)']}[s]||['Draft','var(--off)','#475569']; return `<span class="pill" style="background:${m[1]};color:${m[2]}">${m[0]}</span>`; }
+function invStatusPill(s){ const m={draft:['Draft','var(--off)','#8A7D6E'],sent:['Sent','var(--blue-bg)','var(--blue)'],paid:['Paid','var(--green-bg)','var(--green)'],overdue:['Overdue','var(--red-bg)','var(--red)']}[s]||['Draft','var(--off)','#8A7D6E']; return `<span class="pill" style="background:${m[1]};color:${m[2]}">${m[0]}</span>`; }
 function money2(n){ return '£'+(Math.round((n||0)*100)/100).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 
 function vInvoices(){
@@ -3078,22 +3079,22 @@ function createInvoice(){
 }
 function setInvStatus(id,s){ const inv=S.invoices.find(i=>i.id===id); inv.status=s; save(); pushInvoice(inv); render(); toast('Invoice marked '+s); }
 function invoiceEmailHtml(inv,l,a,t,due){
-  const rows=(inv.lines||[]).map(li=>`<tr><td style="padding:8px 0;border-bottom:1px solid #E4EAF1">${esc(li.desc)}</td><td style="padding:8px 0;border-bottom:1px solid #E4EAF1;text-align:right;white-space:nowrap">${money2(li.net)}</td></tr>`).join('');
-  return `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#1A2B45">
+  const rows=(inv.lines||[]).map(li=>`<tr><td style="padding:8px 0;border-bottom:1px solid #E3D9C8">${esc(li.desc)}</td><td style="padding:8px 0;border-bottom:1px solid #E3D9C8;text-align:right;white-space:nowrap">${money2(li.net)}</td></tr>`).join('');
+  return `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#4A4038">
     <h2 style="margin:0 0 4px">${esc(a.name||'Your Lettings')}</h2>
-    <p style="color:#7A8FA6;font-size:13px;margin:0 0 20px">${inv.type==='remittance'?'Remittance statement':'Invoice'} ${esc(inv.no)} · ${esc(inv.periodLabel)}</p>
+    <p style="color:#8A7D6E;font-size:13px;margin:0 0 20px">${inv.type==='remittance'?'Remittance statement':'Invoice'} ${esc(inv.no)} · ${esc(inv.periodLabel)}</p>
     <p>Dear ${esc(landlordName(l))},</p>
     <p>Please find your ${inv.type==='remittance'?'remittance statement':'invoice'} below.</p>
     <table style="width:100%;border-collapse:collapse;font-size:13px;margin:16px 0">${rows}</table>
     <p style="text-align:right;font-size:15px;font-weight:700">${inv.type==='remittance'?'Net paid to you':'Total due'}: ${money2(t.gross)}</p>
     ${inv.type!=='remittance'?`<p style="font-size:13px">Due date: ${fmtDate(due)}</p>`:''}
-    ${inv.type!=='remittance'&&(a.bankSortCode||a.bankAccNo)?`<div style="background:#F5F8FC;border-radius:8px;padding:14px 16px;margin:14px 0"><p style="margin:0 0 8px;font-weight:700;color:#0B1E3D">Payment details</p>
-      <table style="font-size:13px;width:100%"><tr><td style="padding:2px 0;color:#7A8FA6">Account name</td><td style="padding:2px 0;text-align:right">${esc(a.bankAccName||a.name||'—')}</td></tr>
-      <tr><td style="padding:2px 0;color:#7A8FA6">Bank</td><td style="padding:2px 0;text-align:right">${esc(a.bankName||'—')}</td></tr>
-      <tr><td style="padding:2px 0;color:#7A8FA6">Sort code</td><td style="padding:2px 0;text-align:right">${esc(a.bankSortCode||'—')}</td></tr>
-      <tr><td style="padding:2px 0;color:#7A8FA6">Account number</td><td style="padding:2px 0;text-align:right">${esc(a.bankAccNo||'—')}</td></tr>
-      <tr><td style="padding:2px 0;color:#7A8FA6">Reference</td><td style="padding:2px 0;text-align:right">${esc(inv.no)}</td></tr></table></div>`:''}
-    <p style="font-size:12px;color:#7A8FA6;margin-top:24px">${esc(a.name||'Your agency')}${a.address?' · '+esc(a.address):''}</p>
+    ${inv.type!=='remittance'&&(a.bankSortCode||a.bankAccNo)?`<div style="background:#FBF3E7;border-radius:8px;padding:14px 16px;margin:14px 0"><p style="margin:0 0 8px;font-weight:700;color:#1B2F4A">Payment details</p>
+      <table style="font-size:13px;width:100%"><tr><td style="padding:2px 0;color:#8A7D6E">Account name</td><td style="padding:2px 0;text-align:right">${esc(a.bankAccName||a.name||'—')}</td></tr>
+      <tr><td style="padding:2px 0;color:#8A7D6E">Bank</td><td style="padding:2px 0;text-align:right">${esc(a.bankName||'—')}</td></tr>
+      <tr><td style="padding:2px 0;color:#8A7D6E">Sort code</td><td style="padding:2px 0;text-align:right">${esc(a.bankSortCode||'—')}</td></tr>
+      <tr><td style="padding:2px 0;color:#8A7D6E">Account number</td><td style="padding:2px 0;text-align:right">${esc(a.bankAccNo||'—')}</td></tr>
+      <tr><td style="padding:2px 0;color:#8A7D6E">Reference</td><td style="padding:2px 0;text-align:right">${esc(inv.no)}</td></tr></table></div>`:''}
+    <p style="font-size:12px;color:#8A7D6E;margin-top:24px">${esc(a.name||'Your agency')}${a.address?' · '+esc(a.address):''}</p>
   </div>`;
 }
 async function sendInvoiceToLandlord(id){
@@ -3144,12 +3145,12 @@ function vInvoiceDetail(){
           ${inv.vat?`<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px"><span class="faint">VAT @ 20%</span><span>${money2(t.vat)}</span></div>`:''}
           <div style="display:flex;justify-content:space-between;padding:9px 0;border-top:2px solid var(--navy);margin-top:4px;font-size:15px;font-weight:700;color:var(--navy)"><span>${inv.type==='remittance'?'Net paid to landlord':'Total due'}</span><span>${money2(t.gross)}</span></div>
         </div></div>
-        ${inv.type!=='remittance'&&(a.bankSortCode||a.bankAccNo)?`<div style="background:#F5F8FC;border-radius:8px;padding:14px 16px;margin:16px 0 0"><div style="font-weight:700;font-size:12.5px;color:#0B1E3D;margin-bottom:8px">Payment details</div>
-          <table style="font-size:12.5px;width:100%"><tr><td style="padding:2px 0;color:#7A8FA6">Account name</td><td style="padding:2px 0;text-align:right">${esc(a.bankAccName||a.name||'—')}</td></tr>
-          <tr><td style="padding:2px 0;color:#7A8FA6">Bank</td><td style="padding:2px 0;text-align:right">${esc(a.bankName||'—')}</td></tr>
-          <tr><td style="padding:2px 0;color:#7A8FA6">Sort code</td><td style="padding:2px 0;text-align:right">${esc(a.bankSortCode||'—')}</td></tr>
-          <tr><td style="padding:2px 0;color:#7A8FA6">Account number</td><td style="padding:2px 0;text-align:right">${esc(a.bankAccNo||'—')}</td></tr>
-          <tr><td style="padding:2px 0;color:#7A8FA6">Reference</td><td style="padding:2px 0;text-align:right">${esc(inv.no)}</td></tr></table></div>`:''}
+        ${inv.type!=='remittance'&&(a.bankSortCode||a.bankAccNo)?`<div style="background:#FBF3E7;border-radius:8px;padding:14px 16px;margin:16px 0 0"><div style="font-weight:700;font-size:12.5px;color:#1B2F4A;margin-bottom:8px">Payment details</div>
+          <table style="font-size:12.5px;width:100%"><tr><td style="padding:2px 0;color:#8A7D6E">Account name</td><td style="padding:2px 0;text-align:right">${esc(a.bankAccName||a.name||'—')}</td></tr>
+          <tr><td style="padding:2px 0;color:#8A7D6E">Bank</td><td style="padding:2px 0;text-align:right">${esc(a.bankName||'—')}</td></tr>
+          <tr><td style="padding:2px 0;color:#8A7D6E">Sort code</td><td style="padding:2px 0;text-align:right">${esc(a.bankSortCode||'—')}</td></tr>
+          <tr><td style="padding:2px 0;color:#8A7D6E">Account number</td><td style="padding:2px 0;text-align:right">${esc(a.bankAccNo||'—')}</td></tr>
+          <tr><td style="padding:2px 0;color:#8A7D6E">Reference</td><td style="padding:2px 0;text-align:right">${esc(inv.no)}</td></tr></table></div>`:''}
         ${!inv.vat&&inv.type!=='remittance'?`<div class="faint" style="font-size:11px;margin-top:16px">Not VAT registered — no VAT is charged on this invoice.</div>`:''}
         <div class="faint" style="font-size:11px;margin-top:6px;line-height:1.6">${inv.type==='remittance'?'This statement records rent collected on your behalf, less our fees, remitted to your nominated account. Held under our Client Money Protection scheme.':(inv.type==='maintenance'?'Disbursement for works carried out on your behalf. Payment terms: '+(a.paymentTerms||14)+' days.':(inv.type==='tenantfind'?'One-off tenant-find fee. Payment terms: '+(a.paymentTerms||14)+' days.':'Payment terms: '+(a.paymentTerms||14)+' days. Management fees are invoiced in advance. Tenants pay landlords directly (no client money held) unless a remittance statement applies.'))}</div>
       </div>
@@ -3784,7 +3785,7 @@ function buildManagementAgreement(l, service){
 
   return `
     <h2 style="text-align:center;margin-top:0">${title}</h2>
-    <p style="text-align:center;color:#7A8FA6;font-size:12px">Made under the laws of England &amp; Wales · ${fmt(new Date())}</p>
+    <p style="text-align:center;color:#8A7D6E;font-size:12px">Made under the laws of England &amp; Wales · ${fmt(new Date())}</p>
 
     <p><b>1. Parties &amp; definitions.</b> This agreement is between <b>${esc(a.name||'the Agent')}</b>${a.companyNo?' (company no. '+esc(a.companyNo)+')':''}${a.address?' of '+esc(a.address):''} ("the Agent") and <b>${esc(l.name)}${l.entity==='joint'&&l.joint?' &amp; '+esc(l.joint):''}</b>${l.address?' of '+esc(l.address):''} ("the Landlord"${l.entity==='joint'?', jointly and severally liable':''}), together "the Parties". "The Property" means the property or properties listed in Clause 2. "Tenancy" means an assured shorthold tenancy or other tenancy of the Property arranged under this agreement.</p>
     <p><b>2. Property(ies).</b> This agreement covers:</p>
@@ -3810,7 +3811,7 @@ function buildManagementAgreement(l, service){
     <p><b>16. Entire agreement.</b> This document, together with any signed variation, is the entire agreement between the Parties regarding the Property and supersedes any prior discussion or representation.</p>
     <p><b>17. Governing law.</b> This agreement is governed by the law of England &amp; Wales, and the Parties submit to the exclusive jurisdiction of its courts.</p>
     <p style="margin-top:16px">By signing below, both parties agree to be bound by the terms above. Electronic signatures are legally binding under the Electronic Communications Act 2000.</p>
-    <p style="font-size:11px;color:#7A8FA6;margin-top:8px">Signed for and on behalf of ${esc(a.name||'the Agent')}${a.companyNo?' (company no. '+esc(a.companyNo)+')':''}${a.address?', '+esc(a.address):''}.</p>`;
+    <p style="font-size:11px;color:#8A7D6E;margin-top:8px">Signed for and on behalf of ${esc(a.name||'the Agent')}${a.companyNo?' (company no. '+esc(a.companyNo)+')':''}${a.address?', '+esc(a.address):''}.</p>`;
 }
 
 // ── Signature capture: draw with mouse/touch, or type your name in a signature-style font ──
@@ -3821,11 +3822,11 @@ function sigBlockHtml(prefix){
       <label style="cursor:pointer;display:flex;align-items:center;gap:5px"><input type="radio" name="${prefix}-sigmode" value="draw" checked onchange="setSigMode('${prefix}','draw')" style="width:auto">Draw</label>
       <label style="cursor:pointer;display:flex;align-items:center;gap:5px"><input type="radio" name="${prefix}-sigmode" value="type" onchange="setSigMode('${prefix}','type')" style="width:auto">Type</label>
     </div>
-    <div id="${prefix}-draw-wrap" style="border:1.5px solid #E4EAF1;border-radius:8px;overflow:hidden;background:#fff"><canvas id="${prefix}-sig" style="display:block;width:100%;height:130px;touch-action:none;cursor:crosshair"></canvas></div>
+    <div id="${prefix}-draw-wrap" style="border:1.5px solid #E3D9C8;border-radius:8px;overflow:hidden;background:#fff"><canvas id="${prefix}-sig" style="display:block;width:100%;height:130px;touch-action:none;cursor:crosshair"></canvas></div>
     <div id="${prefix}-type-wrap" style="display:none">
       <input id="${prefix}-sig-text" placeholder="Type your name" oninput="renderTypedSig('${prefix}')" style="margin-bottom:8px">
       <select id="${prefix}-sig-font" onchange="renderTypedSig('${prefix}')" style="margin-bottom:8px">${SIG_FONTS.map(f=>`<option value="${f[0]},${f[1]}">${f[0]}</option>`).join('')}</select>
-      <div style="border:1.5px solid #E4EAF1;border-radius:8px;background:#fff;height:90px;display:flex;align-items:center;padding:0 16px;overflow:hidden"><span id="${prefix}-sig-preview" style="font-size:38px;color:#0B1E3D;white-space:nowrap"></span></div>
+      <div style="border:1.5px solid #E3D9C8;border-radius:8px;background:#fff;height:90px;display:flex;align-items:center;padding:0 16px;overflow:hidden"><span id="${prefix}-sig-preview" style="font-size:38px;color:#1B2F4A;white-space:nowrap"></span></div>
     </div>
     <div style="margin-top:6px"><button class="btn sm" onclick="clearSig('${prefix}')" type="button">Clear</button></div></div>`;
 }
@@ -3848,7 +3849,7 @@ function initSigPad(prefix){
   const c=document.getElementById(prefix+'-sig'); if(!c||!window.SignaturePad) return;
   const ratio=Math.max(window.devicePixelRatio||1,1);
   c.width=c.offsetWidth*ratio; c.height=c.offsetHeight*ratio; c.getContext('2d').scale(ratio,ratio);
-  window['_'+prefix+'SigPadObj']=new SignaturePad(c,{penColor:'#0B1E3D',minWidth:0.7,maxWidth:2.2});
+  window['_'+prefix+'SigPadObj']=new SignaturePad(c,{penColor:'#1B2F4A',minWidth:0.7,maxWidth:2.2});
 }
 // Returns a dataURL for whichever mode is active, or null if nothing captured
 function getSigDataUrl(prefix){
@@ -3858,7 +3859,7 @@ function getSigDataUrl(prefix){
   const font=val(prefix+'-sig-font').split(',')[0];
   const c=document.createElement('canvas'); c.width=600; c.height=160; const ctx=c.getContext('2d');
   ctx.fillStyle='#fff'; ctx.fillRect(0,0,c.width,c.height);
-  ctx.fillStyle='#0B1E3D'; ctx.font="52px '"+font+"', cursive"; ctx.textBaseline='middle';
+  ctx.fillStyle='#1B2F4A'; ctx.font="52px '"+font+"', cursive"; ctx.textBaseline='middle';
   ctx.fillText(text,20,c.height/2);
   return c.toDataURL('image/png');
 }
@@ -3875,7 +3876,7 @@ function openAgreement(id){
     <div class="fg"><label>Landlord's email — the secure signing link is sent here</label><input id="ag-email" value="${esc(l.email||'')}" placeholder="landlord@email.com"></div>
     ${l.entity==='joint'?`<div class="fg"><label>Joint owner ${l.joint?'('+esc(l.joint)+') ':''}email — they'll be sent the same link</label><input id="ag-joint-email" value="${esc(l.jointEmail||'')}" placeholder="joint-owner@email.com"></div>`:''}
     <div class="fg"><label>Agreement preview</label>
-      <div id="ag-preview" style="max-height:220px;overflow-y:auto;border:1px solid #E4EAF1;border-radius:8px;padding:14px;font-size:12.5px;line-height:1.7;background:var(--off)">${buildManagementAgreement(l,service)}</div></div>
+      <div id="ag-preview" style="max-height:220px;overflow-y:auto;border:1px solid #E3D9C8;border-radius:8px;padding:14px;font-size:12.5px;line-height:1.7;background:var(--off)">${buildManagementAgreement(l,service)}</div></div>
     <div class="fg"><label>Your name (signing for ${esc(S.agency.name||'the agency')})</label><input id="ag-agent-name" value="${esc(window._agentName||S.agency.name||'')}"></div>
     ${sigBlockHtml('ag')}
     <p class="hint">You sign first, then NexLet emails the landlord a secure link to counter-sign. Both parties receive a timestamped copy automatically once complete.</p>`;
@@ -3923,14 +3924,14 @@ async function sendAgreement(id){
 function agreementEmailHtml(l,agentName,link,service){
   const nm=service==='letonly'?'Tenant-Find Agreement':'Letting & Management Agreement';
   const b=agencyBrand();
-  return `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#1A2B45">
-    <div style="background:#0B1E3D;padding:20px 24px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:20px;font-weight:700">${esc(b.name)}</span>${b.ico?`<div style="font-size:10px;color:#7F9CC0;margin-top:2px">ICO Reg. ${esc(b.ico)}</div>`:''}</div>
-    <div style="border:1px solid #E4EAF1;border-top:none;border-radius:0 0 10px 10px;padding:26px 24px">
+  return `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#4A4038">
+    <div style="background:#1B2F4A;padding:20px 24px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:20px;font-weight:700">${esc(b.name)}</span>${b.ico?`<div style="font-size:10px;color:#C9B99E;margin-top:2px">ICO Reg. ${esc(b.ico)}</div>`:''}</div>
+    <div style="border:1px solid #E3D9C8;border-top:none;border-radius:0 0 10px 10px;padding:26px 24px">
       <p>Dear ${esc(landlordName(l))},</p>
       <p>${esc(agentName)} at <b>${esc(b.name)}</b> has prepared your <b>${nm}</b> and signed it. It's ready for you to review and counter-sign.</p>
-      <p style="text-align:center;margin:26px 0"><a href="${link}" style="background:#009970;color:#fff;text-decoration:none;font-weight:600;padding:13px 30px;border-radius:8px;display:inline-block">Review &amp; sign your agreement</a></p>
-      <p style="font-size:12px;color:#7A8FA6">This is a secure, personal link. Electronic signatures are legally binding under the Electronic Communications Act 2000. Once signed, you'll receive a timestamped copy by email.</p>
-      <div style="margin-top:18px;padding-top:12px;border-top:1px solid #E4EAF1;font-size:10.5px;color:#7A8FA6">${esc(b.name)}${b.ico?' · ICO Reg. '+esc(b.ico):''}</div>
+      <p style="text-align:center;margin:26px 0"><a href="${link}" style="background:#C8892A;color:#fff;text-decoration:none;font-weight:600;padding:13px 30px;border-radius:8px;display:inline-block">Review &amp; sign your agreement</a></p>
+      <p style="font-size:12px;color:#8A7D6E">This is a secure, personal link. Electronic signatures are legally binding under the Electronic Communications Act 2000. Once signed, you'll receive a timestamped copy by email.</p>
+      <div style="margin-top:18px;padding-top:12px;border-top:1px solid #E3D9C8;font-size:10.5px;color:#8A7D6E">${esc(b.name)}${b.ico?' · ICO Reg. '+esc(b.ico):''}</div>
     </div></div>`;
 }
 
@@ -3987,33 +3988,33 @@ function signingReceiptHtml(a,l){
   signees.push({name:a.landlord_name,email:a.landlord_email,role:a.joint_name?'Landlord 1':'Landlord',ts:a.landlord_signed_at});
   if(a.joint_name) signees.push({name:a.joint_name,email:a.joint_email,role:'Landlord 2',ts:a.joint_signed_at});
   const rid=s=>_ridFor((s.email||s.name||'')+a.id);
-  const signeeCards=signees.map(s=>`<div style="border:1px solid #E4EAF1;border-radius:8px;padding:14px 16px;margin-bottom:10px;display:grid;grid-template-columns:1fr 1fr;gap:4px 18px;font-size:12px">
-    <div><span style="color:#7A8FA6">Signee name</span><br><b>${esc(s.name||'—')}</b></div>
-    <div><span style="color:#7A8FA6">Audit level</span><br><b>Email</b></div>
-    <div><span style="color:#7A8FA6">Signee email</span><br>${esc(s.email||'—')}</div>
-    <div><span style="color:#7A8FA6">Recipient ID</span><br>${rid(s)}</div>
-    <div><span style="color:#7A8FA6">Signee role</span><br>${esc(s.role)}</div>
-    <div><span style="color:#7A8FA6">OTP required</span><br>No</div>
+  const signeeCards=signees.map(s=>`<div style="border:1px solid #E3D9C8;border-radius:8px;padding:14px 16px;margin-bottom:10px;display:grid;grid-template-columns:1fr 1fr;gap:4px 18px;font-size:12px">
+    <div><span style="color:#8A7D6E">Signee name</span><br><b>${esc(s.name||'—')}</b></div>
+    <div><span style="color:#8A7D6E">Audit level</span><br><b>Email</b></div>
+    <div><span style="color:#8A7D6E">Signee email</span><br>${esc(s.email||'—')}</div>
+    <div><span style="color:#8A7D6E">Recipient ID</span><br>${rid(s)}</div>
+    <div><span style="color:#8A7D6E">Signee role</span><br>${esc(s.role)}</div>
+    <div><span style="color:#8A7D6E">OTP required</span><br>No</div>
   </div>`).join('');
   const events=[{label:'Sent',name:signees[0].name,ts:a.agent_signed_at}];
   signees.slice(1).forEach(s=>{ if(s.ts) events.push({label:'Signed',name:s.name,ts:s.ts}); });
   const completedAt=signees.slice(1).every(s=>s.ts)?signees.slice(1).reduce((m,s)=>s.ts&&new Date(s.ts)>new Date(m||0)?s.ts:m,null):null;
   if(completedAt) events.push({label:'Completed',name:'',ts:completedAt});
-  const eventsHtml=events.filter(e=>e.ts).sort((x,y)=>new Date(x.ts)-new Date(y.ts)).map(e=>`<div style="display:flex;justify-content:space-between;border-bottom:1px solid #F1F3F6;padding:10px 0;font-size:12.5px">
-    <div><b>${e.label}</b>${e.name?' · '+esc(e.name):''}</div><div style="color:#7A8FA6">${fmt(e.ts)}</div></div>`).join('');
-  return `<div style="max-width:640px;margin:0 auto;font-family:Arial,sans-serif;color:#1A2332">
+  const eventsHtml=events.filter(e=>e.ts).sort((x,y)=>new Date(x.ts)-new Date(y.ts)).map(e=>`<div style="display:flex;justify-content:space-between;border-bottom:1px solid #F1E8D8;padding:10px 0;font-size:12.5px">
+    <div><b>${e.label}</b>${e.name?' · '+esc(e.name):''}</div><div style="color:#8A7D6E">${fmt(e.ts)}</div></div>`).join('');
+  return `<div style="max-width:640px;margin:0 auto;font-family:Arial,sans-serif;color:#4A4038">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
-      <div style="font-size:17px;font-weight:700;color:#0B1E3D">✒ Signing receipt</div>
-      <div style="font-size:11px;color:#7A8FA6">${esc(b.name)}</div>
+      <div style="font-size:17px;font-weight:700;color:#1B2F4A">✒ Signing receipt</div>
+      <div style="font-size:11px;color:#8A7D6E">${esc(b.name)}</div>
     </div>
-    <div style="font-size:11px;color:#7A8FA6;text-transform:uppercase;letter-spacing:.4px;margin-bottom:14px">Document information</div>
-    <div style="border:1px solid #E4EAF1;border-radius:8px;padding:14px 16px;margin-bottom:22px;font-size:12.5px">
-      <div style="color:#7A8FA6">Document name</div><div style="font-weight:600;margin-bottom:8px">${title}</div>
-      <div style="color:#7A8FA6">Document ID</div><div style="font-weight:600">${esc(a.id)}</div>
+    <div style="font-size:11px;color:#8A7D6E;text-transform:uppercase;letter-spacing:.4px;margin-bottom:14px">Document information</div>
+    <div style="border:1px solid #E3D9C8;border-radius:8px;padding:14px 16px;margin-bottom:22px;font-size:12.5px">
+      <div style="color:#8A7D6E">Document name</div><div style="font-weight:600;margin-bottom:8px">${title}</div>
+      <div style="color:#8A7D6E">Document ID</div><div style="font-weight:600">${esc(a.id)}</div>
     </div>
-    <div style="font-size:11px;color:#7A8FA6;text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Signee information</div>
+    <div style="font-size:11px;color:#8A7D6E;text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Signee information</div>
     ${signeeCards}
-    <div style="font-size:11px;color:#7A8FA6;text-transform:uppercase;letter-spacing:.4px;margin:22px 0 4px">Signing events</div>
+    <div style="font-size:11px;color:#8A7D6E;text-transform:uppercase;letter-spacing:.4px;margin:22px 0 4px">Signing events</div>
     ${eventsHtml}
     <div style="font-size:10.5px;color:#94A3B8;margin-top:20px">Electronic signatures applied under the Electronic Communications Act 2000. This receipt is generated from ${esc(b.name)}'s own signing records.</div>
   </div>`;
@@ -4022,7 +4023,7 @@ function viewSigningReceipt(id){
   const a=agreementFor(id); if(!a||a.status!=='signed'){ toast('No completed signing on file',1); return; }
   const l=L(id);
   const w=window.open('','_blank'); if(!w){ toast('Allow pop-ups to view',1); return; }
-  w.document.write(`<html><head><title>Signing receipt</title><style>body{margin:24px auto;padding:0 20px}@media print{button{display:none}}</style></head><body><button onclick="print()" style="padding:10px 18px;background:#0B1E3D;color:#fff;border:none;border-radius:8px;cursor:pointer;margin-bottom:20px;font-family:Arial,sans-serif">Print / Save as PDF</button>${signingReceiptHtml(a,l)}</body></html>`);
+  w.document.write(`<html><head><title>Signing receipt</title><style>body{margin:24px auto;padding:0 20px}@media print{button{display:none}}</style></head><body><button onclick="print()" style="padding:10px 18px;background:#1B2F4A;color:#fff;border:none;border-radius:8px;cursor:pointer;margin-bottom:20px;font-family:Arial,sans-serif">Print / Save as PDF</button>${signingReceiptHtml(a,l)}</body></html>`);
   w.document.close();
 }
 
@@ -4048,13 +4049,13 @@ function buildTenancyAgreementHtml(p,rec,l){
   const parking=p.parking||'Not included';
   const pets=rec.pets||'Not permitted without the landlord\u2019s written consent';
   const licenceClause=c.hmoApplicable?('HMO / selective licence'+(c.hmoNo?': '+esc(c.hmoNo):' \u2014 reference to be confirmed by the landlord.')):'No HMO or selective licence applies to this property.';
-  const H=(n,t)=>`<h3 style="font-size:14px;font-weight:700;color:#0B1E3D;margin:18px 0 6px">${n}. ${t}</h3>`;
+  const H=(n,t)=>`<h3 style="font-size:14px;font-weight:700;color:#1B2F4A;margin:18px 0 6px">${n}. ${t}</h3>`;
   const Hg=t=>`<h4 style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#5A6B82;margin:26px 0 4px;border-top:1px solid #E2E5EA;padding-top:14px">${t}</h4>`;
   const Li=arr=>`<ul style="margin:4px 0 0;padding-left:20px">${arr.map(x=>`<li style="margin-bottom:4px">${x}</li>`).join('')}</ul>`;
-  const letterhead=`<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px;gap:20px;border-bottom:2px solid #0B1E3D;padding-bottom:14px">
-    <div><div style="font-family:var(--disp);font-size:22px;color:#0B1E3D;line-height:1.15">${esc((b.name||'Beacon Residentials').split(' ')[0])} <span style="color:#009970;font-weight:400">${esc((b.name||'Beacon Residentials').split(' ').slice(1).join(' ')||'Residentials')}</span></div>
+  const letterhead=`<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px;gap:20px;border-bottom:2px solid var(--navy);padding-bottom:14px">
+    <div><div style="font-family:var(--disp);font-size:22px;color:var(--navy);line-height:1.15">${esc((b.name||'Beacon Residentials').split(' ')[0])} <span style="color:var(--orange);font-weight:400">${esc((b.name||'Beacon Residentials').split(' ').slice(1).join(' ')||'Residentials')}</span></div>
       <div class="faint" style="font-size:11.5px;line-height:1.6;margin-top:4px;white-space:pre-line">${esc(b.address||'')}${b.redressNo?'<br>Redress: '+esc(b.redress||'')+' \u00b7 '+esc(b.redressNo):''}</div></div>
-    <div style="text-align:right;flex-shrink:0"><div style="font-family:var(--disp);font-size:17px;color:#0B1E3D;white-space:nowrap">TENANCY AGREEMENT</div><div class="faint" style="font-size:11px;margin-top:2px">${fmtDate(today())}</div></div>
+    <div style="text-align:right;flex-shrink:0"><div style="font-family:var(--disp);font-size:17px;color:var(--navy);white-space:nowrap">TENANCY AGREEMENT</div><div class="faint" style="font-size:11px;margin-top:2px">${fmtDate(today())}</div></div>
   </div>`;
   const furnishedClauses=nF?`${H(28,'Furnishings')}<p>The property is let <strong>${esc(furnished).toLowerCase()}</strong>. A full inventory of landlord-owned items is attached as Schedule 1 and forms part of this agreement. The tenant must keep all such items in the same condition as at the start of the tenancy (fair wear and tear excepted), must not remove or dispose of any item without the landlord\u2019s written consent, and must report any damage promptly in writing.</p>`:'';
   return `${letterhead}
@@ -4146,7 +4147,7 @@ function openTenancyAgreement(pid){
   const body=`${readiness}
     <div class="fg"><label>Tenant’s email — the secure signing link is sent here</label><input id="ta-email" value="${esc(rec.email||'')}" placeholder="tenant@email.com"></div>
     ${occWithEmail.length?`<div class="note" style="margin:-8px 0 4px">${occWithEmail.map(o=>esc(o.name)).join(', ')} will also be sent the link — every named adult signs in one sitting.</div>`:''}
-    <div class="fg"><label>Agreement preview</label><div id="ta-preview" style="max-height:220px;overflow-y:auto;border:1px solid #E4EAF1;border-radius:8px;padding:14px;font-size:12.5px;line-height:1.7;background:var(--off)">${buildTenancyAgreementHtml(p,rec,l)}</div></div>
+    <div class="fg"><label>Agreement preview</label><div id="ta-preview" style="max-height:220px;overflow-y:auto;border:1px solid #E3D9C8;border-radius:8px;padding:14px;font-size:12.5px;line-height:1.7;background:var(--off)">${buildTenancyAgreementHtml(p,rec,l)}</div></div>
     <div class="fg"><label>Your name (signing on behalf of ${esc(landlordName(l))})</label><input id="ta-agent-name" value="${esc(window._agentName||S.agency.name||'')}"></div>
     ${sigBlockHtml('ta')}
     <p class="hint">You sign first, then NexLet emails the tenant (and any joint occupants) a secure link to sign together. Everyone receives a timestamped copy once complete.</p>`;
@@ -4203,13 +4204,13 @@ function viewSignedTenancyAgreement(pid){
   const w=window.open('','_blank'); if(!w){ toast('Allow pop-ups to view',1); return; }
   const fmt=d=>d?new Date(d).toLocaleString('en-GB',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
   const occNames=[a.tenant_name,...(a.occupants||[]).map(o=>o.name)].filter(Boolean).join(', ');
-  const cert=`<div style="border:1px solid #E4EAF1;border-radius:10px;padding:20px 22px"><div style="font-size:15px;font-weight:700;color:#0B1E3D;margin-bottom:4px">✔ Fully signed tenancy terms &amp; conditions</div>
+  const cert=`<div style="border:1px solid #E3D9C8;border-radius:10px;padding:20px 22px"><div style="font-size:15px;font-weight:700;color:#1B2F4A;margin-bottom:4px">✔ Fully signed tenancy terms &amp; conditions</div>
     <table style="width:100%;font-size:12.5px;border-collapse:collapse">
-      <tr><td style="padding:6px 0;color:#7A8FA6">Agent</td><td style="padding:6px 0;font-weight:600">${esc(a.agent_name||'')}</td></tr>
-      <tr><td style="padding:6px 0;color:#7A8FA6">Tenant(s)</td><td style="padding:6px 0;font-weight:600">${esc(occNames)}</td></tr>
-      <tr><td style="padding:6px 0;color:#7A8FA6">Signed</td><td style="padding:6px 0">${fmt(a.tenant_signed_at)}</td></tr>
+      <tr><td style="padding:6px 0;color:#8A7D6E">Agent</td><td style="padding:6px 0;font-weight:600">${esc(a.agent_name||'')}</td></tr>
+      <tr><td style="padding:6px 0;color:#8A7D6E">Tenant(s)</td><td style="padding:6px 0;font-weight:600">${esc(occNames)}</td></tr>
+      <tr><td style="padding:6px 0;color:#8A7D6E">Signed</td><td style="padding:6px 0">${fmt(a.tenant_signed_at)}</td></tr>
     </table></div>`;
-  w.document.write(`<html><head><title>Signed Tenancy Terms &amp; Conditions</title><style>body{font-family:Arial,sans-serif;max-width:760px;margin:24px auto;padding:0 20px;color:#1A2B45;line-height:1.7}@media print{button{display:none}}</style></head><body><button onclick="print()" style="padding:10px 18px;background:#0B1E3D;color:#fff;border:none;border-radius:8px;cursor:pointer;margin-bottom:16px">Print / Save as PDF</button>${cert}<hr style="margin:24px 0;border:none;border-top:1px solid #E4EAF1">${a.document_html}</body></html>`);
+  w.document.write(`<html><head><title>Signed Tenancy Terms &amp; Conditions</title><style>body{font-family:Arial,sans-serif;max-width:760px;margin:24px auto;padding:0 20px;color:#4A4038;line-height:1.7}@media print{button{display:none}}</style></head><body><button onclick="print()" style="padding:10px 18px;background:#1B2F4A;color:#fff;border:none;border-radius:8px;cursor:pointer;margin-bottom:16px">Print / Save as PDF</button>${cert}<hr style="margin:24px 0;border:none;border-top:1px solid #E3D9C8">${a.document_html}</body></html>`);
   w.document.close();
 }
 function tenancySigningReceiptHtml(a,p){
@@ -4218,27 +4219,27 @@ function tenancySigningReceiptHtml(a,p){
   const signees=[{name:a.agent_name,email:a.agent_email,role:'Agent',ts:a.agent_signed_at},{name:a.tenant_name,email:a.tenant_email,role:(a.occupants&&a.occupants.length)?'Tenant 1':'Tenant',ts:a.tenant_signed_at}];
   (a.occupants||[]).forEach((o,i)=>{ const sig=(a.occupant_sigs||[]).find(s=>s.name===o.name); signees.push({name:o.name,email:o.email,role:'Tenant '+(i+2),ts:sig?sig.signed_at:null}); });
   const rid=s=>_ridFor((s.email||s.name||'')+a.id);
-  const signeeCards=signees.map(s=>`<div style="border:1px solid #E4EAF1;border-radius:8px;padding:14px 16px;margin-bottom:10px;display:grid;grid-template-columns:1fr 1fr;gap:4px 18px;font-size:12px">
-    <div><span style="color:#7A8FA6">Signee name</span><br><b>${esc(s.name||'—')}</b></div>
-    <div><span style="color:#7A8FA6">Audit level</span><br><b>Email</b></div>
-    <div><span style="color:#7A8FA6">Signee email</span><br>${esc(s.email||'—')}</div>
-    <div><span style="color:#7A8FA6">Recipient ID</span><br>${rid(s)}</div>
-    <div><span style="color:#7A8FA6">Signee role</span><br>${esc(s.role)}</div>
-    <div><span style="color:#7A8FA6">OTP required</span><br>No</div>
+  const signeeCards=signees.map(s=>`<div style="border:1px solid #E3D9C8;border-radius:8px;padding:14px 16px;margin-bottom:10px;display:grid;grid-template-columns:1fr 1fr;gap:4px 18px;font-size:12px">
+    <div><span style="color:#8A7D6E">Signee name</span><br><b>${esc(s.name||'—')}</b></div>
+    <div><span style="color:#8A7D6E">Audit level</span><br><b>Email</b></div>
+    <div><span style="color:#8A7D6E">Signee email</span><br>${esc(s.email||'—')}</div>
+    <div><span style="color:#8A7D6E">Recipient ID</span><br>${rid(s)}</div>
+    <div><span style="color:#8A7D6E">Signee role</span><br>${esc(s.role)}</div>
+    <div><span style="color:#8A7D6E">OTP required</span><br>No</div>
   </div>`).join('');
   const events=[{label:'Sent',name:signees[0].name,ts:a.agent_signed_at}];
   signees.slice(1).forEach(s=>{ if(s.ts) events.push({label:'Signed',name:s.name,ts:s.ts}); });
   const allSigned=signees.slice(1).every(s=>s.ts);
   const completedAt=allSigned?signees.slice(1).reduce((m,s)=>new Date(s.ts)>new Date(m||0)?s.ts:m,null):null;
   if(completedAt) events.push({label:'Completed',name:'',ts:completedAt});
-  const eventsHtml=events.filter(e=>e.ts).sort((x,y)=>new Date(x.ts)-new Date(y.ts)).map(e=>`<div style="display:flex;justify-content:space-between;border-bottom:1px solid #F1F3F6;padding:10px 0;font-size:12.5px"><div><b>${e.label}</b>${e.name?' · '+esc(e.name):''}</div><div style="color:#7A8FA6">${fmt(e.ts)}</div></div>`).join('');
-  return `<div style="max-width:640px;margin:0 auto;font-family:Arial,sans-serif;color:#1A2332">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px"><div style="font-size:17px;font-weight:700;color:#0B1E3D">✒ Signing receipt</div><div style="font-size:11px;color:#7A8FA6">${esc(b.name)}</div></div>
-    <div style="font-size:11px;color:#7A8FA6;text-transform:uppercase;letter-spacing:.4px;margin-bottom:14px">Document information</div>
-    <div style="border:1px solid #E4EAF1;border-radius:8px;padding:14px 16px;margin-bottom:22px;font-size:12.5px"><div style="color:#7A8FA6">Document name</div><div style="font-weight:600;margin-bottom:8px">Tenancy Terms &amp; Conditions — ${esc(p&&p.address||'')}</div><div style="color:#7A8FA6">Document ID</div><div style="font-weight:600">${esc(a.id)}</div></div>
-    <div style="font-size:11px;color:#7A8FA6;text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Signee information</div>
+  const eventsHtml=events.filter(e=>e.ts).sort((x,y)=>new Date(x.ts)-new Date(y.ts)).map(e=>`<div style="display:flex;justify-content:space-between;border-bottom:1px solid #F1E8D8;padding:10px 0;font-size:12.5px"><div><b>${e.label}</b>${e.name?' · '+esc(e.name):''}</div><div style="color:#8A7D6E">${fmt(e.ts)}</div></div>`).join('');
+  return `<div style="max-width:640px;margin:0 auto;font-family:Arial,sans-serif;color:#4A4038">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px"><div style="font-size:17px;font-weight:700;color:#1B2F4A">✒ Signing receipt</div><div style="font-size:11px;color:#8A7D6E">${esc(b.name)}</div></div>
+    <div style="font-size:11px;color:#8A7D6E;text-transform:uppercase;letter-spacing:.4px;margin-bottom:14px">Document information</div>
+    <div style="border:1px solid #E3D9C8;border-radius:8px;padding:14px 16px;margin-bottom:22px;font-size:12.5px"><div style="color:#8A7D6E">Document name</div><div style="font-weight:600;margin-bottom:8px">Tenancy Terms &amp; Conditions — ${esc(p&&p.address||'')}</div><div style="color:#8A7D6E">Document ID</div><div style="font-weight:600">${esc(a.id)}</div></div>
+    <div style="font-size:11px;color:#8A7D6E;text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Signee information</div>
     ${signeeCards}
-    <div style="font-size:11px;color:#7A8FA6;text-transform:uppercase;letter-spacing:.4px;margin:22px 0 4px">Signing events</div>
+    <div style="font-size:11px;color:#8A7D6E;text-transform:uppercase;letter-spacing:.4px;margin:22px 0 4px">Signing events</div>
     ${eventsHtml}
     <div style="font-size:10.5px;color:#94A3B8;margin-top:20px">Electronic signatures applied under the Electronic Communications Act 2000. This receipt is generated from ${esc(b.name)}’s own signing records.</div>
   </div>`;
@@ -4247,7 +4248,7 @@ function viewTenancySigningReceipt(pid){
   const p=P(pid); const rec=tenantRecFor(pid); if(!rec) return;
   const a=tenancyAgreementFor(rec.id); if(!a||a.status!=='signed'){ toast('No completed signing on file',1); return; }
   const w=window.open('','_blank'); if(!w){ toast('Allow pop-ups to view',1); return; }
-  w.document.write(`<html><head><title>Signing receipt</title><style>body{margin:24px auto;padding:0 20px}@media print{button{display:none}}</style></head><body><button onclick="print()" style="padding:10px 18px;background:#0B1E3D;color:#fff;border:none;border-radius:8px;cursor:pointer;margin-bottom:20px;font-family:Arial,sans-serif">Print / Save as PDF</button>${tenancySigningReceiptHtml(a,p)}</body></html>`);
+  w.document.write(`<html><head><title>Signing receipt</title><style>body{margin:24px auto;padding:0 20px}@media print{button{display:none}}</style></head><body><button onclick="print()" style="padding:10px 18px;background:#1B2F4A;color:#fff;border:none;border-radius:8px;cursor:pointer;margin-bottom:20px;font-family:Arial,sans-serif">Print / Save as PDF</button>${tenancySigningReceiptHtml(a,p)}</body></html>`);
   w.document.close();
 }
 async function pollInboundEnquiries(){
@@ -4266,26 +4267,26 @@ async function pollTenancyAgreements(){
 }
 function signedCertHtml(a){
   const fmt=d=>d?new Date(d).toLocaleString('en-GB',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
-  return `<div style="border:1px solid #E4EAF1;border-radius:10px;padding:20px 22px">
-    <div style="font-size:15px;font-weight:700;color:#0B1E3D;margin-bottom:4px">✔ Fully signed agreement</div>
-    <div style="font-size:12px;color:#7A8FA6;margin-bottom:16px">${a.service==='letonly'?'Tenant-Find Agreement':'Letting &amp; Management Agreement'} · ${esc(agencyBrand().name)} e-signature record</div>
+  return `<div style="border:1px solid #E3D9C8;border-radius:10px;padding:20px 22px">
+    <div style="font-size:15px;font-weight:700;color:#1B2F4A;margin-bottom:4px">✔ Fully signed agreement</div>
+    <div style="font-size:12px;color:#8A7D6E;margin-bottom:16px">${a.service==='letonly'?'Tenant-Find Agreement':'Letting &amp; Management Agreement'} · ${esc(agencyBrand().name)} e-signature record</div>
     <table style="width:100%;font-size:12.5px;border-collapse:collapse">
-      <tr><td style="padding:6px 0;color:#7A8FA6">Agent</td><td style="padding:6px 0;font-weight:600">${esc(a.agent_name||'')}</td></tr>
-      <tr><td style="padding:6px 0;color:#7A8FA6">Agent signed</td><td style="padding:6px 0">${fmt(a.agent_signed_at)}</td></tr>
-      <tr><td style="padding:6px 0;color:#7A8FA6">Landlord</td><td style="padding:6px 0;font-weight:600">${esc(a.landlord_name||'')}${a.joint_name?' &amp; '+esc(a.joint_name):''}</td></tr>
-      <tr><td style="padding:6px 0;color:#7A8FA6">Landlord signed</td><td style="padding:6px 0">${fmt(a.landlord_signed_at)}</td></tr>
-      ${a.joint_name?`<tr><td style="padding:6px 0;color:#7A8FA6">Joint owner signed</td><td style="padding:6px 0">${fmt(a.joint_signed_at)}</td></tr>`:''}
+      <tr><td style="padding:6px 0;color:#8A7D6E">Agent</td><td style="padding:6px 0;font-weight:600">${esc(a.agent_name||'')}</td></tr>
+      <tr><td style="padding:6px 0;color:#8A7D6E">Agent signed</td><td style="padding:6px 0">${fmt(a.agent_signed_at)}</td></tr>
+      <tr><td style="padding:6px 0;color:#8A7D6E">Landlord</td><td style="padding:6px 0;font-weight:600">${esc(a.landlord_name||'')}${a.joint_name?' &amp; '+esc(a.joint_name):''}</td></tr>
+      <tr><td style="padding:6px 0;color:#8A7D6E">Landlord signed</td><td style="padding:6px 0">${fmt(a.landlord_signed_at)}</td></tr>
+      ${a.joint_name?`<tr><td style="padding:6px 0;color:#8A7D6E">Joint owner signed</td><td style="padding:6px 0">${fmt(a.joint_signed_at)}</td></tr>`:''}
     </table>
     <div style="display:flex;gap:24px;margin-top:14px;flex-wrap:wrap">
-      ${a.agent_sig_png?`<div><div style="font-size:11px;color:#7A8FA6;margin-bottom:4px">For and on behalf of ${esc(agencyBrand().name)}</div><img src="${a.agent_sig_png}" style="height:56px"></div>`:''}
-      ${a.landlord_sig_png?`<div><div style="font-size:11px;color:#7A8FA6;margin-bottom:4px">Landlord signature</div><img src="${a.landlord_sig_png}" style="height:56px"></div>`:''}
-      ${a.joint_sig_png?`<div><div style="font-size:11px;color:#7A8FA6;margin-bottom:4px">Joint owner signature</div><img src="${a.joint_sig_png}" style="height:56px"></div>`:''}
+      ${a.agent_sig_png?`<div><div style="font-size:11px;color:#8A7D6E;margin-bottom:4px">For and on behalf of ${esc(agencyBrand().name)}</div><img src="${a.agent_sig_png}" style="height:56px"></div>`:''}
+      ${a.landlord_sig_png?`<div><div style="font-size:11px;color:#8A7D6E;margin-bottom:4px">Landlord signature</div><img src="${a.landlord_sig_png}" style="height:56px"></div>`:''}
+      ${a.joint_sig_png?`<div><div style="font-size:11px;color:#8A7D6E;margin-bottom:4px">Joint owner signature</div><img src="${a.joint_sig_png}" style="height:56px"></div>`:''}
     </div>
-    <div style="font-size:11px;color:#7A8FA6;margin-top:14px">Electronic signatures applied under the Electronic Communications Act 2000.</div>
+    <div style="font-size:11px;color:#8A7D6E;margin-top:14px">Electronic signatures applied under the Electronic Communications Act 2000.</div>
   </div>`;
 }
 function emailSignedAgreement(a,l){
-  const full=`<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#1A2B45">${signedCertHtml(a)}<hr style="border:none;border-top:1px solid #E4EAF1;margin:24px 0"><div style="font-size:12.5px;line-height:1.7">${a.document_html}</div></div>`;
+  const full=`<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#4A4038">${signedCertHtml(a)}<hr style="border:none;border-top:1px solid #E3D9C8;margin:24px 0"><div style="font-size:12.5px;line-height:1.7">${a.document_html}</div></div>`;
   if(l.email) agencyEmail(l.email,'Your signed agreement — '+agencyBrand().name,full);
   if(a.agent_email) agencyEmail(a.agent_email,'Signed: '+(l.name||'landlord')+' — agreement complete',full);
 }
@@ -4293,7 +4294,7 @@ function viewSignedAgreement(id){
   const a=agreementFor(id);
   if(!a){ const l=L(id); if(l&&l.docs&&l.docs.agreementUrl){ window.open(l.docs.agreementUrl,'_blank'); return; } toast('No agreement on file',1); return; }
   const w=window.open('','_blank'); if(!w){ toast('Allow pop-ups to view',1); return; }
-  w.document.write(`<html><head><title>Signed Agreement</title><style>body{font-family:Arial,sans-serif;max-width:760px;margin:24px auto;padding:0 20px;color:#1A2B45;line-height:1.7}h2{font-family:Georgia,serif}img{max-height:60px}@media print{button{display:none}}</style></head><body><button onclick="print()" style="padding:10px 18px;background:#0B1E3D;color:#fff;border:none;border-radius:8px;cursor:pointer;margin-bottom:16px">Print / Save as PDF</button>${signedCertHtml(a)}<hr style="margin:24px 0;border:none;border-top:1px solid #E4EAF1">${a.document_html}</body></html>`);
+  w.document.write(`<html><head><title>Signed Agreement</title><style>body{font-family:Arial,sans-serif;max-width:760px;margin:24px auto;padding:0 20px;color:#4A4038;line-height:1.7}h2{font-family:Georgia,serif}img{max-height:60px}@media print{button{display:none}}</style></head><body><button onclick="print()" style="padding:10px 18px;background:#1B2F4A;color:#fff;border:none;border-radius:8px;cursor:pointer;margin-bottom:16px">Print / Save as PDF</button>${signedCertHtml(a)}<hr style="margin:24px 0;border:none;border-top:1px solid #E3D9C8">${a.document_html}</body></html>`);
   w.document.close();
 }
 
@@ -4318,26 +4319,26 @@ async function inviteToPortal(id){
   pushLandlord(l); render(); toast('✓ Portal invite sent to '+l.name);
 }
 function portalInviteHtml(l,link,login){ const b=agencyBrand();
-  return `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#1A2B45">
-    <div style="background:#0B1E3D;padding:20px 24px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:20px;font-weight:700">${esc(b.name)}</span>${b.ico?`<div style="font-size:10px;color:#7F9CC0;margin-top:2px">ICO Reg. ${esc(b.ico)}</div>`:''}</div>
-    <div style="border:1px solid #E4EAF1;border-top:none;border-radius:0 0 10px 10px;padding:26px 24px">
+  return `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#4A4038">
+    <div style="background:#1B2F4A;padding:20px 24px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:20px;font-weight:700">${esc(b.name)}</span>${b.ico?`<div style="font-size:10px;color:#C9B99E;margin-top:2px">ICO Reg. ${esc(b.ico)}</div>`:''}</div>
+    <div style="border:1px solid #E3D9C8;border-top:none;border-radius:0 0 10px 10px;padding:26px 24px">
       <p>Dear ${esc(landlordName(l))},</p>
       <p>${esc(b.name)} has given you access to your own <b>online portfolio portal</b> — a secure, read-only view of your properties, compliance certificates, rent and management agreement.</p>
-      <p style="text-align:center;margin:24px 0"><a href="${login}" style="background:#009970;color:#fff;text-decoration:none;font-weight:600;padding:13px 30px;border-radius:8px;display:inline-block">Sign in to your portal</a></p>
-      <p style="font-size:12.5px;color:#7A8FA6">Please sign in (or create your account) using <b>${esc(l.email)}</b> — the email we hold for you — so we can link you to your portfolio automatically. Once signed in you'll be taken straight to your dashboard.</p>
-      <p style="font-size:11px;color:#7A8FA6">Direct link: <a href="${link}" style="color:#009970">${esc(link)}</a></p>
-      <div style="margin-top:18px;padding-top:12px;border-top:1px solid #E4EAF1;font-size:10.5px;color:#7A8FA6">${esc(b.name)}${b.ico?' · ICO Reg. '+esc(b.ico):''}</div>
+      <p style="text-align:center;margin:24px 0"><a href="${login}" style="background:#C8892A;color:#fff;text-decoration:none;font-weight:600;padding:13px 30px;border-radius:8px;display:inline-block">Sign in to your portal</a></p>
+      <p style="font-size:12.5px;color:#8A7D6E">Please sign in (or create your account) using <b>${esc(l.email)}</b> — the email we hold for you — so we can link you to your portfolio automatically. Once signed in you'll be taken straight to your dashboard.</p>
+      <p style="font-size:11px;color:#8A7D6E">Direct link: <a href="${link}" style="color:#C8892A">${esc(link)}</a></p>
+      <div style="margin-top:18px;padding-top:12px;border-top:1px solid #E3D9C8;font-size:10.5px;color:#8A7D6E">${esc(b.name)}${b.ico?' · ICO Reg. '+esc(b.ico):''}</div>
     </div></div>`;
 }
 function letterWrap(subject, inner){ const b=agencyBrand(); const foot=[b.name, b.ico?'ICO Reg. '+b.ico:'', b.redress?b.redress+(b.redressNo?' ('+b.redressNo+')':''):''].filter(Boolean).join(' · ');
-  return `<div style="font-family:Georgia,'Times New Roman',serif;max-width:640px;margin:0 auto;color:#1A2B45">
-    <div style="background:#0B1E3D;padding:18px 26px;border-radius:8px 8px 0 0;display:flex;align-items:center;justify-content:space-between">
+  return `<div style="font-family:Georgia,'Times New Roman',serif;max-width:640px;margin:0 auto;color:#4A4038">
+    <div style="background:#1B2F4A;padding:18px 26px;border-radius:8px 8px 0 0;display:flex;align-items:center;justify-content:space-between">
       <div style="font-family:Arial,sans-serif;font-size:19px;font-weight:700;color:#fff;letter-spacing:.3px">${esc(b.name)}</div>
-      <div style="font-family:Arial,sans-serif;font-size:10px;color:#7F9CC0;text-align:right">${b.address?esc(b.address):''}</div>
+      <div style="font-family:Arial,sans-serif;font-size:10px;color:#C9B99E;text-align:right">${b.address?esc(b.address):''}</div>
     </div>
-    <div style="border:1px solid #E4EAF1;border-top:3px solid #00C896;border-radius:0 0 8px 8px;padding:30px 30px 24px">
+    <div style="border:1px solid #E3D9C8;border-top:3px solid #00C896;border-radius:0 0 8px 8px;padding:30px 30px 24px">
       <div style="font-size:15px;line-height:1.75">${inner}</div>
-      <div style="margin-top:26px;padding-top:14px;border-top:1px solid #E4EAF1;font-family:Arial,sans-serif;font-size:10.5px;color:#7A8FA6;line-height:1.6">${esc(foot)}<br>Issued by ${esc(b.name)} on ${new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}.</div>
+      <div style="margin-top:26px;padding-top:14px;border-top:1px solid #E3D9C8;font-family:Arial,sans-serif;font-size:10.5px;color:#8A7D6E;line-height:1.6">${esc(foot)}<br>Issued by ${esc(b.name)} on ${new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}.</div>
     </div></div>`; }
 function _money(n){ return '£'+(Math.round((+n||0)*100)/100).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function _dstr(d){ return d?new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}):'—'; }
@@ -4350,10 +4351,10 @@ const TEMPLATES=[
     fields:[],
     build:(l,p,b)=>({subject:`Welcome to ${b.name} — what happens next`,body:`<p>Dear ${esc(landlordName(l))},</p>
       <p>Welcome to ${esc(b.name)} — thank you for instructing us to manage your ${l.service==='letonly'?'letting':'property'}. Your dedicated point of contact is <b>${esc(b.agent)}</b>, reachable at ${esc(b.email)}. We hold ${b.redress?('membership of '+esc(b.redress)):'approved redress-scheme membership'} for your protection.</p>
-      <p style="font-weight:700;margin:18px 0 8px;color:#0B1E3D">What happens next</p>
+      <p style="font-weight:700;margin:18px 0 8px;color:#1B2F4A">What happens next</p>
       <p style="margin:0 0 4px"><b>1. Compliance certificates</b></p>
       <ul style="padding-left:18px;line-height:1.8;margin-top:2px"><li>We'll gather or arrange the certificates the property needs before it's marketed or handed over — EPC, Gas Safety Certificate (where applicable), EICR, and working smoke/CO alarms</li><li>We'll flag anything missing or close to expiry, and remind you well ahead of renewal dates</li></ul>
-      <p style="margin:12px 0 4px"><b>2. Marketing &amp; finding a tenant</b> <span style="font-weight:400;color:#7A8FA6">(if the property needs a tenant)</span></p>
+      <p style="margin:12px 0 4px"><b>2. Marketing &amp; finding a tenant</b> <span style="font-weight:400;color:#8A7D6E">(if the property needs a tenant)</span></p>
       <ul style="padding-left:18px;line-height:1.8;margin-top:2px"><li>Professional listing across the major portals, accompanied viewings, and a right to rent check plus full referencing on any applicant</li><li>You'll be kept updated on interest and offers as they come in</li></ul>
       <p style="margin:12px 0 4px"><b>3. Tenancy agreement &amp; move-in</b></p>
       <ul style="padding-left:18px;line-height:1.8;margin-top:2px"><li>Once a tenant is approved, we prepare and send the tenancy agreement for e-signature</li><li>The deposit is protected in a government-approved scheme within 30 days of receipt, and rent is collected before keys are released</li></ul>
@@ -4372,9 +4373,9 @@ const TEMPLATES=[
     build:(l,p,b,f)=>{const rec=+f.received||0, fee=f.deductions!==''&&f.deductions!=null?+f.deductions:(p?rec*propFee(p)/100:0), net=rec-fee; return {subject:`Rent statement — ${f.month} — ${p?p.address:''}`,body:`<p>Dear ${esc(landlordName(l))},</p>
       <p>Please find your rent statement for <b>${esc(f.month)}</b> in respect of <b>${p?esc(p.address):'your property'}</b>.</p>
       <table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:14px;margin:14px 0">
-        <tr><td style="padding:8px 0;border-bottom:1px solid #E4EAF1">Rent received</td><td style="padding:8px 0;border-bottom:1px solid #E4EAF1;text-align:right">${_money(rec)}</td></tr>
-        <tr><td style="padding:8px 0;border-bottom:1px solid #E4EAF1">Management fee &amp; deductions</td><td style="padding:8px 0;border-bottom:1px solid #E4EAF1;text-align:right">− ${_money(fee)}</td></tr>
-        <tr><td style="padding:10px 0;font-weight:700">Net remitted to you</td><td style="padding:10px 0;text-align:right;font-weight:700;color:#009970">${_money(net)}</td></tr></table>
+        <tr><td style="padding:8px 0;border-bottom:1px solid #E3D9C8">Rent received</td><td style="padding:8px 0;border-bottom:1px solid #E3D9C8;text-align:right">${_money(rec)}</td></tr>
+        <tr><td style="padding:8px 0;border-bottom:1px solid #E3D9C8">Management fee &amp; deductions</td><td style="padding:8px 0;border-bottom:1px solid #E3D9C8;text-align:right">− ${_money(fee)}</td></tr>
+        <tr><td style="padding:10px 0;font-weight:700">Net remitted to you</td><td style="padding:10px 0;text-align:right;font-weight:700;color:#C8892A">${_money(net)}</td></tr></table>
       ${f.note?`<p>${esc(f.note)}</p>`:''}
       <p>The net amount will be paid to your nominated account. Please retain this statement for your records.</p>
       <p>Kind regards,<br>${esc(b.name)}</p>`}}},
@@ -4426,22 +4427,22 @@ const TEMPLATES=[
     fields:[{k:'amount',label:'Holding deposit received (£)',type:'number',def:p=>p?Math.round(p.rent*12/52):0}],
     build:(l,p,b,f)=>{ const rec=p&&tenantRecFor(p.id); const name=rec?_allTenantNames(rec):'there'; return {subject:`Holding Deposit Received — ${p?p.address:''}`,body:`<p>Dear ${esc(name)},</p>
       <p>We are pleased to confirm receipt of your holding deposit of ${gbp(+f.amount||0)} in respect of <b>${p?esc(p.address):''}</b>. The property is now reserved on your behalf, subject to satisfactory references and contract.</p>
-      <p style="font-weight:700;margin:16px 0 4px;color:#0B1E3D">Next Step 1: Referencing</p>
+      <p style="font-weight:700;margin:16px 0 4px;color:#1B2F4A">Next Step 1: Referencing</p>
       <p>In order to proceed with referencing, we require the following details for each prospective occupant aged 18 or over: full name, email address, and contact telephone number. Upon receipt, these details will be passed to our referencing partner${S.agency.refPartner?' ('+esc(S.agency.refPartner)+')':''}, who will contact each applicant directly to complete identity verification, credit history, employment and landlord references, and an affordability assessment.</p>
-      <p style="font-weight:700;margin:16px 0 4px;color:#0B1E3D">Next Step 2: Right to Rent — documents required from you directly</p>
+      <p style="font-weight:700;margin:16px 0 4px;color:#1B2F4A">Next Step 2: Right to Rent — documents required from you directly</p>
       <p>Separately, we are required by law to verify your right to rent in the UK before the tenancy begins. Please email us the following for each occupant aged 18 or over:</p>
       <ul style="padding-left:18px;line-height:1.8">
         <li>UK/Irish passport, or Biometric Residence Permit (BRP), current visa, or Home Office share code (non-UK/Irish nationals)</li>
         <li>One additional proof of address (utility bill or bank statement, dated within the last 3 months)</li>
       </ul>
-      <p style="font-weight:700;margin:16px 0 4px;color:#0B1E3D">Please note</p>
+      <p style="font-weight:700;margin:16px 0 4px;color:#1B2F4A">Please note</p>
       <ul style="padding-left:18px;line-height:1.8">
         <li>Each applicant will receive a referencing link directly from our partner, typically within 24 hours</li>
         <li>We would ask that this is completed within 72 hours of receipt</li>
         <li>Please advise your current employer and landlord that they may be contacted for a reference</li>
         <li>We recommend checking your junk or spam folder should the referencing email not arrive in your inbox</li>
       </ul>
-      <p style="font-weight:700;margin:16px 0 4px;color:#0B1E3D">Holding Deposit Terms</p>
+      <p style="font-weight:700;margin:16px 0 4px;color:#1B2F4A">Holding Deposit Terms</p>
       <p>Your holding deposit is fully refundable, save in the following circumstances, in accordance with the Tenant Fees Act 2019: where you withdraw from the tenancy in writing; where false or misleading information is provided; where a Right to Rent check is not satisfied; or where reasonable steps are not taken to enter into the tenancy by the agreed move-in date. Should we determine that any part of the deposit is to be withheld, written confirmation of the reason will be provided to you within seven days.</p>
       <p>Should you have any queries in the meantime, please do not hesitate to contact us.</p>
       <p>Yours sincerely,<br>${esc(b.name)}</p>`};}},
@@ -4494,7 +4495,7 @@ function _tplModal(){
   const body=`<div class="fg"><label>${t.audience==='tenant'?'Property (recipient is the tenant on this property)':'Landlord (recipient)'}</label>${t.audience==='tenant'?'':llSel}</div>${propSel}
     ${fields?`<div class="grid2" style="gap:10px">${fields}</div>`:''}
     <div class="fg"><label>Preview — sent to ${esc(recip.name?recip.name+' — ':'')}${esc(recip.email||'(no email on file)')}</label>
-      <div id="tpl-prev" style="max-height:300px;overflow-y:auto;border:1px solid #E4EAF1;border-radius:8px;background:#F6F8FB;padding:6px">${letterWrap(built.subject,built.body)}</div></div>
+      <div id="tpl-prev" style="max-height:300px;overflow-y:auto;border:1px solid #E3D9C8;border-radius:8px;background:#F6F8FB;padding:6px">${letterWrap(built.subject,built.body)}</div></div>
     ${t.ai?`<div style="margin-bottom:6px"><button class="btn" id="tpl-ai" onclick="tplPolish()">✦ Polish tone with AI</button> <span class="faint" style="font-size:11px">Rewrites wording warmer/clearer — you review before sending.</span></div>`:''}`;
   const foot=`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn" onclick="tplCopy()">Copy text</button><button class="btn navy" onclick="tplSend()">Send via NexLet</button>`;
   modal(t.title, body, foot);
@@ -4666,12 +4667,12 @@ function genNoticeDoc(n){
   const p=P(n.propertyId)||{}; const l=L(n.landlordId)||{}; const a=S.agency; const b=agencyBrand();
   const addr1=esc(p.address||''); const addr2=esc(p.city||''); const postcode=esc(p.postcode||'');
   const box=(v)=>`<div style="border:1.3px solid #C7D2E0;background:#F7F9FC;border-radius:3px;padding:7px 10px;font-size:13px;min-height:16px">${v||'&nbsp;'}</div>`;
-  const qhead=(num,txt)=>`<div style="font-weight:700;color:#1A2B45;font-size:13.5px;margin:16px 0 6px">${num} ${esc(txt)}</div>`;
+  const qhead=(num,txt)=>`<div style="font-weight:700;color:#4A4038;font-size:13.5px;margin:16px 0 6px">${num} ${esc(txt)}</div>`;
   const govHeader=(formNo,title,statute)=>`
-    <div style="border-left:4px solid #1A2B45;padding-left:12px;margin-bottom:18px">
-      <div style="font-size:11px;color:#7A8FA6;letter-spacing:.4px">FORM ${formNo}</div>
-      <div style="font-size:19px;font-weight:700;color:#1A2B45;margin:2px 0 4px">${esc(title)}</div>
-      <div style="font-size:12px;color:#7A8FA6">${esc(statute)}</div>
+    <div style="border-left:4px solid #4A4038;padding-left:12px;margin-bottom:18px">
+      <div style="font-size:11px;color:#8A7D6E;letter-spacing:.4px">FORM ${formNo}</div>
+      <div style="font-size:19px;font-weight:700;color:#4A4038;margin:2px 0 4px">${esc(title)}</div>
+      <div style="font-size:12px;color:#8A7D6E">${esc(statute)}</div>
     </div>`;
   const sigBlock=()=>`
     ${qhead('','Signed')}
@@ -4708,7 +4709,7 @@ function genNoticeDoc(n){
       <p style="font-size:12.5px;margin-top:14px">If you do not agree, you may refer this notice to the First-tier Tribunal (Property Chamber) before the start date in 4.6, and the Tribunal will decide the market rent. If you do not refer it, the new rent takes effect on that date.</p>
       ${sigBlock()}`;
   }
-  const grows=n.grounds.map(c=>{ const g=groundById(c); return g?`<tr style="border-bottom:1px solid #E4EAF1"><td style="padding:8px 8px 8px 0;font-weight:600;white-space:nowrap;vertical-align:top">Ground ${g[0]}</td><td style="padding:8px 0">${esc(g[3])} — ${esc(g[4])}</td></tr>`:''; }).join('');
+  const grows=n.grounds.map(c=>{ const g=groundById(c); return g?`<tr style="border-bottom:1px solid #E3D9C8"><td style="padding:8px 8px 8px 0;font-weight:600;white-space:nowrap;vertical-align:top">Ground ${g[0]}</td><td style="padding:8px 0">${esc(g[3])} — ${esc(g[4])}</td></tr>`:''; }).join('');
   return `${govHeader('3A','Notice seeking possession of a property let on an assured tenancy','Housing Act 1988 section 8, Schedule 2')}
     ${qhead('1.','To (tenant(s))')}
     ${box(esc(n.tenantName||''))}
@@ -4770,7 +4771,7 @@ async function emailNotice(id){
   const recips=_noticeRecipients(n);
   if(!recips.length){ toast('No email on file for the tenant, occupants or guarantor',1); return; }
   const label=n.kind==='section13'?'Section 13 rent increase notice':'Section 8 possession notice';
-  const html=n.officialDoc?`<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#1A2B45"><p>Please find your ${label} attached/linked below.</p><p><a href="${n.officialDoc.url}">View the signed notice →</a></p><hr style="margin:20px 0;border:none;border-top:1px solid #ddd"><div style="font-size:12px;color:#7A8FA6">For reference, a summary of the notice:</div>${n.docHtml}</div>`:`<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#1A2B45">${n.docHtml}</div>`;
+  const html=n.officialDoc?`<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#4A4038"><p>Please find your ${label} attached/linked below.</p><p><a href="${n.officialDoc.url}">View the signed notice →</a></p><hr style="margin:20px 0;border:none;border-top:1px solid #ddd"><div style="font-size:12px;color:#8A7D6E">For reference, a summary of the notice:</div>${n.docHtml}</div>`:`<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#4A4038">${n.docHtml}</div>`;
   for(const r of recips){ await agencyEmail(r.email, label+' — '+esc(p.address||''), html); }
   n.emailedTo=recips.map(r=>r.email); n.emailedAt=new Date().toISOString();
   const l=L(n.landlordId||p.landlordId); if(l&&l.id){ l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Notice',note:label+' emailed to '+recips.map(r=>r.label+' ('+r.email+')').join(', ')+' — '+(p.address||'')}); pushLandlord(l); }
@@ -4794,7 +4795,7 @@ function vNotices(){
     </div>
     <div class="panel">${ns.length?ns.map(noticeRow).join(''):`<div class="empty">No notices yet. Click \u201cNew notice\u201d to prepare a Section 8 or Section 13 notice.</div>`}</div>`;
 }
-function noticeRow(n){ const p=P(n.propertyId)||{}; const st={draft:['Draft','var(--off)','#475569'],served:['Served','var(--amber-bg)','var(--amber)'],expired:['Expired','var(--red-bg)','var(--red)'],withdrawn:['Withdrawn','var(--off)','#94A3B8']}[n.status]||['Draft','var(--off)','#475569'];
+function noticeRow(n){ const p=P(n.propertyId)||{}; const st={draft:['Draft','var(--off)','#8A7D6E'],served:['Served','var(--amber-bg)','var(--amber)'],expired:['Expired','var(--red-bg)','var(--red)'],withdrawn:['Withdrawn','var(--off)','#94A3B8']}[n.status]||['Draft','var(--off)','#8A7D6E'];
   const label=n.kind==='section13'?'Section 13 rent increase':'Section 8 · Ground'+(n.grounds.length>1?'s':'')+' '+n.grounds.join(', ');
   return `<div class="row" style="cursor:pointer" onclick="go('notice','${n.id}')"><div class="av">\u2696</div>
     <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:var(--navy)">${esc(p.address||'—')}</div>
@@ -4934,17 +4935,17 @@ async function _rentReceivedSend(rid){
   const fee=Math.round(r.amount*propFee(p))/100; const net=Math.round((r.amount-fee)*100)/100;
   const period=new Date(r.due).toLocaleDateString('en-GB',{month:'long',year:'numeric'});
   const subject=`Rent received & statement — ${period} — ${p.address||''}`;
-  const html=`<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#1A2B45">
-    <div style="background:#0B1E3D;padding:18px 22px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:18px;font-weight:700">${esc(agencyBrand().name)}</span></div>
-    <div style="padding:22px;border:1px solid #E4EAF1;border-top:none;border-radius:0 0 10px 10px">
+  const html=`<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#4A4038">
+    <div style="background:#1B2F4A;padding:18px 22px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:18px;font-weight:700">${esc(agencyBrand().name)}</span></div>
+    <div style="padding:22px;border:1px solid #E3D9C8;border-top:none;border-radius:0 0 10px 10px">
       <p>Dear ${esc(landlordName(l))},</p>
       <p>We confirm we have <b>received your tenant's rent</b> for <b>${esc(period)}</b> in respect of <b>${esc(p.address||'your property')}</b>, and have processed your statement below.</p>
       <table style="width:100%;border-collapse:collapse;font-size:14px;margin:14px 0">
-        <tr><td style="padding:8px 0;border-bottom:1px solid #E4EAF1">Rent received</td><td style="padding:8px 0;border-bottom:1px solid #E4EAF1;text-align:right">${_money(r.amount)}</td></tr>
-        <tr><td style="padding:8px 0;border-bottom:1px solid #E4EAF1">Management fee (${propFee(p)}%)</td><td style="padding:8px 0;border-bottom:1px solid #E4EAF1;text-align:right">− ${_money(fee)}</td></tr>
-        <tr><td style="padding:10px 0;font-weight:700">Net remitted to you</td><td style="padding:10px 0;text-align:right;font-weight:700;color:#009970">${_money(net)}</td></tr></table>
+        <tr><td style="padding:8px 0;border-bottom:1px solid #E3D9C8">Rent received</td><td style="padding:8px 0;border-bottom:1px solid #E3D9C8;text-align:right">${_money(r.amount)}</td></tr>
+        <tr><td style="padding:8px 0;border-bottom:1px solid #E3D9C8">Management fee (${propFee(p)}%)</td><td style="padding:8px 0;border-bottom:1px solid #E3D9C8;text-align:right">− ${_money(fee)}</td></tr>
+        <tr><td style="padding:10px 0;font-weight:700">Net remitted to you</td><td style="padding:10px 0;text-align:right;font-weight:700;color:#C8892A">${_money(net)}</td></tr></table>
       <p>The net sum will be paid to your nominated account in line with your instruction${p&&p.rentDueDay?` (rent due day: ${esc(p.rentDueDay)})`:''}. Please retain this statement for your records.</p>
-      <p style="color:#7A8FA6;font-size:12px">${esc(agencyBrand().name)} · held under our Client Money Protection scheme. This is an automated statement; reply with any queries.</p>
+      <p style="color:#8A7D6E;font-size:12px">${esc(agencyBrand().name)} · held under our Client Money Protection scheme. This is an automated statement; reply with any queries.</p>
     </div></div>`;
   // Audit row + comms log + document trail (agency_letters).
   const row={id:uid('lt'),agency_id:window._agencyId,landlord_id:l.id,property_id:p.id,type:'rent_statement',subject,body_html:html,status:'sent'};
@@ -5062,7 +5063,7 @@ function vStatement(){
 async function emailStatement(){
   const l=L(ST.landlordId)||{}; if(!l.email){toast('No email on file',1);return;}
   const subject='Your landlord statement — '+esc(l.name);
-  const html=`<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#1A2B45"><p>Dear ${esc(landlordName(l))},</p><p>Please find your landlord statement attached below.</p>${ST.doc}</div>`;
+  const html=`<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#4A4038"><p>Dear ${esc(landlordName(l))},</p><p>Please find your landlord statement attached below.</p>${ST.doc}</div>`;
   const row={id:uid('lt'),agency_id:window._agencyId,landlord_id:l.id,type:'statement',subject,body_html:html,status:'sent'};
   if(LIVE){ try{ await sb.from('agency_letters').insert(row); }catch(e){ console.error(e); } }
   S.letters=S.letters||[]; S.letters.unshift({...row,created_at:new Date().toISOString()});
@@ -5163,7 +5164,7 @@ function vInventoryList(){
     <div class="panel">${list.length?list.map(v=>{ const p=P(v.propertyId)||{}; const t=(S.tenants||[]).find(x=>x.id===v.tenantId)||{};
       return `<div class="row" style="cursor:pointer" onclick="go('inventorydetail','${v.id}')"><div class="av">📋</div>
         <div style="flex:1"><div style="font-size:14px;font-weight:600;color:var(--navy)">${esc(p.address||'—')}</div><div class="faint" style="font-size:12px">${esc(t.name||'—')} · ${v.rooms.length} item${v.rooms.length===1?'':'s'}</div></div>
-        <span class="pill" style="background:${v.status==='complete'?'var(--green-bg)':v.status==='in-progress'?'var(--blue-bg)':'var(--off)'};color:${v.status==='complete'?'var(--green)':v.status==='in-progress'?'var(--blue)':'#475569'}">${v.status==='complete'?'Complete':v.status==='in-progress'?'In progress':'Draft'}</span></div>`; }).join(''):'<div class="empty">No inventories yet. Create one for a tenancy to start recording move-in condition.</div>'}</div>`;
+        <span class="pill" style="background:${v.status==='complete'?'var(--green-bg)':v.status==='in-progress'?'var(--blue-bg)':'var(--off)'};color:${v.status==='complete'?'var(--green)':v.status==='in-progress'?'var(--blue)':'#8A7D6E'}">${v.status==='complete'?'Complete':v.status==='in-progress'?'In progress':'Draft'}</span></div>`; }).join(''):'<div class="empty">No inventories yet. Create one for a tenancy to start recording move-in condition.</div>'}</div>`;
 }
 function _ensureRoomShape(r){
   if(!r.checkin) r.checkin={photos:r.checkinPhoto?[r.checkinPhoto]:[],note:r.checkinNote||''};
@@ -5478,13 +5479,13 @@ function _invReportHtml(r,p,t,v){
     const parts=[]; if(m.gas||m.electricity||m.water) parts.push('Meters — '+[m.gas&&'Gas: '+esc(m.gas),m.electricity&&'Electricity: '+esc(m.electricity),m.water&&'Water: '+esc(m.water)].filter(Boolean).join(' · '));
     if(k.count) parts.push('Keys handed over — '+esc(k.count)+(k.note?' ('+esc(k.note)+')':''));
     if(!parts.length&&!ack.confirmed) return '';
-    return `<div style="padding:12px 24px;border-bottom:1px solid #EEF1F5;font-size:11.5px;color:#475569;line-height:1.6">${parts.map(x=>'<div>'+x+'</div>').join('')}${ack.confirmed?`<div style="margin-top:4px;color:#1B7A4B;font-weight:700">✓ Tenant confirmed accurate — ${esc(ack.name)}, via ${esc(ack.method)}, ${fmtDate(ack.date)}</div>`:`<div style="margin-top:4px;color:#B86E20">Awaiting tenant acknowledgement of this report</div>`}</div>`; })():'';
+    return `<div style="padding:12px 24px;border-bottom:1px solid #EEF1F5;font-size:11.5px;color:#8A7D6E;line-height:1.6">${parts.map(x=>'<div>'+x+'</div>').join('')}${ack.confirmed?`<div style="margin-top:4px;color:#1B7A4B;font-weight:700">✓ Tenant confirmed accurate — ${esc(ack.name)}, via ${esc(ack.method)}, ${fmtDate(ack.date)}</div>`:`<div style="margin-top:4px;color:#B86E20">Awaiting tenant acknowledgement of this report</div>`}</div>`; })():'';
   const money=(r.type==='moveout'||r.type==='precheckout')?`<div style="display:grid;grid-template-columns:repeat(3,1fr);background:#F4F6F9;border-bottom:1px solid #E2E5EA">
-      <div style="padding:16px 20px;border-right:1px solid #E2E5EA"><div style="font-size:10px;font-weight:700;letter-spacing:.5px;color:#94A3B8;text-transform:uppercase">Deposit held</div><div style="font-size:20px;font-weight:700;color:#0B1E3D;margin-top:4px">${money2(r.depositHeld)}</div></div>
+      <div style="padding:16px 20px;border-right:1px solid #E2E5EA"><div style="font-size:10px;font-weight:700;letter-spacing:.5px;color:#94A3B8;text-transform:uppercase">Deposit held</div><div style="font-size:20px;font-weight:700;color:#1B2F4A;margin-top:4px">${money2(r.depositHeld)}</div></div>
       <div style="padding:16px 20px;border-right:1px solid #E2E5EA"><div style="font-size:10px;font-weight:700;letter-spacing:.5px;color:#94A3B8;text-transform:uppercase">${r.type==='precheckout'?'Indicative deduction':'Proposed deduction'}</div><div style="font-size:20px;font-weight:700;color:#C0392B;margin-top:4px">${money2(r.totalDeduction)}</div><div style="font-size:10px;color:#94A3B8;margin-top:1px">${r.results.length} item${r.results.length===1?'':'s'} assessed</div></div>
       <div style="padding:16px 20px"><div style="font-size:10px;font-weight:700;letter-spacing:.5px;color:#94A3B8;text-transform:uppercase">${r.type==='precheckout'?'If unresolved, return':'Return to tenant'}</div><div style="font-size:20px;font-weight:700;color:#1B7A4B;margin-top:4px">${money2(Math.max(0,r.depositHeld-r.totalDeduction))}</div></div>
     </div>`:'';
-  const legend=r.type!=='movein'?`<div style="display:flex;gap:16px;flex-wrap:wrap;padding:12px 24px;border-bottom:1px solid #EEF1F5;font-size:11px;color:#475569">
+  const legend=r.type!=='movein'?`<div style="display:flex;gap:16px;flex-wrap:wrap;padding:12px 24px;border-bottom:1px solid #EEF1F5;font-size:11px;color:#8A7D6E">
       <div style="display:flex;align-items:center;gap:6px"><span style="width:9px;height:9px;border-radius:2px;background:#1B7A4B;display:inline-block"></span> Fair wear &amp; tear</div>
       <div style="display:flex;align-items:center;gap:6px"><span style="width:9px;height:9px;border-radius:2px;background:#C0392B;display:inline-block"></span> Tenant damage</div>
       <div style="display:flex;align-items:center;gap:6px"><span style="width:9px;height:9px;border-radius:2px;background:#D98324;display:inline-block"></span> Cleaning</div>
@@ -5497,33 +5498,33 @@ function _invReportHtml(r,p,t,v){
           <div style="font-size:10px;font-weight:700;letter-spacing:.5px;color:#94A3B8;text-transform:uppercase">${esc(x.room)}</div>
           ${x.condition?`<span style="font-size:9.5px;font-weight:700;color:#fff;background:#5B6473;padding:2px 8px;border-radius:8px">${esc(x.condition)}</span>`:''}
         </div>
-        <div style="font-size:14px;font-weight:700;color:#0B1E3D;margin:1px 0 8px">${esc(x.item)}</div>
+        <div style="font-size:14px;font-weight:700;color:#1B2F4A;margin:1px 0 8px">${esc(x.item)}</div>
         <div style="display:flex;gap:8px;margin-bottom:8px">${photoStrip(x.checkinPhotos)}</div>
-        <div style="font-size:11.5px;color:#64748B;line-height:1.5">${esc(x.summary)}</div>
+        <div style="font-size:11.5px;color:#8A7D6E;line-height:1.5">${esc(x.summary)}</div>
       </div>`;
     }
     const charge=x.charge?money2(x.charge):'£0';
     return `<div style="padding:16px 0;border-bottom:1px solid #EEF1F5">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px">
-        <div><div style="font-size:10px;font-weight:700;letter-spacing:.5px;color:#94A3B8;text-transform:uppercase">${esc(x.room)}</div><div style="font-size:14px;font-weight:700;color:#0B1E3D">${esc(x.item)}</div></div>
+        <div><div style="font-size:10px;font-weight:700;letter-spacing:.5px;color:#94A3B8;text-transform:uppercase">${esc(x.room)}</div><div style="font-size:14px;font-weight:700;color:#1B2F4A">${esc(x.item)}</div></div>
         <div style="display:flex;align-items:center;gap:10px">
           <span style="font-size:10px;font-weight:700;color:#fff;background:${clsColor[x.classification]||'#5B6473'};padding:3px 9px;border-radius:100px;white-space:nowrap">${clsLabel[x.classification]||x.classification}</span>
           ${(r.type==='moveout'||r.type==='precheckout')?`<span style="font-size:15px;font-weight:700;color:${x.charge?'#C0392B':'#1B7A4B'};min-width:48px;text-align:right">${charge}</span>`:''}
         </div>
       </div>
       <div style="display:flex;gap:8px;margin-bottom:8px"><div style="display:flex;gap:6px;flex:1">${photoStrip(x.checkinPhotos)}</div><div style="display:flex;gap:6px;flex:1">${photoStrip(x.stagePhotos)}</div></div>
-      <div style="display:flex;gap:14px;font-size:11px;color:#64748B;line-height:1.5;margin-bottom:${x.charge?'8px':'0'}">
-        <div style="flex:1"><b style="color:#475569">Check-in:</b> ${esc(x.checkinNote||'—')}</div>
-        <div style="flex:1"><b style="color:#475569">${x.stageLabel==='mid-tenancy'?'Now':'Check-out'}:</b> ${esc(x.stageNote||'—')}</div>
+      <div style="display:flex;gap:14px;font-size:11px;color:#8A7D6E;line-height:1.5;margin-bottom:${x.charge?'8px':'0'}">
+        <div style="flex:1"><b style="color:#8A7D6E">Check-in:</b> ${esc(x.checkinNote||'—')}</div>
+        <div style="flex:1"><b style="color:#8A7D6E">${x.stageLabel==='mid-tenancy'?'Now':'Check-out'}:</b> ${esc(x.stageNote||'—')}</div>
       </div>
-      ${(r.type==='moveout'||r.type==='precheckout')&&x.charge?`<div style="background:#FBF6F2;border:1px solid #F0E0D4;border-radius:7px;padding:8px 11px;font-size:11px;color:#8A5A3A;line-height:1.55">${esc(x.summary)}${x.breakdown?'<br><span style="color:#A87A56">'+x.breakdown+'</span>':''}</div>`:(r.type!=='moveout'&&r.type!=='precheckout')?`<div style="font-size:11px;color:#64748B;line-height:1.5">${esc(x.summary)}</div>`:`<div style="font-size:11px;color:#64748B;line-height:1.5">${esc(x.summary)}</div>`}
+      ${(r.type==='moveout'||r.type==='precheckout')&&x.charge?`<div style="background:#FBF6F2;border:1px solid #F0E0D4;border-radius:7px;padding:8px 11px;font-size:11px;color:#8A5A3A;line-height:1.55">${esc(x.summary)}${x.breakdown?'<br><span style="color:#A87A56">'+x.breakdown+'</span>':''}</div>`:(r.type!=='moveout'&&r.type!=='precheckout')?`<div style="font-size:11px;color:#8A7D6E;line-height:1.5">${esc(x.summary)}</div>`:`<div style="font-size:11px;color:#8A7D6E;line-height:1.5">${esc(x.summary)}</div>`}
     </div>`;
   }).join('');
-  const footer=((r.type==='moveout'||r.type==='precheckout')?`<div style="background:#F9FAFB;border-top:1px solid #E2E5EA;padding:16px 24px;font-size:10.5px;color:#7A8699;line-height:1.6"><b style="color:#475569">How these figures were calculated</b><br>Every item was classified as fair wear &amp; tear (never chargeable), cleaning (charged in full), or damage. Damage is apportioned by remaining useful life: repair/replacement cost × (years of useful life remaining ÷ total useful life) — the tenant never pays full replacement cost, per Propertymark/mydeposits betterment guidance. The maths for each chargeable item is shown against that item above.${r.type==='precheckout'?' These figures are indicative only — the real move-out inspection determines the final deduction.':''}</div>`:'')
+  const footer=((r.type==='moveout'||r.type==='precheckout')?`<div style="background:#F9FAFB;border-top:1px solid #E2E5EA;padding:16px 24px;font-size:10.5px;color:#7A8699;line-height:1.6"><b style="color:#8A7D6E">How these figures were calculated</b><br>Every item was classified as fair wear &amp; tear (never chargeable), cleaning (charged in full), or damage. Damage is apportioned by remaining useful life: repair/replacement cost × (years of useful life remaining ÷ total useful life) — the tenant never pays full replacement cost, per Propertymark/mydeposits betterment guidance. The maths for each chargeable item is shown against that item above.${r.type==='precheckout'?' These figures are indicative only — the real move-out inspection determines the final deduction.':''}</div>`:'')
     +((r.sentLandlordAt||r.sentTenantAt)?`<div style="background:#EAF6EF;border-top:1px solid #E2E5EA;padding:10px 24px;font-size:10.5px;color:#1B7A4B;line-height:1.6">${r.sentLandlordAt?'✓ Sent to landlord '+new Date(r.sentLandlordAt).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):''}${r.sentLandlordAt&&r.sentTenantAt?' · ':''}${r.sentTenantAt?'✓ Sent to tenant '+new Date(r.sentTenantAt).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):''}</div>`:'')
     +`<div style="border-top:1px solid #E2E5EA;padding:12px 24px;font-size:10px;color:#94A3B8;line-height:1.6">This report is a fair and accurate record of condition based on the photographs and notes taken at the time of each stage.${r.type==='moveout'?' Report ref: '+esc(r.id)+' · Please review and raise any inaccuracy within 14 days — after that, without a dispute raised, this record will be treated as agreed.':' Report ref: '+esc(r.id)+'.'}</div>`;
   return `<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;border-radius:8px;overflow:hidden;border:1px solid #E2E5EA">
-    <div style="background:#0B1E3D;color:#fff;padding:20px 24px">
+    <div style="background:#1B2F4A;color:#fff;padding:20px 24px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
         <div><div style="font-size:10px;font-weight:700;letter-spacing:1px;color:#E8923A;text-transform:uppercase;margin-bottom:5px">${typeKicker}</div><div style="font-family:Georgia,serif;font-size:20px">${esc(p.address||'')}</div><div style="font-size:12px;color:rgba(255,255,255,.7);margin-top:3px">Tenant: ${esc(t.name||'—')}</div></div>
         <div style="text-align:right;font-size:11px;color:rgba(255,255,255,.75);line-height:1.6">${dateBlock}</div>
@@ -5568,7 +5569,7 @@ function emailInvReport(vid,rid,recipient){
   const typeTitle={movein:'Move-in condition report',midterm:'Mid-tenancy inspection report',precheckout:'Pre-checkout snag list',moveout:'Move-out & deposit report'}[r.type];
   toast('Sending report…');
   _signReportPhotos(r).then(signed=>{
-    agencyEmail(to,typeTitle+' — '+(p.address||''),`<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#1A2B45">${_invReportHtml(signed,p,t,v)}</div>`);
+    agencyEmail(to,typeTitle+' — '+(p.address||''),`<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#4A4038">${_invReportHtml(signed,p,t,v)}</div>`);
     if(recipient==='landlord') r.sentLandlordAt=new Date().toISOString(); else r.sentTenantAt=new Date().toISOString();
     pushInv2(v); render(); toast('✓ Report emailed to '+recipient);
   });

@@ -22,24 +22,24 @@
 <meta name="twitter:image" content="https://nexlet.co.uk/og-image.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --navy:#0B1E3D;--navy-mid:#132847;
-  --green:#00C896;--green-dark:#009970;
-  --white:#fff;--off:#F6F8FB;--border:#E4EAF1;
-  --txt:#1A2B45;--muted:#7A8FA6;--red:#E53E3E;
+  --navy:#1B2F4A;--navy-mid:#0F1F32;
+  --green:#C8892A;--green-dark:#DFA24C;
+  --white:#fff;--off:#FDFAF6;--border:#E3D9C8;
+  --txt:#4A4038;--muted:#8A7D6E;--red:#E53E3E;
   --font:'DM Sans',system-ui,sans-serif;
-  --disp:'DM Serif Display',Georgia,serif;
+  --disp:'Cormorant Garamond',Georgia,serif;
 }
 html,body{height:100%;font-family:var(--font);color:var(--txt);-webkit-font-smoothing:antialiased}
 body{display:flex;flex-direction:column;min-height:100vh}
 .panels{display:flex;flex:1}
 .trust-bar{background:#F6F8FB;text-align:center;padding:11px 20px;font-size:12px;color:var(--muted);letter-spacing:.01em;flex-shrink:0}
 .left{width:45%;background:var(--navy);display:flex;flex-direction:column;padding:48px;position:relative;overflow:hidden}
-.left::before{content:'';position:absolute;top:-100px;right:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(0,200,150,0.08) 0%,transparent 70%);pointer-events:none}
-.left::after{content:'';position:absolute;bottom:-100px;left:-50px;width:300px;height:300px;background:radial-gradient(circle,rgba(30,58,95,0.8) 0%,transparent 70%);pointer-events:none}
+.left::before{content:'';position:absolute;top:-100px;right:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(200,137,42,0.08) 0%,transparent 70%);pointer-events:none}
+.left::after{content:'';position:absolute;bottom:-100px;left:-50px;width:300px;height:300px;background:radial-gradient(circle,rgba(27,47,74,0.8) 0%,transparent 70%);pointer-events:none}
 .left-logo{font-family:var(--disp);font-size:22px;color:#fff;text-decoration:none;display:block;margin-bottom:auto}
 .left-logo span{color:var(--green)}
 .left-content{position:relative;z-index:1;margin-bottom:auto}
@@ -48,7 +48,7 @@ body{display:flex;flex-direction:column;min-height:100vh}
 .left-sub{font-size:15px;color:rgba(255,255,255,0.5);line-height:1.7;font-weight:300;margin-bottom:32px}
 .left-features{display:flex;flex-direction:column;gap:12px}
 .left-feat{display:flex;align-items:center;gap:10px;font-size:13.5px;color:rgba(255,255,255,0.65)}
-.left-feat-dot{width:20px;height:20px;border-radius:50%;background:rgba(0,200,150,0.15);border:1px solid rgba(0,200,150,0.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;color:var(--green)}
+.left-feat-dot{width:20px;height:20px;border-radius:50%;background:rgba(200,137,42,0.15);border:1px solid rgba(200,137,42,0.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;color:var(--green)}
 .left-bottom{font-size:12px;color:rgba(255,255,255,0.25);margin-top:48px}
 .right{flex:1;background:var(--off);display:flex;align-items:center;justify-content:center;padding:40px 20px}
 .login-box{background:var(--white);border:1px solid var(--border);border-radius:16px;padding:40px;width:100%;max-width:420px}
@@ -72,7 +72,7 @@ body{display:flex;flex-direction:column;min-height:100vh}
 .btn-google:hover{border-color:#c5d0dd;background:var(--off)}
 .google-icon{width:18px;height:18px;flex-shrink:0}
 .error-msg{background:rgba(229,62,62,0.06);border:1px solid rgba(229,62,62,0.2);border-radius:8px;padding:10px 14px;font-size:13px;color:var(--red);margin-bottom:16px;display:none}
-.success-msg{background:rgba(0,200,150,0.06);border:1px solid rgba(0,200,150,0.3);border-radius:8px;padding:10px 14px;font-size:13px;color:var(--green-dark);margin-bottom:16px;display:none}
+.success-msg{background:rgba(200,137,42,0.06);border:1px solid rgba(200,137,42,0.3);border-radius:8px;padding:10px 14px;font-size:13px;color:var(--green-dark);margin-bottom:16px;display:none}
 .spinner{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;margin-right:8px;vertical-align:middle}
 @keyframes spin{to{transform:rotate(360deg)}}
 .login-footer{text-align:center;margin-top:24px;font-size:13px;color:var(--muted)}
@@ -346,8 +346,8 @@ async function resendConfirmation() {
   if (error) {
     err.textContent = 'Could not resend — ' + error.message;
   } else {
-    err.style.background = 'rgba(0,200,150,0.06)';
-    err.style.borderColor = 'rgba(0,200,150,0.3)';
+    err.style.background = 'rgba(200,137,42,0.06)';
+    err.style.borderColor = 'rgba(200,137,42,0.3)';
     err.style.color = 'var(--green-dark)';
     err.textContent = 'Confirmation email sent! Check your inbox.';
   }
@@ -409,7 +409,7 @@ document.getElementById('password').addEventListener('input', () => {
   </div>
   <div style="display:flex;gap:10px;flex-shrink:0">
     <button onclick="declineCookies()" style="padding:8px 16px;border-radius:7px;border:1px solid rgba(255,255,255,0.2);background:none;color:rgba(255,255,255,0.6);font-family:var(--font,sans-serif);font-size:13px;cursor:pointer">Essential only</button>
-    <button onclick="acceptCookies()" style="padding:8px 16px;border-radius:7px;border:none;background:#00C896;color:#0B1E3D;font-family:var(--font,sans-serif);font-size:13px;font-weight:600;cursor:pointer">Accept & continue</button>
+    <button onclick="acceptCookies()" style="padding:8px 16px;border-radius:7px;border:none;background:#C8892A;color:#1B2F4A;font-family:var(--font,sans-serif);font-size:13px;font-weight:600;cursor:pointer">Accept & continue</button>
   </div>
 </div>
 <script>
