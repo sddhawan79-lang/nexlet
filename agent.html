@@ -4086,12 +4086,36 @@ function buildManagementAgreement(l, service){
     : `The Agent does not hold client money on account; rent is remitted directly to the Landlord and the Agent's fee is invoiced separately.`;
   const redress = a.redress ? `The Agent is a member of ${esc(a.redress)}${a.redressNo?' (ref. '+esc(a.redressNo)+')':''}, an approved redress scheme under the Redress Schemes for Lettings Agency Work (Requirement to Belong to a Scheme etc.) (England) Order 2014.` : `The Agent is a member of an approved property redress scheme.`;
 
+  const now=new Date();
+  const bInit=(a.name||'Beacon Residentials').split(/\s+/).map(w=>w[0]||'').join('').slice(0,3).toUpperCase();
+  const docRef=bInit+'-'+(isFull?'LMA':'TFA')+'-'+now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  const glanceRows=[
+    ['Service level', isFull?'Full management':'Tenant-find only'],
+    ['Basis of appointment', isMulti?'Multiple agency — you may instruct other agents':'Sole agency, '+esc(a.solePeriodWeeks||'12')+'-week tie-in'],
+    ['Fee', isFull?((propFee(props[0]||{})||(isMulti?MULTI_FEE:DEF_FEE))+'% of gross monthly rent'):(feeOf(l)+" weeks' rent, one-off")],
+    isFull?['Repairs authority','Up to '+gbp(a.repairLimit||250)+' without prior approval']:null,
+    ['Invoices', isFull?('Monthly, payable within '+esc(a.paymentTerms||14)+' days'):('On commencement, payable within '+esc(a.paymentTerms||14)+' days')],
+    ['Rent handling','Paid by the Tenant directly to the Landlord — the Agent does not hold rent'],
+    ['Ending this agreement','See Clause 10']
+  ].filter(Boolean);
   return `
     <h2 style="text-align:center;margin-top:0">${title}</h2>
     <p style="text-align:center;color:#8A7D6E;font-size:12px">Made under the laws of England &amp; Wales · ${fmt(new Date())}</p>
+    <p style="text-align:center;color:#8A7D6E;font-size:10.5px;margin-top:-6px">Document ref. ${docRef} · v1.0 · Generated ${now.toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'UTC'})} UTC</p>
 
-    <p><b>1. Parties &amp; definitions.</b> This agreement is between <b>${esc(a.name||'the Agent')}</b>${a.companyNo?' (company no. '+esc(a.companyNo)+')':''}${a.address?' of '+esc(a.address):''} ("the Agent") and <b>${esc(l.name)}${l.entity==='joint'&&l.joint?' &amp; '+esc(l.joint):''}</b>${l.address?' of '+esc(l.address):''} ("the Landlord"${l.entity==='joint'?', jointly and severally liable':''}), together "the Parties". "The Property" means the property or properties listed in Clause 2. "Tenancy" means an assured shorthold tenancy or other tenancy of the Property arranged under this agreement.</p>
-    <p><b>2. Property(ies).</b> This agreement covers:</p>
+    <div style="border:1px solid #1B2F4A;border-radius:6px;padding:12px 14px;margin:16px 0;font-size:12px;line-height:1.55">
+      <div style="font-weight:700;color:#1B2F4A;letter-spacing:.06em;font-size:11px;margin-bottom:5px">IMPORTANT — PLEASE READ BEFORE SIGNING</div>
+      This is a legally binding document. Before you sign it you should read it carefully to ensure it contains everything you want and nothing unacceptable to you. Once signed, you may have obligations to pay fees and to maintain the property that are difficult to end early. If you do not understand any part of this agreement, or your legal obligations as a landlord, you should seek advice from a solicitor or other qualified legal adviser, a law centre, a housing advice service, or Citizens Advice.
+    </div>
+
+    <div style="background:#FDFAF6;border:1px solid #E3D9C8;border-radius:6px;padding:12px 14px;margin:16px 0;font-size:12px">
+      <div style="font-weight:700;color:#1B2F4A;letter-spacing:.06em;font-size:11px;margin-bottom:6px">AT A GLANCE</div>
+      <table style="width:100%;border-collapse:collapse">${glanceRows.map(r=>`<tr><td style="padding:4px 0;width:38%;color:#8A7D6E;vertical-align:top">${r[0]}</td><td style="padding:4px 0">${r[1]}</td></tr>`).join('')}</table>
+      <div style="margin-top:8px;color:#8A7D6E;font-size:11px">This summary is for convenience only. The numbered clauses below are what both parties are bound by, and take precedence over it.</div>
+    </div>
+
+    <p><b>1. Parties &amp; definitions.</b> This agreement is between <b>${esc(a.name||'the Agent')}</b>${a.companyNo?' (company no. '+esc(a.companyNo)+')':''}${a.address?' of '+esc(a.address):''} ("the Agent") and <b>${esc(l.name)}${l.entity==='joint'&&l.joint?' &amp; '+esc(l.joint):''}</b>${l.address?' of '+esc(l.address):''} ("the Landlord"${l.entity==='joint'?', jointly and severally liable':''}), together "the Parties". "The Property" means the property or properties listed in Clause 1a. "Tenancy" means an assured shorthold tenancy or other tenancy of the Property arranged under this agreement.</p>
+    <p><b>1a. The Property(ies).</b> This agreement covers:</p>
     ${propList}
     ${appointmentClause}
     ${dutiesClause}
@@ -4234,7 +4258,7 @@ function agreementEmailHtml(l,agentName,link,service){
       <p>${esc(agentName)} at <b>${esc(b.name)}</b> has prepared your <b>${nm}</b> and signed it. It's ready for you to review and counter-sign.</p>
       <p style="text-align:center;margin:26px 0"><a href="${link}" style="background:#C8892A;color:#fff;text-decoration:none;font-weight:600;padding:13px 30px;border-radius:8px;display:inline-block">Review &amp; sign your agreement</a></p>
       <p style="font-size:12px;color:#8A7D6E">This is a secure, personal link. Electronic signatures are legally binding under the Electronic Communications Act 2000. Once signed, you'll receive a timestamped copy by email.</p>
-      <div style="margin-top:18px;padding-top:12px;border-top:1px solid #E3D9C8;font-size:10.5px;color:#8A7D6E">${esc(b.name)}${b.ico?' · ICO Reg. '+esc(b.ico):''}</div>
+      <div style="margin-top:18px;padding-top:12px;border-top:1px solid #E3D9C8;font-size:10.5px;color:#8A7D6E">${esc(b.name)}${b.tagline?' · <i>'+esc(b.tagline)+'</i>':''}${b.ico?' · ICO Reg. '+esc(b.ico):''}</div>
     </div></div>`;
 }
 
@@ -4612,7 +4636,7 @@ function viewSignedAgreement(id){
 // Every send → email (agencyEmail) + audit row in agency_letters + comms log.
 // Branding: Beacon Residentials Ltd (falls back if agency settings blank).
 // ═══════════════════════════════════════════════════════════════════════════
-function agencyBrand(){ const a=S.agency; return { name:a.name||'Beacon Residentials Ltd', ico:a.icoNo||'ZC164221', address:a.address||'', redress:a.redress||'', redressNo:a.redressNo||'', email:window._agentEmail||a.email||'beaconresidentials@gmail.com', agent:window._agentName||a.name||'Beacon Residentials Ltd' }; }
+function agencyBrand(){ const a=S.agency; return { name:a.name||'Beacon Residentials Ltd', tagline:a.tagline||'Your neighbourhood property people.', ico:a.icoNo||'ZC164221', address:a.address||'', redress:a.redress||'', redressNo:a.redressNo||'', email:window._agentEmail||a.email||'beaconresidentials@gmail.com', agent:window._agentName||a.name||'Beacon Residentials Ltd' }; }
 
 // Invite a managed landlord to their read-only portal (landlord-portal.html).
 async function inviteToPortal(id){
@@ -4634,13 +4658,13 @@ function portalInviteHtml(l,link,login){ const b=agencyBrand();
       <p style="text-align:center;margin:24px 0"><a href="${login}" style="background:#C8892A;color:#fff;text-decoration:none;font-weight:600;padding:13px 30px;border-radius:8px;display:inline-block">Sign in to your portal</a></p>
       <p style="font-size:12.5px;color:#8A7D6E">Please sign in (or create your account) using <b>${esc(l.email)}</b> — the email we hold for you — so we can link you to your portfolio automatically. Once signed in you'll be taken straight to your dashboard.</p>
       <p style="font-size:11px;color:#8A7D6E">Direct link: <a href="${link}" style="color:#C8892A">${esc(link)}</a></p>
-      <div style="margin-top:18px;padding-top:12px;border-top:1px solid #E3D9C8;font-size:10.5px;color:#8A7D6E">${esc(b.name)}${b.ico?' · ICO Reg. '+esc(b.ico):''}</div>
+      <div style="margin-top:18px;padding-top:12px;border-top:1px solid #E3D9C8;font-size:10.5px;color:#8A7D6E">${esc(b.name)}${b.tagline?' · <i>'+esc(b.tagline)+'</i>':''}${b.ico?' · ICO Reg. '+esc(b.ico):''}</div>
     </div></div>`;
 }
 function letterWrap(subject, inner){ const b=agencyBrand(); const foot=[b.name, b.ico?'ICO Reg. '+b.ico:'', b.redress?b.redress+(b.redressNo?' ('+b.redressNo+')':''):''].filter(Boolean).join(' · ');
   return `<div style="font-family:Georgia,'Times New Roman',serif;max-width:640px;margin:0 auto;color:#4A4038">
     <div style="background:#1B2F4A;padding:18px 26px;border-radius:8px 8px 0 0;display:flex;align-items:center;justify-content:space-between">
-      <div style="font-family:Arial,sans-serif;font-size:19px;font-weight:700;color:#fff;letter-spacing:.3px">${esc(b.name)}</div>
+      <div style="font-family:Arial,sans-serif;font-size:19px;font-weight:700;color:#fff;letter-spacing:.3px">${esc(b.name)}${b.tagline?`<div style="font-size:10px;font-weight:400;color:#C9B99E;font-style:italic;letter-spacing:0;margin-top:3px">${esc(b.tagline)}</div>`:''}</div>
       <div style="font-family:Arial,sans-serif;font-size:10px;color:#C9B99E;text-align:right">${b.address?esc(b.address):''}</div>
     </div>
     <div style="border:1px solid #E3D9C8;border-top:3px solid #00C896;border-radius:0 0 8px 8px;padding:30px 30px 24px">
