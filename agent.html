@@ -400,12 +400,32 @@ function certRAG(d){ if(!d) return {k:'missing',label:'Missing',bg:'var(--red-bg
 function fmtDate(d){ if(!d) return '—'; return new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}); }
 const CERT_LABELS={gas:'Gas Safety (CP12)',eicr:'EICR (Electrical)',epc:'EPC',hmo:'HMO / Selective Licence',legionella:'Legionella Risk Assessment',smoke:'Smoke Alarms',co:'CO Alarm',rtr:'Right to Rent Check',htr:'How to Rent Guide',infosheet:'Renters’ Rights Act Information Sheet'};
 function declStatus(d){ return d?{k:'ok',label:'Confirmed',bg:'var(--green-bg)',color:'var(--green)'}:{k:'missing',label:'Missing',bg:'var(--amber-bg)',color:'var(--amber)'}; }
-function _rtrRAG(rec){
-  if(!rec||!rec.rtrCheckDate) return {k:'missing',label:'Missing',bg:'var(--red-bg)',color:'var(--red)'};
-  if(rec.rtrResult==='Invalid') return {k:'expired',label:'Invalid',bg:'var(--red-bg)',color:'var(--red)'};
-  if(rec.rtrResult==='Time-limited'&&rec.rtrExpiry) return certRAG(rec.rtrExpiry);
+// Every named adult on a tenancy needs their OWN Right to Rent check (Immigration Act 2014) —
+// this view unifies the lead tenant (fields live on rec) with occupants (fields on rec.occupants[i])
+// so status can be rolled up per-tenancy while still being tracked per-person.
+function _tnPeopleView(rec){
+  if(!rec) return [];
+  const lead={idx:0,isLead:true,name:rec.name||'',rtrResult:rec.rtrResult||'',rtrExpiry:rec.rtrExpiry||'',rtrCheckDate:rec.rtrCheckDate||'',_occ:rec};
+  const occ=(rec.occupants||[]).map((o,i)=>({idx:i+1,isLead:false,name:o.name||'',rtrResult:o.rtrResult||'',rtrExpiry:o.rtrExpiry||'',rtrCheckDate:o.rtrCheckDate||'',_occ:o}));
+  return [lead,...occ];
+}
+function _rtrPersonRAG(person){
+  if(!person||!person.rtrCheckDate) return {k:'missing',label:'Missing',bg:'var(--red-bg)',color:'var(--red)'};
+  if(person.rtrResult==='Invalid') return {k:'expired',label:'Invalid',bg:'var(--red-bg)',color:'var(--red)'};
+  if(person.rtrResult==='Time-limited'&&person.rtrExpiry) return certRAG(person.rtrExpiry);
   return {k:'ok',label:'Confirmed',bg:'var(--green-bg)',color:'var(--green)'};
 }
+const _RAG_RANK={missing:3,expired:3,soon:2,ok:1};
+// Rolled-up status across everyone named on the tenancy — worst-of-all-occupants, since one
+// missing check is still a compliance gap even if everyone else is confirmed.
+function _rtrRAG(rec){
+  const people=_tnPeopleView(rec).filter(pp=>pp.name);
+  if(!people.length) return {k:'missing',label:'Missing',bg:'var(--red-bg)',color:'var(--red)'};
+  let worst=null;
+  people.forEach(pp=>{ const r=_rtrPersonRAG(pp); if(!worst||(_RAG_RANK[r.k]||0)>(_RAG_RANK[worst.k]||0)) worst=r; });
+  return (worst.k==='ok'&&people.length>1)?{...worst,label:'Confirmed ('+people.length+')'}:worst;
+}
+function _rtrAllDone(rec){ return _tnPeopleView(rec).filter(pp=>pp.name).every(pp=>{ const r=_rtrPersonRAG(pp); return r.k==='ok'||r.k==='soon'; }); }
 function _depositRAG(rec){
   if(rec.depositCertName){
     if(rec.depositCertExpiry){ const n=daysUntil(rec.depositCertExpiry);
@@ -1063,7 +1083,7 @@ function vReports(){
   // Compliance calendar — certs expiring in next 90 days, soonest first
   const cal=[];
   S.properties.forEach(p=>{ _fullCertItems(p).forEach(([k,lab,d,kind])=>{ if(kind==='exp'&&d){ const n=daysUntil(d); if(n<=90) cal.push({p,lab,d,n}); } });
-    const rec=tenantRecFor(p.id); if(rec&&rec.rtrResult==='Time-limited'&&rec.rtrExpiry){ const n=daysUntil(rec.rtrExpiry); if(n<=90) cal.push({p,lab:'Right to Rent (time-limited)',d:rec.rtrExpiry,n}); } });
+    const rec=tenantRecFor(p.id); if(rec){ _tnPeopleView(rec).forEach(pp=>{ if(pp.name&&pp.rtrResult==='Time-limited'&&pp.rtrExpiry){ const n=daysUntil(pp.rtrExpiry); if(n<=90) cal.push({p,lab:'Right to Rent'+(pp.isLead?'':' — '+pp.name)+' (time-limited)',d:pp.rtrExpiry,n}); } }); } });
   const incomplete=S.properties.filter(p=>p.tenant).map(p=>({p,cl:_tenancyChecklist(p)})).filter(x=>x.cl.pct<100).sort((a,b)=>a.cl.pct-b.cl.pct);
   cal.sort((a,b)=>a.n-b.n);
   return `<h1 class="pg">Reports</h1><div class="sub">Portfolio health at a glance — arrears, fee income and the compliance calendar across every managed property.</div>
@@ -2035,12 +2055,14 @@ function vPropertyDetail(){
         ${declRow('smoke','Smoke alarms','Fit a working smoke alarm on every floor',c.smoke,c.smokeDoc,c.smokeDocUrl)}
         ${c.coNA?`<div class="doc"><div class="di" style="background:var(--off);color:#94A3B8">⛨</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">CO alarm</div><div class="faint" style="font-size:11.5px">Marked not applicable — no fixed combustion appliance</div></div><span class="pill" style="background:var(--off);color:#94A3B8">N/A</span><a href="#" onclick="toggleCoNA('${p.id}');return false" style="font-size:11px;color:var(--blue)">Applies</a></div>`:declRow('co','CO alarm','Required in any room with a fixed combustion appliance (boiler cupboard, gas fire, log burner, etc.)',c.co,c.coDoc,c.coDocUrl)}
         </div></details>
-        ${_grpHead('Tenancy &amp; right-to-rent documents',_grpIssue2)}${p.tenant?(()=>{ const rec=tenantRecFor(p.id); const r=_rtrRAG(rec); return `<div class="doc"><div class="di" style="background:${r.bg};color:${r.color}">⛨</div>
-          <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Right to Rent check</div><div class="faint" style="font-size:11.5px">${rec&&rec.rtrCheckDate?'Checked '+fmtDate(rec.rtrCheckDate)+(rec.rtrResult?' · '+esc(rec.rtrResult):'')+(rec.rtrExpiry?' · expires '+fmtDate(rec.rtrExpiry):'')+(rec.rtrCheckMethod?' · via '+esc(rec.rtrCheckMethod):''):'Check before the tenancy starts'}</div></div>
+        ${_grpHead('Tenancy &amp; right-to-rent documents',_grpIssue2)}${p.tenant?(()=>{ const rec=tenantRecFor(p.id); const people=_tnPeopleView(rec).filter(pp=>pp.name);
+          return people.map(person=>{ const r=_rtrPersonRAG(person); const src=person._occ;
+            return `<div class="doc"><div class="di" style="background:${r.bg};color:${r.color}">⛨</div>
+          <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Right to Rent — ${esc(person.name)}</div><div class="faint" style="font-size:11.5px">${src&&src.rtrCheckDate?'Checked '+fmtDate(src.rtrCheckDate)+(src.rtrResult?' · '+esc(src.rtrResult):'')+(src.rtrExpiry?' · expires '+fmtDate(src.rtrExpiry):'')+(src.rtrCheckMethod?' · via '+esc(src.rtrCheckMethod):''):'Check before this person moves in'}</div></div>
           <span class="pill" style="background:${r.bg};color:${r.color}">${r.label}</span>
-          ${rec&&rec.rtrDocUrl?`<button class="btn sm" onclick="viewDoc('${rec.rtrDocUrl}','Right to Rent evidence')">View${(rec.rtrDocs&&rec.rtrDocs.length>1)?' ('+rec.rtrDocs.length+')':''}</button>`:''}
-          <button class="btn sm" onclick="rtrWizard('${p.id}')">${rec&&rec.rtrCheckDate?'Update':'Check'}</button></div>
-          <div class="faint" style="font-size:11px;padding:0 0 10px 30px;margin-top:-6px">Checked by an external referencing company instead of the GOV.UK wizard? <a href="#" onclick="rtrExternal('${p.id}');return false">Upload their report</a></div>`; })():''}
+          ${src&&src.rtrDocUrl?`<button class="btn sm" onclick="viewDoc('${src.rtrDocUrl}','Right to Rent evidence')">View${(src.rtrDocs&&src.rtrDocs.length>1)?' ('+src.rtrDocs.length+')':''}</button>`:''}
+          <button class="btn sm" onclick="rtrWizard('${p.id}',${person.idx})">${src&&src.rtrCheckDate?'Update':'Check'}</button></div>
+          <div class="faint" style="font-size:11px;padding:0 0 10px 30px;margin-top:-6px">Checked by an external referencing company instead of the GOV.UK wizard? <a href="#" onclick="rtrExternal('${p.id}',${person.idx});return false">Upload their report</a></div>`; }).join(''); })():''}
         ${p.tenant?(()=>{ const rec0=tenantRecFor(p.id); const cutoff=rec0&&rec0.start&&new Date(rec0.start)<new Date('2026-06-01'); return cutoff?declRow('htr','How to Rent guide (withdrawn June 2026)','This tenancy started before the guide was withdrawn — the gov.uk “How to rent” guide should have been given on or before move-in',c.htr,null,null):''; })():''}
         ${(p.tenant&&tenantRecFor(p.id)&&tenantRecFor(p.id).start&&new Date(tenantRecFor(p.id).start)<new Date('2026-05-01'))?declRow('infosheet','RRA Information Sheet','Existing tenancy (started before 1 May 2026) — must be given the government Information Sheet explaining the Renters\u2019 Rights Act changes, by 31 May 2026',c.infosheet,c.infosheetDoc,c.infosheetDocUrl):''}
         ${p.tenant?(()=>{ const rec=tenantRecFor(p.id); if(!rec||!rec.deposit) return ''; const r=_depositRAG(rec); return `<div class="doc"><div class="di" style="background:${r.bg};color:${r.color}">⛨</div>
@@ -2289,90 +2311,142 @@ function propTenancyStatus(p){
 }
 function startMarketingForProperty(pid){ const p=P(pid); if(propTenancyStatus(p)==='unsigned'){ toast('Send the agreement first — you can\'t market before the landlord signs',1); return; } openListing(null,pid); }
 function recordExistingTenant(pid){ setTenant(pid); }
-function tnTab(name){
-  ['details','docs'].forEach(t=>{
-    const panel=document.getElementById('tn-tab-'+t); if(panel) panel.style.display=(t===name?'block':'none');
-    const btn=document.getElementById('tn-tab-btn-'+t); if(btn){ btn.style.color=t===name?'var(--navy)':'#94A3B8'; btn.style.borderBottomColor=t===name?'var(--navy)':'transparent'; btn.style.fontWeight=t===name?'700':'500'; }
-  });
+// ── Tenant setup — one tab per person (ID, address proof, RTR, guarantor) plus a Tenancy
+// tab for what's shared (dates, deposit, tenancy agreement). Each person tab has its own
+// "Save & next" to step through a household one adult at a time.
+function _tnMkPerson(src,isLead){ src=src||{};
+  return {
+    id:src.id||(isLead?'lead':uid('occ')), name:src.name||'', email:src.email||'', phone:src.phone||'', dob:src.dob||'',
+    id1DocName:src.id1DocName||'', id1DocUrl:src.id1DocUrl||'', id2DocName:src.id2DocName||'', id2DocUrl:src.id2DocUrl||'',
+    addressProofDocs:(src.addressProofDocs&&src.addressProofDocs.length)?src.addressProofDocs.slice():(src.addressProofName?[{name:src.addressProofName,url:src.addressProofUrl}]:[]),
+    rtrResult:src.rtrResult||'', rtrExpiry:src.rtrExpiry||'', rtrCheckDate:src.rtrCheckDate||'', rtrCheckMethod:src.rtrCheckMethod||'', shareCode:src.shareCode||'',
+    rtrDocs:(src.rtrDocs&&src.rtrDocs.length)?src.rtrDocs.slice():(src.rtrDocName?[{name:src.rtrDocName,url:src.rtrDocUrl}]:(src.docs||[])),
+    guarantor:src.guarantor?{name:src.guarantor.name||'',email:src.guarantor.email||'',phone:src.guarantor.phone||'',docs:(src.guarantor.docs||[]).slice()}:{name:'',email:'',phone:'',docs:[]}
+  };
 }
 function setTenant(pid){ const p=P(pid); const t=p.tenant||{}; const rec=tenantRecFor(pid)||{};
-  window._tnFiles={};
-  window._tnDocs={};
-  window._tnDocs['address']={existing:(rec.addressProofDocs&&rec.addressProofDocs.length)?rec.addressProofDocs.slice():(rec.addressProofName?[{name:rec.addressProofName,url:rec.addressProofUrl}]:[]),pending:[]};
-  const g=rec.guarantor||{}; const hasG=!!(g.name||g.email||g.phone);
-  window._tnDocs['guarantor']={existing:(g.docs||[]).slice(),pending:[]};
-  const occ=(t.occupants||rec.occupants||[]);
-  const occRows=occ.map(o=>_occRowHtml(o)).join('');
-  const docCount=[rec.depositCertName,rec.refDocName,rec.origContractName,rec.id1DocName,rec.id2DocName,(window._tnDocs['address'].existing.length?'x':'')].filter(Boolean).length;
-  const tabBtn=(id,label)=>`<button type="button" id="tn-tab-btn-${id}" onclick="tnTab('${id}')" style="background:none;border:none;border-bottom:2px solid ${id==='details'?'var(--navy)':'transparent'};color:${id==='details'?'var(--navy)':'#94A3B8'};font-weight:${id==='details'?'700':'500'};font-size:13.5px;padding:8px 4px;cursor:pointer;margin-right:22px">${label}</button>`;
-  const body=`<div style="display:flex;border-bottom:1px solid var(--border);margin-bottom:18px">${tabBtn('details','Tenant details')}${tabBtn('docs','Documents ('+docCount+'/6)')}</div>
-  <div id="tn-tab-details">
-  <div class="fg"><label>Tenant name (lead)</label><input id="tn-name" value="${esc(t.name||rec.name||'')}"></div>
-  <div class="grid2" style="gap:10px"><div class="fg"><label>Email</label><input id="tn-email" value="${esc(t.email||rec.email||'')}"></div>
-  <div class="fg"><label>Phone</label><input id="tn-phone" value="${esc(rec.phone||'')}"></div></div>
-  <div class="grid2" style="gap:10px"><div class="fg"><label>Tenancy start</label><input id="tn-start" type="date" value="${t.start||rec.start||''}"></div>
-  <div class="fg"><label>Deposit held (£)</label><input id="tn-deposit" type="number" value="${esc(rec.deposit!=null?rec.deposit:'')}"></div></div>
-  <div class="fg"><label>Other adults on this tenancy (optional — e.g. joint tenants, family sharers)</label>
-  <div id="tn-occupants">${occRows}</div>
-  <button type="button" class="btn sm" onclick="tnAddOccupant()" style="margin-top:4px">+ Add another adult</button></div>
-  <div class="fg"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="tn-has-guarantor" ${hasG?'checked':''} onchange="document.getElementById('tn-guarantor-box').style.display=this.checked?'grid':'none'"> Has a guarantor</label>
-  <div id="tn-guarantor-box" class="grid2" style="gap:10px;display:${hasG?'grid':'none'};margin-top:6px">
-    <input id="tn-g-name" placeholder="Guarantor name" value="${esc(g.name||'')}" style="grid-column:1/-1">
-    <input id="tn-g-email" placeholder="Guarantor email" value="${esc(g.email||'')}">
-    <input id="tn-g-phone" placeholder="Guarantor phone" value="${esc(g.phone||'')}">
-    <div style="grid-column:1/-1;margin-top:4px">
-      <div id="tn-docs-guarantor" style="display:flex;flex-direction:column;gap:4px">${_docBucketHtml('guarantor')}</div>
-      <label style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer;font-size:11.5px;font-weight:600;margin-top:6px">+ Add guarantor ID/document<input type="file" accept="application/pdf,image/*" style="display:none" multiple onchange="tnDocAdd('guarantor',this)"></label>
-    </div>
-  </div></div>
-  </div>
-  <div id="tn-tab-docs" style="display:none">
-  <div style="background:#F6F8FB;border:1px solid var(--border);border-radius:10px;padding:16px">
+  window._tnFiles={}; window._tnDocs={};
+  const savedOcc=(t.occupants||rec.occupants||[]);
+  window._tnPeople=[_tnMkPerson({...rec,name:t.name||rec.name||'',email:t.email||rec.email||''},true), ...savedOcc.map(o=>_tnMkPerson(o,false))];
+  window._tnPeople.forEach((per,idx)=>{
+    window._tnDocs['address-'+idx]={existing:per.addressProofDocs.slice(),pending:[]};
+    window._tnDocs['guarantor-'+idx]={existing:(per.guarantor.docs||[]).slice(),pending:[]};
+    window._tnDocs['rtrext-'+idx]={existing:per.rtrDocs.slice(),pending:[]};
+  });
+  window._tnCore={start:t.start||rec.start||'', deposit:rec.deposit!=null?rec.deposit:'', depositCertExpiry:rec.depositCertExpiry||'', depositCertName:rec.depositCertName||'', depositCertUrl:rec.depositCertUrl||'', refDocName:rec.refDocName||'', refDocUrl:rec.refDocUrl||'', origContractName:rec.origContractName||'', origContractUrl:rec.origContractUrl||''};
+  window._tnActiveTab='tenancy'; window._tnPid=pid;
+  _tnOpenModal(pid);
+}
+function _tnTabBarHtml(){
+  const active=window._tnActiveTab;
+  const btn=(id,label,dot)=>`<button type="button" onclick="tnTab('${id}')" style="background:none;border:none;border-bottom:2px solid ${active===id?'var(--navy)':'transparent'};color:${active===id?'var(--navy)':'#94A3B8'};font-weight:${active===id?'700':'500'};font-size:13px;padding:8px 4px;cursor:pointer;margin-right:16px;white-space:nowrap">${label}${dot?` <span style="color:var(--red)">•</span>`:''}</button>`;
+  const personTabs=window._tnPeople.map((per,idx)=>{ const rag=_rtrPersonRAG(per);
+    return btn('person-'+idx, esc(per.name||(idx===0?'Tenant':'Person '+(idx+1))), rag.k!=='ok'); }).join('');
+  return `<div style="display:flex;border-bottom:1px solid var(--border);margin-bottom:18px;overflow-x:auto">${btn('tenancy','Tenancy')}${personTabs}<button type="button" onclick="tnAddPerson()" style="background:none;border:none;color:var(--blue);font-size:13px;font-weight:600;cursor:pointer;padding:8px 4px;white-space:nowrap">+ Add person</button></div>`;
+}
+function _tnTenancyTabHtml(pid){ const rec=tenantRecFor(pid); const d=window._tnCore;
+  return `<div class="grid2" style="gap:10px"><div class="fg"><label>Tenancy start</label><input id="tn-start" type="date" value="${esc(d.start)}"></div>
+  <div class="fg"><label>Deposit held (£)</label><input id="tn-deposit" type="number" value="${esc(d.deposit)}"></div></div>
+  <div style="background:#F6F8FB;border:1px solid var(--border);border-radius:10px;padding:16px;margin-top:6px">
     <div style="font-size:12.5px;font-weight:700;color:var(--navy)">📁 Tenancy documents</div>
-    <div class="faint" style="font-size:11.5px;margin-bottom:10px">Deposit, referencing &amp; the signed agreement for ${rec.name?esc(rec.name):'this tenant'}</div>
-    ${_docSlotHtml('deposit','Deposit certificate','(custodial/insured scheme cert or Prescribed Information)',rec.depositCertName,rec.depositCertUrl,'aiScanDeposit')}
-    <div class="fg" style="margin-top:-8px"><label>Protection covers tenancy until <span class="faint">(only for a fixed-term cert with an "ending on or after" date — leave blank for a periodic tenancy, no re-protection needed on renewal or rent increase)</span></label><div style="display:flex;gap:8px;align-items:center"><input id="tn-deposit-expiry" type="date" value="${rec.depositCertExpiry||''}" style="flex:1"><a href="#" onclick="event.preventDefault();document.getElementById('tn-deposit-expiry').value=''">Clear</a></div></div>
+    <div class="faint" style="font-size:11.5px;margin-bottom:10px">Deposit, referencing &amp; the signed agreement</div>
+    ${_docSlotHtml('deposit','Deposit certificate','(custodial/insured scheme cert or Prescribed Information)',d.depositCertName,d.depositCertUrl,'aiScanDeposit')}
+    <div class="fg" style="margin-top:-8px"><label>Protection covers tenancy until <span class="faint">(only for a fixed-term cert with an "ending on or after" date — leave blank for a periodic tenancy, no re-protection needed on renewal or rent increase)</span></label><div style="display:flex;gap:8px;align-items:center"><input id="tn-deposit-expiry" type="date" value="${esc(d.depositCertExpiry)}" style="flex:1"><a href="#" onclick="event.preventDefault();document.getElementById('tn-deposit-expiry').value=''">Clear</a></div></div>
     <div id="tn-deposit-scan-status" class="faint" style="font-size:11px;margin-top:-8px"></div>
-    ${_docSlotHtml('ref','Reference report','(employer/previous-landlord reference or credit check)',rec.refDocName,rec.refDocUrl)}
+    ${_docSlotHtml('ref','Reference report','(employer/previous-landlord reference or credit check)',d.refDocName,d.refDocUrl)}
     <div class="fg"><label>Tenancy terms &amp; conditions <span class="faint">(e-sign with the tenant — recommended for new tenancies; skip if uploading an already-signed contract below)</span></label>
-    ${(()=>{ const ta=tenancyAgreementFor(rec.id);
+    ${(()=>{ if(!rec||!rec.id) return '<div class="hint">Save once to enable e-signature.</div>';
+      const ta=tenancyAgreementFor(rec.id);
       if(ta&&ta.status==='signed') return `<div class="doc" style="border:1px solid var(--border);border-radius:8px;padding:8px 10px"><div class="di" style="background:var(--green-bg);color:var(--green)">✓</div><div style="flex:1;font-size:12.5px">Signed ${fmtDate(ta.tenant_signed_at)}</div><button class="btn sm" onclick="viewSignedTenancyAgreement('${pid}')">View</button><button class="btn sm" onclick="viewTenancySigningReceipt('${pid}')">Receipt</button></div>`;
       if(ta&&ta.status==='sent') return `<div class="doc" style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:var(--amber-bg)"><div class="di" style="background:#fff;color:var(--amber)">⏳</div><div style="flex:1;font-size:12.5px">Awaiting tenant signature — sent ${fmtDate(ta.created_at)}</div><button class="btn sm" onclick="openTenancyAgreement('${pid}')">Resend</button></div>`;
       return `<button type="button" class="btn sm" onclick="openTenancyAgreement('${pid}')">✨ Generate &amp; send for e-signature</button>`;
     })()}
     </div>
-    ${_docSlotHtml('origcontract','Original signed tenancy agreement','(if this tenancy was already running when NexLet took over management — stays legally valid; no need to reissue, even after the 1 May 2026 conversion to a periodic tenancy)',rec.origContractName,rec.origContractUrl)}
+    ${_docSlotHtml('origcontract','Original signed tenancy agreement','(if this tenancy was already running when NexLet took over management — stays legally valid; no need to reissue, even after the 1 May 2026 conversion to a periodic tenancy)',d.origContractName,d.origContractUrl)}
   </div>
-  <div style="background:#F6F8FB;border:1px solid var(--border);border-radius:10px;padding:16px;margin-top:12px">
+  <div class="hint" style="margin-top:14px">Each person's tab holds their ID, address proof and Right to Rent check. Save the tenancy here once everyone's done.</div>`;
+}
+function _tnPersonTabHtml(idx){
+  const per=window._tnPeople[idx]; const isLead=idx===0; const rag=_rtrPersonRAG(per); const hasG=!!(per.guarantor&&(per.guarantor.name||per.guarantor.email||per.guarantor.phone));
+  return `<div class="grid2" style="gap:10px"><div class="fg"><label>Full name</label><input id="tn-p${idx}-name" value="${esc(per.name)}"></div>
+  <div class="fg"><label>Email</label><input id="tn-p${idx}-email" value="${esc(per.email)}"></div></div>
+  <div class="grid2" style="gap:10px"><div class="fg"><label>Phone</label><input id="tn-p${idx}-phone" value="${esc(per.phone)}"></div>
+  <div class="fg"><label>Date of birth</label><input id="tn-p${idx}-dob" type="date" value="${esc(per.dob)}"></div></div>
+  ${isLead?'':`<div style="text-align:right;margin:-4px 0 8px"><a href="#" onclick="event.preventDefault();tnRemovePerson(${idx})" style="font-size:11.5px;color:var(--red)">Remove this person</a></div>`}
+  <div style="background:#F6F8FB;border:1px solid var(--border);border-radius:10px;padding:14px;margin-top:6px">
     <div style="font-size:12.5px;font-weight:700;color:var(--navy)">🪪 Identity &amp; address</div>
     <div class="faint" style="font-size:11.5px;margin-bottom:10px">Safeguarding — optional but recommended</div>
-    ${_docSlotHtml('id1','Photo ID — 1 of 2','(passport or driving licence)',rec.id1DocName,rec.id1DocUrl)}
-    ${_docSlotHtml('id2','Photo ID — 2 of 2','(a second form: passport, driving licence, or national ID card)',rec.id2DocName,rec.id2DocUrl)}
-    <div class="fg"><label>Proof of address <span class="faint">(utility bill, council tax bill, or bank statement — dated within the last 3 months; attach as many as needed, e.g. 3 months of statements)</span></label>
-    <div id="tn-docs-address" style="display:flex;flex-direction:column;gap:4px">${_docBucketHtml('address')}</div>
-    <label style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer;font-size:12.5px;font-weight:600;margin-top:6px">+ Add document<input type="file" accept="application/pdf,image/*" style="display:none" multiple onchange="tnDocAdd('address',this)"></label>
+    ${_docSlotHtml('id1-'+idx,'Photo ID — 1 of 2','(passport or driving licence)',per.id1DocName,per.id1DocUrl)}
+    ${_docSlotHtml('id2-'+idx,'Photo ID — 2 of 2','(a second form: passport, driving licence, or national ID card)',per.id2DocName,per.id2DocUrl)}
+    <div class="fg"><label>Proof of address <span class="faint">(utility bill, council tax bill, or bank statement — dated within the last 3 months; attach as many as needed)</span></label>
+    <div id="tn-docs-address-${idx}" style="display:flex;flex-direction:column;gap:4px">${_docBucketHtml('address-'+idx)}</div>
+    <label style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer;font-size:12.5px;font-weight:600;margin-top:6px">+ Add document<input type="file" accept="application/pdf,image/*" style="display:none" multiple onchange="tnDocAdd('address-${idx}',this)"></label>
     </div>
   </div>
+  <div style="background:#F6F8FB;border:1px solid var(--border);border-radius:10px;padding:14px;margin-top:10px">
+    <div style="font-size:12.5px;font-weight:700;color:var(--navy)">🛂 Right to Rent</div>
+    <div class="faint" style="font-size:11.5px;margin-bottom:10px">Required by law before this person moves in — checked individually, not shared across the household</div>
+    <div class="doc" style="border:1px solid var(--border);border-radius:8px;padding:8px 10px">
+      <div style="flex:1"><div style="font-size:12.5px;font-weight:600">${per.rtrCheckDate?'Checked '+fmtDate(per.rtrCheckDate)+(per.rtrResult?' · '+esc(per.rtrResult):''):'Not checked yet'}</div>${per.rtrExpiry?`<div class="faint" style="font-size:11px">Expires ${fmtDate(per.rtrExpiry)}</div>`:''}</div>
+      <span class="pill" style="background:${rag.bg};color:${rag.color}">${rag.label}</span>
+      ${per.rtrDocUrl?`<button class="btn sm" onclick="viewDoc('${per.rtrDocUrl}','Right to Rent evidence')">View</button>`:''}
+      <button class="btn sm" onclick="tnSyncPerson(${idx});rtrWizard(window._tnPid,${idx})">${per.rtrCheckDate?'Update':'Check'}</button></div>
+    <div class="faint" style="font-size:11px;margin-top:6px">Checked by an external referencing company instead? <a href="#" onclick="event.preventDefault();tnSyncPerson(${idx});rtrExternal(window._tnPid,${idx})">Upload their report</a></div>
   </div>
-  <div class="hint" style="margin-top:14px">Saving creates the tenancy record (for rent tracking, maintenance &amp; the tenant portal) and moves the let to Managed. All named adults appear on Section 8/13 notices, and a named guarantor is copied on them too.</div>`;
-  modal(rec.name?'Set up tenant — '+esc(rec.name):'Set up tenant',body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" id="tn-save-btn" onclick="saveTenant('${pid}')">Save tenant</button>`, true); }
-function _occRowHtml(o){ o=o||{}; const key=o.id=o.id||uid('occ');
-  window._tnDocs=window._tnDocs||{}; window._tnDocs[key]=window._tnDocs[key]||{existing:(o.docs||[]).slice(),pending:[]};
-  return `<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px" data-occ-row data-occ-key="${key}">
-    <div style="display:grid;grid-template-columns:1.3fr 1.3fr 1fr auto;gap:8px">
-      <input class="occ-name" placeholder="Full name" value="${esc(o.name||'')}">
-      <input class="occ-email" placeholder="Email (optional)" value="${esc(o.email||'')}">
-      <input class="occ-phone" placeholder="Phone (optional)" value="${esc(o.phone||'')}">
-      <button type="button" class="btn sm" onclick="this.closest('[data-occ-row]').remove()">✕</button>
+  <div class="fg" style="margin-top:10px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="tn-p${idx}-hasg" ${hasG?'checked':''} onchange="document.getElementById('tn-p${idx}-gbox').style.display=this.checked?'grid':'none'"> Has a guarantor</label>
+  <div id="tn-p${idx}-gbox" class="grid2" style="gap:10px;display:${hasG?'grid':'none'};margin-top:6px">
+    <input id="tn-p${idx}-gname" placeholder="Guarantor name" value="${esc(per.guarantor.name)}" style="grid-column:1/-1">
+    <input id="tn-p${idx}-gemail" placeholder="Guarantor email" value="${esc(per.guarantor.email)}">
+    <input id="tn-p${idx}-gphone" placeholder="Guarantor phone" value="${esc(per.guarantor.phone)}">
+    <div style="grid-column:1/-1;margin-top:4px">
+      <div id="tn-docs-guarantor-${idx}" style="display:flex;flex-direction:column;gap:4px">${_docBucketHtml('guarantor-'+idx)}</div>
+      <label style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer;font-size:11.5px;font-weight:600;margin-top:6px">+ Add guarantor ID/document<input type="file" accept="application/pdf,image/*" style="display:none" multiple onchange="tnDocAdd('guarantor-${idx}',this)"></label>
     </div>
-    <div style="margin-top:8px">
-      <div id="tn-docs-${key}" style="display:flex;flex-direction:column;gap:4px">${_docBucketHtml(key)}</div>
-      <label style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer;font-size:11.5px;font-weight:600;margin-top:6px">+ Add ID/document<input type="file" accept="application/pdf,image/*" style="display:none" multiple onchange="tnDocAdd('${key}',this)"></label>
-    </div>
-  </div>`;
+  </div></div>
+  <div style="display:flex;justify-content:flex-end;margin-top:16px;gap:8px">${idx>0?`<button type="button" class="btn sm" onclick="tnTab('person-${idx-1}')">← Back</button>`:''}<button type="button" class="btn navy" onclick="tnSaveAndNext(${idx})">${idx<window._tnPeople.length-1?'Save & next →':'Save & go to Tenancy →'}</button></div>`;
 }
-function tnAddOccupant(){ const c=document.getElementById('tn-occupants'); if(!c) return; c.insertAdjacentHTML('beforeend',_occRowHtml({})); }
-function _readOccupants(){ return [...document.querySelectorAll('#tn-occupants [data-occ-row]')].map(r=>{ const key=r.getAttribute('data-occ-key'); const docs=(window._tnDocs[key]&&window._tnDocs[key].existing)||[]; return {id:key,name:(r.querySelector('.occ-name').value||'').trim(),email:(r.querySelector('.occ-email').value||'').trim(),phone:(r.querySelector('.occ-phone').value||'').trim(),docs}; }).filter(o=>o.name); }
+function _tnBodyHtml(pid){
+  const active=window._tnActiveTab; const m=active.match(/^person-(\d+)$/);
+  const content=m?_tnPersonTabHtml(parseInt(m[1],10)):_tnTenancyTabHtml(pid);
+  return `${_tnTabBarHtml()}<div id="tn-tab-content">${content}</div>`;
+}
+function _tnOpenModal(pid){
+  const rec=tenantRecFor(pid);
+  modal(rec&&rec.name?'Set up tenant — '+esc(rec.name):'Set up tenant', _tnBodyHtml(pid), `<button class="btn" onclick="window._tnPeople=null;window._tnPid=null;closeModal()">Cancel</button><button class="btn navy" id="tn-save-btn" onclick="saveTenant('${pid}')">Save tenancy</button>`, true);
+}
+function tnSyncPerson(idx){
+  const per=window._tnPeople&&window._tnPeople[idx]; if(!per) return;
+  const nameEl=document.getElementById('tn-p'+idx+'-name'); if(!nameEl) return; // tab not currently rendered
+  per.name=val('tn-p'+idx+'-name'); per.email=val('tn-p'+idx+'-email'); per.phone=val('tn-p'+idx+'-phone'); per.dob=val('tn-p'+idx+'-dob');
+  const hasG=document.getElementById('tn-p'+idx+'-hasg');
+  if(hasG&&hasG.checked) per.guarantor={name:val('tn-p'+idx+'-gname'),email:val('tn-p'+idx+'-gemail'),phone:val('tn-p'+idx+'-gphone'),docs:(window._tnDocs['guarantor-'+idx]&&window._tnDocs['guarantor-'+idx].existing)||[]};
+  else per.guarantor={name:'',email:'',phone:'',docs:[]};
+}
+function tnTab(id){
+  const cur=window._tnActiveTab; const m=cur&&cur.match(/^person-(\d+)$/);
+  if(m) tnSyncPerson(parseInt(m[1],10));
+  window._tnActiveTab=id;
+  _tnOpenModal(window._tnPid);
+}
+function tnSaveAndNext(idx){
+  tnSyncPerson(idx);
+  if(!window._tnPeople[idx].name){ toast('Enter a name first',1); return; }
+  tnTab(idx<window._tnPeople.length-1?'person-'+(idx+1):'tenancy');
+}
+function tnAddPerson(){
+  const idx=window._tnPeople.length;
+  window._tnPeople.push(_tnMkPerson({},false));
+  window._tnDocs['address-'+idx]={existing:[],pending:[]}; window._tnDocs['guarantor-'+idx]={existing:[],pending:[]}; window._tnDocs['rtrext-'+idx]={existing:[],pending:[]};
+  tnTab('person-'+idx);
+}
+function tnRemovePerson(idx){
+  if(idx===0) return;
+  if(!confirm('Remove this person from the tenancy?')) return;
+  window._tnPeople.splice(idx,1);
+  window._tnDocs={};
+  window._tnPeople.forEach((per,i)=>{ window._tnDocs['address-'+i]={existing:per.addressProofDocs.slice(),pending:[]}; window._tnDocs['guarantor-'+i]={existing:(per.guarantor.docs||[]).slice(),pending:[]}; window._tnDocs['rtrext-'+i]={existing:per.rtrDocs.slice(),pending:[]}; });
+  tnTab('tenancy');
+}
 async function _storageUpload(file,path,bucket){
   if(!sb||!LIVE) return null;
   try{
@@ -2460,74 +2534,116 @@ async function aiScanDeposit(input){
     } else { if(st)st.textContent='AI could not find a date in this file — enter it manually.'; }
   }catch(e){ console.error('aiScanDeposit exception',e); if(st)st.textContent='Could not read the file — enter the date manually.'; }
 }
-// ── Right to Rent wizard — 3 steps: enter details, check on GOV.UK, record & attach evidence.
-function rtrWizard(pid){ const rec=tenantRecFor(pid); if(!rec){ toast('Set up the tenant first',1); return; }
-  window._rtrWiz={pid,step:1,code:rec.shareCode||'',dob:rec.dob||'',result:rec.rtrResult||'',expiry:rec.rtrExpiry||'',checkDate:rec.rtrCheckDate||today()};
+// ── Right to Rent check — 3 steps: choose method &amp; enter details, record the result,
+// attach evidence. Scoped to one person (pid,personIdx): mid tenant-setup this writes into the
+// in-memory person object (committed when the tenancy is saved); from the Compliance page it
+// persists immediately, same as before.
+function _tnMidSetup(pid){ return window._tnPeople&&window._tnPid===pid; }
+function _tnPersonSrc(pid,personIdx){
+  if(_tnMidSetup(pid)) return window._tnPeople[personIdx];
+  const rec=tenantRecFor(pid); if(!rec) return null;
+  return personIdx?((rec.occupants||[])[personIdx-1]):rec;
+}
+function rtrWizard(pid,personIdx){ personIdx=personIdx||0;
+  const per=_tnPersonSrc(pid,personIdx); if(!per){ toast('Set up the tenant first',1); return; }
+  window._rtrWiz={pid,personIdx,step:1,method:'sharecode',docType:'',code:(per.shareCode&&per.shareCode!=='External check')?per.shareCode:'',dob:per.dob||'',result:per.rtrResult||'',expiry:per.rtrExpiry||'',checkDate:per.rtrCheckDate||today()};
   _rtrWizRender();
 }
 function _rtrWizStepBar(step){
-  const steps=['1. Enter details','2. Check on GOV.UK','3. Record & save'];
+  const steps=['1. Method & details','2. Record result','3. Save evidence'];
   return `<div style="display:flex;border-radius:8px;overflow:hidden;border:1px solid var(--border);margin-bottom:14px">${steps.map((s,i)=>`<div style="flex:1;padding:8px 6px;text-align:center;font-size:11px;font-weight:600;background:${step===i+1?'var(--navy)':step>i+1?'var(--green-bg)':'var(--off)'};color:${step===i+1?'#fff':step>i+1?'var(--green)':'#94A3B8'}">${step>i+1?'✓ ':''}${s}</div>`).join('')}</div>`;
 }
+function _rtrWizMethodChange(v){ window._rtrWiz.method=v; _rtrWizRender(); }
 function _rtrWizRender(){
-  const w=window._rtrWiz; const rec=tenantRecFor(w.pid);
+  const w=window._rtrWiz; const per=_tnPersonSrc(w.pid,w.personIdx);
   let body=_rtrWizStepBar(w.step);
   if(w.step===1){
-    body+=`<div class="hint" style="margin-bottom:10px">Enter the tenant's share code (from the gov.uk "prove your right to rent" service) and date of birth.</div>
-      <div class="fg"><label>Share code</label><input id="rtr-code" value="${esc(w.code)}" placeholder="W-XXX-XXX-XXX" style="text-transform:uppercase;font-family:monospace"></div>
-      <div class="fg"><label>Date of birth</label><input id="rtr-dob" type="date" value="${w.dob}"></div>
-      <div class="faint" style="font-size:11.5px;margin-top:-4px">Checked by an external referencing company instead? <a href="#" onclick="event.preventDefault();closeModal();rtrExternal('${w.pid}')">Upload their report instead</a></div>`;
+    body+=`<div class="fg"><label>Check method</label><select id="rtr-method" onchange="_rtrWizMethodChange(this.value)">
+        <option value="sharecode" ${w.method==='sharecode'?'selected':''}>GOV.UK share code (digital status — eVisa, EU Settlement Scheme, etc.)</option>
+        <option value="manual" ${w.method==='manual'?'selected':''}>Manual document check (British/Irish passport or other original ID)</option>
+      </select></div>
+      ${w.method==='manual'?`
+      <div class="fg"><label>Document(s) seen</label><select id="rtr-doctype">
+        <option ${w.docType==='British/Irish passport'?'selected':''}>British/Irish passport</option>
+        <option ${w.docType==='Full birth/adoption certificate + NI number document'?'selected':''}>Full birth/adoption certificate + NI number document</option>
+        <option ${w.docType==='Other original document(s) from the Home Office list'?'selected':''}>Other original document(s) from the Home Office list</option>
+      </select></div>
+      <div class="hint">Check the original document in person (or on a live video call), confirm the photo matches, and keep a copy as evidence.</div>`:`
+      <div class="fg"><label>Share code</label><input id="rtr-code" value="${esc(w.code)}" placeholder="R-XXX-XXX-XXX" style="text-transform:uppercase;font-family:monospace"></div>
+      <div class="fg"><label>Date of birth</label><input id="rtr-dob" type="date" value="${esc(w.dob)}"></div>`}
+      <div class="faint" style="font-size:11.5px;margin-top:8px">Checked by an external referencing company instead? <a href="#" onclick="event.preventDefault();closeModal();rtrExternal(window._rtrWiz.pid,window._rtrWiz.personIdx)">Upload their report instead</a></div>`;
     modal('Right to Rent check — step 1 of 3',body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="_rtrWizNext()">Next</button>`,true);
   } else if(w.step===2){
-    body+=`<div class="hint" style="margin-bottom:10px">Check the code on GOV.UK, then record the result here.</div>
-      <a class="btn navy sm" href="https://www.gov.uk/view-right-to-rent" target="_blank" style="margin-bottom:12px;display:inline-flex">Open GOV.UK checker ↗</a>
+    body+=`<div class="hint" style="margin-bottom:10px">${w.method==='manual'?'Record what the document(s) showed.':'Check the code on GOV.UK, then record the result here.'}</div>
+      ${w.method==='manual'?'':'<a class="btn navy sm" href="https://www.gov.uk/view-right-to-rent" target="_blank" style="margin-bottom:12px;display:inline-flex">Open GOV.UK checker ↗</a>'}
       <div class="fg"><label>Result</label><select id="rtr-result" onchange="document.getElementById('rtr-expiry-wrap').style.display=this.value==='Time-limited'?'block':'none'">
-        <option value="">Select…</option><option ${w.result==='Valid'?'selected':''}>Valid</option><option ${w.result==='Time-limited'?'selected':''}>Time-limited</option><option ${w.result==='Invalid'?'selected':''}>Invalid</option></select></div>
-      <div id="rtr-expiry-wrap" style="display:${w.result==='Time-limited'?'block':'none'}"><div class="fg"><label>Right to rent expires</label><input id="rtr-expiry" type="date" value="${w.expiry}"></div></div>
-      <div class="fg"><label>Checked on</label><input id="rtr-checkdate" type="date" value="${w.checkDate}"></div>`;
+        <option value="">Select…</option><option value="Valid" ${w.result==='Valid'?'selected':''}>Valid</option><option value="Time-limited" ${w.result==='Time-limited'?'selected':''}>Time-limited</option><option value="Invalid" ${w.result==='Invalid'?'selected':''}>Invalid</option></select></div>
+      <div id="rtr-expiry-wrap" style="display:${w.result==='Time-limited'?'block':'none'}"><div class="fg"><label>Right to rent expires</label><input id="rtr-expiry" type="date" value="${esc(w.expiry)}"></div></div>
+      <div class="fg"><label>Checked on</label><input id="rtr-checkdate" type="date" value="${esc(w.checkDate)}"></div>`;
     modal('Right to Rent check — step 2 of 3',body,`<button class="btn" onclick="_rtrWizBack()">Back</button><button class="btn navy" onclick="_rtrWizNext()">Next</button>`,true);
   } else {
-    const existingFile=(rec&&rec.rtrDocName)||''; window._certFile=null;
-    body+=`<div class="hint" style="margin-bottom:10px">Attach a screenshot of the GOV.UK result, or a copy of the passport/BRP/EUSS status — keep evidence for the tenancy plus 12 months.</div>
+    const existingFile=(per&&per.rtrDocName)||''; window._certFile=null;
+    body+=`<div class="hint" style="margin-bottom:10px">${w.method==='manual'?'Attach a copy of the document(s) you checked.':'Attach a screenshot of the GOV.UK result.'} Keep evidence for the tenancy plus 12 months.</div>
       <label style="display:flex;align-items:center;gap:10px;padding:10px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer">
         <span style="font-size:18px">📄</span><div style="font-size:12.5px;font-weight:600;flex:1">${existingFile?'Replace file':'Click to attach'}</div>
         <input type="file" accept="image/*,.pdf" style="display:none" onchange="ctAttachEvidence(this)">
       </label>
-      <div id="ct-evid-status" style="margin-top:6px;font-size:11.5px">${existingFile?`<span style="color:var(--green)">✓ ${esc(existingFile)} on file</span> ${rec.rtrDocUrl?`<a href="#" onclick="event.preventDefault();viewDoc('${rec.rtrDocUrl}','Right to Rent evidence')">View</a>`:''}`:'<span class="faint">No evidence attached yet</span>'}</div>`;
+      <div id="ct-evid-status" style="margin-top:6px;font-size:11.5px">${existingFile?`<span style="color:var(--green)">✓ ${esc(existingFile)} on file</span> ${per.rtrDocUrl?`<a href="#" onclick="event.preventDefault();viewDoc('${per.rtrDocUrl}','Right to Rent evidence')">View</a>`:''}`:'<span class="faint">No evidence attached yet</span>'}</div>`;
     modal('Right to Rent check — step 3 of 3',body,`<button class="btn" onclick="_rtrWizBack()">Back</button><button class="btn navy" onclick="_rtrWizSave()">Save</button>`,true);
   }
 }
 function _rtrWizNext(){
   const w=window._rtrWiz;
-  if(w.step===1){ w.code=val('rtr-code'); w.dob=val('rtr-dob'); if(!w.code){toast('Enter the share code',1);return;} w.step=2; }
-  else if(w.step===2){ w.result=val('rtr-result'); if(!w.result){toast('Select a result',1);return;} w.expiry=w.result==='Time-limited'?val('rtr-expiry'):''; w.checkDate=val('rtr-checkdate')||today(); w.step=3; }
+  if(w.step===1){
+    w.method=val('rtr-method')||'sharecode';
+    if(w.method==='manual'){ w.docType=val('rtr-doctype'); w.code=''; w.dob=''; }
+    else { w.code=val('rtr-code'); w.dob=val('rtr-dob'); if(!w.code){toast('Enter the share code',1);return;} w.docType=''; }
+    w.step=2;
+  } else if(w.step===2){ w.result=val('rtr-result'); if(!w.result){toast('Select a result',1);return;} w.expiry=w.result==='Time-limited'?val('rtr-expiry'):''; w.checkDate=val('rtr-checkdate')||today(); w.step=3; }
   _rtrWizRender();
 }
 function _rtrWizBack(){ window._rtrWiz.step--; _rtrWizRender(); }
 async function _rtrWizSave(){
-  const w=window._rtrWiz; const rec=tenantRecFor(w.pid); if(!rec) return;
-  rec.shareCode=w.code; rec.dob=w.dob; rec.rtrResult=w.result; rec.rtrExpiry=w.expiry; rec.rtrCheckDate=w.checkDate;
-  if(window._certFile){ rec.rtrDocName=window._certFile.name; const ext=(window._certFile.name.split('.').pop()||'jpg'); const url=await _storageUpload(window._certFile,w.pid+'/rtr-'+Date.now()+'.'+ext,'tenant-documents'); if(url) rec.rtrDocUrl=url; window._certFile=null; }
+  const w=window._rtrWiz;
+  let evidenceUrl=null;
+  if(window._certFile){ const ext=(window._certFile.name.split('.').pop()||'jpg'); evidenceUrl=await _storageUpload(window._certFile,w.pid+'/rtr-'+Date.now()+'.'+ext,'tenant-documents'); }
+  const method=w.method==='manual'?('Manual document check'+(w.docType?' — '+w.docType:'')):'GOV.UK share code';
+  const apply=(target)=>{
+    target.shareCode=w.code; target.dob=w.dob||target.dob; target.rtrResult=w.result; target.rtrExpiry=w.expiry; target.rtrCheckDate=w.checkDate; target.rtrCheckMethod=method;
+    if(window._certFile){ target.rtrDocName=window._certFile.name; if(evidenceUrl) target.rtrDocUrl=evidenceUrl; }
+  };
+  if(_tnMidSetup(w.pid)){
+    apply(window._tnPeople[w.personIdx]); window._certFile=null;
+    window._tnActiveTab='person-'+w.personIdx; _tnOpenModal(w.pid);
+    toast('✓ Right to Rent recorded — save the tenancy to keep it');
+    return;
+  }
+  const rec=tenantRecFor(w.pid); if(!rec) return;
+  const target=w.personIdx?((rec.occupants=rec.occupants||[])[w.personIdx-1]):rec; if(!target) return;
+  apply(target); window._certFile=null;
   save(); pushTenantRec(rec); closeModal(); render(); toast('✓ Right to Rent check saved');
 }
 // ── RTR done by an external referencing company (not the GOV.UK wizard) — upload
 // their report, optionally AI-scan it, and mark the check satisfied directly.
-function rtrExternal(pid){ const rec=tenantRecFor(pid); if(!rec){ toast('Set up the tenant first',1); return; }
+function rtrExternal(pid,personIdx){ personIdx=personIdx||0;
+  const per=_tnPersonSrc(pid,personIdx); if(!per){ toast('Set up the tenant first',1); return; }
   window._tnDocs=window._tnDocs||{};
-  window._tnDocs['rtrext']={existing:(rec.rtrDocs&&rec.rtrDocs.length)?rec.rtrDocs.slice():(rec.rtrDocName?[{name:rec.rtrDocName,url:rec.rtrDocUrl}]:[]),pending:[]};
-  const partnerOpts=REF_PARTNERS.map(x=>`<option ${rec.rtrCheckMethod===x?'selected':''}>${x}</option>`).join('');
+  const key='rtrext-'+personIdx;
+  window._tnDocs[key]={existing:(per.rtrDocs&&per.rtrDocs.length)?per.rtrDocs.slice():(per.rtrDocName?[{name:per.rtrDocName,url:per.rtrDocUrl}]:[]),pending:[]};
+  const partnerOpts=REF_PARTNERS.map(x=>`<option ${per.rtrCheckMethod===x?'selected':''}>${x}</option>`).join('');
   const body=`<div class="note" style="margin-bottom:12px">Use this when the Right to Rent check was carried out by an external referencing company rather than the GOV.UK share-code wizard. Attach their report — AI can read it, or enter the date yourself — then mark it satisfied.</div>
-    <div class="fg"><label>Checked by <span class="faint">(the referencing company or identity-check provider that ran it — you remain responsible for their check being Home Office–compliant)</span></label><select id="rtr-ext-method"><option value="">Select…</option>${partnerOpts}<option ${rec.rtrCheckMethod&&!REF_PARTNERS.includes(rec.rtrCheckMethod)?'selected':''} value="Other">Other</option></select></div>
+    <div class="fg"><label>Checked by <span class="faint">(the referencing company or identity-check provider that ran it — you remain responsible for their check being Home Office–compliant)</span></label><select id="rtr-ext-method"><option value="">Select…</option>${partnerOpts}<option ${per.rtrCheckMethod&&!REF_PARTNERS.includes(per.rtrCheckMethod)?'selected':''} value="Other">Other</option></select></div>
     <div class="fg"><label>Referencing company's report <span class="faint">(attach as many pages/files as needed)</span></label>
-      <div id="tn-docs-rtrext" style="display:flex;flex-direction:column;gap:4px">${_docBucketHtml('rtrext')}</div>
-      <label style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer;font-size:12.5px;font-weight:600;margin-top:6px">✦ Add &amp; scan with AI<input type="file" accept="image/*,.pdf" multiple style="display:none" onchange="rtrExtDocAdd('${pid}',this)"></label>
+      <div id="tn-docs-${key}" style="display:flex;flex-direction:column;gap:4px">${_docBucketHtml(key)}</div>
+      <label style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer;font-size:12.5px;font-weight:600;margin-top:6px">✦ Add &amp; scan with AI<input type="file" accept="image/*,.pdf" multiple style="display:none" onchange="rtrExtDocAdd('${pid}',${personIdx},this)"></label>
       <div id="ct-evid-status" style="margin-top:6px;font-size:11.5px"></div></div>
-    <div class="fg"><label>Checked on</label><input id="rtr-ext-date" type="date" value="${rec.rtrCheckDate||today()}"></div>`;
-  modal('Right to Rent — external check',body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveRtrExternal('${pid}')">Mark satisfied</button>`,true);
+    <div class="fg"><label>Checked on</label><input id="rtr-ext-date" type="date" value="${esc(per.rtrCheckDate||today())}"></div>`;
+  modal('Right to Rent — external check',body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveRtrExternal('${pid}',${personIdx})">Mark satisfied</button>`,true);
 }
-async function rtrExtDocAdd(pid,input){
+async function rtrExtDocAdd(pid,personIdx,input){
+  const key='rtrext-'+personIdx;
   const files=[...(input.files||[])]; if(!files.length) return;
-  window._tnDocs['rtrext'].pending.push(...files); input.value=''; _refreshDocBucket('rtrext');
+  window._tnDocs[key].pending.push(...files); input.value=''; _refreshDocBucket(key);
   const file=files[0]; const st=document.getElementById('ct-evid-status');
   if(!window._sessionToken){ if(st) st.textContent='Enter the date manually.'; return; }
   if(st) st.innerHTML='<span style="color:var(--blue)">✦ Reading '+esc(file.name)+'…</span>';
@@ -2543,19 +2659,27 @@ async function rtrExtDocAdd(pid,input){
     if(st) st.innerHTML=parsed?(parsed.satisfied===false?'⚠ report may flag an issue, review before confirming':'✓ looks satisfactory, review &amp; confirm'):'Review &amp; confirm manually';
   }catch(e){ if(st) st.textContent='Enter the date manually.'; }
 }
-async function saveRtrExternal(pid){
-  const rec=tenantRecFor(pid); if(!rec) return;
-  const bucket=window._tnDocs['rtrext']||{existing:[],pending:[]};
+async function saveRtrExternal(pid,personIdx){ personIdx=personIdx||0;
+  const key='rtrext-'+personIdx;
+  const bucket=window._tnDocs[key]||{existing:[],pending:[]};
   let failed=0;
   for(const f of bucket.pending){
     const ext=(f.name.split('.').pop()||'pdf');
     const url=await _storageUpload(f,pid+'/rtr-'+Date.now()+'-'+Math.random().toString(36).slice(2,6)+'.'+ext,'tenant-documents');
     if(url) bucket.existing.push({name:f.name,url}); else failed++;
   }
-  rec.rtrDocs=bucket.existing; rec.rtrDocName=bucket.existing[0]?bucket.existing[0].name:''; rec.rtrDocUrl=bucket.existing[0]?bucket.existing[0].url:'';
-  rec.rtrCheckDate=val('rtr-ext-date')||today(); rec.rtrResult='Valid'; rec.shareCode=rec.shareCode||'External check';
-  rec.rtrCheckMethod=val('rtr-ext-method')||rec.rtrCheckMethod||'';
-  save(); pushTenantRec(rec); closeModal(); render();
+  bucket.pending=[];
+  const rtrDocs=bucket.existing, first=rtrDocs[0]||{}; const method=val('rtr-ext-method')||''; const checkDate=val('rtr-ext-date')||today();
+  const apply=(target)=>{ target.rtrDocs=rtrDocs; target.rtrDocName=first.name||''; target.rtrDocUrl=first.url||''; target.rtrCheckDate=checkDate; target.rtrResult='Valid'; target.shareCode=target.shareCode||'External check'; target.rtrCheckMethod=method||target.rtrCheckMethod||''; };
+  if(_tnMidSetup(pid)){
+    apply(window._tnPeople[personIdx]);
+    window._tnActiveTab='person-'+personIdx; _tnOpenModal(pid);
+    toast('✓ Right to Rent recorded — save the tenancy to keep it');
+  } else {
+    const rec=tenantRecFor(pid); if(!rec) return;
+    const target=personIdx?((rec.occupants=rec.occupants||[])[personIdx-1]):rec; if(!target) return;
+    apply(target); save(); pushTenantRec(rec); closeModal(); render();
+  }
   if(failed) toast('⚠ Marked satisfied, but '+failed+' file'+(failed>1?'s':'')+' failed to upload'+(window._lastStorageError?' ('+window._lastStorageError+')':'')+' — re-attach and save again',1);
   else toast('✓ Right to Rent marked satisfied (external check)');
 }
@@ -2736,12 +2860,13 @@ function _commitTenant(pid,info,stage){
   save(); pushProperty(p); pushTenantRec(rec);
   return rec;
 }
-async function saveTenant(pid){ const nm=val('tn-name'); if(!nm){toast('Enter tenant name',1);return;}
+async function saveTenant(pid){
+  const activeMatch=(window._tnActiveTab||'').match(/^person-(\d+)$/); if(activeMatch) tnSyncPerson(parseInt(activeMatch[1],10));
+  const people=window._tnPeople||[]; const lead=people[0];
+  if(!lead||!lead.name){ toast('Enter the tenant\'s name (on the first person tab)',1); return; }
   const btn=document.getElementById('tn-save-btn'); if(btn){btn.disabled=true;btn.textContent='Saving…';}
-  const files=window._tnFiles||{};
   const failed=[];
-  // Upload every pending file across all doc buckets (address, guarantor, each occupant) first —
-  // the guarantor/occupant objects below read from bucket.existing, so uploads must land before that.
+  // Upload every pending file across all doc buckets (address/guarantor/rtr-external per person) first.
   for(const key of Object.keys(window._tnDocs||{})){
     const bucket=window._tnDocs[key]; if(!bucket.pending||!bucket.pending.length) continue;
     let ok=0; window._lastStorageError='';
@@ -2754,20 +2879,51 @@ async function saveTenant(pid){ const nm=val('tn-name'); if(!nm){toast('Enter te
     if(failCount) failed.push(failCount+' document'+(failCount>1?'s':'')+(window._lastStorageError?' ('+window._lastStorageError+')':''));
     bucket.pending=[];
   }
-  const hasGuarantor=document.getElementById('tn-has-guarantor').checked;
-  const guarantor=hasGuarantor?{name:val('tn-g-name'),email:val('tn-g-email'),phone:val('tn-g-phone'),docs:(window._tnDocs.guarantor&&window._tnDocs.guarantor.existing)||[]}:null;
-  const rec=tenantRecFor(pid)||{};
-  const info={name:nm,email:val('tn-email'),phone:val('tn-phone'),start:val('tn-start'),deposit:val('tn-deposit')?parseFloat(val('tn-deposit')):undefined,depositCertExpiry:val('tn-deposit-expiry')||'',occupants:_readOccupants(),guarantor,addressProofDocs:(window._tnDocs.address&&window._tnDocs.address.existing)||[]};
-  if(files.deposit){ const ext=(files.deposit.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.deposit,pid+'/deposit-'+Date.now()+'.'+ext,'tenant-documents'); if(url){ info.depositCertName=files.deposit.name; info.depositCertUrl=url; } else failed.push('deposit certificate'); }
-  if(files.ref){ const ext=(files.ref.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.ref,pid+'/reference-'+Date.now()+'.'+ext,'tenant-documents'); if(url){ info.refDocName=files.ref.name; info.refDocUrl=url; } else failed.push('reference report'); }
-  if(files.origcontract){ const ext=(files.origcontract.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.origcontract,pid+'/orig-contract-'+Date.now()+'.'+ext,'tenant-documents'); if(url){ info.origContractName=files.origcontract.name; info.origContractUrl=url; } else failed.push('original contract'); }
-  if(files.id1){ const ext=(files.id1.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.id1,pid+'/id1-'+Date.now()+'.'+ext,'tenant-documents'); if(url){ info.id1DocName=files.id1.name; info.id1DocUrl=url; } else failed.push('ID document 1'); }
-  if(files.id2){ const ext=(files.id2.name.split('.').pop()||'pdf'); const url=await _storageUpload(files.id2,pid+'/id2-'+Date.now()+'.'+ext,'tenant-documents'); if(url){ info.id2DocName=files.id2.name; info.id2DocUrl=url; } else failed.push('ID document 2'); }
-  _commitTenant(pid,info);
-  window._tnFiles={};
+  people.forEach((per,idx)=>{
+    per.addressProofDocs=(window._tnDocs['address-'+idx]&&window._tnDocs['address-'+idx].existing)||[];
+    const gBucket=(window._tnDocs['guarantor-'+idx]&&window._tnDocs['guarantor-'+idx].existing)||[];
+    per.guarantor=per.guarantor&&(per.guarantor.name||per.guarantor.email||per.guarantor.phone)?{...per.guarantor,docs:gBucket}:null;
+    const rtrExtBucket=(window._tnDocs['rtrext-'+idx]&&window._tnDocs['rtrext-'+idx].existing)||[];
+    if(rtrExtBucket.length) per.rtrDocs=rtrExtBucket;
+  });
+  const files=window._tnFiles||{};
+  async function slot(kind,idx,applyTo){
+    const f=files[idx==null?kind:kind+'-'+idx]; if(!f) return;
+    const ext=(f.name.split('.').pop()||'pdf');
+    const url=await _storageUpload(f,pid+'/'+kind+'-'+(idx==null?'':idx+'-')+Date.now()+'.'+ext,'tenant-documents');
+    if(url) applyTo(f.name,url); else failed.push(kind);
+  }
+  const core=window._tnCore||{};
+  const coreStart=document.getElementById('tn-start'), coreDeposit=document.getElementById('tn-deposit'), coreDepositExp=document.getElementById('tn-deposit-expiry');
+  if(coreStart) core.start=coreStart.value; if(coreDeposit) core.deposit=coreDeposit.value; if(coreDepositExp) core.depositCertExpiry=coreDepositExp.value;
+  await slot('deposit',null,(n,u)=>{ core.depositCertName=n; core.depositCertUrl=u; });
+  await slot('ref',null,(n,u)=>{ core.refDocName=n; core.refDocUrl=u; });
+  await slot('origcontract',null,(n,u)=>{ core.origContractName=n; core.origContractUrl=u; });
+  for(let idx=0;idx<people.length;idx++){
+    await slot('id1',idx,(n,u)=>{ people[idx].id1DocName=n; people[idx].id1DocUrl=u; });
+    await slot('id2',idx,(n,u)=>{ people[idx].id2DocName=n; people[idx].id2DocUrl=u; });
+  }
+  const info={
+    name:lead.name, email:lead.email, phone:lead.phone, start:core.start||today(),
+    deposit:(core.deposit!==''&&core.deposit!=null)?parseFloat(core.deposit):undefined,
+    depositCertExpiry:core.depositCertExpiry, depositCertName:core.depositCertName, depositCertUrl:core.depositCertUrl,
+    refDocName:core.refDocName, refDocUrl:core.refDocUrl, origContractName:core.origContractName, origContractUrl:core.origContractUrl,
+    id1DocName:lead.id1DocName, id1DocUrl:lead.id1DocUrl, id2DocName:lead.id2DocName, id2DocUrl:lead.id2DocUrl,
+    addressProofDocs:lead.addressProofDocs, guarantor:lead.guarantor,
+    occupants:people.slice(1)
+  };
+  const rec=_commitTenant(pid,info);
+  // _commitTenant doesn't know about RTR fields — patch those onto the lead directly.
+  if(rec){
+    rec.dob=lead.dob; rec.rtrResult=lead.rtrResult; rec.rtrExpiry=lead.rtrExpiry; rec.rtrCheckDate=lead.rtrCheckDate; rec.rtrCheckMethod=lead.rtrCheckMethod; rec.shareCode=lead.shareCode;
+    if(lead.rtrDocs&&lead.rtrDocs.length){ rec.rtrDocs=lead.rtrDocs; rec.rtrDocName=lead.rtrDocs[0].name; rec.rtrDocUrl=lead.rtrDocs[0].url; }
+    pushTenantRec(rec);
+  }
+  window._tnFiles={}; window._tnPeople=null; window._tnPid=null;
   closeModal(); render();
   if(failed.length) toast('⚠ Saved, but file upload failed for: '+failed.join(', ')+' — re-attach and save again',1);
-  else toast('✓ Tenant set up'); }
+  else toast('✓ Tenant set up');
+}
 function _allTenantNames(rec){
   const names=[rec.name].concat((rec.occupants||[]).map(o=>o.name)).filter(Boolean);
   if(names.length<=1) return names[0]||'';
@@ -2789,7 +2945,7 @@ function moveInPackItems(p){
     {key:'eicr',label:'EICR (electrical)',ok:certRAG(c.eicr).k==='ok'||certRAG(c.eicr).k==='soon',url:c.eicrDocUrl,required:true},
     {key:'epc',label:'EPC',ok:certRAG(c.epc).k==='ok'||certRAG(c.epc).k==='soon',url:c.epcDocUrl,required:false},
     {key:'deposit',label:'Deposit protection & prescribed information',ok:!rec.deposit||!!rec.depositCertName,url:rec.depositCertUrl,required:!!rec.deposit},
-    {key:'rtr',label:'Right to Rent check completed',ok:!!(rec.rtrResult||rec.rtrCheckDate),url:null,required:true},
+    {key:'rtr',label:'Right to Rent check completed (everyone named)',ok:_rtrAllDone(rec),url:null,required:true},
   ];
   if(preReform) items.push({key:'infosheet',label:'RRA Information Sheet (official gov.uk PDF — sitting tenancy pre-dates 1 May 2026)',ok:!!c.infosheet,url:c.infosheetDocUrl,required:true});
   return items;
@@ -4138,10 +4294,14 @@ let _tnAgSigPad=null;
 function openTenancyAgreement(pid){
   const p=P(pid); const l=L(p.landlordId); const rec=tenantRecFor(pid);
   if(!rec){ toast('Set up the tenant record first',1); return; }
-  const rtrOk=!!rec.rtrCheckDate;
+  const people=_tnPeopleView(rec).filter(pp=>pp.name);
+  const rtrOk=_rtrAllDone(rec);
+  const rtrLines=people.length?people.map(pp=>{ const r=_rtrPersonRAG(pp); const src=pp._occ;
+    return `${esc(pp.name)}: <span style="color:${r.k==='ok'?'var(--green)':'var(--red)'}">${r.label}</span>${src&&src.rtrDocUrl?` · <a href="#" onclick="event.preventDefault();viewDoc('${src.rtrDocUrl}','Right to Rent evidence — ${esc(pp.name)}')">View</a>`:''}`;
+  }).join('<br>'):'No one named on the tenancy yet';
   const depositWithinGrace=rec.start&&((new Date()-new Date(rec.start))/864e5)<30;
   const readiness=`<div class="note${rtrOk?'':' warn'}" style="margin-bottom:12px"><b>Readiness check</b><br>
-    Right to Rent: ${rtrOk?'✓ Confirmed':'⚠ Not done yet — complete this before signing'}<br>
+    Right to Rent (everyone named must be confirmed):<br>${rtrLines}<br>
     Deposit protection: ${rec.depositCertName?'✓ Protected':(depositWithinGrace?'⏳ Within the 30-day window':'⚠ Overdue — protect it before signing')}</div>`;
   const occWithEmail=(rec.occupants||[]).filter(o=>o.email);
   const body=`${readiness}
@@ -4432,7 +4592,7 @@ const TEMPLATES=[
       <p style="font-weight:700;margin:16px 0 4px;color:#1B2F4A">Next Step 2: Right to Rent — documents required from you directly</p>
       <p>Separately, we are required by law to verify your right to rent in the UK before the tenancy begins. Please email us the following for each occupant aged 18 or over:</p>
       <ul style="padding-left:18px;line-height:1.8">
-        <li>UK/Irish passport, or Biometric Residence Permit (BRP), current visa, or Home Office share code (non-UK/Irish nationals)</li>
+        <li>UK/Irish passport, or Home Office share code (for non-UK/Irish nationals with digital immigration status)</li>
         <li>One additional proof of address (utility bill or bank statement, dated within the last 3 months)</li>
       </ul>
       <p style="font-weight:700;margin:16px 0 4px;color:#1B2F4A">Please note</p>
