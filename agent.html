@@ -160,6 +160,7 @@ h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.9/dist/purify.min.js"></script>
 <script src="nexlet-audit.js"></script>
 <script src="nexlet-calendar.js"></script>
+<script src="nexlet-print.js"></script>
 <script>
 // ─────────────────────────────────────────────────────────────
 // NexLet Agency Portal — functional front-end (local state demo).
@@ -2404,7 +2405,13 @@ function _tnPersonTabHtml(idx){
   <div class="fg"><label>Email</label><input id="tn-p${idx}-email" value="${esc(per.email)}"></div></div>
   <div class="grid2" style="gap:10px"><div class="fg"><label>Phone</label><input id="tn-p${idx}-phone" value="${esc(per.phone)}"></div>
   <div class="fg"><label>Date of birth</label><input id="tn-p${idx}-dob" type="date" value="${esc(per.dob)}"></div></div>
-  ${isLead?'':`<div style="text-align:right;margin:-4px 0 8px"><a href="#" onclick="event.preventDefault();tnRemovePerson(${idx})" style="font-size:11.5px;color:var(--red)">Remove this person</a></div>`}
+  ${isLead?'':`<div class="fg"><label>Status on the tenancy</label>
+    <select id="tn-p${idx}-ptype">
+      <option value="joint" ${(per.personType||'joint')==='joint'?'selected':''}>Joint tenant \u2014 signs the agreement, jointly and severally liable</option>
+      <option value="permitted" ${per.personType==='permitted'?'selected':''}>Permitted occupier \u2014 does not sign, no tenancy rights</option>
+    </select>
+    <div class="hint">A partner or adult child who is not taking on the rent should be a permitted occupier. Either way a Right to Rent check is required for everyone aged 18 or over.</div></div>
+  <div style="text-align:right;margin:-4px 0 8px"><a href="#" onclick="event.preventDefault();tnRemovePerson(${idx})" style="font-size:11.5px;color:var(--red)">Remove this person</a></div>`}
   <div style="background:#F6F8FB;border:1px solid var(--border);border-radius:10px;padding:14px;margin-top:6px">
     <div style="font-size:12.5px;font-weight:700;color:var(--navy)">① 🪪 Identity &amp; address</div>
     <div class="faint" style="font-size:11.5px;margin-bottom:10px">Safeguarding — optional but recommended</div>
@@ -2453,6 +2460,7 @@ function tnSyncPerson(idx){
   const per=window._tnPeople&&window._tnPeople[idx]; if(!per) return;
   const nameEl=document.getElementById('tn-p'+idx+'-name'); if(!nameEl) return; // tab not currently rendered
   per.name=val('tn-p'+idx+'-name'); per.email=val('tn-p'+idx+'-email'); per.phone=val('tn-p'+idx+'-phone'); per.dob=val('tn-p'+idx+'-dob');
+  if(idx>0&&document.getElementById('tn-p'+idx+'-ptype')) per.personType=val('tn-p'+idx+'-ptype')||'joint';
   const hasG=document.getElementById('tn-p'+idx+'-hasg');
   if(hasG&&hasG.checked) per.guarantor={name:val('tn-p'+idx+'-gname'),email:val('tn-p'+idx+'-gemail'),phone:val('tn-p'+idx+'-gphone'),docs:(window._tnDocs['guarantor-'+idx]&&window._tnDocs['guarantor-'+idx].existing)||[]};
   else per.guarantor={name:'',email:'',phone:'',docs:[]};
@@ -4219,7 +4227,7 @@ function openAgreement(id){
       </select></div>
     <div class="fg"><label>Landlord's email — the secure signing link is sent here</label><input id="ag-email" value="${esc(l.email||'')}" placeholder="landlord@email.com"></div>
     ${l.entity==='joint'?`<div class="fg"><label>Joint owner ${l.joint?'('+esc(l.joint)+') ':''}email — they'll be sent the same link</label><input id="ag-joint-email" value="${esc(l.jointEmail||'')}" placeholder="joint-owner@email.com"></div>`:''}
-    <div class="fg"><label>Agreement preview</label>
+    <div class="fg"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><label style="margin:0">Agreement preview</label><button type="button" class="btn sm" onclick="NexLetPrint.fromEl('ag-preview','Management Agreement','Draft for review')">⎙ Print / save as PDF</button></div>
       <div id="ag-preview" style="max-height:220px;overflow-y:auto;border:1px solid #E3D9C8;border-radius:8px;padding:14px;font-size:12.5px;line-height:1.7;background:var(--off)">${buildManagementAgreement(l,service)}</div></div>
     <div class="fg"><label>Your name (signing for ${esc(S.agency.name||'the agency')})</label><input id="ag-agent-name" value="${esc(window._agentName||S.agency.name||'')}"></div>
     ${sigBlockHtml('ag')}
@@ -4383,8 +4391,12 @@ function buildTenancyAgreementHtml(p,rec,l){
   const b=agencyBrand();
   const c=p.compliance||{};
   const occ=(rec.occupants||[]).filter(o=>o.name);
-  const occNames=occ.map(o=>o.name);
-  const tenantNames=[rec.name,...occNames].filter(Boolean).join(', ');
+  const isPerm=o=>(o.personType||'joint')==='permitted'||(o.age!==''&&o.age!=null&&+o.age<18);
+  const jointT=occ.filter(o=>!isPerm(o));
+  const permOcc=occ.filter(isPerm);
+  const tenantNames=[rec.name,...jointT.map(o=>o.name)].filter(Boolean).join(', ');
+  // Every person the agreement is served on, for the email-service consent table.
+  const svcPeople=[{n:rec.name,e:rec.email}].concat(jointT.map(o=>({n:o.name,e:o.email||''}))).filter(x=>x.n);
   const depositScheme=rec.scheme||'a government-approved tenancy deposit scheme (to be confirmed within 30 days of receipt)';
   const prop=[p.address,p.city,p.postcode].filter(Boolean).map(esc).join(', ');
   const rentDay=esc(p.rentDueDay||'1st');
@@ -4423,6 +4435,7 @@ function buildTenancyAgreementHtml(p,rec,l){
     ${Pr('RENT:',`The Tenant shall pay <strong>${gbp(rentAmt)} per month</strong> payable monthly (\u201cthe Rent\u201d). The first month\u2019s rent shall be payable in cleared funds immediately after the execution of this Agreement, but before the commencement of the tenancy. Thereafter, Rent shall be payable monthly in advance on the <strong>${rentDay}</strong> of each month and in cleared funds.`)}
     ${dep!=null?Pr('DEPOSIT:',`The Tenant shall pay to the Landlord when signing this Agreement <strong>${gbp(dep)}</strong> as a Deposit. At the end of the Tenancy the Deposit will be returned to the Tenant subject to the possible deductions set out in this agreement. The Deposit will be protected in ${esc(depositScheme)} within 30 days of receipt.`):''}
     ${Pr('PAYABLE:',`<strong>${firstPay}</strong> (being the first Rent instalment${dep!=null?' together with the Deposit':''}) to be paid by cleared funds upon signing of the Agreement, and, in any event, prior to the release of any keys to the Property. Thereafter ${gbp(rentAmt)} to be paid on the ${rentDay} of every month by standing order to the Landlord\u2019s nominated account.`)}
+    ${Pr('SERVICE BY EMAIL:',`The Tenant agrees that notices and other documents under this Agreement, including notices under the Housing Act 1988 and documents in court proceedings, may be served by email to the address recorded below. Each Tenant confirms this is an address they use and read regularly.<table style="width:100%;border-collapse:collapse;margin-top:7px">${svcPeople.map(x=>`<tr><td style="padding:3px 10px 3px 0;font-size:12px;width:40%">${esc(x.n)}</td><td style="padding:3px 0;font-size:12px">${x.e?'<strong>'+esc(x.e)+'</strong>':'<span style="color:#B4543A">no email given \u2014 postal service only</span>'}</td></tr>`).join('')}</table>`)}
     ${Pr('TYPE OF TENANCY:',`This Agreement is intended to create an <strong>Assured Periodic Tenancy</strong> as defined by the Housing Act 1988 (as amended by the Renters\u2019 Rights Act 2025) and will take effect subject to the provisions for recovery of possession.`)}
     ${Pr('RENT INCREASES:',`The Tenant is notified that the Rent payable under this Tenancy may be increased by the Landlord in accordance with section 13 of the Housing Act 1988 (as amended). Any such increase may be proposed by the Landlord by serving a formal notice in the prescribed form, specifying the proposed new Rent and the date on which the increase is to take effect.`)}
   </table>
@@ -4438,7 +4451,7 @@ function buildTenancyAgreementHtml(p,rec,l){
   ${D([
     ['1.1.1','“Agent” means '+esc(b.name)+(b.address?' of '+esc(b.address):'')+', acting as the Landlord’s managing agent.'],
     ['1.1.2','“Landlord” means '+esc(landlordName(l))+' and includes their successors in title and any person entitled to possession of the Property on the ending of this Tenancy.'],
-    ['1.1.3','“Tenant” means '+esc(tenantNames)+' and, where more than one person is named, each of them jointly and severally.'],
+    ['1.1.3','“Tenant” means '+esc(tenantNames)+' and, where more than one person is named, each of them jointly and severally. A permitted occupier named at clause 3.5 is not a Tenant and has no tenancy rights under this agreement.'],
     ['1.1.4','“Property” means '+prop+', together with the fixtures, fittings, furniture and effects listed in the Inventory.'],
     ['1.1.5','“Rent” means '+gbp(rentAmt)+' per calendar month, payable in advance on the '+rentDay+' of each month.'],
     dep!=null?['1.1.6','“Deposit” means the sum of '+gbp(dep)+' paid by the Tenant as security for the performance of the Tenant’s obligations under this agreement.']:null,
@@ -4464,7 +4477,8 @@ function buildTenancyAgreementHtml(p,rec,l){
   ${C('3.1','The Landlord lets the Property to the Tenant on the terms of this agreement from and including '+fmtDate(rec.start)+', which is the first date the Tenant is entitled to occupy the Property.')}
   ${C('3.2','This is an <strong>assured periodic tenancy</strong> under the Housing Act 1988 as amended by the Renters’ Rights Act 2025. There is no fixed term and no end date — the Tenancy runs on a periodic basis until lawfully ended in accordance with clause 4.21, clause 5 or clause 7.')}
   ${C('3.3','<strong>Licensing:</strong> '+licenceClause)}
-  ${occ.length?C('3.4','The following are permitted occupiers, not tenants, and do not sign this agreement:')+D(occ.map((o,ix)=>['3.4.'+(ix+1),esc(o.name)+(o.age?', age '+esc(o.age):'')+(o.age>=18?' — an adult; a Right to Rent check is required before the Tenancy begins':'')])):''}
+  ${jointT.length?C('3.4','This is a joint tenancy. Each of the following signs this agreement as a Tenant and is jointly and severally liable for the Rent and for every obligation in it:')+D([['3.4.1',esc(rec.name||'')+' (lead tenant)']].concat(jointT.map((o,ix)=>['3.4.'+(ix+2),esc(o.name)]))):''}
+  ${permOcc.length?C('3.5','The following are permitted occupiers. They are not tenants, do not sign this agreement, and have no right to remain at the Property once the Tenancy ends. A Right to Rent check is required for each of them who is aged 18 or over before they occupy:')+D(permOcc.map((o,ix)=>['3.5.'+(ix+1),esc(o.name)+(o.age?', age '+esc(o.age):'')])):''}
 
   ${S(4,'Tenant’s covenants')}
   <p style="margin:2px 0 8px;color:#5A6B82">The Tenant agrees with the Landlord as follows:</p>
@@ -4539,7 +4553,10 @@ function buildTenancyAgreementHtml(p,rec,l){
     ['4.8.2','not to do anything that would invalidate the Landlord’s buildings or contents insurance, and to meet any additional premium, excess or cost caused by a breach of this clause;'],
     ['4.8.3','to report any fire, theft, loss or damage to the police where appropriate and to the Landlord or the Agent as soon as possible, with written details to follow;'],
     ['4.8.4','not to bring into the Property or use any gas appliance that has not been installed and checked by a Gas Safe registered engineer in accordance with the Gas Safety (Installation and Use) Regulations 1998;'],
-    ['4.8.5','not to keep or use at the Property any dangerous, flammable or explosive substance other than in quantities normal for household use.']
+    ['4.8.5','not to keep or use at the Property any dangerous, flammable or explosive substance other than in quantities normal for household use;'],
+    ['4.8.6','not to charge or store inside the Property any electric bicycle, electric scooter or similar vehicle, or any lithium-ion battery for one, except in a location agreed with the Landlord in writing, and to use only the manufacturer’s charger and not to charge unattended or overnight;'],
+    ['4.8.7','not to install an electric vehicle charging point at the Property without the Landlord’s prior written consent;'],
+    ['4.8.8','to take out and maintain insurance covering the Tenant’s own contents and the Tenant’s liability for accidental damage to the Landlord’s property, and to produce evidence of that cover on reasonable request.']
   ])}
 
   ${Sub('4.9','Head Lease')}
@@ -4564,9 +4581,14 @@ function buildTenancyAgreementHtml(p,rec,l){
 
   ${Sub('4.12','Animals and pets')}
   ${D([
-    ['4.12.1',esc(pets)+'.'],
-    ['4.12.2','that any request to keep a pet is considered under section 16A of the Housing Act 1988 and will not be unreasonably refused; the Landlord may attach reasonable conditions, including a professional clean at the end of the Tenancy where a pet has been kept;'],
-    ['4.12.3','to be responsible for any damage, soiling, odour or infestation caused by a pet kept at the Property, and to meet the reasonable, evidenced cost of putting it right.']
+    ['4.12.1','that the position at the start of the Tenancy is: '+esc(pets)+';'],
+    ['4.12.2','that the Tenant may ask the Landlord for consent to keep a pet at the Property under section 16A of the Housing Act 1988, and that consent will not be unreasonably refused;'],
+    ['4.12.3','that a request must be made in writing and should say what type and breed of animal it is, its age, whether it is neutered and microchipped, how many animals the Tenant already keeps, and whether the Tenant has kept that animal in rented accommodation before;'],
+    ['4.12.4','that the Landlord will reply in writing within <strong>28 days</strong> of receiving a written request; where the Landlord reasonably needs further information from the Tenant, or needs the consent of a superior landlord or an insurer, that period is extended by the time reasonably required to obtain it, and the Landlord will tell the Tenant in writing that an extension applies and why;'],
+    ['4.12.5','that consent may reasonably be refused where a superior lease prohibits animals, where the Landlord’s insurer will not cover the risk, where the Property is not suitable for the animal in question, or where keeping the animal would be unlawful;'],
+    ['4.12.6','that consent may be given subject to reasonable conditions, which may include keeping the animal under proper control, preventing nuisance to neighbours and other occupiers, and having the Property professionally cleaned and treated for fleas at the end of the Tenancy;'],
+    ['4.12.7','that consent relates only to the animal named in it and does not extend to any replacement or additional animal;'],
+    ['4.12.8','to be responsible for any damage, soiling, odour or infestation caused by an animal kept at the Property, whether or not consent was given, and to meet the reasonable and evidenced cost of putting it right.']
   ])}
 
   ${Sub('4.13','Nuisance and noise')}
@@ -4626,16 +4648,20 @@ function buildTenancyAgreementHtml(p,rec,l){
     ['4.20.1','to comply with all legislation applicable to the use or occupation of the Property;'],
     ['4.20.2','to make every reasonable endeavour to ensure that all persons living at or visiting the Property comply with the Tenant’s obligations under this agreement;'],
     ['4.20.3','to notify the Landlord or the Agent promptly of any change to the Tenant’s contact details, including email address and telephone number;'],
-    ['4.20.4','not to cause damage to any wooden or laminate flooring, including by walking on it in high-heeled shoes.']
+    ['4.20.4','not to cause damage to any wooden or laminate flooring, including by walking on it in high-heeled shoes;'],
+    ['4.20.5','where the Tenant claims Universal Credit or Housing Benefit including an amount for housing costs, to tell the Landlord or the Agent and to co-operate with any reasonable request for information needed to verify the Rent or the Tenancy.']
   ])}
 
-  ${Sub('4.21','Termination of the tenancy')}
+  ${Sub('4.21','Ending the tenancy')}
   ${D([
-    ['4.21.1','that the Tenant may end the Tenancy at any time by giving the Landlord at least <strong>two months’ written notice</strong>, expiring on a Rent payment day;'],
-    ['4.21.2','at the end of the Tenancy, to leave the Landlord’s furniture and effects in the rooms in which they were at the start of the Tenancy;'],
-    ['4.21.3','to remove all of the Tenant’s belongings and rubbish, and to return the Property clean and in the condition recorded in the Inventory, fair wear and tear excepted;'],
-    ['4.21.4','that where the Tenant leaves belongings at the Property after the Tenancy ends, the Landlord may dispose of them after 14 days and recover any reasonable costs from the proceeds;'],
-    ['4.21.5','to provide a forwarding address to the Landlord and the Agent.']
+    ['4.21.1','that the Tenant may end the Tenancy by giving the Landlord at least <strong>two months’ written notice</strong>, which must expire on either the first or the last day of a rental period;'],
+    ['4.21.2','that where the Tenant comprises more than one person, a notice given by any one of them ends the Tenancy for all of them, and a notice once given may be withdrawn only with the written agreement of the Landlord and of every person comprising the Tenant;'],
+    ['4.21.3','to allow the Landlord or the Agent to inspect the Property at the end of the Tenancy, and to attend that inspection if the Tenant wishes;'],
+    ['4.21.4','at the end of the Tenancy, to leave the Landlord’s furniture and effects in the rooms in which they were at the start of the Tenancy;'],
+    ['4.21.5','to remove all of the Tenant’s belongings and rubbish, and to return the Property clean and in the condition recorded in the Inventory, fair wear and tear excepted;'],
+    ['4.21.6','that where belongings are left at the Property after the Tenancy ends, the Landlord will take reasonable steps to tell the Tenant at the last postal or email address held for them, will store the items for <strong>14 days</strong>, and may then sell or dispose of them; items that are perishable, unsanitary or unsafe to store may be disposed of immediately; the reasonable and evidenced cost of removal, storage and disposal may be deducted from any proceeds of sale or recovered from the Tenant;'],
+    ['4.21.7','to return all keys, fobs, permits and security devices to the Agent by 12.00 noon on the last day of the Tenancy, and to remain liable for Rent and outgoings until they are returned;'],
+    ['4.21.8','to provide a forwarding address to the Landlord and the Agent.']
   ])}
 
   ${S(5,'Recovery of possession')}
@@ -4665,18 +4691,20 @@ function buildTenancyAgreementHtml(p,rec,l){
   ${C('7.2','If, in the reasonable opinion of an appropriate expert, the Property cannot be made habitable within one month, either party may give one month’s written notice to terminate this agreement, following which it ends and no further obligations arise under it, without prejudice to any claim in respect of matters pre-dating termination.')}
 
   ${S(8,'Service of notices')}
-  ${C('8.1','Any notice served by the Landlord on the Tenant must be in writing and is sufficiently served if sent by first-class post to the Property or left at the Property, in which case it is deemed served two Working Days after posting or the next day after being left.')}
-  ${C('8.2','Any notice served by the Tenant on the Landlord must be in writing and is sufficiently served if sent by first-class post to, or left at, the address given for the Landlord or the Agent in this agreement, and is deemed served on the same basis.')}
-  ${C('8.3','Notice may also be served by email, and is deemed served the same day if sent before 4.30 pm on a Working Day, and otherwise on the next Working Day.')}
-  ${C('8.4','In accordance with section 48 of the Landlord and Tenant Act 1987, the address at which the Tenant may serve notices on the Landlord — including notices in proceedings — is that given for the Agent at clause 1.1.1.')}
-  ${C('8.5','Each party must notify the other in writing of any change to their address or email address within 14 days.')}
+  ${C('8.1','Any notice or document served by the Landlord or the Agent on the Tenant must be in writing. It is validly served if delivered by hand to the Property, left at the Property, sent by first-class post to the Property, or sent by email to an address recorded for the Tenant in the Particulars or notified in writing afterwards.')}
+  ${C('8.2','<strong>Consent to service by email.</strong> The Tenant expressly agrees that any notice or document under this agreement or under the Housing Act 1988 — including a notice seeking possession under section 8, a notice of rent increase under section 13, and any document in court proceedings — may be validly served on the Tenant by email to the address recorded for them in the Particulars. Each Tenant confirms that the address given is one they use and read regularly, and accepts service by that means.')}
+  ${C('8.3','Any notice served by the Tenant on the Landlord must be in writing and is validly served if sent by first-class post to, or left at, the address given for the Agent in this agreement, or sent by email to the Agent at the address given in this agreement.')}
+  ${C('8.4','A notice is treated as served: (a) where delivered by hand or left at the Property, on the day it is left; (b) where sent by first-class post, on the second Working Day after posting; and (c) where sent by email, on the day it is sent if sent before 4.30 pm on a Working Day, and otherwise on the next Working Day. Service by email takes effect when the message leaves the sender’s system; a failure by the recipient to open or read it does not affect valid service.')}
+  ${C('8.5','Where the Tenant comprises more than one person, service on any one of them is treated as service on all of them.')}
+  ${C('8.6','In accordance with section 48 of the Landlord and Tenant Act 1987, the address at which the Tenant may serve notices on the Landlord — including notices in proceedings — is that given for the Agent at clause 1.1.1.')}
+  ${C('8.7','Each party must notify the other in writing within 14 days of any change to their postal address, email address or telephone number. Where the Tenant does not do so, service at the last address notified remains valid.')}
 
   ${S(9,'Deposit')}
   ${dep!=null?C('9.1','The Tenant pays the Deposit of '+gbp(dep)+' to the Landlord or the Agent on signing this agreement. The Deposit may not exceed five weeks’ Rent, or six weeks’ Rent where the annual Rent is £50,000 or more.'):C('9.1','No Deposit is payable under this agreement.')}
   ${C('9.2','The Deposit is held as security for the performance of the Tenant’s obligations under this agreement and to compensate the Landlord for any breach by the Tenant.')}
   ${C('9.3','The Deposit will be protected in '+esc(depositScheme)+' within 30 days of receipt, and the prescribed information given to the Tenant within the same period.')}
   ${C('9.4','No interest on the Deposit is payable to the Tenant.')}
-  ${C('9.5','At the end of the Tenancy the Landlord or the Agent will inspect the Property against the Inventory and prepare a check-out report, and will set out in writing any proposed deductions within 14 days.')}
+  ${C('9.5','At the end of the Tenancy the Landlord or the Agent will inspect the Property against the Inventory and prepare a check-out report, and will set out in writing any proposed deductions within 14 days. The Tenant is entitled to attend that inspection. Where the Tenant arranges to attend and then does not do so, the Landlord or the Agent may either carry out the inspection in the Tenant’s absence — in which case the report stands as the record of the condition of the Property unless the Tenant shows it to be wrong — or offer one further appointment, the reasonable cost of which the Tenant will meet.')}
   ${C('9.6','Deductions may be made from the Deposit, or claimed as compensation, in reasonable and evidenced amounts for:')}
   ${D([
     ['9.6.1','damage to the Property or its fixtures and fittings caused by the Tenant, their household or visitors, beyond fair wear and tear;'],
@@ -4689,11 +4717,15 @@ function buildTenancyAgreementHtml(p,rec,l){
   ])}
   ${C('9.7','Where the Tenant disagrees with a proposed deduction, the disputed amount is resolved through the free dispute resolution service of the Deposit Scheme, or by agreement between the parties or order of the court. The undisputed balance will be released without delay.')}
   ${C('9.8','Where the Tenant comprises more than one person, any one of them may act on behalf of the others in the deposit dispute process, and the Landlord may discharge the Deposit by paying any one, some or all of them.')}
+  ${C('9.9','Where the Tenant comprises more than one person, they must between them appoint one of their number as lead tenant to deal with the Deposit and any dispute about it, and must notify the Landlord or the Agent in writing of that appointment. Until they do, the first-named Tenant is treated as the lead tenant.')}
+  ${C('9.10','Where all or part of the Deposit is paid by someone who is not the Tenant, it is treated as paid on the Tenant’s behalf and will be dealt with at the end of the Tenancy as if the Tenant had paid it, unless the Landlord and that person agree otherwise in writing.')}
+  ${C('9.11','The Landlord may transfer the Deposit to a different government-approved deposit scheme, or between the custodial and insured arrangements of a scheme, on giving the Tenant written notice of the change and the new scheme details within 30 days of the transfer.')}
 
   ${S(10,'Notices to the Tenant under the Housing Act 1988')}
   ${C('10.1','The Landlord gives notice to the Tenant that possession of the Property may be recovered on any ground in Schedule 2 to the Housing Act 1988 as amended by the Renters’ Rights Act 2025 that applies during the Tenancy, subject to the prescribed notice being served and a court order obtained.')}
   ${C('10.2','The Tenant is notified that the Rent may be increased once in any 12-month period by the Landlord serving notice under section 13 of the Housing Act 1988, giving at least two months’ notice and specifying the proposed new Rent and the date it takes effect. The Tenant may refer a proposed increase to the First-tier Tribunal.')}
   ${C('10.3','The Landlord may not discriminate against the Tenant on the ground that the Tenant receives benefits or has children, in accordance with the Renters’ Rights Act 2025.')}
+  ${C('10.4','Where the Landlord holds the Property under a superior lease granted for a term of more than 21 years, the Tenant is given notice before the Tenancy begins that possession may be recovered on Ground 2ZB (the superior lease comes to an end) or Ground 2ZD (the superior landlord recovers possession) in Schedule 2 to the Housing Act 1988 as amended. This notice is given so that those grounds remain available where they apply; it does not itself indicate an intention to recover possession.')}
 
   ${S(11,'Data protection')}
   ${C('11.1','The Landlord and the Agent process and retain personal data relating to the Tenant in accordance with the UK GDPR and the Data Protection Act 2018'+(b.ico?', under ICO registration '+esc(b.ico):'')+'.')}
@@ -4735,11 +4767,14 @@ function openTenancyAgreement(pid){
   const readiness=`<div class="note${rtrOk?'':' warn'}" style="margin-bottom:12px"><b>Readiness check</b><br>
     Right to Rent (everyone named must be confirmed):<br>${rtrLines}<br>
     Deposit protection: ${rec.depositCertName?'✓ Protected':(depositWithinGrace?'⏳ Within the 30-day window':'⚠ Overdue — protect it before signing')}</div>`;
-  const occWithEmail=(rec.occupants||[]).filter(o=>o.email);
+  const _isPerm=o=>(o.personType||'joint')==='permitted'||(o.age!==''&&o.age!=null&&+o.age<18);
+  const occWithEmail=(rec.occupants||[]).filter(o=>o.email&&!_isPerm(o));
+  const permNames=(rec.occupants||[]).filter(o=>o.name&&_isPerm(o)).map(o=>o.name);
   const body=`${readiness}
     <div class="fg"><label>Tenant’s email — the secure signing link is sent here</label><input id="ta-email" value="${esc(rec.email||'')}" placeholder="tenant@email.com"></div>
-    ${occWithEmail.length?`<div class="note" style="margin:-8px 0 4px">${occWithEmail.map(o=>esc(o.name)).join(', ')} will also be sent the link — every named adult signs in one sitting.</div>`:''}
-    <div class="fg"><label>Agreement preview</label><div id="ta-preview" style="max-height:220px;overflow-y:auto;border:1px solid #E3D9C8;border-radius:8px;padding:14px;font-size:12.5px;line-height:1.7;background:var(--off)">${buildTenancyAgreementHtml(p,rec,l)}</div></div>
+    ${occWithEmail.length?`<div class="note" style="margin:-8px 0 4px">${occWithEmail.map(o=>esc(o.name)).join(', ')} will also be sent the link as joint tenant${occWithEmail.length>1?'s':''}.</div>`:''}
+    ${permNames.length?`<div class="note" style="margin:-8px 0 4px">${permNames.map(esc).join(', ')} ${permNames.length>1?'are':'is'} recorded as a permitted occupier and will not be asked to sign.</div>`:''}
+    <div class="fg"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><label style="margin:0">Agreement preview</label><button type="button" class="btn sm" onclick="NexLetPrint.fromEl('ta-preview','Tenancy Agreement','Draft for review')">⎙ Print / save as PDF</button></div><div id="ta-preview" style="max-height:220px;overflow-y:auto;border:1px solid #E3D9C8;border-radius:8px;padding:14px;font-size:12.5px;line-height:1.7;background:var(--off)">${buildTenancyAgreementHtml(p,rec,l)}</div></div>
     <div class="fg"><label>Your name (signing on behalf of ${esc(landlordName(l))})</label><input id="ta-agent-name" value="${esc(window._agentName||S.agency.name||'')}"></div>
     ${sigBlockHtml('ta')}
     <p class="hint">You sign first, then NexLet emails the tenant (and any joint occupants) a secure link to sign together. Everyone receives a timestamped copy once complete.</p>`;
@@ -4755,7 +4790,9 @@ async function sendTenancyAgreement(pid){
   if(!sigDataUrl){ toast('Please add your signature',1); return; }
   if(!LIVE){ toast('Connect to Supabase to send (not available in demo)',1); return; }
   const token=uid('ta')+Math.random().toString(36).slice(2,10);
-  const occupants=(rec.occupants||[]).filter(o=>o.name).map(o=>({name:o.name,email:o.email||''}));
+  // Joint tenants only — permitted occupiers do not sign (clause 3.5).
+  const _perm=o=>(o.personType||'joint')==='permitted'||(o.age!==''&&o.age!=null&&+o.age<18);
+  const occupants=(rec.occupants||[]).filter(o=>o.name&&!_perm(o)).map(o=>({name:o.name,email:o.email||'',personType:'joint'}));
   const row={ id:uid('ta'), agency_id:window._agencyId, property_id:pid, tenant_id:rec.id, landlord_id:l.id, token,
     document_html: buildTenancyAgreementHtml(p,rec,l), agent_name:agentName, agent_email:window._agentEmail||'',
     agent_sig_png:sigDataUrl, agent_signed_at:new Date().toISOString(),
