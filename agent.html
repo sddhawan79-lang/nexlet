@@ -159,6 +159,7 @@ h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.9/dist/purify.min.js"></script>
 <script src="nexlet-audit.js"></script>
+<script src="nexlet-calendar.js"></script>
 <script>
 // ─────────────────────────────────────────────────────────────
 // NexLet Agency Portal — functional front-end (local state demo).
@@ -391,7 +392,7 @@ const RAG={green:{label:'● Pass',bg:'var(--green-bg)',color:'var(--green)'},am
 const CREDIT={not_requested:{label:'Credit: not requested',bg:'var(--off)',color:'#94A3B8'},requested:{label:'Credit: requested',bg:'var(--blue-bg)',color:'var(--blue)'},in_progress:{label:'Credit: in progress',bg:'var(--amber-bg)',color:'var(--amber)'},complete:{label:'Credit: report attached',bg:'var(--green-bg)',color:'var(--green)'}};
 
 const NAV=[
-  {k:'dashboard',ic:'▦',t:'Agency Dashboard',grp:'Overview',pin:true},{k:'inbox',ic:'✉',t:'Inbox',grp:'Overview',pin:true},{k:'reports',ic:'◩',t:'Reports',grp:'Overview',pin:true},{k:'audit',ic:'⛊',t:'Audit Trail',grp:'Overview'},
+  {k:'dashboard',ic:'▦',t:'Agency Dashboard',grp:'Overview',pin:true},{k:'inbox',ic:'✉',t:'Inbox',grp:'Overview',pin:true},{k:'reports',ic:'◩',t:'Reports',grp:'Overview',pin:true},{k:'calendar',ic:'▤',t:'Calendar',grp:'Overview',pin:true},{k:'audit',ic:'⛊',t:'Audit Trail',grp:'Overview'},
   {k:'landlords',ic:'⚇',t:'Landlords',grp:'Instruction'},{k:'properties',ic:'⌂',t:'Properties',grp:'Instruction'},
   {k:'marketing',ic:'🏷',t:'Marketing',grp:'Marketing & Referencing'},{k:'applicants',ic:'◕',t:'Applicants & Viewings',grp:'Marketing & Referencing'},{k:'offers',ic:'£',t:'Offers',grp:'Marketing & Referencing'},{k:'referencing',ic:'◷',t:'Referencing',grp:'Marketing & Referencing'},{k:'pipeline',ic:'◫',t:'Tenancy Progression',grp:'Marketing & Referencing'},
   {k:'compliance',ic:'⌘',t:'Compliance',grp:'Tenancy Management'},{k:'inventory2',ic:'📄',t:'Inventory & Check-out',grp:'Tenancy Management'},{k:'rent',ic:'£',t:'Rent & Arrears',grp:'Tenancy Management'},{k:'maintenance',ic:'🔧',t:'Maintenance',grp:'Tenancy Management'},{k:'keys',ic:'🔑',t:'Key Register',grp:'Tenancy Management'},
@@ -506,7 +507,7 @@ function render(){
   document.getElementById('view').innerHTML=({
     dashboard:vDashboard, landlords:vLandlords, landlord:vLandlordDetail, valuation:vValuationDetail, valuationreport:vValuationReport, pipeline:vPipeline,
     marketing:vMarketing, listing:vListingDetail, applicants:vApplicants, offers:vOffers, inbox:vInbox,
-    keys:vKeys, reports:vReports, clientmoney:vClientMoney, audit:()=>window.NexLetAudit.view(),
+    keys:vKeys, reports:vReports, clientmoney:vClientMoney, audit:()=>window.NexLetAudit.view(), calendar:()=>window.NexLetCalendar.view(),
     referencing:vReferencing, properties:vProperties, property:vPropertyDetail, llportal:vLandlordPortal, llproperty:vLandlordPortalProperty,
     invoices:vInvoices, invoice:vInvoiceDetail, business:vBusiness, settings:vSettings, templates:vTemplates, notices:vNotices, notice:vNoticeDetail, compliance:vCompliance,
     rent:vRentArrears, maintenance:vMaintenance, inventory2:vInventoryList, inventorydetail:vInventoryDetail, statement:vStatement
