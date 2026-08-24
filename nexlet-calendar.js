@@ -99,8 +99,13 @@
       const a = addr(rec.propertyId) || rec.name || '';
       if (rec.start) push(rec.start, 'tenancy', 'Tenancy starts', a);
       if (rec.end) push(rec.end, 'tenancy', 'Tenancy ends', a);
-      if (rec.deposit && !rec.schemeRef && rec.start)
-        push(plusDays(rec.start, 30), 'deposit', 'Deposit protection deadline', a);
+      // s213 Housing Act 2004 runs 30 days from RECEIPT. Fall back to the
+      // tenancy start only when no receipt date has been recorded.
+      const depFrom = rec.depositReceived || rec.start;
+      const heldBy = rec.depositHolder || 'landlord';
+      if (rec.deposit && !rec.schemeRef && depFrom)
+        push(plusDays(depFrom, 30), 'deposit',
+          heldBy === 'landlord' ? 'Deposit certificate due from landlord' : 'Deposit protection deadline', a);
       if (rec.rtrExpiry) push(rec.rtrExpiry, 'rtr', 'Right to Rent recheck — ' + (rec.name || 'tenant'), a);
       (rec.occupants || []).forEach(o => {
         if (o && o.rtrExpiry) push(o.rtrExpiry, 'rtr', 'Right to Rent recheck — ' + (o.name || 'occupant'), a);

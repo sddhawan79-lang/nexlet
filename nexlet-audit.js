@@ -148,6 +148,17 @@
         { k: 'held', label: 'How is it held?', type: 'select', options: ['Custodial — scheme holds the money', 'Insured — we hold the money'] }
       ]
     },
+    deposit_landlord_cert: {
+      portal: 'Landlord', action: 'deposit.registered',
+      label: 'Obtain deposit certificate from landlord',
+      why: 'The landlord received the deposit direct, so protecting it within 30 days is their statutory duty. Get the certificate and prescribed information for your file — if they protect late the tenant complains to you first.',
+      refLabel: 'Scheme deposit reference',
+      evidenceLabel: 'Landlord\u2019s scheme certificate',
+      extra: [
+        { k: 'schemeMembership', label: 'Landlord\u2019s scheme membership no.', type: 'text' },
+        { k: 'piServed', label: 'Prescribed information served by landlord?', type: 'select', options: ['Yes \u2014 copy on file', 'No \u2014 chased', 'Unknown'] }
+      ]
+    },
     deposit_pi: {
       portal: 'Deposit scheme', action: 'deposit.pi_served',
       label: 'Serve prescribed information',
@@ -182,10 +193,17 @@
       if (!rec || !rec.deposit) return;
       const p = (window.P && window.P(rec.propertyId)) || {};
       const label = p.address || rec.name || 'Tenancy';
-      const deadline = rec.start ? addDays(rec.start, 30) : null;
+      // The 30 days run from RECEIPT of the deposit (s213 Housing Act 2004).
+      // Tenancy start is only a fallback when no receipt date was recorded.
+      const from = rec.depositReceived || rec.start;
+      const deadline = from ? addDays(from, 30) : null;
+      // Where the LANDLORD receives the deposit, protecting it is their duty,
+      // not ours — so chase the evidence rather than the registration.
+      const held = rec.depositHolder || 'landlord';
       if (!rec.schemeRef && !has('deposit.registered', rec.id))
-        out.push({ step: 'deposit_registered', entity: 'tenancy', entityId: rec.id, label, deadline });
-      if (!has('deposit.pi_served', rec.id))
+        out.push({ step: held === 'landlord' ? 'deposit_landlord_cert' : 'deposit_registered',
+          entity: 'tenancy', entityId: rec.id, label, deadline });
+      if (!rec.piServedAt && !has('deposit.pi_served', rec.id))
         out.push({ step: 'deposit_pi', entity: 'tenancy', entityId: rec.id, label, deadline });
     });
 
