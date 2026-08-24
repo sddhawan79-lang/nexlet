@@ -3474,6 +3474,8 @@ function vSettings(){
       <div class="fg"><label>Trading name</label><input id="set-name" value="${esc(a.name)}"></div>
       <div class="fg"><label>Agency address (shown on invoices)</label><textarea id="set-address" rows="2" placeholder="Street, town, postcode">${esc(a.address||'')}</textarea></div>
       <div class="fg"><label>Company registration number <span class="faint">(if registered with Companies House)</span></label><input id="set-companyno" value="${esc(a.companyNo||'')}" placeholder="e.g. 12345678"></div>
+      <div class="fg"><label>Archive copy address <span class="faint">(blind-copied on every document sent)</span></label><input id="set-archive" value="${esc(a.archiveEmail||'')}" placeholder="e.g. accounts@beaconresidentials.co.uk"></div>
+      <div class="hint" style="margin:-6px 0 14px;color:var(--faint)">Keeps a copy of every agreement, notice and statement the system sends. Use a business address on your own domain — tenancy documents contain personal data, so a personal mailbox is not appropriate. Leave blank to send no copy.</div>
       <div class="inline2"><div class="fg"><label>Redress scheme (required)</label>
         <select id="set-redress"><option value="">Not yet a member</option><option ${a.redress==='The Property Ombudsman'?'selected':''}>The Property Ombudsman</option><option ${a.redress==='Property Redress Scheme'?'selected':''}>Property Redress Scheme</option></select></div>
       <div class="fg"><label>Redress membership no.</label><input id="set-redressno" value="${esc(a.redressNo)}" placeholder="e.g. T01234"></div></div>
@@ -3555,7 +3557,7 @@ function removeRentGuideEntry(id){
   S.agency.rentGuide=(S.agency.rentGuide||[]).filter(x=>x.id!==id);
   save(); if(LIVE) pushAgency(); render();
 }
-function saveSettings(){ S.agency.name=val('set-name'); S.agency.address=val('set-address'); S.agency.companyNo=val('set-companyno'); S.agency.bankName=val('set-bankname'); S.agency.bankAccName=val('set-bankaccname'); S.agency.bankSortCode=val('set-sortcode'); S.agency.bankAccNo=val('set-accno'); S.agency.redress=val('set-redress'); S.agency.redressNo=val('set-redressno'); S.agency.cmp=val('set-cmp'); S.agency.icoNo=val('set-ico'); S.agency.refPartner=val('set-ref'); S.agency.vatRegistered=val('set-vat')==='yes'; S.agency.vatNumber=val('set-vatno'); S.agency.paymentTerms=parseInt(val('set-terms'))||14; S.agency.abortiveFee=parseFloat(val('set-abortive'))||0; S.agency.noticeFee=parseFloat(val('set-noticefee'))||0; S.agency.renewalFee=parseFloat(val('set-renewalfee'))||0; S.agency.arrearsFee=parseFloat(val('set-arrearsfee'))||0; S.agency.keyFee=parseFloat(val('set-keyfee'))||0; S.agency.insuranceFee=parseFloat(val('set-insurancefee'))||0; S.agency.disputeFee=parseFloat(val('set-disputefee'))||0; S.agency.invMoveinFee=parseFloat(val('set-invmoveinfee'))||0; S.agency.invMoveoutFee=parseFloat(val('set-invmoveoutfee'))||0; save(); pushAgency(); render(); toast('✓ Settings saved'); }
+function saveSettings(){ S.agency.name=val('set-name'); S.agency.address=val('set-address'); S.agency.companyNo=val('set-companyno'); S.agency.archiveEmail=val('set-archive'); S.agency.bankName=val('set-bankname'); S.agency.bankAccName=val('set-bankaccname'); S.agency.bankSortCode=val('set-sortcode'); S.agency.bankAccNo=val('set-accno'); S.agency.redress=val('set-redress'); S.agency.redressNo=val('set-redressno'); S.agency.cmp=val('set-cmp'); S.agency.icoNo=val('set-ico'); S.agency.refPartner=val('set-ref'); S.agency.vatRegistered=val('set-vat')==='yes'; S.agency.vatNumber=val('set-vatno'); S.agency.paymentTerms=parseInt(val('set-terms'))||14; S.agency.abortiveFee=parseFloat(val('set-abortive'))||0; S.agency.noticeFee=parseFloat(val('set-noticefee'))||0; S.agency.renewalFee=parseFloat(val('set-renewalfee'))||0; S.agency.arrearsFee=parseFloat(val('set-arrearsfee'))||0; S.agency.keyFee=parseFloat(val('set-keyfee'))||0; S.agency.insuranceFee=parseFloat(val('set-insurancefee'))||0; S.agency.disputeFee=parseFloat(val('set-disputefee'))||0; S.agency.invMoveinFee=parseFloat(val('set-invmoveinfee'))||0; S.agency.invMoveoutFee=parseFloat(val('set-invmoveoutfee'))||0; save(); pushAgency(); render(); toast('✓ Settings saved'); }
 
 // ── ONBOARDING WIZARD ──
 let OB=null;
@@ -4069,7 +4071,7 @@ async function agencyEmail(to,subject,html,attachmentUrls){
   const brand=agencyBrand().name;
   const taggedSubject=(brand&&subject&&!subject.startsWith('['+brand+']'))?`[${brand}] ${subject}`:subject;
   try{
-    const res=await fetch(AG_EDGE,{method:'POST',headers,body:JSON.stringify({type:'send_email',to,subject:taggedSubject,html,bcc:'beaconresidentials@gmail.com',from:brand+' <documents@nexlet.co.uk>',...(attachmentUrls&&attachmentUrls.length?{attachment_urls:attachmentUrls}:{})})});
+    const res=await fetch(AG_EDGE,{method:'POST',headers,body:JSON.stringify({type:'send_email',to,subject:taggedSubject,html,bcc:(S.agency&&S.agency.archiveEmail)||'',from:brand+' <documents@nexlet.co.uk>',...(attachmentUrls&&attachmentUrls.length?{attachment_urls:attachmentUrls}:{})})});
     const data=await res.json().catch(()=>({}));
     if(!res.ok){ console.error('[agencyEmail] failed',res.status,data); return {ok:false,error:data.error||data.message||('HTTP '+res.status)}; }
     return {ok:true};
@@ -4346,7 +4348,9 @@ function signingReceiptHtml(a,l){
     <div><span style="color:#8A7D6E">Signee email</span><br>${esc(s.email||'—')}</div>
     <div><span style="color:#8A7D6E">Recipient ID</span><br>${rid(s)}</div>
     <div><span style="color:#8A7D6E">Signee role</span><br>${esc(s.role)}</div>
-    <div><span style="color:#8A7D6E">OTP required</span><br>No</div>
+    <div><span style="color:#8A7D6E">Signed at</span><br>${s.ts?fmt(s.ts):'<span style="color:#B4863A">Not yet signed</span>'}</div>
+    <div><span style="color:#8A7D6E">IP address</span><br>${esc(s.ip||'—')}</div>
+    <div style="grid-column:1/-1"><span style="color:#8A7D6E">Device</span><br><span style="font-size:10.5px;word-break:break-all">${esc(s.ua||'—')}</span></div>
   </div>`).join('');
   const events=[{label:'Sent',name:signees[0].name,ts:a.agent_signed_at}];
   signees.slice(1).forEach(s=>{ if(s.ts) events.push({label:'Signed',name:s.name,ts:s.ts}); });
@@ -4789,24 +4793,34 @@ async function sendTenancyAgreement(pid){
   const sigDataUrl=getSigDataUrl('ta');
   if(!sigDataUrl){ toast('Please add your signature',1); return; }
   if(!LIVE){ toast('Connect to Supabase to send (not available in demo)',1); return; }
-  const token=uid('ta')+Math.random().toString(36).slice(2,10);
+  // Each signatory gets their OWN token, so nobody can sign on anyone else's
+  // behalf and each person can sign separately, on their own device.
+  const newToken=()=>{ const a=new Uint8Array(16); crypto.getRandomValues(a);
+    return Array.from(a).map(b=>b.toString(16).padStart(2,'0')).join(''); };
+  const token=newToken();
   // Joint tenants only — permitted occupiers do not sign (clause 3.5).
   const _perm=o=>(o.personType||'joint')==='permitted'||(o.age!==''&&o.age!=null&&+o.age<18);
   const occupants=(rec.occupants||[]).filter(o=>o.name&&!_perm(o)).map(o=>({name:o.name,email:o.email||'',personType:'joint'}));
+  const signatories=[{role:'tenant',name:rec.name||'',email,token,sig_png:null,signed_at:null}]
+    .concat(occupants.map(o=>({role:'occupant',name:o.name,email:o.email,token:newToken(),sig_png:null,signed_at:null})));
   const row={ id:uid('ta'), agency_id:window._agencyId, property_id:pid, tenant_id:rec.id, landlord_id:l.id, token,
     document_html: buildTenancyAgreementHtml(p,rec,l), agent_name:agentName, agent_email:window._agentEmail||'',
-    agent_sig_png:sigDataUrl, agent_signed_at:new Date().toISOString(),
-    tenant_name:rec.name, tenant_email:email, occupants, status:'sent' };
+    agent_sig_png:sigDataUrl,
+    tenant_name:rec.name, tenant_email:email, occupants, signatories, status:'sent' };
   const { error }=await sb.from('agency_tenancy_agreements').insert(row);
   if(error){ console.error(error); toast('⚠ Could not send — run tenancy-agreement-esign-migration.sql then retry',1); return; }
   S.tenancyAgreements=S.tenancyAgreements||[]; S.tenancyAgreements.push(row);
   _advanceStage(pid,'contract');
   rec.email=rec.email||email; pushTenantRec(rec);
-  const link=new URL('tenancy-esign.html?t='+encodeURIComponent(token), location.href).href;
-  const mailBody=nm=>`<p>Hi ${esc(nm)},</p><p>Please review and sign your tenancy terms &amp; conditions for <b>${esc(p.address)}</b>.</p><p><a href="${link}">Sign your tenancy terms &amp; conditions</a></p>`;
-  const r1=await agencyEmail(email,'Please sign your tenancy terms & conditions — '+p.address,mailBody((rec.name||'').split(' ')[0]));
+  const linkFor=tk=>new URL('tenancy-esign.html?t='+encodeURIComponent(tk), location.href).href;
+  const mailBody=(nm,tk)=>`<p>Hi ${esc(nm)},</p><p>Please review and sign your tenancy agreement for <b>${esc(p.address)}</b>.</p><p><a href="${linkFor(tk)}">Sign your tenancy agreement</a></p><p style="font-size:12px;color:#6B7280">This link is personal to you. Each tenant signs separately using their own link — you do not need to be together to sign.</p>`;
+  const subj='Please sign your tenancy agreement — '+p.address;
+  const r1=await agencyEmail(email,subj,mailBody((rec.name||'').split(' ')[0],token));
   const occResults=[];
-  for(const o of occupants){ if(o.email) occResults.push({email:o.email, r:await agencyEmail(o.email,'Please sign your tenancy terms & conditions — '+p.address,mailBody((o.name||'').split(' ')[0]))}); }
+  for(const s of signatories.slice(1)){ if(s.email) occResults.push({email:s.email, r:await agencyEmail(s.email,subj,mailBody((s.name||'').split(' ')[0],s.token))}); }
+  if(window.NexLetAudit) NexLetAudit.log({action:'agreement.sent',entity:'tenancy',entityId:rec.id,
+    entityLabel:(rec.name||'')+' — '+(p.address||''),
+    detail:{document:'Tenancy agreement',signatories:signatories.length,names:signatories.map(s=>s.name).join(', ')}});
   closeModal(); render();
   const failed=[!r1.ok?email:null, ...occResults.filter(x=>!x.r.ok).map(x=>x.email)].filter(Boolean);
   if(!failed.length) toast('✓ Sent to tenant for signature');
@@ -4816,11 +4830,16 @@ async function sendTenancyReminder(id){
   const a=(S.tenancyAgreements||[]).find(x=>x.id===id); if(!a){ toast('Agreement not found',1); return; }
   if(!LIVE){ toast('Connect to Supabase to send (not available in demo)',1); return; }
   const p=P(a.property_id)||{};
-  const link=new URL('tenancy-esign.html?t='+encodeURIComponent(a.token), location.href).href;
-  const mailBody=nm=>`<p>Hi ${esc(nm)},</p><p>Just a reminder — please review and sign your tenancy terms &amp; conditions for <b>${esc(p.address||'')}</b>.</p><p><a href="${link}">Sign your tenancy terms &amp; conditions</a></p>`;
-  const r1=await agencyEmail(a.tenant_email,'Reminder: please sign your tenancy terms & conditions — '+(p.address||''),mailBody((a.tenant_name||'').split(' ')[0]));
+  const mailBody=(nm,tk)=>`<p>Hi ${esc(nm)},</p><p>Just a reminder — please review and sign your tenancy agreement for <b>${esc(p.address||'')}</b>.</p><p><a href="${new URL('tenancy-esign.html?t='+encodeURIComponent(tk), location.href).href}">Sign your tenancy agreement</a></p><p style="font-size:12px;color:#6B7280">This link is personal to you.</p>`;
+  const subj='Reminder: please sign your tenancy agreement — '+(p.address||'');
+  // Chase only the people who haven't signed yet.
+  const pending=(a.signatories&&a.signatories.length)
+    ? a.signatories.filter(s=>!s.signed_at&&s.email)
+    : [{name:a.tenant_name,email:a.tenant_email,token:a.token}].concat((a.occupants||[]).filter(o=>o.email).map(o=>({name:o.name,email:o.email,token:a.token})));
+  if(!pending.length){ toast('Everyone has already signed'); return; }
   const occResults=[];
-  for(const o of (a.occupants||[])){ if(o.email) occResults.push({email:o.email, r:await agencyEmail(o.email,'Reminder: please sign your tenancy terms & conditions — '+(p.address||''),mailBody((o.name||'').split(' ')[0]))}); }
+  for(const s of pending) occResults.push({email:s.email, r:await agencyEmail(s.email,subj,mailBody((s.name||'').split(' ')[0],s.token))});
+  const r1={ok:true};
   const l=L(a.landlord_id); if(l&&l.id){ l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:'Tenancy terms & conditions signature reminder emailed to '+(a.tenant_name||'tenant')+' for '+(p.address||'the property')+'.'}); pushLandlord(l); }
   render();
   const failed=[!r1.ok?a.tenant_email:null, ...occResults.filter(x=>!x.r.ok).map(x=>x.email)].filter(Boolean);
@@ -4832,12 +4851,14 @@ function viewSignedTenancyAgreement(pid){
   const a=tenancyAgreementFor(rec.id); if(!a){ toast('No tenancy terms & conditions on file',1); return; }
   const w=window.open('','_blank'); if(!w){ toast('Allow pop-ups to view',1); return; }
   const fmt=d=>d?new Date(d).toLocaleString('en-GB',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
-  const occNames=[a.tenant_name,...(a.occupants||[]).map(o=>o.name)].filter(Boolean).join(', ');
-  const cert=`<div style="border:1px solid #E3D9C8;border-radius:10px;padding:20px 22px"><div style="font-size:15px;font-weight:700;color:#1B2F4A;margin-bottom:4px">✔ Fully signed tenancy terms &amp; conditions</div>
+  const sgs=a.signatories&&a.signatories.length?a.signatories
+    :[{name:a.tenant_name,signed_at:a.tenant_signed_at}].concat((a.occupants||[]).map(o=>{
+        const s=(a.occupant_sigs||[]).find(x=>x.name===o.name); return {name:o.name,signed_at:s?s.signed_at:null}; }));
+  const allDone=sgs.every(s=>s.signed_at);
+  const cert=`<div style="border:1px solid #E3D9C8;border-radius:10px;padding:20px 22px"><div style="font-size:15px;font-weight:700;color:${allDone?'#1B2F4A':'#B4863A'};margin-bottom:4px">${allDone?'✔ Fully signed tenancy agreement':'○ Partially signed — awaiting '+sgs.filter(s=>!s.signed_at).length+' signature(s)'}</div>
     <table style="width:100%;font-size:12.5px;border-collapse:collapse">
-      <tr><td style="padding:6px 0;color:#8A7D6E">Agent</td><td style="padding:6px 0;font-weight:600">${esc(a.agent_name||'')}</td></tr>
-      <tr><td style="padding:6px 0;color:#8A7D6E">Tenant(s)</td><td style="padding:6px 0;font-weight:600">${esc(occNames)}</td></tr>
-      <tr><td style="padding:6px 0;color:#8A7D6E">Signed</td><td style="padding:6px 0">${fmt(a.tenant_signed_at)}</td></tr>
+      <tr><td style="padding:6px 0;color:#8A7D6E">Agent</td><td style="padding:6px 0;font-weight:600">${esc(a.agent_name||'')}</td><td style="padding:6px 0">${fmt(a.agent_signed_at)}</td></tr>
+      ${sgs.map(s=>`<tr><td style="padding:6px 0;color:#8A7D6E">Tenant</td><td style="padding:6px 0;font-weight:600">${esc(s.name||'')}</td><td style="padding:6px 0">${s.signed_at?fmt(s.signed_at):'<span style="color:#B4863A">Awaiting signature</span>'}${s.ip?' <span style="color:#8A7D6E">· '+esc(s.ip)+'</span>':''}</td></tr>`).join('')}
     </table></div>`;
   w.document.write(`<html><head><title>Signed Tenancy Terms &amp; Conditions</title><style>body{font-family:Arial,sans-serif;max-width:760px;margin:24px auto;padding:0 20px;color:#4A4038;line-height:1.7}@media print{button{display:none}}</style></head><body><button onclick="print()" style="padding:10px 18px;background:#1B2F4A;color:#fff;border:none;border-radius:8px;cursor:pointer;margin-bottom:16px">Print / Save as PDF</button>${cert}<hr style="margin:24px 0;border:none;border-top:1px solid #E3D9C8">${a.document_html}</body></html>`);
   w.document.close();
@@ -4845,8 +4866,15 @@ function viewSignedTenancyAgreement(pid){
 function tenancySigningReceiptHtml(a,p){
   const fmt=d=>d?new Date(d).toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'UTC'})+' UTC':'—';
   const b=agencyBrand();
-  const signees=[{name:a.agent_name,email:a.agent_email,role:'Agent',ts:a.agent_signed_at},{name:a.tenant_name,email:a.tenant_email,role:(a.occupants&&a.occupants.length)?'Tenant 1':'Tenant',ts:a.tenant_signed_at}];
-  (a.occupants||[]).forEach((o,i)=>{ const sig=(a.occupant_sigs||[]).find(s=>s.name===o.name); signees.push({name:o.name,email:o.email,role:'Tenant '+(i+2),ts:sig?sig.signed_at:null}); });
+  // Prefer the per-signatory records — they carry the server-side time, IP and
+  // device. Fall back to the legacy columns for agreements sent before v2.
+  const sigs=a.signatories&&a.signatories.length?a.signatories:null;
+  const signees=[{name:a.agent_name,email:a.agent_email,role:'Agent',ts:a.agent_signed_at,ip:a.agent_ip,ua:a.agent_ua}];
+  if(sigs){ sigs.forEach((s,i)=>signees.push({name:s.name,email:s.email,role:sigs.length>1?'Tenant '+(i+1):'Tenant',ts:s.signed_at,ip:s.ip,ua:s.ua})); }
+  else{
+    signees.push({name:a.tenant_name,email:a.tenant_email,role:(a.occupants&&a.occupants.length)?'Tenant 1':'Tenant',ts:a.tenant_signed_at});
+    (a.occupants||[]).forEach((o,i)=>{ const sig=(a.occupant_sigs||[]).find(s=>s.name===o.name); signees.push({name:o.name,email:o.email,role:'Tenant '+(i+2),ts:sig?sig.signed_at:null}); });
+  }
   const rid=s=>_ridFor((s.email||s.name||'')+a.id);
   const signeeCards=signees.map(s=>`<div style="border:1px solid #E3D9C8;border-radius:8px;padding:14px 16px;margin-bottom:10px;display:grid;grid-template-columns:1fr 1fr;gap:4px 18px;font-size:12px">
     <div><span style="color:#8A7D6E">Signee name</span><br><b>${esc(s.name||'—')}</b></div>
@@ -4854,7 +4882,9 @@ function tenancySigningReceiptHtml(a,p){
     <div><span style="color:#8A7D6E">Signee email</span><br>${esc(s.email||'—')}</div>
     <div><span style="color:#8A7D6E">Recipient ID</span><br>${rid(s)}</div>
     <div><span style="color:#8A7D6E">Signee role</span><br>${esc(s.role)}</div>
-    <div><span style="color:#8A7D6E">OTP required</span><br>No</div>
+    <div><span style="color:#8A7D6E">Signed at</span><br>${s.ts?fmt(s.ts):'<span style="color:#B4863A">Not yet signed</span>'}</div>
+    <div><span style="color:#8A7D6E">IP address</span><br>${esc(s.ip||'—')}</div>
+    <div style="grid-column:1/-1"><span style="color:#8A7D6E">Device</span><br><span style="font-size:10.5px;word-break:break-all">${esc(s.ua||'—')}</span></div>
   </div>`).join('');
   const events=[{label:'Sent',name:signees[0].name,ts:a.agent_signed_at}];
   signees.slice(1).forEach(s=>{ if(s.ts) events.push({label:'Signed',name:s.name,ts:s.ts}); });
@@ -4889,7 +4919,21 @@ async function pollTenancyAgreements(){
   if(!LIVE) return;
   try{ const {data}=await sb.from('agency_tenancy_agreements').select('*').eq('agency_id',window._agencyId);
     if(data){ const prevSigned=new Set((S.tenancyAgreements||[]).filter(a=>a.status==='signed').map(a=>a.id));
+      // Count signatures already seen, so each new one is logged exactly once.
+      const prevCount={}; (S.tenancyAgreements||[]).forEach(a=>{ prevCount[a.id]=(a.signatories||[]).filter(s=>s.signed_at).length; });
       const newlySigned=data.filter(a=>a.status==='signed'&&!prevSigned.has(a.id));
+      if(window.NexLetAudit) data.forEach(a=>{
+        const now=(a.signatories||[]).filter(s=>s.signed_at).length;
+        if(prevCount[a.id]!==undefined&&now>prevCount[a.id]){
+          const p=P(a.property_id)||{};
+          (a.signatories||[]).filter(s=>s.signed_at).slice(prevCount[a.id]).forEach(s=>{
+            NexLetAudit.log({action:'agreement.signed',entity:'tenancy',entityId:a.tenant_id,
+              entityLabel:(s.name||'')+' — '+(p.address||''),
+              detail:{document:'Tenancy agreement',signedAt:s.signed_at,ip:s.ip||'',device:(s.ua||'').slice(0,80),
+                complete:a.status==='signed'?'yes':'awaiting others'}});
+          });
+        }
+      });
       S.tenancyAgreements=data;
       newlySigned.forEach(a=>{ if(a.property_id) _advanceStage(a.property_id,'managed'); });
       if(newlySigned.length) render(); } }catch(e){}
