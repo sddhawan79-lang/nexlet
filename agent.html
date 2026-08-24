@@ -2361,7 +2361,7 @@ function setTenant(pid){ const p=P(pid); const t=p.tenant||{}; const rec=tenantR
     window._tnDocs['guarantor-'+idx]={existing:(per.guarantor.docs||[]).slice(),pending:[]};
     window._tnDocs['rtrext-'+idx]={existing:per.rtrDocs.slice(),pending:[]};
   });
-  window._tnCore={start:t.start||rec.start||'', deposit:rec.deposit!=null?rec.deposit:'', depositCertExpiry:rec.depositCertExpiry||'', depositCertName:rec.depositCertName||'', depositCertUrl:rec.depositCertUrl||'', refDocName:rec.refDocName||'', refDocUrl:rec.refDocUrl||'', origContractName:rec.origContractName||'', origContractUrl:rec.origContractUrl||''};
+  window._tnCore={start:t.start||rec.start||'', deposit:rec.deposit!=null?rec.deposit:'', schemeRef:rec.schemeRef||'', depositCertExpiry:rec.depositCertExpiry||'', depositCertName:rec.depositCertName||'', depositCertUrl:rec.depositCertUrl||'', refDocName:rec.refDocName||'', refDocUrl:rec.refDocUrl||'', origContractName:rec.origContractName||'', origContractUrl:rec.origContractUrl||''};
   window._tnActiveTab='tenancy'; window._tnPid=pid;
   _tnOpenModal(pid);
 }
@@ -2381,6 +2381,7 @@ function _tnTenancyTabHtml(pid){ const rec=tenantRecFor(pid); const d=window._tn
     <div class="faint" style="font-size:11.5px;margin-bottom:10px">Deposit, referencing &amp; the signed agreement</div>
     ${_stepDivider(1,'Deposit certificate')}
     ${_docSlotHtml('deposit','File','(custodial/insured scheme cert or Prescribed Information)',d.depositCertName,d.depositCertUrl,'aiScanDeposit')}
+    <div class="fg" style="margin-top:-8px"><label>Scheme deposit reference <span class="faint">(the DPC / certificate number — quote this in any dispute)</span></label><input id="tn-schemeref" value="${esc(d.schemeRef||'')}" placeholder="${esc((S.agency.depScheme||'scheme')+' reference')}"></div>
     <div class="fg" style="margin-top:-8px"><label>Protection covers tenancy until <span class="faint">(only for a fixed-term cert with an "ending on or after" date — leave blank for a periodic tenancy, no re-protection needed on renewal or rent increase)</span></label><div style="display:flex;gap:8px;align-items:center"><input id="tn-deposit-expiry" type="date" value="${esc(d.depositCertExpiry)}" style="flex:1"><a href="#" onclick="event.preventDefault();document.getElementById('tn-deposit-expiry').value=''">Clear</a></div></div>
     <div id="tn-deposit-scan-status" class="faint" style="font-size:11px;margin-top:-8px"></div>
     ${_stepDivider(2,'Reference report')}
@@ -2972,8 +2973,9 @@ async function saveTenant(pid){
     if(url) applyTo(f.name,url); else failed.push(kind);
   }
   const core=window._tnCore||{};
-  const coreStart=document.getElementById('tn-start'), coreDeposit=document.getElementById('tn-deposit'), coreDepositExp=document.getElementById('tn-deposit-expiry');
+  const coreStart=document.getElementById('tn-start'), coreDeposit=document.getElementById('tn-deposit'), coreDepositExp=document.getElementById('tn-deposit-expiry'), coreSchemeRef=document.getElementById('tn-schemeref');
   if(coreStart) core.start=coreStart.value; if(coreDeposit) core.deposit=coreDeposit.value; if(coreDepositExp) core.depositCertExpiry=coreDepositExp.value;
+  if(coreSchemeRef) core.schemeRef=coreSchemeRef.value;
   await slot('deposit',null,(n,u)=>{ core.depositCertName=n; core.depositCertUrl=u; });
   await slot('ref',null,(n,u)=>{ core.refDocName=n; core.refDocUrl=u; });
   await slot('origcontract',null,(n,u)=>{ core.origContractName=n; core.origContractUrl=u; });
@@ -2984,7 +2986,7 @@ async function saveTenant(pid){
   const info={
     name:lead.name, email:lead.email, phone:lead.phone, start:core.start||today(),
     deposit:(core.deposit!==''&&core.deposit!=null)?parseFloat(core.deposit):undefined,
-    depositCertExpiry:core.depositCertExpiry, depositCertName:core.depositCertName, depositCertUrl:core.depositCertUrl,
+    depositCertExpiry:core.depositCertExpiry, depositCertName:core.depositCertName, depositCertUrl:core.depositCertUrl, schemeRef:core.schemeRef,
     refDocName:core.refDocName, refDocUrl:core.refDocUrl, origContractName:core.origContractName, origContractUrl:core.origContractUrl,
     id1DocName:lead.id1DocName, id1DocUrl:lead.id1DocUrl, id2DocName:lead.id2DocName, id2DocUrl:lead.id2DocUrl,
     addressProofDocs:lead.addressProofDocs, guarantor:lead.guarantor,
@@ -3476,6 +3478,15 @@ function vSettings(){
       <div class="fg"><label>Company registration number <span class="faint">(if registered with Companies House)</span></label><input id="set-companyno" value="${esc(a.companyNo||'')}" placeholder="e.g. 12345678"></div>
       <div class="fg"><label>Archive copy address <span class="faint">(blind-copied on every document sent)</span></label><input id="set-archive" value="${esc(a.archiveEmail||'')}" placeholder="e.g. accounts@beaconresidentials.co.uk"></div>
       <div class="hint" style="margin:-6px 0 14px;color:var(--faint)">Keeps a copy of every agreement, notice and statement the system sends. Use a business address on your own domain — tenancy documents contain personal data, so a personal mailbox is not appropriate. Leave blank to send no copy.</div>
+      <div class="inline2"><div class="fg"><label>Deposit scheme</label>
+        <select id="set-depscheme"><option value="">Not yet a member</option>${['mydeposits','Tenancy Deposit Scheme (TDS)','Deposit Protection Service (DPS)'].map(s=>`<option ${a.depScheme===s?'selected':''}>${s}</option>`).join('')}</select></div>
+      <div class="fg"><label>Scheme membership no.</label><input id="set-depmembership" value="${esc(a.depMembership||'')}" placeholder="e.g. 123456"></div></div>
+      <div class="fg"><label>Which product do you use?</label>
+        <select id="set-depproduct">
+          <option value="custodial" ${(a.depProduct||'custodial')==='custodial'?'selected':''}>Custodial — the scheme holds the money (free)</option>
+          <option value="insured" ${a.depProduct==='insured'?'selected':''}>Insured — we hold the money and pay a fee per deposit</option>
+        </select></div>
+      ${a.depProduct==='insured'?'<div class="note warn" style="margin:-6px 0 14px"><b>Insured means you hold client money.</b> Client Money Protection membership is then a legal requirement, and the deposit must sit in a designated client account — not the business account. Custodial avoids both.</div>':'<div class="hint" style="margin:-6px 0 14px;color:var(--faint)">Custodial keeps deposits out of your client-money exposure entirely — the scheme holds the cash, so no CMP obligation arises from deposits and there is nothing to reconcile.</div>'}
       <div class="inline2"><div class="fg"><label>Redress scheme (required)</label>
         <select id="set-redress"><option value="">Not yet a member</option><option ${a.redress==='The Property Ombudsman'?'selected':''}>The Property Ombudsman</option><option ${a.redress==='Property Redress Scheme'?'selected':''}>Property Redress Scheme</option></select></div>
       <div class="fg"><label>Redress membership no.</label><input id="set-redressno" value="${esc(a.redressNo)}" placeholder="e.g. T01234"></div></div>
@@ -3557,7 +3568,7 @@ function removeRentGuideEntry(id){
   S.agency.rentGuide=(S.agency.rentGuide||[]).filter(x=>x.id!==id);
   save(); if(LIVE) pushAgency(); render();
 }
-function saveSettings(){ S.agency.name=val('set-name'); S.agency.address=val('set-address'); S.agency.companyNo=val('set-companyno'); S.agency.archiveEmail=val('set-archive'); S.agency.bankName=val('set-bankname'); S.agency.bankAccName=val('set-bankaccname'); S.agency.bankSortCode=val('set-sortcode'); S.agency.bankAccNo=val('set-accno'); S.agency.redress=val('set-redress'); S.agency.redressNo=val('set-redressno'); S.agency.cmp=val('set-cmp'); S.agency.icoNo=val('set-ico'); S.agency.refPartner=val('set-ref'); S.agency.vatRegistered=val('set-vat')==='yes'; S.agency.vatNumber=val('set-vatno'); S.agency.paymentTerms=parseInt(val('set-terms'))||14; S.agency.abortiveFee=parseFloat(val('set-abortive'))||0; S.agency.noticeFee=parseFloat(val('set-noticefee'))||0; S.agency.renewalFee=parseFloat(val('set-renewalfee'))||0; S.agency.arrearsFee=parseFloat(val('set-arrearsfee'))||0; S.agency.keyFee=parseFloat(val('set-keyfee'))||0; S.agency.insuranceFee=parseFloat(val('set-insurancefee'))||0; S.agency.disputeFee=parseFloat(val('set-disputefee'))||0; S.agency.invMoveinFee=parseFloat(val('set-invmoveinfee'))||0; S.agency.invMoveoutFee=parseFloat(val('set-invmoveoutfee'))||0; save(); pushAgency(); render(); toast('✓ Settings saved'); }
+function saveSettings(){ S.agency.name=val('set-name'); S.agency.address=val('set-address'); S.agency.companyNo=val('set-companyno'); S.agency.archiveEmail=val('set-archive'); S.agency.depScheme=val('set-depscheme'); S.agency.depMembership=val('set-depmembership'); S.agency.depProduct=val('set-depproduct'); S.agency.bankName=val('set-bankname'); S.agency.bankAccName=val('set-bankaccname'); S.agency.bankSortCode=val('set-sortcode'); S.agency.bankAccNo=val('set-accno'); S.agency.redress=val('set-redress'); S.agency.redressNo=val('set-redressno'); S.agency.cmp=val('set-cmp'); S.agency.icoNo=val('set-ico'); S.agency.refPartner=val('set-ref'); S.agency.vatRegistered=val('set-vat')==='yes'; S.agency.vatNumber=val('set-vatno'); S.agency.paymentTerms=parseInt(val('set-terms'))||14; S.agency.abortiveFee=parseFloat(val('set-abortive'))||0; S.agency.noticeFee=parseFloat(val('set-noticefee'))||0; S.agency.renewalFee=parseFloat(val('set-renewalfee'))||0; S.agency.arrearsFee=parseFloat(val('set-arrearsfee'))||0; S.agency.keyFee=parseFloat(val('set-keyfee'))||0; S.agency.insuranceFee=parseFloat(val('set-insurancefee'))||0; S.agency.disputeFee=parseFloat(val('set-disputefee'))||0; S.agency.invMoveinFee=parseFloat(val('set-invmoveinfee'))||0; S.agency.invMoveoutFee=parseFloat(val('set-invmoveoutfee'))||0; save(); pushAgency(); render(); toast('✓ Settings saved'); }
 
 // ── ONBOARDING WIZARD ──
 let OB=null;
@@ -4401,7 +4412,14 @@ function buildTenancyAgreementHtml(p,rec,l){
   const tenantNames=[rec.name,...jointT.map(o=>o.name)].filter(Boolean).join(', ');
   // Every person the agreement is served on, for the email-service consent table.
   const svcPeople=[{n:rec.name,e:rec.email}].concat(jointT.map(o=>({n:o.name,e:o.email||''}))).filter(x=>x.n);
-  const depositScheme=rec.scheme||'a government-approved tenancy deposit scheme (to be confirmed within 30 days of receipt)';
+  // Names the actual scheme from Agency Settings, so the agreement stops saying
+  // "to be confirmed" once membership is recorded.
+  const _dp=b.depProduct==='insured'?'insured':'custodial';
+  // Plain text, NOT pre-escaped — every consumer below escapes at the point of
+  // use. Keeping one convention avoids the double-escaping this had before.
+  const depositScheme=rec.scheme||(b.depScheme
+    ? b.depScheme+' ('+_dp+' scheme'+(b.depMembership?', membership no. '+b.depMembership:'')+')'
+    : 'a government-approved tenancy deposit scheme (to be confirmed within 30 days of receipt)');
   const prop=[p.address,p.city,p.postcode].filter(Boolean).map(esc).join(', ');
   const rentDay=esc(p.rentDueDay||'1st');
   const furnished=p.furnished||'Unfurnished';
@@ -4706,7 +4724,8 @@ function buildTenancyAgreementHtml(p,rec,l){
   ${S(9,'Deposit')}
   ${dep!=null?C('9.1','The Tenant pays the Deposit of '+gbp(dep)+' to the Landlord or the Agent on signing this agreement. The Deposit may not exceed five weeks’ Rent, or six weeks’ Rent where the annual Rent is £50,000 or more.'):C('9.1','No Deposit is payable under this agreement.')}
   ${C('9.2','The Deposit is held as security for the performance of the Tenant’s obligations under this agreement and to compensate the Landlord for any breach by the Tenant.')}
-  ${C('9.3','The Deposit will be protected in '+esc(depositScheme)+' within 30 days of receipt, and the prescribed information given to the Tenant within the same period.')}
+  ${C('9.3','The Deposit will be protected in '+esc(depositScheme)+' within 30 days of receipt, and the prescribed information given to the Tenant within the same period.'+(rec.schemeRef?' The scheme reference for this Deposit is <strong>'+esc(rec.schemeRef)+'</strong>.':''))}
+  ${_dp==='custodial'&&!rec.scheme?C('9.3.1','The Deposit is held by the scheme itself, not by the Landlord or the Agent, for the duration of the Tenancy.'):''}
   ${C('9.4','No interest on the Deposit is payable to the Tenant.')}
   ${C('9.5','At the end of the Tenancy the Landlord or the Agent will inspect the Property against the Inventory and prepare a check-out report, and will set out in writing any proposed deductions within 14 days. The Tenant is entitled to attend that inspection. Where the Tenant arranges to attend and then does not do so, the Landlord or the Agent may either carry out the inspection in the Tenant’s absence — in which case the report stands as the record of the condition of the Property unless the Tenant shows it to be wrong — or offer one further appointment, the reasonable cost of which the Tenant will meet.')}
   ${C('9.6','Deductions may be made from the Deposit, or claimed as compensation, in reasonable and evidenced amounts for:')}
@@ -4984,7 +5003,7 @@ function complaintsDocUrl(){
   const d=(S.agency.bizDocs||[]).find(x=>/complaint/i.test(x.label||''));
   return (d&&d.url)||'';
 }
-function agencyBrand(){ const a=S.agency; return { name:a.name||'Beacon Residentials Ltd', tagline:a.tagline||'Your neighbourhood property people.', ico:a.icoNo||'ZC164221', address:a.address||'', redress:a.redress||'', redressNo:a.redressNo||'', email:window._agentEmail||a.email||'beaconresidentials@gmail.com', agent:window._agentName||a.name||'Beacon Residentials Ltd' }; }
+function agencyBrand(){ const a=S.agency; return { depScheme:a.depScheme||'', depMembership:a.depMembership||'', depProduct:a.depProduct||'custodial', name:a.name||'Beacon Residentials Ltd', tagline:a.tagline||'Your neighbourhood property people.', ico:a.icoNo||'ZC164221', address:a.address||'', redress:a.redress||'', redressNo:a.redressNo||'', email:window._agentEmail||a.email||'beaconresidentials@gmail.com', agent:window._agentName||a.name||'Beacon Residentials Ltd' }; }
 
 // Invite a managed landlord to their read-only portal (landlord-portal.html).
 async function inviteToPortal(id){
