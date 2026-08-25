@@ -1973,8 +1973,9 @@ function _tenancyChecklist(p){
     const rec=tenantRecFor(p.id);
     const ta=rec&&tenancyAgreementFor(rec.id);
     items.push({k:'tenancyagreement',label:'Tenancy terms & conditions signed',done:!!(ta&&ta.status==='signed')||!!(rec&&rec.origContractName),warn:!!(ta&&ta.status==='sent'),go:`openTenancyAgreement('${p.id}')`});
-    items.push({k:'moveinpack',label:'Move-in document pack sent',done:!!(rec&&rec.moveInPackSentAt),go:`openMoveInPack('${p.id}')`});
-    items.push({k:'portal',label:'Tenant invited to portal',done:!!(rec&&rec.invited),go:`inviteTenantToPortal('${p.id}')`});
+    items.push({k:'moveinpack',already:'moveinpack',label:'Move-in document pack sent',done:!!(rec&&rec.moveInPackSentAt),go:`openMoveInPack('${p.id}')`});
+    if(rec&&rec.deposit) items.push({k:'pi',already:'pi',label:'Prescribed information served',done:!!rec.piServedAt,go:`tnDepositPI('${p.id}')`});
+    items.push({k:'portal',already:'portal',label:'Tenant invited to portal',done:!!(rec&&rec.invited),go:`inviteTenantToPortal('${p.id}')`});
   }
   const done=items.filter(i=>i.done).length;
   return {items,pct:Math.round(done/items.length*100)};
@@ -2056,7 +2057,7 @@ function tenancyChecklistPanel(p){
   // below — collapse to one line, expandable, instead of repeating the same list twice.
   if(cl.pct===100) return `<div class="panel" style="margin-bottom:14px"><div class="panel-bd" style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px"><span style="font-size:12.5px;font-weight:600;color:var(--green)">✓ Tenancy setup complete — ready to let</span><span class="faint" style="font-size:11.5px">Details below in Compliance &amp; documents</span></div></div>`;
   const todo=cl.items.filter(i=>!i.done), done=cl.items.filter(i=>i.done);
-  const todoRows=todo.map(i=>`<div class="doc" style="padding:7px 0"><div class="di" style="background:${i.warn?'var(--amber-bg)':'var(--red-bg)'};color:${i.warn?'var(--amber)':'var(--red)'}">!</div><div style="flex:1;font-size:12.5px;font-weight:600;color:var(--navy)">${i.label}</div><button class="btn sm" onclick="${i.go}">Fix</button></div>`).join('');
+  const todoRows=todo.map(i=>`<div class="doc" style="padding:7px 0"><div class="di" style="background:${i.warn?'var(--amber-bg)':'var(--red-bg)'};color:${i.warn?'var(--amber)':'var(--red)'}">!</div><div style="flex:1;font-size:12.5px;font-weight:600;color:var(--navy)">${i.label}${i.already?` <a href="#" onclick="event.preventDefault();markAlreadyDone('${p.id}','${i.already}')" style="font-weight:400;font-size:11px;color:var(--faint)">already done?</a>`:''}</div><button class="btn sm" onclick="${i.go}">Fix</button></div>`).join('');
   window._checklistOpen=window._checklistOpen||{}; const open=!!window._checklistOpen[p.id];
   const doneChips=done.map(i=>`<span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;color:var(--green);background:var(--green-bg);border-radius:100px;padding:4px 11px;cursor:pointer" onclick="${i.go}">✓ ${i.label}</span>`).join('');
   return `<div class="panel" style="margin-bottom:18px"><div class="panel-hd"><h2>Tenancy setup checklist</h2><span class="pill" style="background:var(--amber-bg);color:var(--amber)">${cl.pct}% complete</span></div><div class="panel-bd">
@@ -2328,8 +2329,12 @@ async function _sendFeeChangeLetter(p,l,oldFee,newFee){
     try{ await sb.from('agency_letters').insert(row); }catch(e){}
     S.letters=S.letters||[]; S.letters.unshift({...row,created_at:new Date().toISOString()});
   }
-  if(l.email) agencyEmail(l.email,subject,html);
+  if(l.email) await agencyEmail(l.email,subject,html);
+  l.comms=l.comms||[];
   l.comms.push({id:uid('c'),date:today(),type:'Letter',note:'Fee change letter sent & archived — '+oldFee+'% → '+newFee+'%'});
+  pushLandlord(l);
+  if(window.NexLetAudit) NexLetAudit.log({action:'email.sent',entity:'landlord',entityId:l.id,
+    entityLabel:landlordName(l),detail:{document:'Fee change letter',from:oldFee+'%',to:newFee+'%',property:p.address||''}});
 }
 function editCert(pid,key){ const p=P(pid); const c=p.certs||(p.certs={}); const cur=c[key]||'';
   const label=CERT_LABELS[key]||key.toUpperCase();
@@ -3210,6 +3215,38 @@ function moveInPackItems(p){
   if(preReform) items.push({key:'infosheet',label:'RRA Information Sheet (official gov.uk PDF — sitting tenancy pre-dates 1 May 2026)',ok:!!c.infosheet,url:c.infosheetDocUrl,required:true});
   return items;
 }
+// Record a step as already completed, without sending anything. Needed because
+// the "sent" flags were previously lost on reload, so genuinely-completed work
+// reappears as outstanding — and re-sending documents to a tenant who already
+// has them is worse than the red flag.
+function markAlreadyDone(pid,what){
+  const rec=tenantRecFor(pid); if(!rec) return;
+  const p=P(pid)||{};
+  const body=`<div class="note" style="margin-bottom:12px">This records the step as already completed on a date you choose. <b>Nothing is sent.</b> Use it where the work was genuinely done but the app lost the record — not to skip a step.</div>
+    <div class="fg"><label>Date it was actually done</label><input id="mad-date" type="date" value="${esc((rec.start&&rec.start<today())?rec.start:today())}"></div>
+    <div class="fg"><label>Note for the record <span class="faint">(optional but worth it)</span></label>
+      <input id="mad-note" placeholder="e.g. emailed from Gmail on move-in day, before this was tracked here"></div>`;
+  const labels={moveinpack:'Move-in document pack',welcome:'Welcome letter',portal:'Portal invite',pi:'Prescribed information',condensation:'Condensation acknowledgement'};
+  modal('Record as already done — '+esc(labels[what]||what), body,
+    `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="_saveAlreadyDone('${pid}','${what}')">Record it</button>`, true);
+}
+function _saveAlreadyDone(pid,what){
+  const rec=tenantRecFor(pid); if(!rec) return;
+  const p=P(pid)||{}, l=L(p.landlordId);
+  const when=val('mad-date')||today(); const note=val('mad-note');
+  const field={moveinpack:'moveInPackSentAt',welcome:'welcomeSentAt',portal:'invitedAt',
+    pi:'piServedAt',condensation:'condensationAckAt'}[what];
+  if(!field){ toast('Unknown step',1); return; }
+  rec[field]=when;
+  if(what==='portal') rec.invited=true;
+  pushTenantRec(rec);
+  if(l&&l.id){ l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',
+    note:'Recorded as already done: '+what+' for '+(p.address||'')+' — dated '+when+(note?' · '+note:'')}); pushLandlord(l); }
+  if(window.NexLetAudit) NexLetAudit.log({action:'record.saved',entity:'tenancy',entityId:rec.id,
+    entityLabel:(rec.name||'')+' — '+(p.address||''),
+    detail:{step:what,recordedAs:when,backdated:'yes',note:note||''}});
+  save(); closeModal(); render(); toast('✓ Recorded — nothing was sent');
+}
 function openMoveInPack(pid){
   const p=P(pid); const rec=tenantRecFor(pid);
   if(!rec){ toast('Set up the tenant first',1); return; }
@@ -3221,7 +3258,7 @@ function openMoveInPack(pid){
       ${i.url?`<button class="btn sm" onclick="viewDoc('${i.url}','${esc(i.label)}')">View</button>`:''}</div>`).join('')}
     ${blocking.length?`<div class="note warn" style="margin-top:10px">Can't send yet \u2014 missing: ${blocking.map(i=>esc(i.label)).join(', ')}. Fix these from Compliance &amp; documents first.</div>`:''}
     ${rec.moveInPackSentAt?`<div class="hint" style="margin-top:10px">Last sent ${fmtDate(rec.moveInPackSentAt)}.${rec.moveInPackConfirmedAt?' Tenant confirmed receipt '+fmtDate(rec.moveInPackConfirmedAt)+'.':''}</div>`:''}`;
-  const footer=`<button class="btn" onclick="closeModal()">Cancel</button>${rec.moveInPackSentAt&&!rec.moveInPackConfirmedAt?`<button class="btn" onclick="confirmMoveInPackReceipt('${pid}')">Mark receipt confirmed</button>`:''}<button class="btn navy" ${blocking.length?'disabled title="Fix the missing items above first"':''} onclick="sendMoveInPack('${pid}')">${rec.moveInPackSentAt?'Resend pack':'Send move-in pack'}</button>`;
+  const footer=`<button class="btn" onclick="closeModal()">Cancel</button>${!rec.moveInPackSentAt?`<button class="btn" onclick="closeModal();markAlreadyDone('${pid}','moveinpack')">Already sent — just record it</button>`:''}${rec.moveInPackSentAt&&!rec.moveInPackConfirmedAt?`<button class="btn" onclick="confirmMoveInPackReceipt('${pid}')">Mark receipt confirmed</button>`:''}<button class="btn navy" ${blocking.length?'disabled title="Fix the missing items above first"':''} onclick="sendMoveInPack('${pid}')">${rec.moveInPackSentAt?'Resend pack':'Send move-in pack'}</button>`;
   modal('Move-in document pack', body, footer, true);
 }
 async function sendMoveInPack(pid){
@@ -5467,7 +5504,7 @@ function vTemplates(){
       </div>`).join('')}</div></div>`).join('');
   const sent=(S.letters||[]).slice(0,12);
   const hist=sent.length?`<div class="panel"><div class="panel-hd"><h2>Recently sent</h2></div><div class="panel-bd" style="padding:0">
-    ${sent.map(x=>{const l=L(x.landlord_id)||{}; return `<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line)">
+    ${sent.map(x=>{const l=L(x.landlord_id)||{}; return `<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border)">
       <div style="font-size:16px">✉</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${esc(x.subject||x.type)}</div>
       <div class="faint" style="font-size:11px">${esc(landlordName(l)||x.landlord_id||'')} · ${new Date(x.created_at).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div></div>
       <span class="pill" style="background:var(--green-bg);color:var(--green)">Sent</span></div>`;}).join('')}

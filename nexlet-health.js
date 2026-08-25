@@ -22,9 +22,11 @@
 (function () {
   'use strict';
 
-  const LS_ERR = 'nexlet_errors_v1';
-  const LS_BK  = 'nexlet_last_backup';
+  const LS_ERR  = 'nexlet_errors_v1';
+  const LS_BK   = 'nexlet_last_backup';
+  const LS_AUTO = 'nexlet_auto_backup';
   const MAX_ERR = 40;
+  const AUTO_DAYS = 1;
 
   const esc2 = s => (window.esc ? window.esc(s) : String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'));
@@ -74,8 +76,9 @@
       .filter(x => x.n > 0);
   }
 
-  function backup() {
+  function backup(auto) {
     const data = snapshot();
+    data._meta.automatic = !!auto;
     const name = 'nexlet-backup-' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-') + '.json';
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
@@ -85,12 +88,39 @@
     try { localStorage.setItem(LS_BK, new Date().toISOString()); } catch (e) { }
     const rows = counts().reduce((s, x) => s + x.n, 0);
     if (window.NexLetAudit) window.NexLetAudit.log({ action: 'doc.generated', entity: 'agency',
-      entityLabel: 'Data backup', detail: { file: name, records: rows } });
+      entityLabel: 'Data backup', detail: { file: name, records: rows, automatic: auto ? 'yes' : 'no' } });
     if (window.render) window.render();
-    if (window.toast) window.toast('\u2713 Backup saved \u2014 ' + rows + ' records');
+    if (window.toast) window.toast(auto
+      ? '\u2713 Daily backup saved to your downloads \u2014 ' + rows + ' records'
+      : '\u2713 Backup saved \u2014 ' + rows + ' records');
   }
 
   const lastBackup = () => { try { return localStorage.getItem(LS_BK); } catch (e) { return null; } };
+  const autoOn  = () => { try { return localStorage.getItem(LS_AUTO) !== 'off'; } catch (e) { return true; } };
+
+  /* A browser cannot run at 3am with the tab closed — there is no scheduler and no
+     process. So "nightly" here means: the first time you open the app on a day
+     when the last backup is older than the interval, it takes one. That gives a
+     dated copy per working day without pretending to be a cron job. A genuine
+     unattended nightly dump needs pg_cron on Supabase, which is server-side
+     work, not something this page can do. */
+  function maybeAutoBackup() {
+    if (!autoOn()) return;
+    const d = daysSinceBackup();
+    if (d !== null && d < AUTO_DAYS) return;
+    // Wait until state has actually loaded, or the backup would be empty.
+    const ready = () => {
+      const S = window.S || {};
+      return (S.properties && S.properties.length) || (S.landlords && S.landlords.length);
+    };
+    let tries = 0;
+    const tick = setInterval(() => {
+      tries++;
+      if (ready()) { clearInterval(tick); backup(true); }
+      else if (tries > 20) clearInterval(tick);   // never loaded; skip silently
+    }, 1500);
+  }
+  window.addEventListener('load', () => setTimeout(maybeAutoBackup, 4000));
   function daysSinceBackup() {
     const b = lastBackup(); if (!b) return null;
     return Math.floor((Date.now() - new Date(b)) / 864e5);
@@ -213,13 +243,15 @@
 
       <div class="panel"><div class="panel-hd"><h2 style="font-size:13px">Backup</h2>
         <div style="display:flex;gap:8px">
+          <button class="btn sm" onclick="NexLetHealth.toggleAuto()">${autoOn()?'Daily backup: on':'Daily backup: off'}</button>
           <button class="btn sm" onclick="NexLetHealth.restore()">Restore from file\u2026</button>
           <button class="btn sm navy" onclick="NexLetHealth.backup()">\u2913 Download backup</button></div></div>
         <div style="padding:14px 20px">
           <div style="display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px">
             ${rows.map(x => `<span class="faint">${esc2(x.k)} <b style="color:var(--navy)">${x.n}</b></span>`).join('')}
           </div>
-          <p class="hint" style="margin-top:12px">One JSON file containing everything above. Keep it somewhere other than this machine \u2014 a backup on the same device as the original is not a backup. Weekly is a sensible rhythm; before any bulk change is better.</p>
+          <p class="hint" style="margin-top:12px">One JSON file containing everything above. Keep it somewhere other than this machine \u2014 a backup on the same device as the original is not a backup.</p>
+          <p class="hint" style="margin-top:8px"><b>Daily backup ${autoOn()?'is on':'is off'}.</b> When on, the first time you open NexLet on a day where the last backup is over a day old, one is saved to your downloads automatically. A browser cannot run at 3am with the tab closed \u2014 there is no scheduler and no process \u2014 so this gives a dated copy per working day instead. A genuinely unattended nightly dump needs a scheduled job on the database side.</p>
         </div></div>
 
       ${CHECK ? `<div class="panel"><div class="panel-hd"><h2 style="font-size:13px">Persistence check</h2>
@@ -255,6 +287,9 @@
     view, backup, restore, snapshot,
     check: selfCheck,
     daysSinceBackup, lastBackup,
+    toggleAuto(){ try{ localStorage.setItem(LS_AUTO, autoOn()?'off':'on'); }catch(e){}
+      if(window.render) window.render();
+      if(window.toast) window.toast(autoOn()?'\u2713 Daily backup on':'Daily backup off'); },
     clearErrors() { try { localStorage.removeItem(LS_ERR); } catch (e) { } if (window.render) window.render(); },
     _doRestore() {
       const d = window._pendingRestore; if (!d) return;
