@@ -244,6 +244,7 @@ const pushTenantRec =t =>_w(sb.from('agency_tenants').upsert(tenantToRow(t)),'ag
 const pushRent    =r  =>_w(sb.from('agency_rent_ledger').upsert(rentToRow(r)),'agency_rent_ledger','upsert',r);
 const pushJob     =j  =>_w(sb.from('agency_maintenance').upsert(jobToRow(j)),'agency_maintenance','upsert',j);
 const pushInv2    =v  =>_w(sb.from('agency_inventories').upsert(inv2ToRow(v)),'agency_inventories','upsert',v);
+const pushValuation=v =>_w(sb.from('agency_valuations').upsert(valToRow(v)),'agency_valuations','upsert',v);
 const rowToTenant=r=>({id:r.id,propertyId:r.property_id,landlordId:r.landlord_id,userId:r.user_id,name:r.name||'',email:r.email||'',phone:r.phone||'',start:r.start_date||'',end:r.end_date||'',rent:r.rent||0,deposit:r.deposit,scheme:r.scheme||'',schemeRef:r.scheme_ref||'',depositHolder:r.deposit_holder||'landlord',depositReceived:r.deposit_received||'',landlordSchemeNo:r.landlord_scheme_no||'',depositPaidBy:r.deposit_paid_by||'',piServedAt:r.pi_served_at||'',condensationSentAt:r.condensation_sent_at||'',condensationAckAt:r.condensation_ack_at||'',landlordDepositConfirmedAt:r.landlord_deposit_confirmed_at||'',welcomeSentAt:r.welcome_sent_at||'',status:r.status||'active',inviteToken:r.invite_token||'',invitedAt:r.invited_at||'',invited:!!r.invited_at,occupants:r.occupants||[],guarantor:r.guarantor||null,depositCertName:r.deposit_cert_name||'',depositCertUrl:r.deposit_cert_url||'',depositCertExpiry:r.deposit_cert_expiry||'',refDocName:r.ref_doc_name||'',refDocUrl:r.ref_doc_url||'',shareCode:r.share_code||'',dob:r.dob||'',rtrResult:r.rtr_result||'',rtrExpiry:r.rtr_expiry||'',rtrCheckDate:r.rtr_check_date||'',rtrDocName:r.rtr_doc_name||'',rtrDocUrl:r.rtr_doc_url||'',rtrDocs:r.rtr_docs||[],rtrCheckMethod:r.rtr_check_method||'',origContractName:r.orig_contract_name||'',origContractUrl:r.orig_contract_url||'',id1DocName:r.id1_doc_name||'',id1DocUrl:r.id1_doc_url||'',id2DocName:r.id2_doc_name||'',id2DocUrl:r.id2_doc_url||'',addressProofName:r.address_proof_name||'',addressProofUrl:r.address_proof_url||'',addressProofDocs:r.address_proof_docs||[],forwardingAddress:r.forwarding_address||'',finalMeters:r.final_meters||null,endNotes:r.end_notes||'',checkoutPackSentAt:r.checkout_pack_sent_at||'',moveInPackSentAt:r.move_in_pack_sent_at||'',moveInPackConfirmedAt:r.move_in_pack_confirmed_at||''});
 const tenantToRow=t=>({id:t.id,agency_id:window._agencyId,property_id:t.propertyId,landlord_id:t.landlordId,name:t.name,email:t.email||'',phone:t.phone||'',start_date:t.start||null,end_date:t.end||null,rent:t.rent||0,deposit:t.deposit,scheme:t.scheme||'',scheme_ref:t.schemeRef||'',deposit_holder:t.depositHolder||'landlord',deposit_received:t.depositReceived||null,landlord_scheme_no:t.landlordSchemeNo||'',deposit_paid_by:t.depositPaidBy||'',pi_served_at:t.piServedAt||null,condensation_sent_at:t.condensationSentAt||null,condensation_ack_at:t.condensationAckAt||null,landlord_deposit_confirmed_at:t.landlordDepositConfirmedAt||null,welcome_sent_at:t.welcomeSentAt||null,status:t.status||'active',invite_token:t.inviteToken||null,invited_at:t.invitedAt||null,occupants:t.occupants||[],guarantor:t.guarantor||null,deposit_cert_name:t.depositCertName||'',deposit_cert_url:t.depositCertUrl||'',deposit_cert_expiry:t.depositCertExpiry||null,ref_doc_name:t.refDocName||'',ref_doc_url:t.refDocUrl||'',share_code:t.shareCode||'',dob:t.dob||null,rtr_result:t.rtrResult||'',rtr_expiry:t.rtrExpiry||null,rtr_check_date:t.rtrCheckDate||null,rtr_doc_name:t.rtrDocName||'',rtr_doc_url:t.rtrDocUrl||'',rtr_docs:t.rtrDocs||[],rtr_check_method:t.rtrCheckMethod||'',orig_contract_name:t.origContractName||'',orig_contract_url:t.origContractUrl||'',id1_doc_name:t.id1DocName||'',id1_doc_url:t.id1DocUrl||'',id2_doc_name:t.id2DocName||'',id2_doc_url:t.id2DocUrl||'',address_proof_name:t.addressProofName||'',address_proof_url:t.addressProofUrl||'',address_proof_docs:t.addressProofDocs||[],forwarding_address:t.forwardingAddress||'',final_meters:t.finalMeters||null,end_notes:t.endNotes||'',checkout_pack_sent_at:t.checkoutPackSentAt||null,move_in_pack_sent_at:t.moveInPackSentAt||null,move_in_pack_confirmed_at:t.moveInPackConfirmedAt||null,updated_at:new Date().toISOString()});
 const rowToMsg=r=>({id:r.id,landlordId:r.landlord_id,tenantId:r.tenant_id,propertyId:r.property_id,sender:r.sender||'agent',body:r.body||'',createdAt:r.created_at});
@@ -253,8 +254,10 @@ const rowToRent=r=>({id:r.id,propertyId:r.property_id,tenantId:r.tenant_id,due:r
 const rentToRow=r=>({id:r.id,agency_id:window._agencyId,property_id:r.propertyId,tenant_id:r.tenantId,due_date:r.due,amount:r.amount||0,paid_date:r.paidDate||null,status:r.status||'due',notes:r.notes||''});
 const rowToJob=r=>({id:r.id,propertyId:r.property_id,tenantId:r.tenant_id,reportedBy:r.reported_by||'agent',category:r.category||'General',description:r.description||'',photos:r.photos||[],severity:r.severity||'normal',dampMould:!!r.damp_mould,status:r.status||'reported',createdAt:r.created_at});
 const jobToRow=j=>({id:j.id,agency_id:window._agencyId,property_id:j.propertyId,tenant_id:j.tenantId||null,reported_by:j.reportedBy||'agent',category:j.category||'General',description:j.description||'',photos:j.photos||[],severity:j.severity||'normal',damp_mould:!!j.dampMould,status:j.status||'reported',updated_at:new Date().toISOString()});
-const rowToInv2=r=>({id:r.id,propertyId:String(r.property_id||''),tenantId:r.tenant_id,rooms:r.rooms||[],reports:r.reports||[],depositHeld:r.deposit_held,totalDeduction:r.total_deduction||0,status:r.status||'draft',tenantAck:r.tenant_ack||{},meters:r.meters||{},keyHandover:r.key_handover||{}});
-const inv2ToRow=v=>({id:v.id,agency_id:window._agencyId,property_id:v.propertyId,tenant_id:v.tenantId||null,rooms:v.rooms||[],reports:v.reports||[],deposit_held:v.depositHeld,total_deduction:v.totalDeduction||0,status:v.status||'draft',tenant_ack:v.tenantAck||null,meters:v.meters||null,key_handover:v.keyHandover||null,updated_at:new Date().toISOString()});
+const rowToVal=r=>Object.assign({},r.data||{},{id:r.id});
+const valToRow=v=>({id:v.id,agency_id:window._agencyId,data:v,updated_at:new Date().toISOString()});
+const rowToInv2=r=>({id:r.id,propertyId:r.property_id==null?'':String(r.property_id),tenantId:r.tenant_id,rooms:r.rooms||[],reports:r.reports||[],depositHeld:r.deposit_held,totalDeduction:r.total_deduction||0,status:r.status||'draft',tenantAck:r.tenant_ack||{},meters:r.meters||{},keyHandover:r.key_handover||{}});
+const inv2ToRow=v=>({id:v.id,agency_id:window._agencyId,property_id:v.propertyId||null,tenant_id:v.tenantId||null,rooms:v.rooms||[],reports:v.reports||[],deposit_held:v.depositHeld,total_deduction:v.totalDeduction||0,status:v.status||'draft',tenant_ack:v.tenantAck||null,meters:v.meters||null,key_handover:v.keyHandover||null,updated_at:new Date().toISOString()});
 const rowToNotice=r=>({id:r.id,landlordId:r.landlord_id,propertyId:r.property_id,kind:r.kind||'section8',grounds:r.grounds||[],tenantName:r.tenant_name||'',served:r.served_date||'',expiry:r.expiry_date||'',rentCurrent:r.rent_current,rentNew:r.rent_new,compliance:r.compliance||{},docHtml:r.doc_html||'',notes:r.notes||'',status:r.status||'draft',createdAt:r.created_at,serviceProof:r.service_proof||null,officialDoc:r.official_doc||null,emailedTo:r.emailed_to||[],emailedAt:r.emailed_at||''});
 const noticeToRow=n=>({id:n.id,agency_id:window._agencyId,landlord_id:n.landlordId,property_id:n.propertyId,kind:n.kind,grounds:n.grounds||[],tenant_name:n.tenantName||'',served_date:n.served||null,expiry_date:n.expiry||null,rent_current:n.rentCurrent,rent_new:n.rentNew,compliance:n.compliance||{},doc_html:n.docHtml||'',notes:n.notes||'',status:n.status||'draft',service_proof:n.serviceProof||null,official_doc:n.officialDoc||null,emailed_to:n.emailedTo||[],emailed_at:n.emailedAt||null});
 const pushAgency   =() =>_w(sb.from('agencies').update(agencyToRow(S.agency)).eq('id',window._agencyId));
@@ -305,6 +308,8 @@ async function loadData(agency){
     ]);
     if(ky.data) S.keys=ky.data.map(r=>r.data);
     if(po.data) S.payouts=po.data.map(r=>r.data);
+    const vl=await sb.from('agency_valuations').select('*').eq('agency_id',window._agencyId);
+    if(vl.data) S.valuations=vl.data.map(rowToVal);
     const ld=await sb.from('agency_landlord_leads').select('*').eq('agency_id',window._agencyId);
     if(ld.data) S.landlordLeads=ld.data.map(rowToLead);
     try{ const ie=await sb.from('agency_inbound_enquiries').select('*').eq('agency_id',window._agencyId).eq('status','needs_review').order('created_at',{ascending:false});
@@ -1393,6 +1398,10 @@ const VAL_PTYPES=['Flat','Terraced house','Semi-detached','Detached','Maisonette
 const MARKETING_STEPS=['Professional photography and a floor plan','Listed on Rightmove, Zoopla and our own site','Accompanied viewings with vetted applicants','Right to Rent and reference checks completed before any offer is accepted'];
 const LANDLORD_TODO=['Keep the property empty and accessible for viewings','Have a valid EPC, gas safety certificate (if applicable) and EICR in place before marketing starts','Confirm any mortgage or leasehold consent-to-let you need','Come back to us quickly on referencing and offer updates so we can move fast'];
 const HOW_WE_HELP=['Certificates tracked automatically — gas, EICR, EPC and deposit protection are flagged before they lapse, not after','Referencing and Right to Rent checks logged with evidence, meeting Home Office requirements','Deposit deductions calculated with real useful-life and betterment tables at check-out — the same approach adjudicators use, not a guess','Every agreement, notice and inspection is e-signed and timestamped, giving you a defensible record if anything is ever disputed','A landlord portal showing certificates, statements and communications any time — no chasing us for updates'];
+// save() is a no-op in LIVE mode (live writes go through push* helpers), so the
+// valuations module was discarding every write on reload. This pushes whatever
+// valuation object is in scope.
+function _valPush(v){ if(window.LIVE && v && v.id) pushValuation(v); }
 function VAL(id){ return (S.valuations||[]).find(x=>x.id===id)||{}; }
 function valFor(leadId){
   S.valuations=S.valuations||[]; let v=S.valuations.find(x=>x.leadId===leadId);
@@ -1400,7 +1409,7 @@ function valFor(leadId){
     v={id:uid('val'),leadId,propertyAddress:lead.address||'',postcode:'',ptype:'Flat',beds:'',baths:'',receptions:'',garden:'',parking:'',furnishing:'',visitAt:'',visitNotes:'',
        comparables:[],suggestedRent:'',rentOverridden:false,landlordTarget:'',chosenPlan:'',agencyType:'sole',service:'full',feePct:DEF_FEE,letWeeks:DEF_WEEKS,
        extraNotes:'',status:'draft',createdAt:new Date().toISOString()};
-    S.valuations.push(v); save(); }
+    S.valuations.push(v); save(); _valPush(v); }
   return v;
 }
 function outcode(pc){ return (pc||'').trim().split(/\s+/)[0].toUpperCase(); }
@@ -1443,7 +1452,7 @@ function ownComparables(v){
 function addOwnComparable(vid,pid){
   const v=VAL(vid); const c=ownComparables(v).find(x=>x.id===pid); if(!c) return;
   v.comparables.push({id:uid('cmp'),address:c.address,beds:c.beds,rent:c.rent,dateLet:'',notes:'Your own listing'});
-  recalcRent(v); save(); render(); toast('✓ Added from your own lettings');
+  recalcRent(v); save(); _valPush(v); render(); toast('✓ Added from your own lettings');
 }
 // Area comparables bank: listings the agent has manually pasted+extracted from portals, kept at
 // agency level so they persist and keep building across every future valuation in that area —
@@ -1457,7 +1466,7 @@ function marketCompsFor(v){
 function addMarketComp(vid,cid){
   const v=VAL(vid); const c=(S.agency.marketComps||[]).find(x=>x.id===cid); if(!c) return;
   v.comparables.push({id:uid('cmp'),address:c.address,beds:c.beds,rent:c.rent,dateLet:c.dateLet||'',notes:'From your area comparables bank'});
-  recalcRent(v); save(); render(); toast('✓ Added from your comparables bank');
+  recalcRent(v); save(); _valPush(v); render(); toast('✓ Added from your comparables bank');
 }
 async function extractComparablesFromPaste(vid){
   const v=VAL(vid); const text=val('cmp-paste'); const btn=document.getElementById('cmp-extract-btn');
@@ -1479,7 +1488,7 @@ async function extractComparablesFromPaste(vid){
           S.agency.marketComps.push({id:uid('mc'),address:x.address,beds:x.beds||null,rent:x.rent,dateLet:x.dateLet||'',area:v.postcode||'',addedAt:new Date().toISOString()});
         });
         recalcRent(v); document.getElementById('cmp-paste').value='';
-        save(); if(LIVE) pushAgency(); render();
+        save(); _valPush(v); if(LIVE) pushAgency(); render();
         toast('✓ Added '+arr.length+' comparable'+(arr.length===1?'':'s')+' — saved to your area bank too');
       }
     }
@@ -1507,7 +1516,7 @@ function selectPricingPlan(vid,key){
   const inp=document.getElementById('plan-rent-'+vid+'-'+key); const rent=inp?(parseFloat(inp.value)||p.rent):p.rent;
   const confirmed=v.status==='sent';
   v.suggestedRent=rent; v.rentOverridden=true; v.chosenPlan=key; v.confirmedAt=confirmed?new Date().toISOString():'';
-  save(); render(); toast(confirmed?('✓ Confirmed — '+p.label+' ('+gbp(rent)+'/mo)'):('Selected as the proposed price — '+gbp(rent)+'/mo'));
+  save(); _valPush(v); render(); toast(confirmed?('✓ Confirmed — '+p.label+' ('+gbp(rent)+'/mo)'):('Selected as the proposed price — '+gbp(rent)+'/mo'));
 }
 function pricingPlansHtml(v){
   const plans=computePricingPlans(v); if(!plans.length) return '';
@@ -1530,10 +1539,10 @@ function addComparable(vid){
   const v=VAL(vid); const addr=val('cmp-addr'), rentN=parseFloat(val('cmp-rent'));
   if(!addr||!rentN){ toast('Enter an address and achieved rent',1); return; }
   v.comparables.push({id:uid('cmp'),address:addr,beds:val('cmp-beds'),rent:rentN,dateLet:val('cmp-date'),notes:val('cmp-notes')});
-  recalcRent(v); save(); render(); toast('✓ Comparable added');
+  recalcRent(v); save(); _valPush(v); render(); toast('✓ Comparable added');
 }
-function deleteComparable(vid,cid){ const v=VAL(vid); v.comparables=v.comparables.filter(c=>c.id!==cid); recalcRent(v); save(); render(); }
-function resetRentToAvg(vid){ const v=VAL(vid); v.rentOverridden=false; recalcRent(v); save(); render(); toast('Reset to comparable average'); }
+function deleteComparable(vid,cid){ const v=VAL(vid); v.comparables=v.comparables.filter(c=>c.id!==cid); recalcRent(v); save(); _valPush(v); render(); }
+function resetRentToAvg(vid){ const v=VAL(vid); v.rentOverridden=false; recalcRent(v); save(); _valPush(v); render(); toast('Reset to comparable average'); }
 function toggleValFee(s){ document.getElementById('vv-fee-full').style.display=s==='full'?'':'none'; document.getElementById('vv-fee-letonly').style.display=s==='full'?'none':''; }
 function saveValuation(vid){
   const v=VAL(vid); if(!v.id) return;
@@ -1545,12 +1554,12 @@ function saveValuation(vid){
   const manualRent=parseFloat(val('vv-rent'));
   if(manualRent){ v.suggestedRent=manualRent; v.rentOverridden=true; }
   v.extraNotes=val('vv-notes');
-  save(); render(); toast('✓ Valuation saved');
+  save(); _valPush(v); render(); toast('✓ Valuation saved');
 }
 function markValuationSent(vid){
   const v=VAL(vid); v.status='sent'; v.sentAt=new Date().toISOString();
   const lead=(S.landlordLeads||[]).find(l=>l.id===v.leadId); if(lead){ lead.status='contacted'; lead.comms=lead.comms||[]; lead.comms.push({id:uid('c'),date:today(),type:'Note',note:'Valuation report sent to landlord (offline/printed).'}); }
-  save(); render(); toast('✓ Marked as sent to landlord');
+  save(); _valPush(v); render(); toast('✓ Marked as sent to landlord');
 }
 async function emailValuationReport(vid){
   const v=VAL(vid); const lead=(S.landlordLeads||[]).find(l=>l.id===v.leadId); if(!lead){ toast('No enquiry on file',1); return; }
@@ -1560,7 +1569,7 @@ async function emailValuationReport(vid){
   if(r.ok){ v.status='sent'; v.sentAt=new Date().toISOString(); lead.status='contacted';
     lead.comms=lead.comms||[]; lead.comms.push({id:uid('c'),date:today(),type:'Note',note:'Valuation report emailed to '+lead.email+'.'});
     const existing=existingLandlordForLead(lead); if(existing){ existing.comms=existing.comms||[]; existing.comms.push({id:uid('c'),date:today(),type:'Note',note:'Valuation report emailed to '+lead.email+'.'}); pushLandlord(existing); }
-    save(); render(); toast('✓ Emailed to '+lead.email); }
+    save(); _valPush(v); render(); toast('✓ Emailed to '+lead.email); }
   else toast('⚠ Could not send — check the address and retry',1);
 }
 function convertFromValuation(vid){
