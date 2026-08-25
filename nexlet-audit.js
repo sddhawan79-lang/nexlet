@@ -200,10 +200,16 @@
       // Where the LANDLORD receives the deposit, protecting it is their duty,
       // not ours — so chase the evidence rather than the registration.
       const held = rec.depositHolder || 'landlord';
-      if (!rec.schemeRef && !has('deposit.registered', rec.id))
+      // Don't chase what is demonstrably already done. A certificate on file
+      // (the slot accepts the scheme cert OR the prescribed information) means
+      // this was handled — often before the app tracked it. Retro-flagging a
+      // finished tenancy drags the compliance score down and tempts a duplicate
+      // email to a tenant who already has the documents.
+      const onFile = !!rec.depositCertName;
+      if (!rec.schemeRef && !onFile && !has('deposit.registered', rec.id))
         out.push({ step: held === 'landlord' ? 'deposit_landlord_cert' : 'deposit_registered',
           entity: 'tenancy', entityId: rec.id, label, deadline });
-      if (!rec.piServedAt && !has('deposit.pi_served', rec.id))
+      if (!rec.piServedAt && !onFile && !has('deposit.pi_served', rec.id))
         out.push({ step: 'deposit_pi', entity: 'tenancy', entityId: rec.id, label, deadline });
     });
 

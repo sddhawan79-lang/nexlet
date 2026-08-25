@@ -103,7 +103,9 @@
       // tenancy start only when no receipt date has been recorded.
       const depFrom = rec.depositReceived || rec.start;
       const heldBy = rec.depositHolder || 'landlord';
-      if (rec.deposit && !rec.schemeRef && depFrom)
+      // Same rule as the chase register: a certificate on file means this was
+      // already dealt with, so don't put a dead deadline on the calendar.
+      if (rec.deposit && !rec.schemeRef && !rec.depositCertName && depFrom)
         push(plusDays(depFrom, 30), 'deposit',
           heldBy === 'landlord' ? 'Deposit certificate due from landlord' : 'Deposit protection deadline', a);
       if (rec.rtrExpiry) push(rec.rtrExpiry, 'rtr', 'Right to Rent recheck — ' + (rec.name || 'tenant'), a);
