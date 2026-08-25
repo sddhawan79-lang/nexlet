@@ -1187,6 +1187,25 @@ function keyCheckIn(id){ const k=(S.keys||[]).find(x=>x.id===id); if(!k)return; 
 // ── CLIENT-MONEY ACCOUNTING (gated) — client account balance + rent-in → fee →
 //    landlord-payout ledger. Activates only when the agency actually holds
 //    client money — the CMP duty follows receipt of money, not portfolio size. ──
+// Money-flow vocabulary, derived from whether the agency actually receives
+// money. Every landlord-facing statement reads these rather than hardcoding
+// "received"/"remitted", so the whole set stays consistent with clause 11b.
+function moneyWords(){
+  const held=holdsClientMoney();
+  return held ? {
+    held:true,
+    netLabel:'Net remitted to you',
+    confirmLine:"We confirm we have <b>received your tenant's rent</b>",
+    payLine:'The net sum will be paid to your nominated account in line with your instruction',
+    retain:'Please retain this statement for your records.'
+  } : {
+    held:false,
+    netLabel:'Management fee due',
+    confirmLine:'We confirm your tenant has <b>paid their rent direct to you</b>',
+    payLine:'Rent is paid to you direct by the tenant, so there is nothing for us to remit. Our management fee is invoiced separately. These figures are our record of the payments notified to us — please check them against your own bank records',
+    retain:'Please retain this statement for your records.'
+  };
+}
 function holdsClientMoney(){
   return !!(S.agency.cmp && S.agency.cmp!=='Not holding client money')
       || (S.agency.depHolderDefault||'landlord')==='agency';
@@ -4212,7 +4231,7 @@ function buildManagementAgreement(l, service){
 
   const cmp = a.cmp && a.cmp!=='Not holding client money'
     ? `The Agent protects client money through ${esc(a.cmp)}${a.cmpNo?' (ref. '+esc(a.cmpNo)+')':''}.`
-    : `The Agent does not hold client money on account; rent is remitted directly to the Landlord and the Agent's fee is invoiced separately.`;
+    : `The Agent does not hold client money on account. Rent and any deposit are paid by the Tenant direct to the Landlord, and the Agent's fee is invoiced to the Landlord separately.`;
   const redress = a.redress ? `The Agent is a member of ${esc(a.redress)}${a.redressNo?' (ref. '+esc(a.redressNo)+')':''}, an approved redress scheme under the Redress Schemes for Lettings Agency Work (Requirement to Belong to a Scheme etc.) (England) Order 2014.` : `The Agent is a member of an approved property redress scheme.`;
 
   const now=new Date();
@@ -4263,7 +4282,9 @@ function buildManagementAgreement(l, service){
     <p><b>13. Data protection.</b> The Agent processes personal data as a data controller under UK GDPR${a.icoNo?' (ICO registration '+esc(a.icoNo)+')':''}, solely to provide the services in this agreement, and will not share it beyond what is necessary for the letting relationship (referencing providers, contractors, deposit schemes, HMRC where relevant).</p>
     <p><b>14. Notices.</b> Any notice under this agreement must be in writing and sent to the postal or email address the recipient has provided, and is treated as received the next working day (post) or same day (email, if sent before 5pm on a working day).</p>
     <p><b>15. Force majeure.</b> Neither party is liable for delay or failure to perform caused by circumstances beyond their reasonable control.</p>
-    <p><b>15a. Client account interest.</b> ${cmp} Any interest earned on client money held by the Agent is retained by the Agent to offset banking and administration costs, unless otherwise agreed in writing.</p>
+    ${holdsClientMoney()
+      ? `<p><b>15a. Client account interest.</b> ${cmp} Any interest earned on client money held by the Agent is retained by the Agent to offset banking and administration costs, unless otherwise agreed in writing.</p>`
+      : `<p><b>15a. Client money.</b> ${cmp}</p>`}
     <p><b>15b. Assignment.</b> The Landlord may not assign this agreement without the Agent's written consent. If the Landlord sells the Property, this agreement ends on completion of the sale and the Agent will cooperate with a smooth handover to the new owner or their agent; any fees already due under Clause 5, 5a or 5b remain payable. The Agent may assign this agreement to a successor business that continues to provide the same services, on written notice to the Landlord.</p>
     <p><b>16. Entire agreement.</b> This document, together with any signed variation, is the entire agreement between the Parties regarding the Property and supersedes any prior discussion or representation.</p>
     <p><b>17. Governing law.</b> This agreement is governed by the law of England &amp; Wales, and the Parties submit to the exclusive jurisdiction of its courts.</p>
@@ -5172,9 +5193,21 @@ const TEMPLATES=[
   {key:'welcome',group:'Onboarding',title:'Landlord welcome letter',icon:'👋',ai:true,needProp:false,auto:true,
     fields:[],
     build:(l,p,b)=>{
-      // Whether the agency handles money — the letter must not promise rent
-      // collection or deposit protection it does not perform.
-      const _llHoldsMoney=(S.agency.depHolderDefault||'landlord')==='landlord';
+      // Two separate questions, previously conflated into one flag:
+      //   agentMoney — does the agency receive rent? (gates rent + CMP wording)
+      //   depHeld    — who receives the deposit? (gates the deposit sentence)
+      // The deposit setting does not determine rent handling, so choosing
+      // custodial deposits must not reinstate claims of rent collection.
+      const agentMoney=holdsClientMoney();
+      const depHeld=S.agency.depHolderDefault||'landlord';
+      const depositLine=depHeld==='landlord'
+        ? 'The deposit is paid direct to you. As the person receiving it you must protect it in a government-approved scheme within 30 days and serve the prescribed information — please send us the certificate and reference for your file.'
+        : depHeld==='scheme'
+          ? 'The deposit is transferred to a government-approved custodial scheme within 30 days of receipt. The scheme holds it for the whole tenancy, so neither you nor we hold the money, and the prescribed information is served on the tenant in the same period.'
+          : 'The deposit is protected in a government-approved scheme within 30 days of receipt, and the prescribed information is served on the tenant in the same period.';
+      const rentLine=agentMoney
+        ? 'The first month\'s rent is collected before keys are released.'
+        : 'The first month\'s rent is paid direct to you by the tenant before keys are released.';
       return {subject:`Welcome to ${b.name} — what happens next`,body:`<p>Dear ${esc(landlordName(l))},</p>
       <p>Welcome to ${esc(b.name)} — thank you for instructing us to manage your ${l.service==='letonly'?'letting':'property'}. Your dedicated point of contact is <b>${esc(b.agent)}</b>, reachable at ${esc(b.email)}. We hold ${b.redress?('membership of '+esc(b.redress)):'approved redress-scheme membership'} for your protection.</p>
       <p style="font-weight:700;margin:18px 0 8px;color:#1B2F4A">What happens next</p>
@@ -5183,11 +5216,11 @@ const TEMPLATES=[
       <p style="margin:12px 0 4px"><b>2. Marketing &amp; finding a tenant</b> <span style="font-weight:400;color:#8A7D6E">(if the property needs a tenant)</span></p>
       <ul style="padding-left:18px;line-height:1.8;margin-top:2px"><li>Professional listing across the major portals, accompanied viewings, and a right to rent check plus full referencing on any applicant</li><li>You'll be kept updated on interest and offers as they come in</li></ul>
       <p style="margin:12px 0 4px"><b>3. Tenancy agreement &amp; move-in</b></p>
-      <ul style="padding-left:18px;line-height:1.8;margin-top:2px"><li>Once a tenant is approved, we prepare and send the tenancy agreement for e-signature</li>${_llHoldsMoney?'<li>The deposit is paid direct to you. As the person receiving it you must protect it in a government-approved scheme within 30 days and serve the prescribed information — please send us the certificate and reference for your file. The first month\'s rent is paid direct to you before keys are released.</li>':'<li>The deposit is protected in a government-approved scheme within 30 days of receipt, and rent is collected before keys are released</li>'}</ul>
+      <ul style="padding-left:18px;line-height:1.8;margin-top:2px"><li>Once a tenant is approved, we prepare and send the tenancy agreement for e-signature</li><li>${depositLine} ${rentLine}</li></ul>
       <p style="margin:12px 0 4px"><b>4. Ongoing management</b></p>
-      <ul style="padding-left:18px;line-height:1.8;margin-top:2px">${_llHoldsMoney?'<li>Clear monthly statements and prompt coordination of any maintenance. Rent is paid direct to you by the tenant — please let us know of any arrears so we can act early.</li>':'<li>Clear monthly statements, rent collection, and prompt coordination of any maintenance</li>'}<li>Proactive reminders before certificates expire, so nothing lapses unnoticed</li></ul>
+      <ul style="padding-left:18px;line-height:1.8;margin-top:2px">${agentMoney?'<li>Clear monthly statements, rent collection, and prompt coordination of any maintenance</li>':'<li>Clear monthly statements and prompt coordination of any maintenance. Rent is paid direct to you by the tenant — please let us know of any arrears so we can act early.</li>'}<li>Proactive reminders before certificates expire, so nothing lapses unnoticed</li></ul>
       <p style="margin:12px 0 4px"><b>5. Your legal responsibilities</b></p>
-      <ul style="padding-left:18px;line-height:1.8;margin-top:2px"><li>We'll check whether your property needs to be registered on the Private Rented Sector Database, and confirm once it is</li>${_llHoldsMoney?'<li>We do not handle client money, so rent and the deposit are paid direct to you. That keeps your money out of our hands entirely — and makes deposit protection your legal duty, which we will remind you about and keep evidence of.</li>':'<li>Where we hold client money on your behalf, we\'re covered by Client Money Protection — we\'ll confirm the scheme and certificate</li>'}<li>We'll arrange a Legionella risk assessment as part of your compliance checks — a duty of care, not just a certificate</li><li>If the property is a licensed HMO or falls under selective licensing in its area, we'll confirm the licence is in place before letting</li></ul>
+      <ul style="padding-left:18px;line-height:1.8;margin-top:2px"><li>We'll check whether your property needs to be registered on the Private Rented Sector Database, and confirm once it is</li>${agentMoney?'<li>Where we hold client money on your behalf, we\'re covered by Client Money Protection — we\'ll confirm the scheme and certificate</li>':'<li>We do not handle client money. Rent is paid to you direct by the tenant and our fee is invoiced separately, so your money never passes through our hands.</li>'}<li>We'll arrange a Legionella risk assessment as part of your compliance checks — a duty of care, not just a certificate</li><li>If the property is a licensed HMO or falls under selective licensing in its area, we'll confirm the licence is in place before letting</li></ul>
       <p style="margin:12px 0 4px"><b>6. Fees</b></p>
       <ul style="padding-left:18px;line-height:1.8;margin-top:2px"><li>Management fee as agreed in your terms of business</li><li>Move-in and move-out inventory reports are billed separately (Clause 5b), at standard industry market rates — a full room-by-room schedule of condition with photographic evidence, meter readings, key handover, and tenant acknowledgement</li></ul>
       <p style="margin:12px 0 4px"><b>7. We're here to help — including with cover</b></p>
@@ -5203,9 +5236,9 @@ const TEMPLATES=[
       <table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:14px;margin:14px 0">
         <tr><td style="padding:8px 0;border-bottom:1px solid #E3D9C8">Rent received</td><td style="padding:8px 0;border-bottom:1px solid #E3D9C8;text-align:right">${_money(rec)}</td></tr>
         <tr><td style="padding:8px 0;border-bottom:1px solid #E3D9C8">Management fee &amp; deductions</td><td style="padding:8px 0;border-bottom:1px solid #E3D9C8;text-align:right">− ${_money(fee)}</td></tr>
-        <tr><td style="padding:10px 0;font-weight:700">Net remitted to you</td><td style="padding:10px 0;text-align:right;font-weight:700;color:#C8892A">${_money(net)}</td></tr></table>
+        <tr><td style="padding:10px 0;font-weight:700">${moneyWords().netLabel}</td><td style="padding:10px 0;text-align:right;font-weight:700;color:#C8892A">${_money(net)}</td></tr></table>
       ${f.note?`<p>${esc(f.note)}</p>`:''}
-      <p>The net amount will be paid to your nominated account. Please retain this statement for your records.</p>
+      <p>${moneyWords().payLine}. ${moneyWords().retain}</p>
       <p>Kind regards,<br>${esc(b.name)}</p>`}}},
   {key:'maintenance_auth',group:'Statements & requests',title:'Maintenance authorisation request',icon:'🔧',ai:false,needProp:true,
     fields:[{k:'item',label:'Work required',type:'text',def:()=>''},{k:'estimate',label:'Estimated cost (£)',type:'number',def:()=>''},{k:'contractor',label:'Proposed contractor',type:'text',def:()=>''}],
@@ -5750,7 +5783,7 @@ function _rentReceivedConfirm(r,t,p,l){
     <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:14px;font-size:12.5px;line-height:1.8;margin-bottom:6px">
       <div style="display:flex;justify-content:space-between"><span>Rent received · ${esc(period)}</span><b>${money2(r.amount)}</b></div>
       <div style="display:flex;justify-content:space-between"><span>Less: management fee (${propFee(p)}%)</span><b style="color:var(--red)">− ${money2(fee)}</b></div>
-      <div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);margin-top:6px;padding-top:6px"><b>Net to remit to landlord</b><b style="color:var(--navy)">${money2(net)}</b></div>
+      <div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);margin-top:6px;padding-top:6px"><b>${holdsClientMoney()?'Net to remit to landlord':'Management fee due'}</b><b style="color:var(--navy)">${money2(net)}</b></div>
     </div>
     <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;margin:12px 0 2px;cursor:pointer"><input type="checkbox" id="rp-email" style="width:auto" ${l.email?'checked':''} ${l.email?'':'disabled'}> Email the statement to ${l.email?esc(l.email):'landlord (no email on file)'}</label>`;
   modal('Rent received — notify landlord', body,
@@ -5767,12 +5800,12 @@ async function _rentReceivedSend(rid){
     <div style="background:#1B2F4A;padding:18px 22px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:18px;font-weight:700">${esc(agencyBrand().name)}</span></div>
     <div style="padding:22px;border:1px solid #E3D9C8;border-top:none;border-radius:0 0 10px 10px">
       <p>Dear ${esc(landlordName(l))},</p>
-      <p>We confirm we have <b>received your tenant's rent</b> for <b>${esc(period)}</b> in respect of <b>${esc(p.address||'your property')}</b>, and have processed your statement below.</p>
+      <p>${moneyWords().confirmLine} for <b>${esc(period)}</b> in respect of <b>${esc(p.address||'your property')}</b>, and have processed your statement below.</p>
       <table style="width:100%;border-collapse:collapse;font-size:14px;margin:14px 0">
         <tr><td style="padding:8px 0;border-bottom:1px solid #E3D9C8">Rent received</td><td style="padding:8px 0;border-bottom:1px solid #E3D9C8;text-align:right">${_money(r.amount)}</td></tr>
         <tr><td style="padding:8px 0;border-bottom:1px solid #E3D9C8">Management fee (${propFee(p)}%)</td><td style="padding:8px 0;border-bottom:1px solid #E3D9C8;text-align:right">− ${_money(fee)}</td></tr>
-        <tr><td style="padding:10px 0;font-weight:700">Net remitted to you</td><td style="padding:10px 0;text-align:right;font-weight:700;color:#C8892A">${_money(net)}</td></tr></table>
-      <p>The net sum will be paid to your nominated account in line with your instruction${p&&p.rentDueDay?` (rent due day: ${esc(p.rentDueDay)})`:''}. Please retain this statement for your records.</p>
+        <tr><td style="padding:10px 0;font-weight:700">${moneyWords().netLabel}</td><td style="padding:10px 0;text-align:right;font-weight:700;color:#C8892A">${_money(net)}</td></tr></table>
+      <p>${moneyWords().payLine}${moneyWords().held&&p&&p.rentDueDay?` (rent due day: ${esc(p.rentDueDay)})`:''}. ${moneyWords().retain}</p>
       <p style="color:#8A7D6E;font-size:12px">${esc(agencyBrand().name)}${(S.agency.cmp&&S.agency.cmp!=='Not holding client money')?' · held under our Client Money Protection scheme':''}. This is an automated statement; reply with any queries.</p>
     </div></div>`;
   // Audit row + comms log + document trail (agency_letters).
