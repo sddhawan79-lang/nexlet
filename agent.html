@@ -1013,6 +1013,7 @@ async function confirmOfferAccepted(oid){
   toast((sent?'✓ '+(isResend?'Letter re-sent':'Accepted — letter sent & applicant moved to referencing'):'✓ '+(isResend?'Logged (send failed, see above)':'Accepted — applicant moved to referencing'))+(rivals.length?' · '+rivals.length+' other offer'+(rivals.length>1?'s':'')+' on this property auto-rejected':''));
 }
 function offerAcceptedLetterHtml(d){ const b=agencyBrand(); const totalDue=(d.rent+d.deposit-d.holding);
+  const agentHoldsMoney=holdsClientMoney();
   const clausesHtml=d.clauses.length?d.clauses.map(c=>`<p style="margin:10px 0"><b>${esc(c.title)}.</b> ${esc(c.body)}</p>`).join(''):'';
   const bankRows=`<tr><td style="padding:3px 0;color:#8A7D6E">Amount</td><td style="padding:3px 0;text-align:right;font-weight:700">${gbp(d.holding)}</td></tr>
     <tr><td style="padding:3px 0;color:#8A7D6E">Reference</td><td style="padding:3px 0;text-align:right">${esc(d.bankRef||d.address)}</td></tr>
@@ -1027,6 +1028,7 @@ function offerAcceptedLetterHtml(d){ const b=agencyBrand(); const totalDue=(d.re
       <div style="background:#FBF3E7;border-radius:8px;padding:16px 18px;margin:18px 0">
         <div style="font-weight:700;margin-bottom:8px;color:#1B2F4A">Holding Deposit (required to secure the property)</div>
         <p style="margin:0 0 10px">Please make payment of the holding deposit (equal to one week's rent) to begin the process. This will be deducted from your move-in balance.</p>
+        ${agentHoldsMoney?'':'<p style="margin:0 0 10px;font-size:12.5px">Payment is made <b>direct to the landlord</b> at the account below. We act as managing agent and do not receive or hold the holding deposit, the tenancy deposit or your rent at any stage.</p>'}
         <table style="font-size:13px;width:100%">${bankRows}</table>
         <p style="margin:10px 0 0;font-size:12.5px">Please confirm once payment has been made.</p>
       </div>
@@ -1064,7 +1066,7 @@ function offerAcceptedLetterHtml(d){ const b=agencyBrand(); const totalDue=(d.re
         <li>Let us know if you need paper copies or any adjustments</li>
       </ul>
       <p style="margin:12px 0 4px"><b>4. Move-In Payment</b></p>
-      <p style="margin:2px 0 6px;font-size:13px">This must be received in cleared funds before keys are released. We recommend paying at least 3 working days before move-in.</p>
+      <p style="margin:2px 0 6px;font-size:13px">This must be received in cleared funds before keys are released. We recommend paying at least 3 working days before move-in.${agentHoldsMoney?'':' Payment is made direct to the landlord, using the same account details as above.'}</p>
       <table style="font-size:13px;width:100%;margin-bottom:6px">
         <tr><td style="padding:2px 0;color:#8A7D6E">First month's rent</td><td style="padding:2px 0;text-align:right">${gbp(d.rent)}</td></tr>
         <tr><td style="padding:2px 0;color:#8A7D6E">Deposit</td><td style="padding:2px 0;text-align:right">${gbp(d.deposit)}</td></tr>
@@ -1072,7 +1074,9 @@ function offerAcceptedLetterHtml(d){ const b=agencyBrand(); const totalDue=(d.re
         <tr><td style="padding:4px 0;font-weight:700">Total due</td><td style="padding:4px 0;text-align:right;font-weight:700">${gbp(totalDue)}</td></tr>
       </table>
       <p style="margin:12px 0 4px"><b>5. Deposit Protection</b></p>
-      <p style="margin:2px 0;font-size:13px">Once received, your deposit will be protected in a government-approved tenancy deposit scheme within 30 days, and you'll be sent the prescribed information confirming this.</p>
+      <p style="margin:2px 0;font-size:13px">${agentHoldsMoney
+        ? 'Once received, your deposit will be protected in '+(S.agency.depScheme?esc(S.agency.depScheme):'a government-approved tenancy deposit scheme')+' within 30 days, and you\'ll be sent the prescribed information confirming this.'
+        : 'Your deposit is paid to and held by the landlord. Within 30 days of receiving it the landlord must protect it in a government-approved tenancy deposit scheme and send you the prescribed information confirming where it is held and how to get it back. We will ask the landlord for the certificate and keep a copy on file.'}</p>
       <p style="margin:12px 0 4px"><b>6. Move-In Day</b></p>
       <ul style="padding-left:18px;line-height:1.8;margin-top:2px"><li>Key collection at an agreed time</li><li>You'll receive all documents and guidance you need</li></ul>
       ${d.utilities?`<p style="margin:12px 0 4px"><b>7. Utilities</b></p><p style="margin:2px 0;font-size:13px">You may be contacted by ${esc(d.utilities)} to help set up your utilities.${d.utilitiesNote?' '+esc(d.utilitiesNote):''}</p>`:''}
@@ -1181,9 +1185,12 @@ function doKeyOut(id){ const k=(S.keys||[]).find(x=>x.id===id); if(!k)return; k.
 function keyCheckIn(id){ const k=(S.keys||[]).find(x=>x.id===id); if(!k)return; k.status='in'; k.log=k.log||[]; k.log.push({t:new Date().toISOString(),ev:'in',holder:k.holder}); k.holder=''; k.dueBack=null; save(); pushKey&&pushKey(k); render(); toast('✓ Key checked in'); }
 
 // ── CLIENT-MONEY ACCOUNTING (gated) — client account balance + rent-in → fee →
-//    landlord-payout ledger. Built now; activates when the agency holds client money
-//    (Settings) OR the portfolio exceeds 10 properties (CMP becomes mandatory). ──
-function holdsClientMoney(){ return (S.agency.cmp && S.agency.cmp!=='Not holding client money') || S.properties.length>10; }
+//    landlord-payout ledger. Activates only when the agency actually holds
+//    client money — the CMP duty follows receipt of money, not portfolio size. ──
+function holdsClientMoney(){
+  return !!(S.agency.cmp && S.agency.cmp!=='Not holding client money')
+      || (S.agency.depHolderDefault||'landlord')==='agency';
+}
 function _clientLedger(){
   // Derived: each PAID rent = money-in; fee retained; net = owed to landlord. Payouts reduce owed.
   const ledger=[]; let balance=0;
@@ -1882,7 +1889,17 @@ async function requestLandlordDepositConfirm(pid){
     <div style="background:#1B2F4A;padding:20px 24px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:20px;font-weight:700">${esc(b.name)}</span></div>
     <div style="border:1px solid #E3D9C8;border-top:none;border-radius:0 0 10px 10px;padding:26px 24px">
       <p>Dear ${esc(landlordName(l))},</p>
-      <p>We're protecting the deposit of ${gbp(rec.deposit||0)} for <b>${esc(p.address)}</b>. Please reply to confirm you're aware this has been received and is being protected in a government-approved scheme, with prescribed information served on the tenant within 30 days.</p>
+      ${(window.NexLetDeposit?NexLetDeposit.holderOf(rec):'landlord')==='landlord'
+        ? `<p>You have received the tenancy deposit of ${gbp(rec.deposit||0)} for <b>${esc(p.address)}</b> direct from the tenant.</p>
+           <p>As the person who received it, the law requires you to protect it in a government-approved tenancy deposit scheme <b>within 30 days of receipt</b>, and to serve the prescribed information on the tenant in the same period. Missing either lets the tenant claim between one and three times the deposit, and blocks a possession claim until it is put right.</p>
+           <p>Under clause 11b of our management agreement, please send us:</p>
+           <ul style="padding-left:18px;line-height:1.8">
+             <li>the scheme certificate</li>
+             <li>the scheme deposit reference</li>
+             <li>a copy of the prescribed information you served</li>
+           </ul>
+           <p>We will keep them on file as evidence. Reply to this email with the documents attached, or confirm the date you protected it and we will chase the paperwork separately.</p>`
+        : `<p>We're protecting the deposit of ${gbp(rec.deposit||0)} for <b>${esc(p.address)}</b>. Please reply to confirm you're aware this has been received and is being protected in a government-approved scheme, with prescribed information served on the tenant within 30 days.</p>`}
       <p>Kind regards,<br>${esc(b.name)}</p>
     </div></div>`;
   if(LIVE){ const r=await agencyEmail(email,'Please confirm — deposit protection for '+p.address, html); if(!r.ok){ toast('⚠ Send failed: '+(r.error||'try again'),1); return; } }
@@ -3292,7 +3309,8 @@ function _invBuild(){
 function renderInvoice(){
   const l=L(IV.landlordId)||{};
   const llOpts=S.landlords.map(x=>`<option value="${x.id}" ${x.id===IV.landlordId?'selected':''}>${esc(landlordName(x))} — ${(SVC[x.service]||SVC.full).label}</option>`).join('');
-  const DOCS=[['management','Management fee'],['remittance','Rent remittance (collect & pay out)'],['tenantfind','Tenant-find (one-off)'],['maintenance','Maintenance / disbursement'],['ancillary','Ancillary fee (Clause 5b)']];
+  // Remittance only exists once the agency actually receives rent — see holdsClientMoney().
+  const DOCS=[['management','Management fee'],...(holdsClientMoney()?[['remittance','Rent remittance (collect & pay out)']]:[]),['tenantfind','Tenant-find (one-off)'],['maintenance','Maintenance / disbursement'],['ancillary','Ancillary fee (Clause 5b)']];
   const b=_invBuild();
   const net=b.lines.reduce((s,x)=>s+x.net,0);
   const showPeriod = IV.docType==='management'||IV.docType==='remittance';
@@ -3417,7 +3435,7 @@ function vInvoiceDetail(){
           <tr><td style="padding:2px 0;color:#8A7D6E">Account number</td><td style="padding:2px 0;text-align:right">${esc(a.bankAccNo||'—')}</td></tr>
           <tr><td style="padding:2px 0;color:#8A7D6E">Reference</td><td style="padding:2px 0;text-align:right">${esc(inv.no)}</td></tr></table></div>`:''}
         ${!inv.vat&&inv.type!=='remittance'?`<div class="faint" style="font-size:11px;margin-top:16px">Not VAT registered — no VAT is charged on this invoice.</div>`:''}
-        <div class="faint" style="font-size:11px;margin-top:6px;line-height:1.6">${inv.type==='remittance'?'This statement records rent collected on your behalf, less our fees, remitted to your nominated account. Held under our Client Money Protection scheme.':(inv.type==='maintenance'?'Disbursement for works carried out on your behalf. Payment terms: '+(a.paymentTerms||14)+' days.':(inv.type==='tenantfind'?'One-off tenant-find fee. Payment terms: '+(a.paymentTerms||14)+' days.':'Payment terms: '+(a.paymentTerms||14)+' days. Management fees are invoiced in advance. Tenants pay landlords directly (no client money held) unless a remittance statement applies.'))}</div>
+        <div class="faint" style="font-size:11px;margin-top:6px;line-height:1.6">${inv.type==='remittance'?(holdsClientMoney()?'This statement records rent collected on your behalf, less our fees, remitted to your nominated account. Held under our Client Money Protection scheme.':'This statement records rent paid to you direct by the tenant, less our fees invoiced separately. These figures are our record of the payments notified to us; the Agent does not receive or hold rent for this Property.'):(inv.type==='maintenance'?'Disbursement for works carried out on your behalf. Payment terms: '+(a.paymentTerms||14)+' days.':(inv.type==='tenantfind'?'One-off tenant-find fee. Payment terms: '+(a.paymentTerms||14)+' days.':'Payment terms: '+(a.paymentTerms||14)+' days. Management fees are invoiced in advance. Tenants pay landlords directly (no client money held) unless a remittance statement applies.'))}</div>
       </div>
     </div>`;
 }
@@ -5236,7 +5254,7 @@ const TEMPLATES=[
   {key:'deposit_received',group:'Move-in',title:'Holding deposit received — next steps',icon:'\u2713',ai:true,needProp:true,audience:'tenant',
     fields:[{k:'amount',label:'Holding deposit received (£)',type:'number',def:p=>p?Math.round(p.rent*12/52):0}],
     build:(l,p,b,f)=>{ const rec=p&&tenantRecFor(p.id); const name=rec?_allTenantNames(rec):'there'; return {subject:`Holding Deposit Received — ${p?p.address:''}`,body:`<p>Dear ${esc(name)},</p>
-      <p>We are pleased to confirm receipt of your holding deposit of ${gbp(+f.amount||0)} in respect of <b>${p?esc(p.address):''}</b>. The property is now reserved on your behalf, subject to satisfactory references and contract.</p>
+      <p>${holdsClientMoney()?'We are pleased to confirm receipt of your holding deposit of '+gbp(+f.amount||0):'We are pleased to confirm that the landlord has received your holding deposit of '+gbp(+f.amount||0)} in respect of <b>${p?esc(p.address):''}</b>. The property is now reserved on your behalf, subject to satisfactory references and contract.</p>
       <p style="font-weight:700;margin:16px 0 4px;color:#1B2F4A">Next Step 1: Referencing</p>
       <p>In order to proceed with referencing, we require the following details for each prospective occupant aged 18 or over: full name, email address, and contact telephone number. Upon receipt, these details will be passed to our referencing partner${S.agency.refPartner?' ('+esc(S.agency.refPartner)+')':''}, who will contact each applicant directly to complete identity verification, credit history, employment and landlord references, and an affordability assessment.</p>
       <p style="font-weight:700;margin:16px 0 4px;color:#1B2F4A">Next Step 2: Right to Rent — documents required from you directly</p>
@@ -5855,7 +5873,9 @@ function buildStatement(){
       <tbody>${rows.length?rows.map(r=>`<tr style="border-bottom:1px solid var(--border)"><td style="padding:10px 0">${esc(r.p.address)}</td><td style="text-align:right">${r.count}</td><td style="text-align:right">${money2(r.rent)}</td><td style="text-align:right;color:var(--red)">− ${money2(r.fee)}</td><td style="text-align:right;font-weight:600">${money2(r.net)}</td></tr>`).join(''):`<tr><td colspan="5" style="padding:16px 0;text-align:center;color:var(--muted)">No rent recorded as received in this period.</td></tr>`}</tbody>
       ${rows.length?`<tfoot><tr style="border-top:2px solid var(--navy);font-weight:700;color:var(--navy)"><td style="padding:10px 0">Total</td><td></td><td style="text-align:right">${money2(tot.rent)}</td><td style="text-align:right">− ${money2(tot.fee)}</td><td style="text-align:right">${money2(tot.net)}</td></tr></tfoot>`:''}
     </table>
-    <div class="faint" style="font-size:11px;line-height:1.6">Summary of rent collected on your behalf, less management fees, for the period shown. Held under our Client Money Protection scheme. Retain for your records / tax return.</div>
+    <div class="faint" style="font-size:11px;line-height:1.6">${holdsClientMoney()
+      ? 'Summary of rent collected on your behalf, less management fees, for the period shown. Held under our Client Money Protection scheme. Retain for your records / tax return.'
+      : 'Summary of rent paid to you direct by the tenant, less management fees invoiced separately, for the period shown. These figures are our record of the payments notified to us; the Agent does not receive or hold rent for this Property. Please check them against your own bank records. Retain for your records / tax return.'}</div>
   </div>`;
   view='statement'; render();
 }
