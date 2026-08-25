@@ -431,6 +431,27 @@ function rtrFromChecklist(pid){
   if(needsIt&&needsIt.idx>0) tnTab('person-'+needsIt.idx);
   else if(needsIt) rtrWizard(pid,0);
 }
+// Age from date of birth — the tenant form captures dob, never age.
+function ageFromDob(dob){
+  if(!dob) return null;
+  const d=new Date(dob); if(isNaN(d)) return null;
+  const t=new Date(); let a=t.getFullYear()-d.getFullYear();
+  const m=t.getMonth()-d.getMonth();
+  if(m<0||(m===0&&t.getDate()<d.getDate())) a--;
+  return a;
+}
+// A person is a permitted occupier if explicitly marked one, OR if they are
+// under 18 — a minor cannot be a party to a tenancy of land.
+function isPermittedOccupier(o){
+  if(!o) return false;
+  if((o.personType||'joint')==='permitted') return true;
+  const a=(o.age!==''&&o.age!=null)?+o.age:ageFromDob(o.dob);
+  return a!=null && a<18;
+}
+// Modules load before this script runs, so bridge these onto window explicitly —
+// a top-level function declaration in a classic script is not a window property.
+window.isPermittedOccupier=isPermittedOccupier;
+window.ageFromDob=ageFromDob;
 function _tnPeopleView(rec){
   if(!rec) return [];
   const lead={idx:0,isLead:true,name:rec.name||'',rtrResult:rec.rtrResult||'',rtrExpiry:rec.rtrExpiry||'',rtrCheckDate:rec.rtrCheckDate||'',_occ:rec};
@@ -2457,6 +2478,7 @@ function _tnPersonTabHtml(idx){
   <div class="fg"><label>Email</label><input id="tn-p${idx}-email" value="${esc(per.email)}"></div></div>
   <div class="grid2" style="gap:10px"><div class="fg"><label>Phone</label><input id="tn-p${idx}-phone" value="${esc(per.phone)}"></div>
   <div class="fg"><label>Date of birth</label><input id="tn-p${idx}-dob" type="date" value="${esc(per.dob)}"></div></div>
+  ${(!isLead&&ageFromDob(per.dob)!=null&&ageFromDob(per.dob)<18)?`<div class="note" style="margin-bottom:10px"><b>Under 18 — permitted occupier.</b> A minor cannot be a party to a tenancy, so this person is not named as a tenant and is not asked to sign. No Right to Rent check is required until they turn 18.</div>`:''}
   ${isLead?'':`<div class="fg"><label>Status on the tenancy</label>
     <select id="tn-p${idx}-ptype">
       <option value="joint" ${(per.personType||'joint')==='joint'?'selected':''}>Joint tenant \u2014 signs the agreement, jointly and severally liable</option>
@@ -4519,7 +4541,8 @@ function buildTenancyAgreementHtml(p,rec,l){
   const b=agencyBrand();
   const c=p.compliance||{};
   const occ=(rec.occupants||[]).filter(o=>o.name);
-  const isPerm=o=>(o.personType||'joint')==='permitted'||(o.age!==''&&o.age!=null&&+o.age<18);
+  const isPerm=isPermittedOccupier;
+  const occAge=o=>(o.age!==''&&o.age!=null)?+o.age:ageFromDob(o.dob);
   const jointT=occ.filter(o=>!isPerm(o));
   const permOcc=occ.filter(isPerm);
   const tenantNames=[rec.name,...jointT.map(o=>o.name)].filter(Boolean).join(', ');
@@ -4620,7 +4643,10 @@ function buildTenancyAgreementHtml(p,rec,l){
   ${C('3.2','This is an <strong>assured periodic tenancy</strong> under the Housing Act 1988 as amended by the Renters’ Rights Act 2025. There is no fixed term and no end date — the Tenancy runs on a periodic basis until lawfully ended in accordance with clause 4.21, clause 5 or clause 7.')}
   ${C('3.3','<strong>Licensing:</strong> '+licenceClause)}
   ${jointT.length?C('3.4','This is a joint tenancy. Each of the following signs this agreement as a Tenant and is jointly and severally liable for the Rent and for every obligation in it:')+D([['3.4.1',esc(rec.name||'')+' (lead tenant)']].concat(jointT.map((o,ix)=>['3.4.'+(ix+2),esc(o.name)]))):''}
-  ${permOcc.length?C('3.5','The following are permitted occupiers. They are not tenants, do not sign this agreement, and have no right to remain at the Property once the Tenancy ends. A Right to Rent check is required for each of them who is aged 18 or over before they occupy:')+D(permOcc.map((o,ix)=>['3.5.'+(ix+1),esc(o.name)+(o.age?', age '+esc(o.age):'')])):''}
+  ${permOcc.length?C('3.5','The following are permitted occupiers. They are not tenants, do not sign this agreement, and have no right to remain at the Property once the Tenancy ends. A Right to Rent check is required for each of them who is aged 18 or over before they occupy:')+D(permOcc.map((o,ix)=>{
+    const a=occAge(o);
+    return ['3.5.'+(ix+1),esc(o.name)+(a!=null?', age '+a:'')+(a!=null&&a>=18?' — an adult; a Right to Rent check is required before occupation':(a!=null?' — a minor; no Right to Rent check is required until the age of 18':''))];
+  })):''}
 
   ${S(4,'Tenant’s covenants')}
   <p style="margin:2px 0 8px;color:#5A6B82">The Tenant agrees with the Landlord as follows:</p>
@@ -4935,7 +4961,7 @@ function openTenancyAgreement(pid){
   const readiness=`<div class="note${rtrOk?'':' warn'}" style="margin-bottom:12px"><b>Readiness check</b><br>
     Right to Rent (everyone named must be confirmed):<br>${rtrLines}<br>
     Deposit protection${_depHolder==='landlord'?' (landlord’s duty — obtain their certificate)':''}: ${rec.depositCertName?'✓ Protected':(depositWithinGrace?'⏳ Within the 30-day window':'⚠ Overdue — protect it before signing')}</div>`;
-  const _isPerm=o=>(o.personType||'joint')==='permitted'||(o.age!==''&&o.age!=null&&+o.age<18);
+  const _isPerm=isPermittedOccupier;
   const occWithEmail=(rec.occupants||[]).filter(o=>o.email&&!_isPerm(o));
   const permNames=(rec.occupants||[]).filter(o=>o.name&&_isPerm(o)).map(o=>o.name);
   const body=`${readiness}
@@ -4963,7 +4989,7 @@ async function sendTenancyAgreement(pid){
     return Array.from(a).map(b=>b.toString(16).padStart(2,'0')).join(''); };
   const token=newToken();
   // Joint tenants only — permitted occupiers do not sign (clause 3.5).
-  const _perm=o=>(o.personType||'joint')==='permitted'||(o.age!==''&&o.age!=null&&+o.age<18);
+  const _perm=isPermittedOccupier;
   const occupants=(rec.occupants||[]).filter(o=>o.name&&!_perm(o)).map(o=>({name:o.name,email:o.email||'',personType:'joint'}));
   const signatories=[{role:'tenant',name:rec.name||'',email,token,sig_png:null,signed_at:null}]
     .concat(occupants.map(o=>({role:'occupant',name:o.name,email:o.email,token:newToken(),sig_png:null,signed_at:null})));
