@@ -161,6 +161,7 @@ h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px
 <script src="nexlet-audit.js"></script>
 <script src="nexlet-calendar.js"></script>
 <script src="nexlet-print.js"></script>
+<script src="nexlet-deposit.js"></script>
 <script>
 // ─────────────────────────────────────────────────────────────
 // NexLet Agency Portal — functional front-end (local state demo).
@@ -241,8 +242,8 @@ const pushTenantRec =t =>_w(sb.from('agency_tenants').upsert(tenantToRow(t)),'ag
 const pushRent    =r  =>_w(sb.from('agency_rent_ledger').upsert(rentToRow(r)),'agency_rent_ledger','upsert',r);
 const pushJob     =j  =>_w(sb.from('agency_maintenance').upsert(jobToRow(j)),'agency_maintenance','upsert',j);
 const pushInv2    =v  =>_w(sb.from('agency_inventories').upsert(inv2ToRow(v)),'agency_inventories','upsert',v);
-const rowToTenant=r=>({id:r.id,propertyId:r.property_id,landlordId:r.landlord_id,userId:r.user_id,name:r.name||'',email:r.email||'',phone:r.phone||'',start:r.start_date||'',end:r.end_date||'',rent:r.rent||0,deposit:r.deposit,scheme:r.scheme||'',schemeRef:r.scheme_ref||'',status:r.status||'active',inviteToken:r.invite_token||'',invitedAt:r.invited_at||'',invited:!!r.invited_at,occupants:r.occupants||[],guarantor:r.guarantor||null,depositCertName:r.deposit_cert_name||'',depositCertUrl:r.deposit_cert_url||'',depositCertExpiry:r.deposit_cert_expiry||'',refDocName:r.ref_doc_name||'',refDocUrl:r.ref_doc_url||'',shareCode:r.share_code||'',dob:r.dob||'',rtrResult:r.rtr_result||'',rtrExpiry:r.rtr_expiry||'',rtrCheckDate:r.rtr_check_date||'',rtrDocName:r.rtr_doc_name||'',rtrDocUrl:r.rtr_doc_url||'',rtrDocs:r.rtr_docs||[],rtrCheckMethod:r.rtr_check_method||'',origContractName:r.orig_contract_name||'',origContractUrl:r.orig_contract_url||'',id1DocName:r.id1_doc_name||'',id1DocUrl:r.id1_doc_url||'',id2DocName:r.id2_doc_name||'',id2DocUrl:r.id2_doc_url||'',addressProofName:r.address_proof_name||'',addressProofUrl:r.address_proof_url||'',addressProofDocs:r.address_proof_docs||[],forwardingAddress:r.forwarding_address||'',finalMeters:r.final_meters||null,endNotes:r.end_notes||'',checkoutPackSentAt:r.checkout_pack_sent_at||''});
-const tenantToRow=t=>({id:t.id,agency_id:window._agencyId,property_id:t.propertyId,landlord_id:t.landlordId,name:t.name,email:t.email||'',phone:t.phone||'',start_date:t.start||null,end_date:t.end||null,rent:t.rent||0,deposit:t.deposit,scheme:t.scheme||'',scheme_ref:t.schemeRef||'',status:t.status||'active',invite_token:t.inviteToken||null,invited_at:t.invitedAt||null,occupants:t.occupants||[],guarantor:t.guarantor||null,deposit_cert_name:t.depositCertName||'',deposit_cert_url:t.depositCertUrl||'',deposit_cert_expiry:t.depositCertExpiry||null,ref_doc_name:t.refDocName||'',ref_doc_url:t.refDocUrl||'',share_code:t.shareCode||'',dob:t.dob||null,rtr_result:t.rtrResult||'',rtr_expiry:t.rtrExpiry||null,rtr_check_date:t.rtrCheckDate||null,rtr_doc_name:t.rtrDocName||'',rtr_doc_url:t.rtrDocUrl||'',rtr_docs:t.rtrDocs||[],rtr_check_method:t.rtrCheckMethod||'',orig_contract_name:t.origContractName||'',orig_contract_url:t.origContractUrl||'',id1_doc_name:t.id1DocName||'',id1_doc_url:t.id1DocUrl||'',id2_doc_name:t.id2DocName||'',id2_doc_url:t.id2DocUrl||'',address_proof_name:t.addressProofName||'',address_proof_url:t.addressProofUrl||'',address_proof_docs:t.addressProofDocs||[],forwarding_address:t.forwardingAddress||'',final_meters:t.finalMeters||null,end_notes:t.endNotes||'',checkout_pack_sent_at:t.checkoutPackSentAt||null,updated_at:new Date().toISOString()});
+const rowToTenant=r=>({id:r.id,propertyId:r.property_id,landlordId:r.landlord_id,userId:r.user_id,name:r.name||'',email:r.email||'',phone:r.phone||'',start:r.start_date||'',end:r.end_date||'',rent:r.rent||0,deposit:r.deposit,scheme:r.scheme||'',schemeRef:r.scheme_ref||'',depositHolder:r.deposit_holder||'landlord',depositReceived:r.deposit_received||'',landlordSchemeNo:r.landlord_scheme_no||'',depositPaidBy:r.deposit_paid_by||'',piServedAt:r.pi_served_at||'',status:r.status||'active',inviteToken:r.invite_token||'',invitedAt:r.invited_at||'',invited:!!r.invited_at,occupants:r.occupants||[],guarantor:r.guarantor||null,depositCertName:r.deposit_cert_name||'',depositCertUrl:r.deposit_cert_url||'',depositCertExpiry:r.deposit_cert_expiry||'',refDocName:r.ref_doc_name||'',refDocUrl:r.ref_doc_url||'',shareCode:r.share_code||'',dob:r.dob||'',rtrResult:r.rtr_result||'',rtrExpiry:r.rtr_expiry||'',rtrCheckDate:r.rtr_check_date||'',rtrDocName:r.rtr_doc_name||'',rtrDocUrl:r.rtr_doc_url||'',rtrDocs:r.rtr_docs||[],rtrCheckMethod:r.rtr_check_method||'',origContractName:r.orig_contract_name||'',origContractUrl:r.orig_contract_url||'',id1DocName:r.id1_doc_name||'',id1DocUrl:r.id1_doc_url||'',id2DocName:r.id2_doc_name||'',id2DocUrl:r.id2_doc_url||'',addressProofName:r.address_proof_name||'',addressProofUrl:r.address_proof_url||'',addressProofDocs:r.address_proof_docs||[],forwardingAddress:r.forwarding_address||'',finalMeters:r.final_meters||null,endNotes:r.end_notes||'',checkoutPackSentAt:r.checkout_pack_sent_at||''});
+const tenantToRow=t=>({id:t.id,agency_id:window._agencyId,property_id:t.propertyId,landlord_id:t.landlordId,name:t.name,email:t.email||'',phone:t.phone||'',start_date:t.start||null,end_date:t.end||null,rent:t.rent||0,deposit:t.deposit,scheme:t.scheme||'',scheme_ref:t.schemeRef||'',deposit_holder:t.depositHolder||'landlord',deposit_received:t.depositReceived||null,landlord_scheme_no:t.landlordSchemeNo||'',deposit_paid_by:t.depositPaidBy||'',pi_served_at:t.piServedAt||null,status:t.status||'active',invite_token:t.inviteToken||null,invited_at:t.invitedAt||null,occupants:t.occupants||[],guarantor:t.guarantor||null,deposit_cert_name:t.depositCertName||'',deposit_cert_url:t.depositCertUrl||'',deposit_cert_expiry:t.depositCertExpiry||null,ref_doc_name:t.refDocName||'',ref_doc_url:t.refDocUrl||'',share_code:t.shareCode||'',dob:t.dob||null,rtr_result:t.rtrResult||'',rtr_expiry:t.rtrExpiry||null,rtr_check_date:t.rtrCheckDate||null,rtr_doc_name:t.rtrDocName||'',rtr_doc_url:t.rtrDocUrl||'',rtr_docs:t.rtrDocs||[],rtr_check_method:t.rtrCheckMethod||'',orig_contract_name:t.origContractName||'',orig_contract_url:t.origContractUrl||'',id1_doc_name:t.id1DocName||'',id1_doc_url:t.id1DocUrl||'',id2_doc_name:t.id2DocName||'',id2_doc_url:t.id2DocUrl||'',address_proof_name:t.addressProofName||'',address_proof_url:t.addressProofUrl||'',address_proof_docs:t.addressProofDocs||[],forwarding_address:t.forwardingAddress||'',final_meters:t.finalMeters||null,end_notes:t.endNotes||'',checkout_pack_sent_at:t.checkoutPackSentAt||null,updated_at:new Date().toISOString()});
 const rowToMsg=r=>({id:r.id,landlordId:r.landlord_id,tenantId:r.tenant_id,propertyId:r.property_id,sender:r.sender||'agent',body:r.body||'',createdAt:r.created_at});
 const msgToRow=m=>({id:m.id,agency_id:window._agencyId,landlord_id:m.landlordId||null,tenant_id:m.tenantId||null,property_id:m.propertyId||null,sender:m.sender||'agent',body:m.body||''});
 const pushMessage=m=>_w(sb.from('agency_messages').insert(msgToRow(m)),'agency_messages','upsert',m);
@@ -2361,7 +2362,7 @@ function setTenant(pid){ const p=P(pid); const t=p.tenant||{}; const rec=tenantR
     window._tnDocs['guarantor-'+idx]={existing:(per.guarantor.docs||[]).slice(),pending:[]};
     window._tnDocs['rtrext-'+idx]={existing:per.rtrDocs.slice(),pending:[]};
   });
-  window._tnCore={start:t.start||rec.start||'', deposit:rec.deposit!=null?rec.deposit:'', schemeRef:rec.schemeRef||'', depositCertExpiry:rec.depositCertExpiry||'', depositCertName:rec.depositCertName||'', depositCertUrl:rec.depositCertUrl||'', refDocName:rec.refDocName||'', refDocUrl:rec.refDocUrl||'', origContractName:rec.origContractName||'', origContractUrl:rec.origContractUrl||''};
+  window._tnCore={start:t.start||rec.start||'', deposit:rec.deposit!=null?rec.deposit:'', schemeRef:rec.schemeRef||'', depositHolder:rec.depositHolder||'', depositReceived:rec.depositReceived||'', landlordSchemeNo:rec.landlordSchemeNo||'', depositPaidBy:rec.depositPaidBy||'', depositCertExpiry:rec.depositCertExpiry||'', depositCertName:rec.depositCertName||'', depositCertUrl:rec.depositCertUrl||'', refDocName:rec.refDocName||'', refDocUrl:rec.refDocUrl||'', origContractName:rec.origContractName||'', origContractUrl:rec.origContractUrl||''};
   window._tnActiveTab='tenancy'; window._tnPid=pid;
   _tnOpenModal(pid);
 }
@@ -2381,7 +2382,18 @@ function _tnTenancyTabHtml(pid){ const rec=tenantRecFor(pid); const d=window._tn
     <div class="faint" style="font-size:11.5px;margin-bottom:10px">Deposit, referencing &amp; the signed agreement</div>
     ${_stepDivider(1,'Deposit certificate')}
     ${_docSlotHtml('deposit','File','(custodial/insured scheme cert or Prescribed Information)',d.depositCertName,d.depositCertUrl,'aiScanDeposit')}
-    <div class="fg" style="margin-top:-8px"><label>Scheme deposit reference <span class="faint">(the DPC / certificate number — quote this in any dispute)</span></label><input id="tn-schemeref" value="${esc(d.schemeRef||'')}" placeholder="${esc((S.agency.depScheme||'scheme')+' reference')}"></div>
+    <div class="grid2" style="gap:10px">
+      <div class="fg"><label>Who receives and holds the deposit?</label>
+        <select id="tn-depholder">${Object.entries(NexLetDeposit.HOLDERS).map(([k,v])=>`<option value="${k}" ${(d.depositHolder||S.agency.depHolderDefault||'landlord')===k?'selected':''}>${esc(v.label)}</option>`).join('')}</select></div>
+      <div class="fg"><label>Date the deposit was received <span class="faint">(starts the 30-day clock)</span></label><input id="tn-depreceived" type="date" value="${esc(d.depositReceived||'')}"></div></div>
+    <div class="hint" style="margin:-6px 0 10px;color:var(--faint)">${esc((NexLetDeposit.HOLDERS[d.depositHolder||S.agency.depHolderDefault||'landlord']||{}).note||'')}</div>
+    <div class="grid2" style="gap:10px">
+      <div class="fg"><label>Scheme deposit reference <span class="faint">(the DPC / certificate number)</span></label><input id="tn-schemeref" value="${esc(d.schemeRef||'')}" placeholder="${esc((S.agency.depScheme||'scheme')+' reference')}"></div>
+      <div class="fg"><label>Landlord's scheme membership no. <span class="faint">(where the landlord holds it)</span></label><input id="tn-llschemeno" value="${esc(d.landlordSchemeNo||'')}"></div></div>
+    <div class="fg"><label>Paid by someone other than the tenant? <span class="faint">(a relevant person — they must also receive the prescribed information)</span></label><input id="tn-deppaidby" value="${esc(d.depositPaidBy||'')}" placeholder="e.g. a parent or guarantor's name"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:-2px 0 10px">
+      <button type="button" class="btn sm navy" onclick="tnDepositPI(window._tnPid)">⎙ Prescribed information</button>
+    </div>
     <div class="fg" style="margin-top:-8px"><label>Protection covers tenancy until <span class="faint">(only for a fixed-term cert with an "ending on or after" date — leave blank for a periodic tenancy, no re-protection needed on renewal or rent increase)</span></label><div style="display:flex;gap:8px;align-items:center"><input id="tn-deposit-expiry" type="date" value="${esc(d.depositCertExpiry)}" style="flex:1"><a href="#" onclick="event.preventDefault();document.getElementById('tn-deposit-expiry').value=''">Clear</a></div></div>
     <div id="tn-deposit-scan-status" class="faint" style="font-size:11px;margin-top:-8px"></div>
     ${_stepDivider(2,'Reference report')}
@@ -2939,6 +2951,12 @@ function _commitTenant(pid,info,stage){
   save(); pushProperty(p); pushTenantRec(rec);
   return rec;
 }
+// Save first, then open the prescribed information — it must read committed
+// data, not whatever is sitting unsaved in the form.
+async function tnDepositPI(pid){
+  await saveTenant(pid);
+  setTimeout(()=>{ if(window.NexLetDeposit) NexLetDeposit.open(pid); },90);
+}
 async function saveTenant(pid){
   const activeMatch=(window._tnActiveTab||'').match(/^person-(\d+)$/); if(activeMatch) tnSyncPerson(parseInt(activeMatch[1],10));
   const people=window._tnPeople||[]; const lead=people[0];
@@ -2976,6 +2994,8 @@ async function saveTenant(pid){
   const coreStart=document.getElementById('tn-start'), coreDeposit=document.getElementById('tn-deposit'), coreDepositExp=document.getElementById('tn-deposit-expiry'), coreSchemeRef=document.getElementById('tn-schemeref');
   if(coreStart) core.start=coreStart.value; if(coreDeposit) core.deposit=coreDeposit.value; if(coreDepositExp) core.depositCertExpiry=coreDepositExp.value;
   if(coreSchemeRef) core.schemeRef=coreSchemeRef.value;
+  ['depholder|depositHolder','depreceived|depositReceived','llschemeno|landlordSchemeNo','deppaidby|depositPaidBy'].forEach(pair=>{
+    const [id,key]=pair.split('|'); const el=document.getElementById('tn-'+id); if(el) core[key]=el.value; });
   await slot('deposit',null,(n,u)=>{ core.depositCertName=n; core.depositCertUrl=u; });
   await slot('ref',null,(n,u)=>{ core.refDocName=n; core.refDocUrl=u; });
   await slot('origcontract',null,(n,u)=>{ core.origContractName=n; core.origContractUrl=u; });
@@ -2987,6 +3007,7 @@ async function saveTenant(pid){
     name:lead.name, email:lead.email, phone:lead.phone, start:core.start||today(),
     deposit:(core.deposit!==''&&core.deposit!=null)?parseFloat(core.deposit):undefined,
     depositCertExpiry:core.depositCertExpiry, depositCertName:core.depositCertName, depositCertUrl:core.depositCertUrl, schemeRef:core.schemeRef,
+    depositHolder:core.depositHolder, depositReceived:core.depositReceived, landlordSchemeNo:core.landlordSchemeNo, depositPaidBy:core.depositPaidBy,
     refDocName:core.refDocName, refDocUrl:core.refDocUrl, origContractName:core.origContractName, origContractUrl:core.origContractUrl,
     id1DocName:lead.id1DocName, id1DocUrl:lead.id1DocUrl, id2DocName:lead.id2DocName, id2DocUrl:lead.id2DocUrl,
     addressProofDocs:lead.addressProofDocs, guarantor:lead.guarantor,
@@ -3024,7 +3045,7 @@ function moveInPackItems(p){
     {key:'gas',label:'Gas Safety Certificate (CP12)',ok:certRAG(c.gas).k==='ok'||certRAG(c.gas).k==='soon',url:c.gasDocUrl,required:true},
     {key:'eicr',label:'EICR (electrical)',ok:certRAG(c.eicr).k==='ok'||certRAG(c.eicr).k==='soon',url:c.eicrDocUrl,required:true},
     {key:'epc',label:'EPC',ok:certRAG(c.epc).k==='ok'||certRAG(c.epc).k==='soon',url:c.epcDocUrl,required:false},
-    {key:'deposit',label:'Deposit protection & prescribed information',ok:!rec.deposit||!!rec.depositCertName,url:rec.depositCertUrl,required:!!rec.deposit},
+    {key:'deposit',label:'Deposit protection & prescribed information'+((window.NexLetDeposit&&NexLetDeposit.holderOf(rec)==='landlord')?' (held by landlord)':''),ok:!rec.deposit||!!rec.depositCertName,url:rec.depositCertUrl,required:!!rec.deposit},
     {key:'rtr',label:'Right to Rent check completed (everyone named)',ok:_rtrAllDone(rec),url:null,required:true},
   ];
   if(preReform) items.push({key:'infosheet',label:'RRA Information Sheet (official gov.uk PDF — sitting tenancy pre-dates 1 May 2026)',ok:!!c.infosheet,url:c.infosheetDocUrl,required:true});
@@ -3481,6 +3502,17 @@ function vSettings(){
       <div class="inline2"><div class="fg"><label>Deposit scheme</label>
         <select id="set-depscheme"><option value="">Not yet a member</option>${['mydeposits','Tenancy Deposit Scheme (TDS)','Deposit Protection Service (DPS)'].map(s=>`<option ${a.depScheme===s?'selected':''}>${s}</option>`).join('')}</select></div>
       <div class="fg"><label>Scheme membership no.</label><input id="set-depmembership" value="${esc(a.depMembership||'')}" placeholder="e.g. 123456"></div></div>
+      <div class="fg"><label>Who normally receives the deposit?</label>
+        <select id="set-depholderdefault">
+          <option value="landlord" ${(a.depHolderDefault||'landlord')==='landlord'?'selected':''}>The landlord — direct from the tenant</option>
+          <option value="scheme" ${a.depHolderDefault==='scheme'?'selected':''}>The scheme — custodial</option>
+          <option value="agency" ${a.depHolderDefault==='agency'?'selected':''}>This agency — insured</option>
+        </select>
+        <div class="hint">Sets the default on new tenancies; you can change it per tenancy. While you have no client account or CMP, landlord-direct is the only option that keeps you out of client money.</div></div>
+      <div class="fg"><label>Scheme administrator address <span class="faint">(prescribed content — copy exactly from the scheme)</span></label><textarea id="set-schemeadminaddr" rows="2">${esc(a.schemeAdminAddress||'')}</textarea></div>
+      <div class="inline2"><div class="fg"><label>Scheme telephone</label><input id="set-schemeadminphone" value="${esc(a.schemeAdminPhone||'')}"></div>
+      <div class="fg"><label>Scheme email</label><input id="set-schemeadminemail" value="${esc(a.schemeAdminEmail||'')}"></div></div>
+      <div class="hint" style="margin:-6px 0 14px;color:var(--faint)">Prescribed information must carry the scheme administrator's own published contact details. Take them from your scheme certificate or their prescribed-information template — don't guess.</div>
       <div class="fg"><label>Which product do you use?</label>
         <select id="set-depproduct">
           <option value="custodial" ${(a.depProduct||'custodial')==='custodial'?'selected':''}>Custodial — the scheme holds the money (free)</option>
@@ -3568,7 +3600,7 @@ function removeRentGuideEntry(id){
   S.agency.rentGuide=(S.agency.rentGuide||[]).filter(x=>x.id!==id);
   save(); if(LIVE) pushAgency(); render();
 }
-function saveSettings(){ S.agency.name=val('set-name'); S.agency.address=val('set-address'); S.agency.companyNo=val('set-companyno'); S.agency.archiveEmail=val('set-archive'); S.agency.depScheme=val('set-depscheme'); S.agency.depMembership=val('set-depmembership'); S.agency.depProduct=val('set-depproduct'); S.agency.bankName=val('set-bankname'); S.agency.bankAccName=val('set-bankaccname'); S.agency.bankSortCode=val('set-sortcode'); S.agency.bankAccNo=val('set-accno'); S.agency.redress=val('set-redress'); S.agency.redressNo=val('set-redressno'); S.agency.cmp=val('set-cmp'); S.agency.icoNo=val('set-ico'); S.agency.refPartner=val('set-ref'); S.agency.vatRegistered=val('set-vat')==='yes'; S.agency.vatNumber=val('set-vatno'); S.agency.paymentTerms=parseInt(val('set-terms'))||14; S.agency.abortiveFee=parseFloat(val('set-abortive'))||0; S.agency.noticeFee=parseFloat(val('set-noticefee'))||0; S.agency.renewalFee=parseFloat(val('set-renewalfee'))||0; S.agency.arrearsFee=parseFloat(val('set-arrearsfee'))||0; S.agency.keyFee=parseFloat(val('set-keyfee'))||0; S.agency.insuranceFee=parseFloat(val('set-insurancefee'))||0; S.agency.disputeFee=parseFloat(val('set-disputefee'))||0; S.agency.invMoveinFee=parseFloat(val('set-invmoveinfee'))||0; S.agency.invMoveoutFee=parseFloat(val('set-invmoveoutfee'))||0; save(); pushAgency(); render(); toast('✓ Settings saved'); }
+function saveSettings(){ S.agency.name=val('set-name'); S.agency.address=val('set-address'); S.agency.companyNo=val('set-companyno'); S.agency.archiveEmail=val('set-archive'); S.agency.depScheme=val('set-depscheme'); S.agency.depMembership=val('set-depmembership'); S.agency.depProduct=val('set-depproduct'); S.agency.depHolderDefault=val('set-depholderdefault'); S.agency.schemeAdminAddress=val('set-schemeadminaddr'); S.agency.schemeAdminPhone=val('set-schemeadminphone'); S.agency.schemeAdminEmail=val('set-schemeadminemail'); S.agency.bankName=val('set-bankname'); S.agency.bankAccName=val('set-bankaccname'); S.agency.bankSortCode=val('set-sortcode'); S.agency.bankAccNo=val('set-accno'); S.agency.redress=val('set-redress'); S.agency.redressNo=val('set-redressno'); S.agency.cmp=val('set-cmp'); S.agency.icoNo=val('set-ico'); S.agency.refPartner=val('set-ref'); S.agency.vatRegistered=val('set-vat')==='yes'; S.agency.vatNumber=val('set-vatno'); S.agency.paymentTerms=parseInt(val('set-terms'))||14; S.agency.abortiveFee=parseFloat(val('set-abortive'))||0; S.agency.noticeFee=parseFloat(val('set-noticefee'))||0; S.agency.renewalFee=parseFloat(val('set-renewalfee'))||0; S.agency.arrearsFee=parseFloat(val('set-arrearsfee'))||0; S.agency.keyFee=parseFloat(val('set-keyfee'))||0; S.agency.insuranceFee=parseFloat(val('set-insurancefee'))||0; S.agency.disputeFee=parseFloat(val('set-disputefee'))||0; S.agency.invMoveinFee=parseFloat(val('set-invmoveinfee'))||0; S.agency.invMoveoutFee=parseFloat(val('set-invmoveoutfee'))||0; save(); pushAgency(); render(); toast('✓ Settings saved'); }
 
 // ── ONBOARDING WIZARD ──
 let OB=null;
@@ -4101,9 +4133,18 @@ function buildManagementAgreement(l, service){
     ? `<p><b>2. Appointment — multiple agency.</b> The Landlord appoints the Agent on a <b>multiple agency</b> basis. The Landlord is free to instruct other agents to market the same property(ies) simultaneously. A fee is payable to the Agent only where the Agent introduces the tenant with whom a tenancy is subsequently entered into, or where the Agent is otherwise the effective cause of the letting. If a tenancy is arranged through a different agent, no fee is payable to the Agent under this agreement. The Agent's fee is set higher than a sole agency instruction to reflect this risk (Clause 5).</p>`
     : `<p><b>2. Appointment — sole agency.</b> The Landlord appoints the Agent on a <b>sole agency</b> basis for an initial term of <b>${esc(a.solePeriodWeeks||'12')} weeks</b> from the date of this agreement ("the Tie-In Period"), renewing thereafter until ended per Clause 10. During the Tie-In Period the Landlord will not instruct any other agent to market the property(ies). If the Landlord lets the property during the Tie-In Period — including to a tenant the Landlord finds themselves — the Agent's full fee remains payable if the Agent introduced that tenant or was the effective cause of the letting; the Landlord may otherwise let privately without a fee to the Agent where the Agent had no involvement. Switching to another agent during the Tie-In Period does not end the Landlord's fee liability to the Agent for a tenant the Agent already introduced.</p>`;
 
+  // The statutory deposit duty falls on whoever RECEIVES the deposit. Where the
+  // landlord takes it direct, the Agent's duty is to obtain and file the
+  // evidence — promising to protect money it never receives would be false.
+  const _depHeld=(a.depHolderDefault||'landlord');
+  const _depDuty=_depHeld==='landlord'
+    ? 'obtain from the Landlord, and keep on file, evidence that the deposit has been protected in a Government-authorised scheme within 30 days of receipt and that the prescribed information has been served — the Landlord receiving the deposit direct and remaining responsible for both duties'
+    : (_depHeld==='scheme'
+      ? 'arrange for the deposit to be transferred to a Government-authorised custodial scheme within 30 days of receipt and serve the prescribed information'
+      : 'protect the deposit in a Government-authorised scheme within 30 days of receipt and serve the prescribed information');
   const dutiesClause=isFull
-    ? `<p><b>3. Agent's duties (full management).</b> The Agent will: prepare marketing particulars and advertise the property (Rightmove, Zoopla and the Agent's own channels); arrange and accompany viewings; carry out Right to Rent and tenant referencing checks (credit history, employer and previous-landlord references, affordability); prepare the tenancy agreement; protect the deposit in a Government-authorised scheme within 30 days of receipt and serve the prescribed information; issue the Agent's management invoice to the Landlord monthly; instruct routine repairs up to £${esc(a.repairLimit||'250')} without prior approval (higher value works require the Landlord's authorisation except genuine emergencies); arrange statutory compliance certificates where instructed; conduct property inspections at least every 6 months with a written report; and serve statutory notices as instructed by the Landlord. Rent is paid by the Tenant directly to the Landlord — the Agent does not collect or hold rent. The Landlord will notify the Agent within 2 working days of any missed or late rent payment so the Agent can contact the Tenant on the Landlord's behalf; arrears-chasing beyond an initial reminder is charged per Clause 5b. Where the property already has a tenant in place at the start of this agreement, the Agent takes over management under that tenancy's existing terms (rent, deposit and any fixed term already agreed) — the marketing, viewing and referencing duties above do not apply to that tenancy, and all other duties in this clause apply from the date of instruction.</p>`
-    : `<p><b>3. Agent's duties (tenant-find only).</b> The Agent will: prepare marketing particulars and advertise the property; arrange and accompany viewings; carry out Right to Rent and tenant referencing checks; prepare the tenancy agreement; and protect the deposit in a Government-authorised scheme. Once the tenancy commences, ongoing management, rent collection, repairs, inspections and compliance renewals are the Landlord's own responsibility and fall outside this agreement.</p>`;
+    ? `<p><b>3. Agent's duties (full management).</b> The Agent will: prepare marketing particulars and advertise the property (Rightmove, Zoopla and the Agent's own channels); arrange and accompany viewings; carry out Right to Rent and tenant referencing checks (credit history, employer and previous-landlord references, affordability); prepare the tenancy agreement; ${_depDuty}; issue the Agent's management invoice to the Landlord monthly; instruct routine repairs up to £${esc(a.repairLimit||'250')} without prior approval (higher value works require the Landlord's authorisation except genuine emergencies); arrange statutory compliance certificates where instructed; conduct property inspections at least every 6 months with a written report; and serve statutory notices as instructed by the Landlord. Rent is paid by the Tenant directly to the Landlord — the Agent does not collect or hold rent. The Landlord will notify the Agent within 2 working days of any missed or late rent payment so the Agent can contact the Tenant on the Landlord's behalf; arrears-chasing beyond an initial reminder is charged per Clause 5b. Where the property already has a tenant in place at the start of this agreement, the Agent takes over management under that tenancy's existing terms (rent, deposit and any fixed term already agreed) — the marketing, viewing and referencing duties above do not apply to that tenancy, and all other duties in this clause apply from the date of instruction.</p>`
+    : `<p><b>3. Agent's duties (tenant-find only).</b> The Agent will: prepare marketing particulars and advertise the property; arrange and accompany viewings; carry out Right to Rent and tenant referencing checks; prepare the tenancy agreement; and ${_depDuty}. Once the tenancy commences, ongoing management, rent collection, repairs, inspections and compliance renewals are the Landlord's own responsibility and fall outside this agreement.</p>`;
 
   const feeClause=isFull
     ? `<p><b>5. Management fee.</b> The Landlord shall pay the Agent a management commission of <b>${propFee(props[0]||{})||(isMulti?MULTI_FEE:DEF_FEE)}% of gross monthly rent</b> (stated against each property above; ${isMulti?'the multiple-agency rate':'the sole-agency rate'}) plus VAT where applicable, invoiced monthly and payable within ${esc(a.paymentTerms||14)} days as rent is paid directly to the Landlord rather than collected by the Agent. Commission is payable for as long as the tenancy the Agent arranged or manages remains in place, including any renewal, extension, or statutory periodic tenancy that follows it, and continues to be payable to the Agent even after this agreement ends if that original tenancy continues.</p>`
@@ -4117,6 +4158,19 @@ function buildManagementAgreement(l, service){
     a.disputeFee>0?`<li>Preparing evidence and representations for a deposit protection scheme dispute (adjudication) on the Landlord's behalf: <b>${gbp(a.disputeFee)}</b> plus VAT where applicable, per dispute.</li>`:'',
     a.invMoveinFee>0?`<li>Move-in inventory &amp; check-in report (photographic condition record, room by room): <b>${gbp(a.invMoveinFee)}</b> plus VAT where applicable, per tenancy.</li>`:'',
     a.invMoveoutFee>0?`<li>Move-out &amp; check-out report (compared against the move-in record, for deposit purposes): <b>${gbp(a.invMoveoutFee)}</b> plus VAT where applicable, per tenancy.</li>`:''].filter(Boolean);
+  // Says plainly whether the Agent handles money. Where it does not, the
+  // Landlord needs to know the statutory deposit duty is theirs — and the Agent
+  // needs it on record that it never received the money.
+  const _moneyClause = _depHeld==='landlord'
+    ? `<p><b>11b. Client money.</b> The Agent does not receive, hold or handle any client money in respect of the Property. Rent is paid by the Tenant direct to the Landlord's nominated account, and the deposit is paid by the Tenant direct to the Landlord. Accordingly:</p>
+       <ul style="margin:4px 0 10px 20px;padding:0">
+         <li>The Landlord receives the deposit and is responsible, as the person receiving it, for protecting it in a Government-authorised tenancy deposit scheme within 30 days of receipt and for serving the prescribed information within the same period.</li>
+         <li>The Landlord will provide the Agent with the scheme certificate, the scheme deposit reference and a copy of the prescribed information within 30 days of receipt. Failure to do so is a breach of this agreement.</li>
+         <li>The Agent is not liable for any claim, penalty or award arising from the Landlord's failure to protect the deposit or to serve the prescribed information in time, including an award of up to three times the deposit under section 214 of the Housing Act 2004.</li>
+         <li>The Landlord is responsible for monitoring receipt of rent and for notifying the Agent promptly of any arrears, the Agent having no visibility of the Landlord's account.</li>
+         <li>The Agent will notify the Landlord in writing before any change to these arrangements, and no Client Money Protection obligation arises while the Agent handles no client money.</li>
+       </ul>`
+    : `<p><b>11b. Client money.</b> Where the Agent receives rent or a deposit on the Landlord's behalf, it is held in a designated client account, separate from the Agent's own funds, and is covered by the Agent's Client Money Protection membership${a.cmp&&a.cmp!=='Not holding client money'?' with '+esc(a.cmp):''}. Rent received is remitted to the Landlord's nominated account in accordance with clause 5, less any fees properly due. The Agent will protect the deposit in a Government-authorised scheme within 30 days of receipt and serve the prescribed information within the same period.</p>`;
   const ancillaryClause = ancillaryRows.length ? `<p><b>5b. Ancillary fees.</b> The following additional services are charged to the Landlord only when they arise, at the rates below:</p><ul style="margin:4px 0 10px 20px;padding:0">${ancillaryRows.join('')}</ul>` : '';
 
   const cmp = a.cmp && a.cmp!=='Not holding client money'
@@ -4167,6 +4221,7 @@ function buildManagementAgreement(l, service){
     <p><b>9. Right to Rent, referencing &amp; anti-money-laundering.</b> The Agent will carry out Right to Rent checks on prospective tenants in accordance with the Immigration Act 2014, and standard referencing (credit history, employer and previous-landlord references, affordability assessment) before recommending a tenancy. The Agent carries out identity, address and sanctions-screening checks on the Landlord under the Money Laundering, Terrorist Financing and Transfer of Funds (Information on the Payer) Regulations 2017, and retains those records for 5 years.</p>
     <p><b>10. Term &amp; termination.</b> ${isMulti?'This agreement may be ended by either party giving one month\'s written notice at any time.':`This agreement continues after the initial Tie-In Period (Clause 2) until ended by either party giving one month's written notice.`} Termination does not affect fees already accrued or due under Clause 5 on tenancies arranged before the notice takes effect, including on renewals of those tenancies as set out in Clause 5.</p>
     <p><b>11. Complaints procedure.</b> Any complaint about the Agent's service should be made in writing to the Agent in the first instance, who will acknowledge it within 3 working days and provide a final response within 8 weeks. If unresolved, the Landlord may refer the complaint to ${a.redress?esc(a.redress):'the Agent\'s redress scheme'} free of charge.</p>
+    ${_moneyClause}
     <p><b>12. Liability &amp; insurance.</b> The Agent will exercise reasonable skill and care in performing its duties but is not liable for matters outside its reasonable control, including tenant default, damage to the Property, or delays caused by third parties (contractors, referencing providers, courts). The Landlord is responsible for maintaining adequate buildings and landlord contents insurance, and for ensuring any such policy permits the Property to be let.</p>
     <p><b>13. Data protection.</b> The Agent processes personal data as a data controller under UK GDPR${a.icoNo?' (ICO registration '+esc(a.icoNo)+')':''}, solely to provide the services in this agreement, and will not share it beyond what is necessary for the letting relationship (referencing providers, contractors, deposit schemes, HMRC where relevant).</p>
     <p><b>14. Notices.</b> Any notice under this agreement must be in writing and sent to the postal or email address the recipient has provided, and is treated as received the next working day (post) or same day (email, if sent before 5pm on a working day).</p>
@@ -4415,12 +4470,16 @@ function buildTenancyAgreementHtml(p,rec,l){
   // Names the actual scheme from Agency Settings, so the agreement stops saying
   // "to be confirmed" once membership is recorded.
   const _dp=b.depProduct==='insured'?'insured':'custodial';
+  const _dh=window.NexLetDeposit?NexLetDeposit.holderOf(rec):'landlord';
   // Plain text, NOT pre-escaped — every consumer below escapes at the point of
   // use. Keeping one convention avoids the double-escaping this had before.
   const depositScheme=rec.scheme||(b.depScheme
     ? b.depScheme+' ('+_dp+' scheme'+(b.depMembership?', membership no. '+b.depMembership:'')+')'
     : 'a government-approved tenancy deposit scheme (to be confirmed within 30 days of receipt)');
   const prop=[p.address,p.city,p.postcode].filter(Boolean).map(esc).join(', ');
+  // Deposit wording follows whoever actually receives the money — the statutory
+  // duty falls on the recipient, so the document must not imply otherwise.
+  const _dc=window.NexLetDeposit?NexLetDeposit.clauseFor(rec,l,esc(depositScheme)):{pays:'',holds:'',pi:''};
   const rentDay=esc(p.rentDueDay||'1st');
   const furnished=p.furnished||'Unfurnished';
   const nF=furnished!=='Unfurnished';
@@ -4455,7 +4514,7 @@ function buildTenancyAgreementHtml(p,rec,l){
     ${Pr('CONTENTS:',`The Property shall be let <strong>${esc(furnished)}</strong>.`)}
     ${Pr('TERM:',`The Landlord lets to the Tenant the Property from and including <strong>${fmtDate(rec.start)}</strong> (which is the first date the Tenant is entitled to occupy the Property). This Agreement creates a single assured periodic tenancy that will continue periodically until either the Tenant or the Landlord lawfully terminates the agreement in line with the terms herein, by mutual agreement, or the Landlord obtaining a Court order.`)}
     ${Pr('RENT:',`The Tenant shall pay <strong>${gbp(rentAmt)} per month</strong> payable monthly (\u201cthe Rent\u201d). The first month\u2019s rent shall be payable in cleared funds immediately after the execution of this Agreement, but before the commencement of the tenancy. Thereafter, Rent shall be payable monthly in advance on the <strong>${rentDay}</strong> of each month and in cleared funds.`)}
-    ${dep!=null?Pr('DEPOSIT:',`The Tenant shall pay to the Landlord when signing this Agreement <strong>${gbp(dep)}</strong> as a Deposit. At the end of the Tenancy the Deposit will be returned to the Tenant subject to the possible deductions set out in this agreement. The Deposit will be protected in ${esc(depositScheme)} within 30 days of receipt.`):''}
+    ${dep!=null?Pr('DEPOSIT:',`The Tenant shall pay <strong>${gbp(dep)}</strong> as a Deposit. ${_dc.pays} At the end of the Tenancy the Deposit will be returned to the Tenant subject to the possible deductions set out in this agreement. ${_dc.holds}`):''}
     ${Pr('PAYABLE:',`<strong>${firstPay}</strong> (being the first Rent instalment${dep!=null?' together with the Deposit':''}) to be paid by cleared funds upon signing of the Agreement, and, in any event, prior to the release of any keys to the Property. Thereafter ${gbp(rentAmt)} to be paid on the ${rentDay} of every month by standing order to the Landlord\u2019s nominated account.`)}
     ${Pr('SERVICE BY EMAIL:',`The Tenant agrees that notices and other documents under this Agreement, including notices under the Housing Act 1988 and documents in court proceedings, may be served by email to the address recorded below. Each Tenant confirms this is an address they use and read regularly.<table style="width:100%;border-collapse:collapse;margin-top:7px">${svcPeople.map(x=>`<tr><td style="padding:3px 10px 3px 0;font-size:12px;width:40%">${esc(x.n)}</td><td style="padding:3px 0;font-size:12px">${x.e?'<strong>'+esc(x.e)+'</strong>':'<span style="color:#B4543A">no email given \u2014 postal service only</span>'}</td></tr>`).join('')}</table>`)}
     ${Pr('TYPE OF TENANCY:',`This Agreement is intended to create an <strong>Assured Periodic Tenancy</strong> as defined by the Housing Act 1988 (as amended by the Renters\u2019 Rights Act 2025) and will take effect subject to the provisions for recovery of possession.`)}
@@ -4722,10 +4781,10 @@ function buildTenancyAgreementHtml(p,rec,l){
   ${C('8.7','Each party must notify the other in writing within 14 days of any change to their postal address, email address or telephone number. Where the Tenant does not do so, service at the last address notified remains valid.')}
 
   ${S(9,'Deposit')}
-  ${dep!=null?C('9.1','The Tenant pays the Deposit of '+gbp(dep)+' to the Landlord or the Agent on signing this agreement. The Deposit may not exceed five weeks’ Rent, or six weeks’ Rent where the annual Rent is £50,000 or more.'):C('9.1','No Deposit is payable under this agreement.')}
+  ${dep!=null?C('9.1','The Tenant pays the Deposit of '+gbp(dep)+' on signing this agreement. '+_dc.pays+' The Deposit may not exceed five weeks’ Rent, or six weeks’ Rent where the annual Rent is £50,000 or more.'):C('9.1','No Deposit is payable under this agreement.')}
   ${C('9.2','The Deposit is held as security for the performance of the Tenant’s obligations under this agreement and to compensate the Landlord for any breach by the Tenant.')}
-  ${C('9.3','The Deposit will be protected in '+esc(depositScheme)+' within 30 days of receipt, and the prescribed information given to the Tenant within the same period.'+(rec.schemeRef?' The scheme reference for this Deposit is <strong>'+esc(rec.schemeRef)+'</strong>.':''))}
-  ${_dp==='custodial'&&!rec.scheme?C('9.3.1','The Deposit is held by the scheme itself, not by the Landlord or the Agent, for the duration of the Tenancy.'):''}
+  ${C('9.3',_dc.holds+' '+_dc.pi+(rec.schemeRef?' The scheme reference for this Deposit is <strong>'+esc(rec.schemeRef)+'</strong>.':''))}
+  ${_dh==='landlord'?C('9.3.1','The Agent does not receive, hold or handle the Deposit or any rent payment. All such payments are made by the Tenant direct to the Landlord, and the Agent accepts no responsibility for money it does not receive.'):''}
   ${C('9.4','No interest on the Deposit is payable to the Tenant.')}
   ${C('9.5','At the end of the Tenancy the Landlord or the Agent will inspect the Property against the Inventory and prepare a check-out report, and will set out in writing any proposed deductions within 14 days. The Tenant is entitled to attend that inspection. Where the Tenant arranges to attend and then does not do so, the Landlord or the Agent may either carry out the inspection in the Tenant’s absence — in which case the report stands as the record of the condition of the Property unless the Tenant shows it to be wrong — or offer one further appointment, the reasonable cost of which the Tenant will meet.')}
   ${C('9.6','Deductions may be made from the Deposit, or claimed as compensation, in reasonable and evidenced amounts for:')}
@@ -4787,9 +4846,10 @@ function openTenancyAgreement(pid){
     return `${esc(pp.name)}: <span style="color:${r.k==='ok'?'var(--green)':'var(--red)'}">${r.label}</span>${src&&src.rtrDocUrl?` · <a href="#" onclick="event.preventDefault();viewDoc('${src.rtrDocUrl}','Right to Rent evidence — ${esc(pp.name)}')">View</a>`:''}`;
   }).join('<br>'):'No one named on the tenancy yet';
   const depositWithinGrace=rec.start&&((new Date()-new Date(rec.start))/864e5)<30;
+  const _depHolder=window.NexLetDeposit?NexLetDeposit.holderOf(rec):'landlord';
   const readiness=`<div class="note${rtrOk?'':' warn'}" style="margin-bottom:12px"><b>Readiness check</b><br>
     Right to Rent (everyone named must be confirmed):<br>${rtrLines}<br>
-    Deposit protection: ${rec.depositCertName?'✓ Protected':(depositWithinGrace?'⏳ Within the 30-day window':'⚠ Overdue — protect it before signing')}</div>`;
+    Deposit protection${_depHolder==='landlord'?' (landlord’s duty — obtain their certificate)':''}: ${rec.depositCertName?'✓ Protected':(depositWithinGrace?'⏳ Within the 30-day window':'⚠ Overdue — protect it before signing')}</div>`;
   const _isPerm=o=>(o.personType||'joint')==='permitted'||(o.age!==''&&o.age!=null&&+o.age<18);
   const occWithEmail=(rec.occupants||[]).filter(o=>o.email&&!_isPerm(o));
   const permNames=(rec.occupants||[]).filter(o=>o.name&&_isPerm(o)).map(o=>o.name);
@@ -5047,7 +5107,11 @@ function _thisMonth(){ return new Date().toLocaleDateString('en-GB',{month:'long
 const TEMPLATES=[
   {key:'welcome',group:'Onboarding',title:'Landlord welcome letter',icon:'👋',ai:true,needProp:false,auto:true,
     fields:[],
-    build:(l,p,b)=>({subject:`Welcome to ${b.name} — what happens next`,body:`<p>Dear ${esc(landlordName(l))},</p>
+    build:(l,p,b)=>{
+      // Whether the agency handles money — the letter must not promise rent
+      // collection or deposit protection it does not perform.
+      const _llHoldsMoney=(S.agency.depHolderDefault||'landlord')==='landlord';
+      return {subject:`Welcome to ${b.name} — what happens next`,body:`<p>Dear ${esc(landlordName(l))},</p>
       <p>Welcome to ${esc(b.name)} — thank you for instructing us to manage your ${l.service==='letonly'?'letting':'property'}. Your dedicated point of contact is <b>${esc(b.agent)}</b>, reachable at ${esc(b.email)}. We hold ${b.redress?('membership of '+esc(b.redress)):'approved redress-scheme membership'} for your protection.</p>
       <p style="font-weight:700;margin:18px 0 8px;color:#1B2F4A">What happens next</p>
       <p style="margin:0 0 4px"><b>1. Compliance certificates</b></p>
@@ -5055,11 +5119,11 @@ const TEMPLATES=[
       <p style="margin:12px 0 4px"><b>2. Marketing &amp; finding a tenant</b> <span style="font-weight:400;color:#8A7D6E">(if the property needs a tenant)</span></p>
       <ul style="padding-left:18px;line-height:1.8;margin-top:2px"><li>Professional listing across the major portals, accompanied viewings, and a right to rent check plus full referencing on any applicant</li><li>You'll be kept updated on interest and offers as they come in</li></ul>
       <p style="margin:12px 0 4px"><b>3. Tenancy agreement &amp; move-in</b></p>
-      <ul style="padding-left:18px;line-height:1.8;margin-top:2px"><li>Once a tenant is approved, we prepare and send the tenancy agreement for e-signature</li><li>The deposit is protected in a government-approved scheme within 30 days of receipt, and rent is collected before keys are released</li></ul>
+      <ul style="padding-left:18px;line-height:1.8;margin-top:2px"><li>Once a tenant is approved, we prepare and send the tenancy agreement for e-signature</li>${_llHoldsMoney?'<li>The deposit is paid direct to you. As the person receiving it you must protect it in a government-approved scheme within 30 days and serve the prescribed information — please send us the certificate and reference for your file. The first month\'s rent is paid direct to you before keys are released.</li>':'<li>The deposit is protected in a government-approved scheme within 30 days of receipt, and rent is collected before keys are released</li>'}</ul>
       <p style="margin:12px 0 4px"><b>4. Ongoing management</b></p>
-      <ul style="padding-left:18px;line-height:1.8;margin-top:2px"><li>Clear monthly statements, rent collection, and prompt coordination of any maintenance</li><li>Proactive reminders before certificates expire, so nothing lapses unnoticed</li></ul>
+      <ul style="padding-left:18px;line-height:1.8;margin-top:2px">${_llHoldsMoney?'<li>Clear monthly statements and prompt coordination of any maintenance. Rent is paid direct to you by the tenant — please let us know of any arrears so we can act early.</li>':'<li>Clear monthly statements, rent collection, and prompt coordination of any maintenance</li>'}<li>Proactive reminders before certificates expire, so nothing lapses unnoticed</li></ul>
       <p style="margin:12px 0 4px"><b>5. Your legal responsibilities</b></p>
-      <ul style="padding-left:18px;line-height:1.8;margin-top:2px"><li>We'll check whether your property needs to be registered on the Private Rented Sector Database, and confirm once it is</li><li>Where we hold client money on your behalf, we're covered by Client Money Protection — we'll confirm the scheme and certificate</li><li>We'll arrange a Legionella risk assessment as part of your compliance checks — a duty of care, not just a certificate</li><li>If the property is a licensed HMO or falls under selective licensing in its area, we'll confirm the licence is in place before letting</li></ul>
+      <ul style="padding-left:18px;line-height:1.8;margin-top:2px"><li>We'll check whether your property needs to be registered on the Private Rented Sector Database, and confirm once it is</li>${_llHoldsMoney?'<li>We do not handle client money, so rent and the deposit are paid direct to you. That keeps your money out of our hands entirely — and makes deposit protection your legal duty, which we will remind you about and keep evidence of.</li>':'<li>Where we hold client money on your behalf, we\'re covered by Client Money Protection — we\'ll confirm the scheme and certificate</li>'}<li>We'll arrange a Legionella risk assessment as part of your compliance checks — a duty of care, not just a certificate</li><li>If the property is a licensed HMO or falls under selective licensing in its area, we'll confirm the licence is in place before letting</li></ul>
       <p style="margin:12px 0 4px"><b>6. Fees</b></p>
       <ul style="padding-left:18px;line-height:1.8;margin-top:2px"><li>Management fee as agreed in your terms of business</li><li>Move-in and move-out inventory reports are billed separately (Clause 5b), at standard industry market rates — a full room-by-room schedule of condition with photographic evidence, meter readings, key handover, and tenant acknowledgement</li></ul>
       <p style="margin:12px 0 4px"><b>7. We're here to help — including with cover</b></p>
@@ -5067,7 +5131,7 @@ const TEMPLATES=[
       <p style="margin:12px 0 4px"><b>8. If something goes wrong</b></p>
       <ul style="padding-left:18px;line-height:1.8;margin-top:2px"><li>We'd always rather hear about a problem early — a quick call or email usually sorts it</li><li>If you'd prefer to complain formally, put it in writing to us: we'll acknowledge within 3 working days and give you a full written response within 15 working days</li><li>If you're still unhappy you can ask us to review it, and we'll send a final viewpoint letter. Beyond that you can refer the matter free of charge to our independent redress scheme${b.redress?' ('+esc(b.redress)+')':''} — either on receiving that letter, or once 8 weeks have passed since you first complained</li><li>Our full complaints handling procedure is ${complaintsDocUrl()?'attached to this email, and available any time on request':'available any time on request \u2014 just ask'}</li></ul>
       <p style="margin-top:18px">If you have any questions at any stage, simply reply to this email. We look forward to a long and successful working relationship.</p>
-      <p>Kind regards,<br>${(b.agent&&b.agent!==b.name)?esc(b.agent)+'<br>':''}${esc(b.name)}</p>`})},
+      <p>Kind regards,<br>${(b.agent&&b.agent!==b.name)?esc(b.agent)+'<br>':''}${esc(b.name)}</p>`};}},
   {key:'rent_statement',group:'Statements & requests',title:'Monthly rent statement / remittance',icon:'💷',ai:false,needProp:true,
     fields:[{k:'month',label:'Statement period',type:'text',def:()=>_thisMonth()},{k:'received',label:'Rent received (£)',type:'number',def:p=>p&&p.rent||0},{k:'deductions',label:'Deductions / fees (£)',type:'number',def:()=>''},{k:'note',label:'Note (optional)',type:'text',def:()=>''}],
     build:(l,p,b,f)=>{const rec=+f.received||0, fee=f.deductions!==''&&f.deductions!=null?+f.deductions:(p?rec*propFee(p)/100:0), net=rec-fee; return {subject:`Rent statement — ${f.month} — ${p?p.address:''}`,body:`<p>Dear ${esc(landlordName(l))},</p>
@@ -5645,7 +5709,7 @@ async function _rentReceivedSend(rid){
         <tr><td style="padding:8px 0;border-bottom:1px solid #E3D9C8">Management fee (${propFee(p)}%)</td><td style="padding:8px 0;border-bottom:1px solid #E3D9C8;text-align:right">− ${_money(fee)}</td></tr>
         <tr><td style="padding:10px 0;font-weight:700">Net remitted to you</td><td style="padding:10px 0;text-align:right;font-weight:700;color:#C8892A">${_money(net)}</td></tr></table>
       <p>The net sum will be paid to your nominated account in line with your instruction${p&&p.rentDueDay?` (rent due day: ${esc(p.rentDueDay)})`:''}. Please retain this statement for your records.</p>
-      <p style="color:#8A7D6E;font-size:12px">${esc(agencyBrand().name)} · held under our Client Money Protection scheme. This is an automated statement; reply with any queries.</p>
+      <p style="color:#8A7D6E;font-size:12px">${esc(agencyBrand().name)}${(S.agency.cmp&&S.agency.cmp!=='Not holding client money')?' · held under our Client Money Protection scheme':''}. This is an automated statement; reply with any queries.</p>
     </div></div>`;
   // Audit row + comms log + document trail (agency_letters).
   const row={id:uid('lt'),agency_id:window._agencyId,landlord_id:l.id,property_id:p.id,type:'rent_statement',subject,body_html:html,status:'sent'};
