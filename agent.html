@@ -199,8 +199,8 @@ const landlordToRow=l=>({id:l.id,agency_id:window._agencyId,name:l.name,joint:l.
 // show "A & B". `joint` holds the second owner (or is blank). `entity` = individual|joint|company.
 function landlordName(l){ if(!l) return ''; if(l.entity==='company') return l.name; return (l.joint&&l.joint.trim())?(l.name+' & '+l.joint):l.name; }
 function landlordLegalLine(l){ if(!l) return ''; if(l.entity==='company') return esc(l.name)+' <span style="font-weight:400">(company landlord)</span>'; return esc(landlordName(l)); }
-const rowToProp=r=>({id:String(r.id),landlordId:r.landlord_id,address:r.address||'',city:r.city||'',postcode:r.postcode||'',ptype:r.ptype||'',rent:r.rent||0,beds:r.beds||1,baths:r.baths||1,furnished:r.furnished||'',epc:r.epc||'',councilTaxBand:r.council_tax_band||'',rentDueDay:r.rent_due_day||'1st',available:r.available||null,description:r.description||'',features:r.features||[],feePct:r.fee_pct,certs:r.certs||{},tenant:r.tenant||undefined});
-const propToRow=p=>({id:p.id,agency_id:window._agencyId,landlord_id:p.landlordId,address:p.address,city:p.city,postcode:p.postcode||null,ptype:p.ptype||null,rent:p.rent||0,beds:p.beds||1,baths:p.baths||1,furnished:p.furnished||null,epc:p.epc||null,council_tax_band:p.councilTaxBand||null,rent_due_day:p.rentDueDay||'1st',available:p.available||null,description:p.description||null,features:p.features||[],fee_pct:p.feePct,certs:p.certs||{},tenant:p.tenant||null});
+const rowToProp=r=>({id:String(r.id),landlordId:r.landlord_id,address:r.address||'',city:r.city||'',postcode:r.postcode||'',ptype:r.ptype||'',rent:r.rent||0,beds:r.beds||1,baths:r.baths||1,furnished:r.furnished||'',epc:r.epc||'',councilTaxBand:r.council_tax_band||'',rentDueDay:r.rent_due_day||'1st',available:r.available||null,description:r.description||'',features:r.features||[],feePct:r.fee_pct,certs:r.certs||{},leasehold:(r.certs&&r.certs._leasehold)||null,tenant:r.tenant||undefined});
+const propToRow=p=>({id:p.id,agency_id:window._agencyId,landlord_id:p.landlordId,address:p.address,city:p.city,postcode:p.postcode||null,ptype:p.ptype||null,rent:p.rent||0,beds:p.beds||1,baths:p.baths||1,furnished:p.furnished||null,epc:p.epc||null,council_tax_band:p.councilTaxBand||null,rent_due_day:p.rentDueDay||'1st',available:p.available||null,description:p.description||null,features:p.features||[],fee_pct:p.feePct,certs:Object.assign({},p.certs||{},{_leasehold:p.leasehold||null}),tenant:p.tenant||null});
 // properties.id is a DB-assigned bigint (NOT a client-generated text id like our other
 // tables) — a new property must be INSERTed without an id and get the real id back,
 // or the save fails outright (non-numeric text can't go into a bigint column).
@@ -253,8 +253,8 @@ const rowToRent=r=>({id:r.id,propertyId:r.property_id,tenantId:r.tenant_id,due:r
 const rentToRow=r=>({id:r.id,agency_id:window._agencyId,property_id:r.propertyId,tenant_id:r.tenantId,due_date:r.due,amount:r.amount||0,paid_date:r.paidDate||null,status:r.status||'due',notes:r.notes||''});
 const rowToJob=r=>({id:r.id,propertyId:r.property_id,tenantId:r.tenant_id,reportedBy:r.reported_by||'agent',category:r.category||'General',description:r.description||'',photos:r.photos||[],severity:r.severity||'normal',dampMould:!!r.damp_mould,status:r.status||'reported',createdAt:r.created_at});
 const jobToRow=j=>({id:j.id,agency_id:window._agencyId,property_id:j.propertyId,tenant_id:j.tenantId||null,reported_by:j.reportedBy||'agent',category:j.category||'General',description:j.description||'',photos:j.photos||[],severity:j.severity||'normal',damp_mould:!!j.dampMould,status:j.status||'reported',updated_at:new Date().toISOString()});
-const rowToInv2=r=>({id:r.id,propertyId:r.property_id,tenantId:r.tenant_id,rooms:r.rooms||[],reports:r.reports||[],depositHeld:r.deposit_held,totalDeduction:r.total_deduction||0,status:r.status||'draft'});
-const inv2ToRow=v=>({id:v.id,agency_id:window._agencyId,property_id:v.propertyId,tenant_id:v.tenantId||null,rooms:v.rooms||[],reports:v.reports||[],deposit_held:v.depositHeld,total_deduction:v.totalDeduction||0,status:v.status||'draft',updated_at:new Date().toISOString()});
+const rowToInv2=r=>({id:r.id,propertyId:String(r.property_id||''),tenantId:r.tenant_id,rooms:r.rooms||[],reports:r.reports||[],depositHeld:r.deposit_held,totalDeduction:r.total_deduction||0,status:r.status||'draft',tenantAck:r.tenant_ack||{},meters:r.meters||{},keyHandover:r.key_handover||{}});
+const inv2ToRow=v=>({id:v.id,agency_id:window._agencyId,property_id:v.propertyId,tenant_id:v.tenantId||null,rooms:v.rooms||[],reports:v.reports||[],deposit_held:v.depositHeld,total_deduction:v.totalDeduction||0,status:v.status||'draft',tenant_ack:v.tenantAck||null,meters:v.meters||null,key_handover:v.keyHandover||null,updated_at:new Date().toISOString()});
 const rowToNotice=r=>({id:r.id,landlordId:r.landlord_id,propertyId:r.property_id,kind:r.kind||'section8',grounds:r.grounds||[],tenantName:r.tenant_name||'',served:r.served_date||'',expiry:r.expiry_date||'',rentCurrent:r.rent_current,rentNew:r.rent_new,compliance:r.compliance||{},docHtml:r.doc_html||'',notes:r.notes||'',status:r.status||'draft',createdAt:r.created_at,serviceProof:r.service_proof||null,officialDoc:r.official_doc||null,emailedTo:r.emailed_to||[],emailedAt:r.emailed_at||''});
 const noticeToRow=n=>({id:n.id,agency_id:window._agencyId,landlord_id:n.landlordId,property_id:n.propertyId,kind:n.kind,grounds:n.grounds||[],tenant_name:n.tenantName||'',served_date:n.served||null,expiry_date:n.expiry||null,rent_current:n.rentCurrent,rent_new:n.rentNew,compliance:n.compliance||{},doc_html:n.docHtml||'',notes:n.notes||'',status:n.status||'draft',service_proof:n.serviceProof||null,official_doc:n.officialDoc||null,emailed_to:n.emailedTo||[],emailed_at:n.emailedAt||null});
 const pushAgency   =() =>_w(sb.from('agencies').update(agencyToRow(S.agency)).eq('id',window._agencyId));
@@ -2208,7 +2208,7 @@ function vPropertyDetail(){
             return (rec&&rec.invited)?`<span class="faint" style="font-size:12.5px">✓ Portal invited ${fmtDate(rec.invitedAt)}</span><button class="btn sm" onclick="inviteTenantToPortal('${p.id}')">Resend</button>`
               :`<button class="btn sm navy" onclick="inviteTenantToPortal('${p.id}')">📧 Invite to tenant portal — next step</button>`; })()}${(()=>{ const rec=tenantRecFor(p.id);
             return rec&&rec.welcomeSentAt?`<span class="faint" style="font-size:12.5px">✓ Welcome letter sent ${fmtDate(rec.welcomeSentAt)}</span><button class="btn sm" onclick="sendTenantWelcomeLetter('${p.id}')">Resend</button>`
-              :`<button class="btn sm" onclick="sendTenantWelcomeLetter('${p.id}')">👋 Send welcome letter</button>`; })()}<button class="btn sm" onclick="setTenant('${p.id}')">Edit tenant</button><button class="btn sm" onclick="openNotice('${p.id}')">⚖ Prepare notice</button><button class="btn sm" onclick="sendCheckoutPack('${p.id}')">📦 Send checkout pack</button><button class="btn sm" style="color:var(--red)" onclick="endTenancy('${p.id}')">End tenancy</button></div>`
+              :`<button class="btn sm" onclick="sendTenantWelcomeLetter('${p.id}')">👋 Send welcome letter</button>`; })()}<button class="btn sm navy" onclick="openMoveIn('${p.id}')">✓ Move-in checklist</button><button class="btn sm" onclick="openLeasehold('${p.id}')">🔑 Head lease</button><button class="btn sm" onclick="setTenant('${p.id}')">Edit tenant</button><button class="btn sm" onclick="openNotice('${p.id}')">⚖ Prepare notice</button><button class="btn sm" onclick="sendCheckoutPack('${p.id}')">📦 Send checkout pack</button><button class="btn sm" style="color:var(--red)" onclick="endTenancy('${p.id}')">End tenancy</button></div>`
           :lst?`<div class="faint" style="font-size:13px;margin-bottom:12px">Marketing in progress — ${_pill(LISTING_STATUS,lst.status)} · ${_listingApps(lst.id).length} enquir${_listingApps(lst.id).length===1?'y':'ies'} so far.</div><button class="btn sm navy" onclick="go('listing','${lst.id}')">Manage listing</button>`
           :`<div class="faint" style="font-size:13px;margin-bottom:12px">No tenant yet.</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -2238,6 +2238,54 @@ function editRentDueDay(pid){ const p=P(pid);
   const body=`<div class="fg"><label>Rent due day</label><select id="rd-day">${_rentDayOpts(p.rentDueDay)}</select></div>`;
   modal('Rent due day — '+esc(p.address), body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveRentDueDay('${pid}')">Save</button>`, true); }
 function saveRentDueDay(pid){ const p=P(pid); p.rentDueDay=val('rd-day'); save(); pushProperty(p); closeModal(); render(); toast('✓ Rent due day updated'); }
+const HL_RESTRICTIONS=[
+  ['pets','Pets','e.g. no animals without freeholder consent'],
+  ['flooring','Flooring','e.g. carpet required in all rooms except kitchen and bathroom'],
+  ['noise','Noise hours','e.g. no noise audible outside the flat between 11pm and 7am'],
+  ['subletting','Subletting / short lets','e.g. no lettings under 6 months, no holiday lets'],
+  ['business','Business use','e.g. residential use only, no trade or business'],
+  ['bins','Bins and refuse','e.g. bins in the designated store only, not on balconies'],
+  ['communal','Communal areas','e.g. nothing to be stored in hallways or on landings'],
+  ['parking','Parking','e.g. one allocated bay, no commercial vehicles, visitor bay rules'],
+  ['alterations','Alterations','e.g. no alterations without freeholder consent'],
+  ['other','Other restrictions','anything else the lease imposes on occupiers']
+];
+function openLeasehold(pid){
+  const p=P(pid); const hl=p.leasehold||{};
+  const body=`<div class="note" style="margin-bottom:14px">Where the property is leasehold, the tenancy agreement can only bind the tenant to head-lease restrictions <b>if the tenant has been given notice of them</b> (clause 4.9.1). Anything entered here is disclosed to the tenant as an annexe to their agreement, which is what makes it enforceable.</div>
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;margin-bottom:12px"><input type="checkbox" id="hl-is" style="width:auto" ${hl.isLeasehold?'checked':''} onchange="_hlToggle()"> This property is leasehold</label>
+    <div id="hl-body" style="display:${hl.isLeasehold?'block':'none'}">
+      <div class="grid2" style="gap:10px">
+        <div class="fg"><label>Freeholder</label><input id="hl-freeholder" value="${esc(hl.freeholder||'')}"></div>
+        <div class="fg"><label>Managing agent for the block</label><input id="hl-magent" value="${esc(hl.managingAgent||'')}"></div>
+      </div>
+      <div class="grid2" style="gap:10px">
+        <div class="fg"><label>Block managing agent contact <span class="faint">(for the tenant, e.g. communal repairs)</span></label><input id="hl-mcontact" value="${esc(hl.managingContact||'')}"></div>
+        <div class="fg"><label>Lease term ends <span class="faint">(relevant to Grounds 2ZB/2ZD)</span></label><input id="hl-expiry" type="date" value="${esc(hl.leaseExpiry||'')}"></div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;margin:2px 0 6px"><input type="checkbox" id="hl-over21" style="width:auto" ${hl.over21Years?'checked':''}> Lease was granted for more than 21 years
+        </label>
+      <div class="hint" style="margin:-2px 0 12px">If so, clause 10.4 gives the tenant the prior notice needed to rely on Grounds 2ZB and 2ZD later. Without that notice those grounds are unavailable.</div>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;margin:2px 0 12px"><input type="checkbox" id="hl-notified" style="width:auto" ${hl.freeholderNotified?'checked':''}> Freeholder notified of this letting
+        </label>
+      <div style="font-size:12px;font-weight:700;color:var(--navy);margin:14px 0 6px">Restrictions the lease imposes on occupiers</div>
+      <div class="hint" style="margin:-2px 0 10px">Leave blank anything the lease doesn't cover. Only completed rows are disclosed.</div>
+      ${HL_RESTRICTIONS.map(([k,label,ph])=>`<div class="fg"><label>${esc(label)}</label><input id="hl-r-${k}" value="${esc((hl.restrictions||{})[k]||'')}" placeholder="${esc(ph)}"></div>`).join('')}
+    </div>`;
+  modal('Leasehold &amp; head lease — '+esc(p.address), body,
+    `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveLeasehold('${pid}')">Save</button>`, true);
+}
+function _hlToggle(){ const c=document.getElementById('hl-is'), b=document.getElementById('hl-body'); if(c&&b) b.style.display=c.checked?'block':'none'; }
+function saveLeasehold(pid){
+  const p=P(pid); const on=!!(document.getElementById('hl-is')||{}).checked;
+  const r={}; HL_RESTRICTIONS.forEach(([k])=>{ const v=val('hl-r-'+k); if(v) r[k]=v; });
+  p.leasehold={isLeasehold:on,freeholder:val('hl-freeholder'),managingAgent:val('hl-magent'),
+    managingContact:val('hl-mcontact'),leaseExpiry:val('hl-expiry'),
+    over21Years:!!(document.getElementById('hl-over21')||{}).checked,
+    freeholderNotified:!!(document.getElementById('hl-notified')||{}).checked,restrictions:r};
+  save(); pushProperty(p); closeModal(); render();
+  toast(on?'✓ Head lease saved — restrictions will be disclosed in the tenancy agreement':'✓ Saved');
+}
 function editPropRent(pid){ const p=P(pid); const isLet=!!p.tenant;
   const body=`<div class="note" style="margin-bottom:14px">${isLet?'This property is let — enter the actual rent agreed with the tenant.':'This is the expected/asking rent while marketing. Once a tenant is set up, come back here to enter the achieved rent.'}</div>
     <div class="fg"><label>${isLet?'Achieved':'Expected'} rent (£/mo)</label><input id="pr-rent" type="number" value="${p.rent||''}"></div>`;
@@ -2421,6 +2469,7 @@ function setTenant(pid){ const p=P(pid); const t=p.tenant||{}; const rec=tenantR
     window._tnDocs['guarantor-'+idx]={existing:(per.guarantor.docs||[]).slice(),pending:[]};
     window._tnDocs['rtrext-'+idx]={existing:per.rtrDocs.slice(),pending:[]};
   });
+  window._tnStartBefore=t.start||rec.start||'';
   window._tnCore={start:t.start||rec.start||'', deposit:rec.deposit!=null?rec.deposit:'', schemeRef:rec.schemeRef||'', depositHolder:rec.depositHolder||'', depositReceived:rec.depositReceived||'', landlordSchemeNo:rec.landlordSchemeNo||'', depositPaidBy:rec.depositPaidBy||'', depositCertExpiry:rec.depositCertExpiry||'', depositCertName:rec.depositCertName||'', depositCertUrl:rec.depositCertUrl||'', refDocName:rec.refDocName||'', refDocUrl:rec.refDocUrl||'', origContractName:rec.origContractName||'', origContractUrl:rec.origContractUrl||''};
   window._tnActiveTab='tenancy'; window._tnPid=pid;
   _tnOpenModal(pid);
@@ -3018,6 +3067,40 @@ async function tnDepositPI(pid){
   await saveTenant(pid);
   setTimeout(()=>{ if(window.NexLetDeposit) NexLetDeposit.open(pid); },90);
 }
+// Statutory and practical first-day list, computed from what is actually on
+// file — so it shows what is outstanding, not a generic checklist.
+function moveInTasks(pid){
+  const p=P(pid)||{}, rec=tenantRecFor(pid)||{}, c=p.certs||{};
+  const dep=parseFloat(rec.deposit)||0;
+  const held=window.NexLetDeposit?NexLetDeposit.holderOf(rec):'landlord';
+  const ta=tenancyAgreementFor(rec.id);
+  return [
+    {k:'agreement',t:'Tenancy agreement signed by every joint tenant',done:!!(ta&&ta.status==='signed'),go:"openTenancyAgreement('"+pid+"')"},
+    {k:'htr',t:'How to Rent guide given (current edition)',done:!!c.htr,go:"go('compliance')"},
+    {k:'gas',t:'Gas safety certificate given to the tenant',done:!!c.gas,go:"go('compliance')"},
+    {k:'eicr',t:'EICR given to the tenant',done:!!c.eicr,go:"go('compliance')"},
+    {k:'epc',t:'EPC given to the tenant',done:!!c.epc,go:"go('compliance')"},
+    {k:'rtr',t:'Right to Rent checked for every adult occupier',done:!!c.rtr,go:"setTenant('"+pid+"')"},
+    dep?{k:'dep',t:held==='landlord'?'Deposit protected by the landlord — certificate obtained':'Deposit protected in the scheme',done:!!rec.schemeRef||!!rec.depositCertName,go:"setTenant('"+pid+"')"}:null,
+    dep?{k:'pi',t:'Prescribed information served on every tenant',done:!!rec.piServedAt,go:"tnDepositPI('"+pid+"')"}:null,
+    {k:'inv',t:'Inventory and schedule of condition, signed at check-in',done:(S.inventories2||[]).some(v=>v.propertyId===pid&&v.tenantAck&&v.tenantAck.confirmed),go:"go('inventory')"},
+    {k:'cond',t:'Condensation and mould annexe issued',done:!!(ta&&ta.status==='signed')||!!rec.condensationAckAt,go:"NexLetForms.condensation('"+pid+"')"},
+    {k:'keys',t:'Keys logged out to the tenant',done:(S.keys||[]).some(k=>k.propertyId===pid&&k.status==='out'),go:"go('keys')"},
+    {k:'pack',t:'Move-in pack emailed',done:!!rec.moveInPackSentAt,go:"go('properties')"}
+  ].filter(Boolean);
+}
+function openMoveIn(pid){
+  const p=P(pid)||{}, rec=tenantRecFor(pid)||{};
+  const tasks=moveInTasks(pid), left=tasks.filter(t=>!t.done);
+  const body=`<div class="note${left.length?' warn':''}" style="margin-bottom:14px">
+      <b>${esc(p.address||'')}</b> · move-in ${rec.start?esc(fmtDate(rec.start)):'date not set'}<br>
+      ${left.length?left.length+' of '+tasks.length+' still to do. The certificate items and the prescribed information are statutory — keys should not be released until they are done.':'Everything on the list is done. Keys can be released.'}</div>
+    ${tasks.map(t=>`<div class="row" style="cursor:pointer" onclick="closeModal();${t.go}">
+      <span style="width:19px;flex-shrink:0;color:${t.done?'var(--green)':'var(--amber)'};font-weight:700">${t.done?'✓':'○'}</span>
+      <div style="flex:1;font-size:13px;${t.done?'color:var(--faint)':'color:var(--navy);font-weight:600'}">${esc(t.t)}</div>
+      ${t.done?'':'<span class="btn sm">Do it</span>'}</div>`).join('')}`;
+  modal('Move-in checklist', body, `<button class="btn" onclick="closeModal()">Close</button>`, true);
+}
 async function saveTenant(pid){
   const activeMatch=(window._tnActiveTab||'').match(/^person-(\d+)$/); if(activeMatch) tnSyncPerson(parseInt(activeMatch[1],10));
   const people=window._tnPeople||[]; const lead=people[0];
@@ -3081,10 +3164,15 @@ async function saveTenant(pid){
     if(lead.rtrDocs&&lead.rtrDocs.length){ rec.rtrDocs=lead.rtrDocs; rec.rtrDocName=lead.rtrDocs[0].name; rec.rtrDocUrl=lead.rtrDocs[0].url; }
     pushTenantRec(rec);
   }
-  window._tnFiles={}; window._tnPeople=null; window._tnPid=null;
+  const _newStart=(tenantRecFor(pid)||{}).start;
+  const _startChanged=_newStart&&_newStart!==window._tnStartBefore;
+  window._tnFiles={}; window._tnPeople=null; window._tnPid=null; window._tnStartBefore=null;
   closeModal(); render();
   if(failed.length) toast('⚠ Saved, but file upload failed for: '+failed.join(', ')+' — re-attach and save again',1);
   else toast('✓ Tenant set up');
+  // A move-in date has just been set or moved — surface what is still outstanding
+  // before keys can be released, rather than leaving it to be remembered.
+  if(_startChanged && moveInTasks(pid).some(t=>!t.done)) setTimeout(()=>openMoveIn(pid),420);
 }
 function _allTenantNames(rec){
   const names=[rec.name].concat((rec.occupants||[]).map(o=>o.name)).filter(Boolean);
@@ -4561,6 +4649,22 @@ function buildTenancyAgreementHtml(p,rec,l){
   // Deposit wording follows whoever actually receives the money — the statutory
   // duty falls on the recipient, so the document must not imply otherwise.
   const _dc=window.NexLetDeposit?NexLetDeposit.clauseFor(rec,l,esc(depositScheme)):{pays:'',holds:'',pi:''};
+  // Head-lease disclosure. Clause 4.9.1 binds the Tenant only once notice of the
+  // superior lease obligations has been given, so this annexe IS that notice.
+  const _hl=p.leasehold||{};
+  const _hlRows=(typeof HL_RESTRICTIONS!=='undefined'?HL_RESTRICTIONS:[])
+    .filter(([k])=>(_hl.restrictions||{})[k])
+    .map(([k,label])=>['•','<strong>'+esc(label)+'.</strong> '+esc(_hl.restrictions[k])]);
+  const _hlAnnexe=(_hl.isLeasehold&&(_hlRows.length||_hl.managingContact))
+    ? `<div style="page-break-before:always;padding-top:8px"></div>
+       ${S('Annexe B','The head lease — restrictions affecting occupiers')}
+       ${Pl('The Property is held by the Landlord under a superior lease. That lease imposes obligations which bind anyone living at the Property. This Annexe is the notice referred to at clause 4.9.1, and the Tenant agrees to observe the restrictions set out below.')}
+       ${_hl.freeholder?Pl('<strong>Freeholder:</strong> '+esc(_hl.freeholder)+'.'):''}
+       ${_hl.managingAgent?Pl('<strong>Managing agent for the building:</strong> '+esc(_hl.managingAgent)+(_hl.managingContact?' — '+esc(_hl.managingContact):'')+'. Repairs to communal areas, the structure or the exterior are dealt with by them; report such matters to the Agent, who will pass them on.'):''}
+       ${_hlRows.length?Sh('Restrictions')+D(_hlRows):''}
+       ${Pl('These restrictions are reproduced for the Tenant\'s information. Where the lease itself says something different, the lease prevails. A copy of the relevant parts of the lease is available from the Agent on request.')}
+       ${Pl('A breach of these restrictions may put the Landlord in breach of the superior lease, and is a breach of clause 4.9.1 of this agreement.')}`
+    : '';
   const rentDay=esc(p.rentDueDay||'1st');
   const furnished=p.furnished||'Unfurnished';
   const nF=furnished!=='Unfurnished';
@@ -4729,7 +4833,9 @@ function buildTenancyAgreementHtml(p,rec,l){
 
   ${Sub('4.9','Head Lease')}
   ${D([
-    ['4.9.1','to comply with all obligations imposed upon the Landlord by any superior landlord where the Property is held under a superior lease, once the Tenant has been given notice of them.']
+    ['4.9.1','to comply with all obligations imposed upon the Landlord by any superior landlord where the Property is held under a superior lease, once the Tenant has been given notice of them'+(_hlAnnexe?'; Annexe B to this agreement gives that notice':'')+';'],
+    ['4.9.2','not to do anything at the Property that would put the Landlord in breach of the superior lease;'],
+    ['4.9.3','to allow the superior landlord, its managing agent and their contractors access to the Property on reasonable notice where the superior lease permits it, and to report any matter affecting the structure, exterior or communal areas to the Agent without delay.']
   ])}
 
   ${Sub('4.10','Right to Rent')}
@@ -4943,6 +5049,7 @@ function buildTenancyAgreementHtml(p,rec,l){
   ])}
   ${Pl('Where an independent inspection shows the mould resulted from the Tenant’s breach of clause 4.6.8, or from refusing access or concealing it after being asked to report it, the Tenant meets the reasonable and evidenced cost of remedy. Reporting a problem in good faith never attracts a cost, whatever the eventual cause.')}
   ${Pl('<strong>By signing this agreement the Tenant confirms having read this Annexe</strong>, agrees to take the steps in it, and will pass the information to any other occupier of the Property.')}
+  ${_hlAnnexe}
 
 
   <p style="font-size:12px;color:#5A6B82;border:1px solid #E2E5EA;border-radius:6px;padding:8px 10px;background:#F8FAFC;margin-top:18px">This document satisfies the Landlord’s obligation to give the Tenant written terms of the tenancy and does not remove any right either party has under the Housing Act 1988, the Renters’ Rights Act 2025, the Landlord and Tenant Act 1985, or other legislation in force.</p>`;
@@ -4969,6 +5076,7 @@ function openTenancyAgreement(pid){
     ${occWithEmail.length?`<div class="note" style="margin:-8px 0 4px">${occWithEmail.map(o=>esc(o.name)).join(', ')} will also be sent the link as joint tenant${occWithEmail.length>1?'s':''}.</div>`:''}
     ${permNames.length?`<div class="note" style="margin:-8px 0 4px">${permNames.map(esc).join(', ')} ${permNames.length>1?'are':'is'} recorded as a permitted occupier and will not be asked to sign.</div>`:''}
     <div class="fg"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><label style="margin:0">Agreement preview</label><button type="button" class="btn sm" onclick="NexLetPrint.fromEl('ta-preview','Tenancy Agreement','Draft for review')">⎙ Print / save as PDF</button></div><div id="ta-preview" style="max-height:220px;overflow-y:auto;border:1px solid #E3D9C8;border-radius:8px;padding:14px;font-size:12.5px;line-height:1.7;background:var(--off)">${buildTenancyAgreementHtml(p,rec,l)}</div></div>
+    ${(l.service==='letonly')?`<div class="note warn" style="margin-bottom:12px"><b>Tenant-find instruction — the landlord should sign this, not you.</b> On a tenant-find you introduce the tenant and hand over; your management agreement does not give authority to execute the tenancy, and signing it yourself implies ongoing management you are not providing. Print the agreement for ${esc(landlordName(l))} to sign, or switch the instruction to full management first.</div>`:''}
     <div class="fg"><label>Your name (signing on behalf of ${esc(landlordName(l))})</label><input id="ta-agent-name" value="${esc(window._agentName||S.agency.name||'')}"></div>
     ${sigBlockHtml('ta')}
     <p class="hint">You sign first, then NexLet emails the tenant (and any joint occupants) a secure link to sign together. Everyone receives a timestamped copy once complete.</p>`;
