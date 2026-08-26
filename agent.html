@@ -145,7 +145,7 @@ h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px
     </div>
   </aside>
   <main class="main">
-    <div class="topbar"><span class="tb-title" id="tb-title">Dashboard</span><div style="display:flex;align-items:center;gap:10px"><button class="btn sm" id="notif-bell" onclick="openNotifications()" style="position:relative">🔔<span id="notif-badge" style="display:none;position:absolute;top:-5px;right:-5px;background:var(--red);color:#fff;font-size:9px;font-weight:700;border-radius:8px;padding:1px 5px;min-width:14px;text-align:center;line-height:1.4"></span></button><div id="tb-actions"></div></div></div>
+    <div class="topbar"><span class="tb-title" id="tb-title">Dashboard</span><div style="display:flex;align-items:center;gap:10px"><div onclick="NexLetSearch.open()" title="Search everything (⌘K)" style="display:flex;align-items:center;gap:8px;min-width:228px;padding:7px 11px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:text"><span style="font-size:13px;color:var(--faint)">⌕</span><span style="flex:1;font-size:12.5px;color:var(--faint)">Search…</span><span style="font-size:10px;font-weight:700;color:var(--faint);border:1px solid var(--border);border-radius:4px;padding:1px 5px">⌘K</span></div><button class="btn sm" id="notif-bell" onclick="openNotifications()" style="position:relative">🔔<span id="notif-badge" style="display:none;position:absolute;top:-5px;right:-5px;background:var(--red);color:#fff;font-size:9px;font-weight:700;border-radius:8px;padding:1px 5px;min-width:14px;text-align:center;line-height:1.4"></span></button><div id="tb-actions"></div></div></div>
     <div class="content" id="view"></div>
   </main>
   <button class="btn navy" onclick="openAiFinder()" title="Ask AI — where do I find…?" style="position:fixed;right:22px;bottom:22px;z-index:500;border-radius:100px;padding:12px 18px;box-shadow:0 8px 24px rgba(11,30,61,.28);display:flex;align-items:center;gap:7px">✦ Ask AI</button>
@@ -165,6 +165,7 @@ h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px
 <script src="nexlet-comms.js"></script>
 <script src="nexlet-forms.js"></script>
 <script src="nexlet-health.js"></script>
+<script src="nexlet-search.js"></script>
 <script>
 // ─────────────────────────────────────────────────────────────
 // NexLet Agency Portal — functional front-end (local state demo).
@@ -1356,8 +1357,10 @@ function vLandlords(){
       ${leads.length?leads.map(leadRow).join(''):`<div class="empty" style="padding:20px;text-align:center"><span class="faint" style="font-size:12.5px">No open enquiries.</span></div>`}
       <div style="padding:12px 20px"><button class="btn sm" onclick="openLandlordLead()">＋ Log enquiry</button></div>
     </div>
-    <div class="panel">${S.landlords.length?S.landlords.map(landlordRow).join(''):`<div class="empty">No landlords yet. Click "Onboard a landlord" to start.</div>`}</div>`;
+    ${(S.landlords||[]).length>5?NexLetSearch.bar('lls','Name, email, phone, company…',_llFiltered().length,S.landlords.length):''}
+    <div class="panel">${!(S.landlords||[]).length?`<div class="empty">No landlords yet. Click "Onboard a landlord" to start.</div>`:_llFiltered().length?_llFiltered().map(landlordRow).join(''):NexLetSearch.empty('lls','landlords')}</div>`;
 }
+function _llFiltered(){ return NexLetSearch.filter('lls',S.landlords||[],[l=>l.name,l=>l.email,l=>l.phone,l=>l.company,l=>l.postcode,l=>l.addr1]); }
 function leadRow(x){
   return `<div class="row"><div class="av" style="background:var(--blue-bg);color:var(--blue)">${initials(x.name||'?')}</div>
     <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:600;color:var(--navy)">${esc(x.name||'Unnamed')}</div>
@@ -1909,14 +1912,17 @@ function refCard(r){
 
 // ── PROPERTIES ──
 function vProperties(){
+  const all=S.properties||[];
+  const list=NexLetSearch.filter('props',all,[p=>p.address,p=>p.city,p=>p.postcode,p=>(p.postcode||'').replace(/\s/g,''),p=>(L(p.landlordId)||{}).name,p=>p.tenant?'occupied let':'vacant empty']);
   return `<h1 class="pg">All Properties</h1><div class="sub">Every property across all your landlords. Click one to manage compliance &amp; tenancy.</div>
-    <div class="panel">${S.properties.length?S.properties.map(p=>{const comp=propCompliance(p);return `<div class="row" style="cursor:pointer" onclick="go('property','${p.id}')">
+    ${all.length>5?NexLetSearch.bar('props','Address, postcode, landlord, vacant…',list.length,all.length):''}
+    <div class="panel">${!all.length?`<div class="empty">No properties yet — add one from a landlord's record.</div>`:list.length?list.map(p=>{const comp=propCompliance(p);return `<div class="row" style="cursor:pointer" onclick="go('property','${p.id}')">
       <div class="av">⌂</div><div style="flex:1"><div style="font-size:14px;font-weight:600;color:var(--navy)">${esc(p.address)}</div>
       <div class="faint" style="font-size:12px">${esc(p.city||'')} · ${p.beds} bed · ${gbp(p.rent)}/mo · ${esc(L(p.landlordId).name||'—')}</div></div>
       ${p.tenant?`<span class="pill" style="background:var(--green-bg);color:var(--green)">Occupied</span>`:`<span class="pill" style="background:var(--amber-bg);color:var(--amber)">Vacant</span>`}
       <span class="pill" style="background:${comp.pct===100?'var(--green-bg)':'var(--amber-bg)'};color:${comp.pct===100?'var(--green)':'var(--amber)'}">Compliance ${comp.pct}%</span>
       <span class="pill" style="background:${(SVC[L(p.landlordId).service]||SVC.full).bg};color:${(SVC[L(p.landlordId).service]||SVC.full).color}">${(SVC[L(p.landlordId).service]||SVC.full).label}</span>
-    </div>`;}).join(''):`<div class="empty">No properties yet — add one from a landlord's record.</div>`}</div>`;
+    </div>`;}).join(''):NexLetSearch.empty('props','properties')}</div>`;
 }
 
 // ── PROPERTY DETAIL — compliance tab + tenancy (reuses NexLet's engine) ──
@@ -3386,8 +3392,10 @@ function vInvoices(){
       <div class="kpi"><div class="l">Paid</div><div class="v" style="color:var(--green)">${money2(paidYTD)}</div><div class="s">received</div></div>
       <div class="kpi"><div class="l">VAT status</div><div class="v" style="font-size:17px">${S.agency.vatRegistered?'Registered':'Not registered'}</div><div class="s">${S.agency.vatRegistered?esc(S.agency.vatNumber||''):'no VAT charged'}</div></div>
     </div>
-    <div class="panel">${invs.length?invs.slice().reverse().map(invRow).join(''):`<div class="empty">No invoices yet. Click "Create invoice" to bill a managed landlord.</div>`}</div>`;
+    ${invs.length>5?NexLetSearch.bar('invs','Number, landlord, status…',_invFiltered().length,invs.length):''}
+    <div class="panel">${!invs.length?`<div class="empty">No invoices yet. Click "Create invoice" to bill a managed landlord.</div>`:_invFiltered().length?_invFiltered().slice().reverse().map(invRow).join(''):NexLetSearch.empty('invs','invoices')}</div>`;
 }
+function _invFiltered(){ return NexLetSearch.filter('invs',S.invoices||[],[i=>i.number,i=>i.id,i=>(L(i.landlordId)||{}).name,i=>i.status]); }
 function invRow(inv){ const l=L(inv.landlordId); const t=invTotal(inv);
   return `<div class="row" style="cursor:pointer" onclick="go('invoice','${inv.id}')">
     <div class="av">£</div>
@@ -5835,8 +5843,10 @@ function vNotices(){
       <div class="kpi"><div class="l">Drafts</div><div class="v">${ns.filter(n=>n.status==='draft').length}</div></div>
       <div class="kpi"><div class="l">Grounds covered</div><div class="v" style="font-size:16px">All Sch 2</div></div>
     </div>
-    <div class="panel">${ns.length?ns.map(noticeRow).join(''):`<div class="empty">No notices yet. Click \u201cNew notice\u201d to prepare a Section 8 or Section 13 notice.</div>`}</div>`;
+    ${ns.length>5?NexLetSearch.bar('nots','Property, type, status…',_notFiltered().length,ns.length):''}
+    <div class="panel">${!ns.length?`<div class="empty">No notices yet. Click \u201cNew notice\u201d to prepare a Section 8 or Section 13 notice.</div>`:_notFiltered().length?_notFiltered().map(noticeRow).join(''):NexLetSearch.empty('nots','notices')}</div>`;
 }
+function _notFiltered(){ return NexLetSearch.filter('nots',S.notices||[],[n=>n.type,n=>(P(n.propertyId)||{}).address,n=>(P(n.propertyId)||{}).postcode,n=>n.status,n=>n.grounds]); }
 function noticeRow(n){ const p=P(n.propertyId)||{}; const st={draft:['Draft','var(--off)','#8A7D6E'],served:['Served','var(--amber-bg)','var(--amber)'],expired:['Expired','var(--red-bg)','var(--red)'],withdrawn:['Withdrawn','var(--off)','#94A3B8']}[n.status]||['Draft','var(--off)','#8A7D6E'];
   const label=n.kind==='section13'?'Section 13 rent increase':'Section 8 · Ground'+(n.grounds.length>1?'s':'')+' '+n.grounds.join(', ');
   return `<div class="row" style="cursor:pointer" onclick="go('notice','${n.id}')"><div class="av">\u2696</div>
@@ -6203,12 +6213,14 @@ function createInventory2(){
   closeModal(); go('inventorydetail',v.id); toast('✓ Inventory created — add rooms');
 }
 function vInventoryList(){
-  const list=S.inventories2||[];
+  const all=S.inventories2||[];
+  const list=NexLetSearch.filter('invt',all,[v=>(P(v.propertyId)||{}).address,v=>(P(v.propertyId)||{}).postcode,v=>((S.tenants||[]).find(x=>x.id===v.tenantId)||{}).name,v=>v.status]);
   return `<h1 class="pg">Inventory &amp; Check-out</h1><div class="sub">Move-in baseline vs move-out condition, with AI classifying fair wear &amp; tear vs chargeable damage — adjudicator-style, apportioned, never new-for-old.</div>
-    <div class="panel">${list.length?list.map(v=>{ const p=P(v.propertyId)||{}; const t=(S.tenants||[]).find(x=>x.id===v.tenantId)||{};
+    ${all.length>5?NexLetSearch.bar('invt','Property, tenant, status…',list.length,all.length):''}
+    <div class="panel">${!all.length?'<div class="empty">No inventories yet. Create one for a tenancy to start recording move-in condition.</div>':list.length?list.map(v=>{ const p=P(v.propertyId)||{}; const t=(S.tenants||[]).find(x=>x.id===v.tenantId)||{};
       return `<div class="row" style="cursor:pointer" onclick="go('inventorydetail','${v.id}')"><div class="av">📋</div>
         <div style="flex:1"><div style="font-size:14px;font-weight:600;color:var(--navy)">${esc(p.address||'—')}</div><div class="faint" style="font-size:12px">${esc(t.name||'—')} · ${v.rooms.length} item${v.rooms.length===1?'':'s'}</div></div>
-        <span class="pill" style="background:${v.status==='complete'?'var(--green-bg)':v.status==='in-progress'?'var(--blue-bg)':'var(--off)'};color:${v.status==='complete'?'var(--green)':v.status==='in-progress'?'var(--blue)':'#8A7D6E'}">${v.status==='complete'?'Complete':v.status==='in-progress'?'In progress':'Draft'}</span></div>`; }).join(''):'<div class="empty">No inventories yet. Create one for a tenancy to start recording move-in condition.</div>'}</div>`;
+        <span class="pill" style="background:${v.status==='complete'?'var(--green-bg)':v.status==='in-progress'?'var(--blue-bg)':'var(--off)'};color:${v.status==='complete'?'var(--green)':v.status==='in-progress'?'var(--blue)':'#8A7D6E'}">${v.status==='complete'?'Complete':v.status==='in-progress'?'In progress':'Draft'}</span></div>`; }).join(''):NexLetSearch.empty('invt','inventories')}</div>`;
 }
 function _ensureRoomShape(r){
   if(!r.checkin) r.checkin={photos:r.checkinPhoto?[r.checkinPhoto]:[],note:r.checkinNote||''};

@@ -16,6 +16,11 @@
 (function () {
   'use strict';
 
+  /* agent.html's `S` is a top-level lexical binding, not a window property, so
+     window.S is always undefined. Read it bare. */
+  const ST = () => { try { return (typeof S !== 'undefined' && S) ? S : {}; } catch (e) { return {}; } };
+
+
   const LS_KEY = 'nexlet_audit_local_v1';
   const MAX_LOAD = 800;
 
@@ -177,7 +182,7 @@
   /* Which external steps are outstanding right now, and by when.
      Deliberately conservative: only flags a step when the trigger clearly exists. */
   function due() {
-    const S = window.S || {};
+    const S = ST();
     const out = [];
     const has = (action, entityId) => rows.some(r => r.action === action && (!entityId || r.entity_id === entityId));
 
@@ -248,7 +253,7 @@
   async function log(o) {
     if (!o || !o.action) return;
     await ensureLoaded();
-    const actor = (window.S && window.S.me && (window.S.me.name || window.S.me.email)) || 'Agent';
+    const actor = (ST().me && (ST().me.name || ST().me.email)) || 'Agent';
     const row = {
       agency_id: window._agencyId || null,
       at: nowISO(),
@@ -383,8 +388,8 @@
     });
 
     // Mirror the scheme reference back onto the tenancy so the rest of the app sees it.
-    if (stepKey === 'deposit_registered' && entityId && window.S) {
-      const rec = (window.S.tenants || []).find(t => t.id === entityId);
+    if (stepKey === 'deposit_registered' && entityId) {
+      const rec = (ST().tenants || []).find(t => t.id === entityId);
       if (rec) {
         rec.schemeRef = val('ex-ref') || rec.schemeRef;
         rec.scheme = detail.scheme || rec.scheme;

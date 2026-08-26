@@ -23,6 +23,11 @@
 (function () {
   'use strict';
 
+  /* agent.html's `S` is a top-level lexical binding, not a window property, so
+     window.S is always undefined. Read it bare. */
+  const ST = () => { try { return (typeof S !== 'undefined' && S) ? S : {}; } catch (e) { return {}; } };
+
+
   const LS = 'nexlet_comms_local_v1';
   const MAX = 600;
   let rows = [], loaded = false;
@@ -50,7 +55,7 @@
   function whois(addr) {
     const e = String(addr || '').trim().toLowerCase();
     if (!e) return null;
-    const S = window.S || {};
+    const S = ST();
     const hit = (entity, id, label, who) => ({ entity, id, label, who });
 
     for (const t of (S.tenants || [])) {
@@ -146,7 +151,7 @@
     renderLog();
   }
   function renderLog() {
-    const S = window.S || {};
+    const S = ST();
     const opts = [];
     (S.tenants || []).forEach(t => { const p = (window.P && window.P(t.propertyId)) || {};
       opts.push({ v: 'tenancy:' + t.id, l: (t.name || 'Tenant') + (p.address ? ' — ' + p.address : '') }); });
@@ -208,7 +213,7 @@
     const list = filtered();
     const failed = rows.filter(r => r.delivery === 'failed').length;
     const inbound = rows.filter(r => r.direction === 'in').length;
-    const replyTo = (window.S && S.agency && S.agency.replyTo) || '';
+    const replyTo = (ST().agency && ST().agency.replyTo) || '';
 
     return `<h1 class="pg">Communications</h1>
       <div class="sub">Every email NexLet sends, logged automatically, plus anything you record by hand. NexLet sends the documents; your mail client handles the conversation \u2014 the reply-to address below is what keeps the two joined up.</div>

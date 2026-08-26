@@ -16,6 +16,11 @@
 (function () {
   'use strict';
 
+  /* agent.html's `S` is a top-level lexical binding, not a window property, so
+     window.S is always undefined. Read it bare. */
+  const ST = () => { try { return (typeof S !== 'undefined' && S) ? S : {}; } catch (e) { return {}; } };
+
+
   const DAY = 864e5;
   const LS_EV = 'nexlet_events_local_v1';
   let cursor = new Date(); cursor.setDate(1);
@@ -77,7 +82,7 @@
 
   /* ── build the event list ────────────────────────────────────────────── */
   function events() {
-    const S = window.S || {};
+    const S = ST();
     const out = [];
     const push = (date, type, title, sub, extra) => {
       const d = iso(date); if (!d) return;
@@ -161,7 +166,7 @@
   /* ── add / edit modal ────────────────────────────────────────────────── */
   function openEvent(id, presetDate) {
     const e = manual.find(x => x.id === id) || { date: presetDate || todayIso(), kind: 'appt', title: '', time: '', propertyId: '', notes: '' };
-    const props = ((window.S || {}).properties) || [];
+    const props = (ST().properties) || [];
     const body = `
       <div class="grid2" style="gap:10px">
         <div class="fg"><label>Type</label><select id="ce-kind">

@@ -58,8 +58,12 @@
     'applicants', 'viewings', 'offers', 'keys', 'payouts', 'landlordLeads', 'valuations',
     'agreements', 'letters', 'tenancyAgreements', 'inboundEnquiries'];
 
+  /* agent.html's `let S` is a top-level lexical binding, not a window property,
+     so window.S is always undefined. Read it bare, as the other modules do. */
+  const ST = () => { try { return (typeof S !== 'undefined' && S) ? S : {}; } catch (e) { return {}; } };
+
   function snapshot() {
-    const S = window.S || {};
+    const S = ST();
     const out = { _meta: { app: 'NexLet', takenAt: new Date().toISOString(),
       agencyId: window._agencyId || null, live: !!window.LIVE, version: 1 } };
     COLLECTIONS.forEach(k => { if (S[k] !== undefined) out[k] = S[k]; });
@@ -71,7 +75,7 @@
   }
 
   function counts() {
-    const S = window.S || {};
+    const S = ST();
     return COLLECTIONS.map(k => ({ k, n: Array.isArray(S[k]) ? S[k].length : (S[k] ? 1 : 0) }))
       .filter(x => x.n > 0);
   }
@@ -110,8 +114,8 @@
     if (d !== null && d < AUTO_DAYS) return;
     // Wait until state has actually loaded, or the backup would be empty.
     const ready = () => {
-      const S = window.S || {};
-      return (S.properties && S.properties.length) || (S.landlords && S.landlords.length);
+      const st = ST();
+      return (st.properties && st.properties.length) || (st.landlords && st.landlords.length);
     };
     let tries = 0;
     const tick = setInterval(() => {
@@ -293,7 +297,8 @@
     clearErrors() { try { localStorage.removeItem(LS_ERR); } catch (e) { } if (window.render) window.render(); },
     _doRestore() {
       const d = window._pendingRestore; if (!d) return;
-      COLLECTIONS.forEach(k => { if (d[k] !== undefined) window.S[k] = d[k]; });
+      const st = ST();
+      COLLECTIONS.forEach(k => { if (d[k] !== undefined) st[k] = d[k]; });
       if (d._local) Object.keys(d._local).forEach(k => {
         try { localStorage.setItem(k, JSON.stringify(d._local[k])); } catch (e) { } });
       window._pendingRestore = null;

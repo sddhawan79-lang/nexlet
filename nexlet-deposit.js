@@ -16,6 +16,11 @@
 (function () {
   'use strict';
 
+  /* agent.html's `S` is a top-level lexical binding, not a window property, so
+     window.S is always undefined. Read it bare. */
+  const ST = () => { try { return (typeof S !== 'undefined' && S) ? S : {}; } catch (e) { return {}; } };
+
+
   const esc2 = s => (window.esc ? window.esc(s) : String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'));
   const money = n => (window.gbp ? window.gbp(n) : '£' + (Number(n) || 0).toFixed(2));
@@ -42,7 +47,7 @@
     }
   };
   const holderOf = rec => (rec && rec.depositHolder) ||
-    ((window.S && S.agency && S.agency.depHolderDefault) || 'landlord');
+    ((ST().agency && ST().agency.depHolderDefault) || 'landlord');
 
   /* ── contract wording, so the document matches who actually holds it ────── */
   function clauseFor(rec, l, schemeText) {
@@ -76,11 +81,11 @@
     const prop = [p.address, p.city, p.postcode].filter(Boolean).join(', ');
     const ln = window.landlordName ? landlordName(l) : (l && l.name) || '';
     const scheme = rec.scheme || b.depScheme || '';
-    const isPerm = o => (o.personType || 'joint') === 'permitted' || (o.age !== '' && o.age != null && +o.age < 18);
+    const isPerm = o => window.isPermittedOccupier ? window.isPermittedOccupier(o) : (o.personType || 'joint') === 'permitted';
     const tenants = [{ n: rec.name, e: rec.email }]
       .concat((rec.occupants || []).filter(o => o.name && !isPerm(o)).map(o => ({ n: o.name, e: o.email || '' })))
       .filter(x => x.n);
-    const sch = (window.S && S.agency) || {};
+    const sch = ST().agency || {};
     const missing = !sch.schemeAdminAddress || !sch.schemeAdminPhone || !sch.schemeAdminEmail;
 
     // Who holds it, and therefore whose details go in the "given by" block.
@@ -192,7 +197,7 @@
     const l = window.L(p.landlordId);
     const h = holderOf(rec);
     const html = buildPI(p, rec, l);
-    const sch = (window.S && S.agency) || {};
+    const sch = ST().agency || {};
     const ready = sch.schemeAdminAddress && sch.schemeAdminPhone && sch.schemeAdminEmail && rec.scheme && rec.schemeRef;
 
     const body = `<div class="note${h === 'landlord' ? ' warn' : ''}" style="margin-bottom:12px">
@@ -211,7 +216,7 @@
   async function email(pid) {
     const p = window.P(pid), rec = window.tenantRecFor(pid), l = window.L(p.landlordId);
     const html = buildPI(p, rec, l);
-    const isPerm = o => (o.personType || 'joint') === 'permitted' || (o.age !== '' && o.age != null && +o.age < 18);
+    const isPerm = o => window.isPermittedOccupier ? window.isPermittedOccupier(o) : (o.personType || 'joint') === 'permitted';
     const to = [rec.email].concat((rec.occupants || []).filter(o => o.email && !isPerm(o)).map(o => o.email)).filter(Boolean);
     if (!to.length) { window.toast('No tenant email on file', 1); return; }
     const subj = 'Prescribed information \u2014 your tenancy deposit \u2014 ' + (p.address || '');
