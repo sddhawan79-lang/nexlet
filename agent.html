@@ -2152,9 +2152,16 @@ async function fileLetter({landlordId,propertyId,type,subject,html,to}){
   return row;
 }
 window.fileLetter=o=>fileLetter(o);
+/* The stored copy, or null. Every "see what was sent" affordance keys off this
+   rather than off the sent flag — letters sent before retention existed have a
+   date but no copy, and offering to show one that cannot be shown is worse than
+   saying plainly that it is gone. */
+function sentMoniesCopy(pid){
+  return (S.letters||[]).find(x=>x.property_id===pid&&x.type==='move_in_monies'&&x.body_html)||null;
+}
 function viewSentMonies(pid){
   const p=P(pid)||{};
-  const rows=(S.letters||[]).filter(x=>x.property_id===pid&&x.type==='move_in_monies')
+  const rows=(S.letters||[]).filter(x=>x.property_id===pid&&x.type==='move_in_monies'&&x.body_html)
     .sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
   if(!rows.length){ toast('No sent copy on file — letters sent before this was added were not retained',1); return; }
   if(rows.length===1) return _openLetter(rows[0]);
@@ -2188,18 +2195,24 @@ function preSigningPanel(p){
   if(rec.origContractName) return '';   // already-signed contract uploaded instead
   const names=(typeof _tnPeopleView==='function'?_tnPeopleView(rec):[]).filter(x=>x.name).map(x=>x.name);
   const who=names.length?names.join(', '):(rec.name||'the tenant');
+  const copy=sentMoniesCopy(p.id);
+  const moniesBtns=`<button class="btn sm" onclick="openMoveInMonies('${p.id}')">${rec.moniesSentAt
+      ?'Monies letter — sent '+esc(fmtDate(rec.moniesSentAt))+(copy?'':', no copy kept')
+      :'Move-in monies letter'}</button>
+    ${copy?`<button class="btn sm" onclick="viewSentMonies('${p.id}')">See what was sent</button>`:''}`;
   if(ta&&ta.status==='sent') return `<div class="panel" style="margin-bottom:14px;border-color:var(--amber)">
-    <div class="panel-bd" style="display:flex;align-items:center;gap:10px;padding:12px 20px">
+    <div class="panel-bd" style="padding:12px 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <span style="color:var(--amber);font-weight:700">⏳</span>
-      <span style="font-size:12.5px;font-weight:600;color:var(--navy)">Agreement sent ${esc(fmtDate(ta.created_at))} — awaiting signature from ${esc(who)}</span>
-      <button class="btn sm" style="margin-left:auto" onclick="openTenancyAgreement('${p.id}')">Resend</button>
+      <span style="font-size:12.5px;font-weight:600;color:var(--navy);flex:1;min-width:230px">Agreement sent ${esc(fmtDate(ta.created_at))} — awaiting signature from ${esc(who)}</span>
+      ${moniesBtns}
+      <button class="btn sm" onclick="openTenancyAgreement('${p.id}')">Resend</button>
     </div></div>`;
   return `<div class="panel" style="margin-bottom:14px;border-color:var(--navy)">
     <div class="panel-hd"><h2 style="font-size:13px">Ready to send the tenancy agreement</h2>
       <span class="faint" style="font-size:11.5px">${esc(who)}</span></div>
     <div style="padding:13px 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <p class="hint" style="margin:0;flex:1;min-width:220px">Generates the agreement from this tenancy's details and emails it for e-signature. Each signatory signs in turn and everyone gets the completed copy.</p>
-      <button class="btn sm" onclick="openMoveInMonies('${p.id}')">${rec.moniesSentAt?'Monies letter — sent '+esc(fmtDate(rec.moniesSentAt)):'Move-in monies letter'}</button>
+      ${moniesBtns}
       <button class="btn navy sm" onclick="openTenancyAgreement('${p.id}')">✨ Generate &amp; send for signing</button>
     </div></div>`;
 }
@@ -2232,8 +2245,11 @@ function postSigningPanel(p){
           <div style="flex:1;font-size:12.5px;font-weight:600;color:var(--navy)">${esc(t.t)}</div>
           <button class="btn sm" onclick="${t.go}">Do it</button></div>`).join('')}
       </div>
-      <div style="display:flex;gap:8px;margin-top:12px">
-        <button class="btn sm" onclick="openMoveInMonies('${p.id}')">${rec.moniesSentAt?'Move-in monies — sent '+esc(fmtDate(rec.moniesSentAt)):'Move-in monies letter'}</button>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+        <button class="btn sm" onclick="openMoveInMonies('${p.id}')">${rec.moniesSentAt
+          ?'Move-in monies — sent '+esc(fmtDate(rec.moniesSentAt))+(sentMoniesCopy(p.id)?'':', no copy kept')
+          :'Move-in monies letter'}</button>
+        ${sentMoniesCopy(p.id)?`<button class="btn sm" onclick="viewSentMonies('${p.id}')">See what was sent</button>`:''}
         <button class="btn sm" onclick="openMoveIn('${p.id}')">Full first-day checklist</button>
       </div>
     </div></div>`;
@@ -3440,8 +3456,10 @@ function openMoveInMonies(pid){
   if(!m.rec.id){ toast('Set up the tenancy first',1); return; }
   const row=(a,b,neg)=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px">
     <span style="color:var(--navy)">${esc(a)}</span><span style="font-weight:600;color:${neg?'var(--green)':'var(--navy)'}">${neg?'− ':''}£${b.toFixed(2)}</span></div>`;
-  const sent=m.rec.moniesSentAt;
-  const body=`${sent?`<div class="note ok" style="margin-bottom:12px"><b>Already sent ${esc(fmtDate(sent))}.</b> Send again only if the figures or the payment details have changed — the tenant has had one of these.</div>`:''}
+  const sent=m.rec.moniesSentAt, sentCopy=sentMoniesCopy(pid);
+  const body=`${sent?`<div class="note${sentCopy?' ok':' warn'}" style="margin-bottom:12px"><b>Already sent ${esc(fmtDate(sent))}.</b>
+      ${sentCopy?'Send again only if the figures or the payment details have changed — the tenant has had one of these.'
+        :'No copy of it was kept, so there is no way to confirm what the tenant was told. Sending again is the only way to get a filed copy — check the figures below first.'}</div>`:''}
     <div class="note${m.due?'':' ok'}" style="margin-bottom:14px">
       <b>${esc(m.p.address||'')}</b> · move-in ${m.rec.start?esc(fmtDate(m.rec.start)):'date not set'}<br>
       ${m.due?'Cleared funds are needed before keys are released.':'Nothing outstanding.'}</div>
@@ -3485,7 +3503,7 @@ function openMoveInMonies(pid){
   modal('Move-in monies — '+esc(m.rec.name||''), body,
     `<span class="hint" id="mim-gate" style="flex:1;text-align:left">Read the draft before it can be sent.</span>
      <button class="btn" onclick="closeModal()">Cancel</button>
-     ${sent?`<button class="btn" onclick="viewSentMonies('${pid}')">See what was sent</button>`:''}
+     ${sentCopy?`<button class="btn" onclick="viewSentMonies('${pid}')">See what was sent</button>`:''}
      <button class="btn" onclick="_sendMonies('${pid}',0)">Open draft</button>
      <button class="btn navy" id="mim-send" disabled style="opacity:.45;cursor:not-allowed" onclick="_sendMonies('${pid}',1)">${sent?'Resend to the tenant':'Email the tenant'}</button>`, true);
 }
