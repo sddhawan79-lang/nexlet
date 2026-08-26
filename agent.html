@@ -2061,6 +2061,38 @@ function lifecycleStepper(p){
 // Shown only in the window between "everyone has signed" and "first day done".
 // The pre-signing counterpart to postSigningPanel: tenancy set up, agreement not
 // yet out. Shown only in that window, so it disappears once sent.
+/* True when the stored deposit does not match any lawful week multiple of the
+   CURRENT rent. Independent of rent history, so it also catches figures that
+   went stale before the re-derive existed. */
+function depositMismatch(pid){
+  const rec=tenantRecFor(pid); const p=P(pid)||{};
+  if(!rec||!rec.id) return null;
+  const rent=parseFloat(rec.rent||p.rent)||0, dep=parseFloat(rec.deposit)||0;
+  if(!rent||!dep) return null;
+  const cap=depositCap(rent); if(!cap) return null;
+  const opts=[4,5,cap.weeks===6?6:null].filter(Boolean);
+  if(opts.some(w=>Math.abs(dep-depositForWeeks(rent,w))<0.5)) return null;
+  const over=dep>cap.cap+0.005;
+  return {rent,dep,cap,over,suggested:depositForWeeks(rent,cap.weeks),weeks:cap.weeks,
+          received:!!rec.depositReceived};
+}
+async function fixDeposit(pid){
+  const m=depositMismatch(pid); if(!m) return;
+  const rec=tenantRecFor(pid); if(!rec) return;
+  rec.deposit=m.suggested.toFixed(2);
+  if(!await pushTenantRec(rec)){ toast('⚠ Could not save the deposit — retry',1); return; }
+  render(); toast('✓ Deposit set to '+gbp(m.suggested)+' ('+m.weeks+' weeks of '+gbp(m.rent)+')');
+}
+function depositMismatchBanner(p){
+  const m=depositMismatch(p.id); if(!m) return '';
+  return `<div class="note ${m.over?'warn':''}" style="margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <span style="flex:1;min-width:240px">${m.over
+      ? `<b>Deposit is above the statutory cap.</b> £${m.dep.toFixed(2)} exceeds the ${m.cap.weeks}-week maximum of £${m.cap.cap.toFixed(2)} at ${gbp(m.rent)} rent. A deposit above the cap is unlawfully taken and the excess must be repaid.`
+      : `<b>Deposit does not match the rent.</b> £${m.dep.toFixed(2)} is not a week multiple of ${gbp(m.rent)} — ${m.cap.weeks} weeks would be £${m.suggested.toFixed(2)}. Letters and the agreement will quote the stored figure.`}
+      ${m.received?' <b>Recorded as already received</b>, so check what was actually paid before changing it.':''}</span>
+    <button class="btn sm ${m.over?'':'navy'}" onclick="fixDeposit('${p.id}')">Set to £${m.suggested.toFixed(2)}</button>
+  </div>`;
+}
 function preSigningPanel(p){
   const rec=tenantRecFor(p.id); if(!rec||!rec.id) return '';
   const ta=tenancyAgreementFor(rec.id);
@@ -2207,6 +2239,7 @@ function vPropertyDetail(){
       <div style="display:flex;gap:8px">${(()=>{ const a=agreementFor(l.id); return a&&a.status==='sent'?`<button class="btn sm" style="border-color:var(--amber);color:var(--amber)" onclick="sendAgreementReminder('${a.id}')">Send reminder</button><button class="btn sm" onclick="openAgreement('${l.id}')" title="Start over with a new agreement">Re-send agreement</button>`:`<button class="btn navy sm" onclick="openAgreement('${l.id}')">Send agreement to sign</button>`; })()}</div>
     </div>`:''}
     ${lifecycleStepper(p)}
+    ${depositMismatchBanner(p)}
     ${preSigningPanel(p)}
     ${postSigningPanel(p)}
     ${tenancyChecklistPanel(p)}
@@ -2656,7 +2689,7 @@ function _tnTenancyTabHtml(pid){ const rec=tenantRecFor(pid); const d=window._tn
   ${rent?`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:-4px 0 10px">
     <span class="faint" style="font-size:11.5px">Weeks of rent:</span>
     ${[4,5,cap&&cap.weeks===6?6:null].filter(Boolean).map(w=>`<button type="button" class="btn sm${weeks===w?' navy':''}" onclick="_tnDepWeeks('${pid}',${w})">${w} — \u00a3${depositForWeeks(rent,w).toFixed(2)}</button>`).join('')}
-    ${stale?`<span style="font-size:11.5px;color:var(--amber);font-weight:600">Currently \u00a3${dep.toFixed(2)} — doesn't match ${weeks} weeks at the current rent</span>`:''}
+    ${stale?`<button type="button" class="btn sm" style="border-color:var(--amber);color:var(--amber);font-weight:600" onclick="_tnDepWeeks('${pid}',${weeks})">Currently \u00a3${dep.toFixed(2)} — set to \u00a3${suggested.toFixed(2)} (${weeks} weeks)</button>`:''}
   </div>`:''}
   ${over?`<div class="note warn" style="margin:-4px 0 10px"><b>Over the statutory cap.</b> \u00a3${dep.toFixed(2)} exceeds the ${cap.weeks}-week maximum of \u00a3${cap.cap.toFixed(2)} for this rent. A deposit above the cap is unlawfully taken under the Tenant Fees Act 2019 — the excess must be repaid before it can be protected.</div>`:''}
   <div style="background:#F6F8FB;border:1px solid var(--border);border-radius:10px;padding:16px;margin-top:6px">
