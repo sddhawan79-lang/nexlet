@@ -224,8 +224,9 @@ const invToRow=i=>({id:i.id,agency_id:window._agencyId,no:i.no,landlord_id:i.lan
 
 // ── targeted writes (§4). No-ops in DEMO mode; toast on error in LIVE. ──
 async function _w(promise,_tbl,_op,_rec){ const _audit=()=>{ if(_tbl&&window.NexLetAudit) window.NexLetAudit.noteWrite(_tbl,_op,_rec); };
-  if(!LIVE){ _audit(); return; }
-  try{ const {error}=await promise; if(error){console.error(error);toast('⚠ Save failed: '+(error.message||'unknown error')+' — retry',1);return;} _audit(); }catch(e){ console.error(e); toast('⚠ Save failed: '+(e.message||'unknown error')+' — retry',1); } }
+  if(!LIVE){ _audit(); return true; }
+  try{ const {error}=await promise; if(error){console.error(error);toast('⚠ Save failed: '+(error.message||'unknown error')+' — retry',1);return false;} _audit(); return true; }
+  catch(e){ console.error(e); toast('⚠ Save failed: '+(e.message||'unknown error')+' — retry',1); return false; } }
 const pushLandlord =l  =>_w(sb.from('agency_landlords').upsert(landlordToRow(l)),'agency_landlords','upsert',l);
 const pushProperty =p  =>_w(sb.from('properties').upsert(propToRow(p)),'properties','upsert',p);
 const pushListing  =l  =>_w(sb.from('agency_listings').upsert({id:l.id,agency_id:window._agencyId,data:l,updated_at:new Date().toISOString()}),'agency_listings','upsert',l);
@@ -3239,16 +3240,43 @@ function moveInTasks(pid){
     {k:'pack',t:'Move-in pack emailed',done:!!rec.moveInPackSentAt,go:"go('properties')"}
   ].filter(Boolean);
 }
+function _workingDaysBefore(dateStr,days){
+  /* Counts back N working days, skipping Saturdays and Sundays. Bank holidays are
+     not knowable offline, so the letter says "working days" and the agent can
+     override the date — better than a wrong date presented as certain. */
+  if(!dateStr) return '';
+  const d=new Date(dateStr+'T12:00:00'); if(isNaN(d)) return '';
+  let left=days;
+  while(left>0){ d.setDate(d.getDate()-1); const wd=d.getDay(); if(wd!==0&&wd!==6) left--; }
+  return d.toISOString().slice(0,10);
+}
+/* Bank details and the holding-deposit date live as JSON inside the existing
+   pay_details text column, so this needs no migration. Legacy free text entered
+   before this change still reads back and still prints. */
+function _payParse(raw){
+  const empty={acc:'',sort:'',no:'',ref:'',holdDate:'',legacy:''};
+  if(!raw) return empty;
+  if(typeof raw==='object') return Object.assign(empty,raw);
+  const s=String(raw).trim();
+  if(s.startsWith('{')){ try{ return Object.assign(empty,JSON.parse(s)); }catch(e){} }
+  return Object.assign(empty,{legacy:s});
+}
 function moveInMonies(pid){
   const p=P(pid)||{}, rec=tenantRecFor(pid)||{}, l=L(p.landlordId)||{};
   const rent=parseFloat(rec.rent)||0, dep=parseFloat(rec.deposit)||0;
   const hold=parseFloat(rec.holdingDeposit)||0;
   const held=window.NexLetDeposit?NexLetDeposit.holderOf(rec):'landlord';
   const agentTakesMoney=typeof holdsClientMoney==='function'?holdsClientMoney():false;
-  const depIn=!!rec.depositReceived;          // recorded as received — do not ask again
+  const depIn=!!rec.depositReceived;
   const rentIn=!!rec.firstRentReceived;
+  const pay=_payParse(rec.payDetails);
   const due=Math.max(0,(rentIn?0:rent)+(depIn?0:dep)-hold);
-  return {p,rec,l,rent,dep,hold,due,held,agentTakesMoney,depIn,rentIn};
+  /* Default deadline: three working days before move-in, so funds have time to
+     clear. An explicitly chosen date always wins — rushed tenancies are real. */
+  const autoBy=_workingDaysBefore(rec.start,3);
+  const by=rec.moniesDueBy||autoBy;
+  const manual=!!rec.moniesDueBy&&rec.moniesDueBy!==autoBy;
+  return {p,rec,l,rent,dep,hold,due,held,agentTakesMoney,depIn,rentIn,pay,by,autoBy,manual};
 }
 function openMoveInMonies(pid){
   const m=moveInMonies(pid);
@@ -3260,66 +3288,103 @@ function openMoveInMonies(pid){
     <div class="note${m.due?'':' ok'}" style="margin-bottom:14px">
       <b>${esc(m.p.address||'')}</b> · move-in ${m.rec.start?esc(fmtDate(m.rec.start)):'date not set'}<br>
       ${m.due?'Cleared funds are needed before keys are released.':'Nothing outstanding.'}</div>
-    ${row('First month\'s rent'+(m.rentIn?' — received':''),m.rent)}
+
+    ${row('First month\'s rent',m.rent)}
     ${m.rentIn?row('Rent already received',m.rent,true):''}
-    ${m.dep?row('Deposit'+(m.depIn?' — received '+fmtDate(m.rec.depositReceived):''),m.dep):''}
-    ${m.dep&&m.depIn?row('Deposit already received',m.dep,true):''}
-    ${m.hold?row('Holding deposit already paid',m.hold,true):''}
+    ${m.dep?row('Deposit',m.dep):''}
+    ${m.dep&&m.depIn?row('Deposit received '+fmtDate(m.rec.depositReceived),m.dep,true):''}
+    ${m.hold?row('Holding deposit paid'+(m.pay.holdDate?' '+fmtDate(m.pay.holdDate):''),m.hold,true):''}
     <div style="display:flex;justify-content:space-between;padding:11px 0;font-size:15px">
-      <span style="font-weight:700;color:var(--navy)">Due before move-in</span>
+      <span style="font-weight:700;color:var(--navy)">Final amount to pay</span>
       <span style="font-weight:700;color:var(--navy)">£${m.due.toFixed(2)}</span></div>
-    <div class="fg" style="margin-top:6px"><label>Holding deposit already paid (£)</label>
-      <input id="mim-hold" type="number" step="0.01" value="${m.hold||''}" placeholder="0.00"></div>
-    <div class="fg"><label>Payment details to quote in the letter</label>
-      <textarea id="mim-pay" rows="3" placeholder="Account name, sort code, account number, reference">${esc(m.rec.payDetails||'')}</textarea>
-      <span class="hint">${m.agentTakesMoney?'Your client account details.':'The <b>landlord\'s</b> account details — rent and deposit are paid direct to them, not to us.'}</span></div>
+
+    ${_stepDivider(1,'Holding deposit')}
+    <div class="grid2" style="gap:10px">
+      <div class="fg"><label>Amount already paid (£)</label>
+        <input id="mim-hold" type="number" step="0.01" value="${m.hold||''}" placeholder="0.00"></div>
+      <div class="fg"><label>Date it was paid</label>
+        <input id="mim-holddate" type="date" value="${esc(m.pay.holdDate)}"></div></div>
+    <p class="hint" style="margin:-4px 0 12px">Deducted from the balance and shown on the letter, so the tenant can see it credited. A holding deposit is capped at one week's rent under the Tenant Fees Act.</p>
+
+    ${_stepDivider(2,'Where the money goes')}
+    <div class="note${m.agentTakesMoney?'':' warn'}" style="margin-bottom:11px">
+      ${m.agentTakesMoney?'Funds come to the agency client account.':'<b>Paid direct to the landlord.</b> We hold no client money, so these must be the landlord\'s account details — the letter tells the tenant not to send funds to us.'}</div>
+    <div class="grid2" style="gap:10px">
+      <div class="fg"><label>Account name</label><input id="mim-acc" value="${esc(m.pay.acc)}" placeholder="Mr N S K Trivedi"></div>
+      <div class="fg"><label>Payment reference</label><input id="mim-ref" value="${esc(m.pay.ref||(m.p.address||'').split(' ')[0]+' '+(m.rec.name||'').split(' ').pop())}"></div></div>
+    <div class="grid2" style="gap:10px">
+      <div class="fg"><label>Sort code</label><input id="mim-sort" value="${esc(m.pay.sort)}" placeholder="00-00-00" maxlength="8"></div>
+      <div class="fg"><label>Account number</label><input id="mim-no" value="${esc(m.pay.no)}" placeholder="12345678" maxlength="8"></div></div>
+    ${m.pay.legacy?`<p class="hint" style="margin:-4px 0 10px">Previously entered as free text and still on file: <span style="color:var(--navy)">${esc(m.pay.legacy)}</span></p>`:''}
+
+    ${_stepDivider(3,'Deadline')}
+    <div class="fg"><label>Cleared funds needed by</label>
+      <input id="mim-by" type="date" value="${esc(m.by)}">
+      <span class="hint">${m.autoBy?`Three working days before move-in is <b>${esc(fmtDate(m.autoBy))}</b>${m.manual?' — you have set a different date, which the letter will use without the three-day wording.':', which gives the payment time to clear. Change it for a rushed move-in.'}`:'Set the tenancy start date to get a suggested deadline.'}</span></div>
     <div class="fg"><label style="display:flex;align-items:center;gap:8px;font-weight:400">
       <input id="mim-rentin" type="checkbox" ${m.rentIn?'checked':''} style="width:auto;margin:0">
       First month's rent already received</label>
-      <span class="hint">${m.depIn?'The deposit is recorded as received on '+esc(fmtDate(m.rec.depositReceived))+', so it is not asked for again.':'Tick once rent has cleared, so the letter does not ask for it twice.'}</span></div>
-    <div class="fg"><label>Deadline for cleared funds</label>
-      <input id="mim-by" type="date" value="${esc(m.rec.moniesDueBy||m.rec.start||'')}"></div>`;
+      <span class="hint">${m.depIn?'The deposit is recorded as received on '+esc(fmtDate(m.rec.depositReceived))+', so it is not asked for again.':'Tick once rent has cleared, so the letter does not ask for it twice.'}</span></div>`;
   modal('Move-in monies — '+esc(m.rec.name||''), body,
     `<button class="btn" onclick="closeModal()">Cancel</button>
      <button class="btn" onclick="_sendMonies('${pid}',0)">Preview</button>
      <button class="btn navy" onclick="_sendMonies('${pid}',1)">${sent?'Resend to the tenant':'Email the tenant'}</button>`, true);
 }
 async function _sendMonies(pid,send){
-  const hold=parseFloat(val('mim-hold'))||0, pay=val('mim-pay')||'', by=val('mim-by')||'';
-  const rentEl=document.getElementById('mim-rentin');
   const rec=tenantRecFor(pid); if(!rec) return;
-  rec.holdingDeposit=hold; rec.payDetails=pay; rec.moniesDueBy=by;
+  const prev=_payParse(rec.payDetails);
+  rec.holdingDeposit=parseFloat(val('mim-hold'))||0;
+  rec.payDetails=JSON.stringify({acc:val('mim-acc')||'',sort:val('mim-sort')||'',no:val('mim-no')||'',
+    ref:val('mim-ref')||'',holdDate:val('mim-holddate')||'',legacy:prev.legacy||''});
+  rec.moniesDueBy=val('mim-by')||'';
+  const rentEl=document.getElementById('mim-rentin');
   if(rentEl) rec.firstRentReceived=rentEl.checked?(rec.firstRentReceived||new Date().toISOString()):'';
-  pushTenantRec(rec);   // persist before branching — preview must not lose typed input
+  // Persist before branching — preview must not lose typed input — and never email
+  // on the back of a failed save, or the sent flag is lost and the tenant gets
+  // the letter twice.
+  if(!await pushTenantRec(rec)){ toast('⚠ Nothing sent — the tenancy could not be saved. Retry.',1); return; }
   const m=moveInMonies(pid), b=agencyBrand();
   const payee=m.agentTakesMoney?b.name:(landlordName(m.l)||'your landlord');
-  const line=(a,v,neg)=>`<tr><td style="padding:6px 0">${a}</td><td style="padding:6px 0;text-align:right${neg?';color:#1B7A4B':''}">${neg?'&minus; ':''}&pound;${v.toFixed(2)}</td></tr>`;
-  const inner=`<p>Dear ${esc(m.rec.name||'')},</p>
-    <p>Thank you for completing the paperwork for <b>${esc(m.p.address||'')}</b>. This letter sets out the monies needed before the tenancy begins${m.rec.start?' on '+fmtDate(m.rec.start):''}.</p>
-    <table style="width:100%;border-collapse:collapse;font-size:14px;margin:14px 0">
-      ${line('First month\'s rent',m.rent)}
-      ${m.rentIn?line('Rent already received',m.rent,true):''}
+  const first=(m.rec.name||'').trim().split(' ')[0];
+  const others=(m.rec.occupants||[]).filter(o=>o.name&&!(window.isPermittedOccupier&&window.isPermittedOccupier(o)));
+  const greet=others.length?[first].concat(others.map(o=>o.name.trim().split(' ')[0])).join(' and '):first;
+  const line=(a,v,neg)=>`<tr><td style="padding:7px 0;border-bottom:1px solid #EDE6D8">${a}</td>
+    <td style="padding:7px 0;border-bottom:1px solid #EDE6D8;text-align:right;white-space:nowrap${neg?';color:#1B7A4B':''}">${neg?'&minus; ':''}&pound;${v.toFixed(2)}</td></tr>`;
+  const bank=[['Account name',m.pay.acc],['Sort code',m.pay.sort],['Account number',m.pay.no],['Reference',m.pay.ref]].filter(x=>x[1]);
+  const inner=`<p>Dear ${esc(greet||'')},</p>
+    <p>We are pleased to tell you that your references for <b>${esc(m.p.address||'')}</b> have come back and been approved. Thank you for your patience while those were completed — everything is now in order for the tenancy to go ahead${m.rec.start?' on <b>'+fmtDate(m.rec.start)+'</b>':''}.</p>
+    <p>The last step before we can hand over the keys is the move-in payment. The figures are set out below.</p>
+    <table style="width:100%;border-collapse:collapse;font-size:14px;margin:16px 0">
+      ${line('First month\u2019s rent',m.rent)}
+      ${m.rentIn?line('Rent already received — thank you',m.rent,true):''}
       ${m.dep?line('Deposit',m.dep):''}
-      ${m.depIn?line('Deposit received '+fmtDate(m.rec.depositReceived),m.dep,true):''}
-      ${m.hold?line('Holding deposit already received',m.hold,true):''}
-      <tr><td style="padding:9px 0;border-top:2px solid #1B2F4A;font-weight:700">Due before move-in</td>
-          <td style="padding:9px 0;border-top:2px solid #1B2F4A;text-align:right;font-weight:700">&pound;${m.due.toFixed(2)}</td></tr>
+      ${m.depIn?line('Deposit received '+fmtDate(m.rec.depositReceived)+' — thank you',m.dep,true):''}
+      ${m.hold?line('Holding deposit paid'+(m.pay.holdDate?' on '+fmtDate(m.pay.holdDate):'')+' — credited in full',m.hold,true):''}
+      <tr><td style="padding:11px 0;border-top:2px solid #1B2F4A;font-weight:700;font-size:15px">Final amount to pay</td>
+          <td style="padding:11px 0;border-top:2px solid #1B2F4A;text-align:right;font-weight:700;font-size:15px">&pound;${m.due.toFixed(2)}</td></tr>
     </table>
-    <p><b>Payable to ${esc(payee)}</b>${m.agentTakesMoney?'':' — your landlord receives the rent and deposit directly. Please do not send funds to us.'}</p>
-    ${pay?'<p style="background:#FAF6EE;border:1px solid #EADFC8;border-radius:8px;padding:12px;font-size:13.5px;white-space:pre-line">'+esc(pay)+'</p>':''}
-    <p>Funds must be <b>cleared</b>${by?' by '+fmtDate(by):' before the move-in date'}. Keys cannot be released until they are, and until the tenancy agreement is signed by everyone named on it.</p>
-    ${m.dep?'<p>Your deposit will be protected in a government-approved scheme within 30 days of receipt, and you will be sent the prescribed information confirming where it is held and how to get it back.</p>':''}
-    <p>If anything here does not match what you were expecting, tell us before you send any money.</p>`;
-  const subject='Move-in monies — '+(m.p.address||'');
+    ${m.hold?'<p>Your holding deposit has been credited against the amount above in full, so there is nothing further to pay in respect of it.</p>':''}
+    <p><b>Please pay ${esc(payee)} direct.</b>${m.agentTakesMoney?'':' Your landlord receives the rent and the deposit themselves — please do not send any funds to us, and do not use any account details other than those below.'}</p>
+    ${bank.length?`<table style="border-collapse:collapse;font-size:14px;margin:12px 0;background:#FAF6EE;border:1px solid #EADFC8;border-radius:8px">
+      ${bank.map(x=>`<tr><td style="padding:7px 14px;color:#5A6B82">${x[0]}</td><td style="padding:7px 14px;font-weight:700;color:#1B2F4A">${esc(x[1])}</td></tr>`).join('')}
+    </table>`:''}
+    <p>Please make sure the funds are <b>cleared${m.by?' by '+fmtDate(m.by):''}</b>${m.by&&!m.manual?', which is three working days before your move-in date and allows time for the payment to reach the account':''}. Bank transfers are not always instant, so please do not leave it to the last day. Keys cannot be released until the money has cleared and the tenancy agreement has been signed by everyone named on it.</p>
+    ${m.dep&&!m.depIn?`<p>Once your deposit is received it will be protected in a government-approved tenancy deposit scheme within 30 days, and you will be sent the prescribed information telling you where it is held and how to get it back at the end of the tenancy.</p>`:''}
+    <p>If any of the figures or details above are not what you were expecting, please tell us before you send anything. We would rather answer a question than untangle a payment.</p>
+    <p>We are looking forward to welcoming you to your new home.</p>`;
+  const subject='Move-in payment — '+(m.p.address||'');
   const html=letterWrap(subject,inner);
   if(!send){ const w=window.open('','_blank'); if(!w){ toast('Allow pop-ups to preview',1); return; } w.document.write(html); w.document.close(); return; }
   if(!m.rec.email){ toast('No email address on the tenancy',1); return; }
-  await agencyEmail(m.rec.email,subject,html);
+  const to=[m.rec.email].concat(others.map(o=>o.email).filter(Boolean));
+  for(const addr of to) await agencyEmail(addr,subject,html);
   rec.moniesSentAt=new Date().toISOString();
-  pushTenantRec(rec);
+  await pushTenantRec(rec);
   if(window.NexLetAudit) NexLetAudit.log({action:'email.sent',entity:'tenant',entityId:rec.id,
-    entityLabel:(rec.name||'')+' — '+(m.p.address||''),detail:{document:'Move-in monies letter',due:'£'+m.due.toFixed(2),payableTo:payee}});
-  closeModal(); render(); toast('✓ Move-in monies letter sent');
+    entityLabel:(rec.name||'')+' — '+(m.p.address||''),
+    detail:{document:'Move-in payment letter',finalAmount:'£'+m.due.toFixed(2),holdingDepositCredited:m.hold?'£'+m.hold.toFixed(2):'none',
+      payableTo:payee,clearedBy:m.by||'not set',recipients:to.join(', ')}});
+  closeModal(); render(); toast('✓ Move-in payment letter sent');
 }
 function openMoveIn(pid){
   const p=P(pid)||{}, rec=tenantRecFor(pid)||{};
