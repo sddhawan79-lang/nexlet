@@ -2209,7 +2209,6 @@ async function _doSend(){
   try{ await o.onSend(); }catch(e){ console.error(e); toast('⚠ Could not send — '+(e.message||'retry'),1); }
   _pendingSend=null;
 }
-window.confirmSend=o=>confirmSend(o);
 /* Records a sent document in agency_letters so it can be re-opened exactly as
    sent. Shared, because every send needs it and each one was doing it or not. */
 async function fileLetter({landlordId,propertyId,type,subject,html,to}){
@@ -2220,7 +2219,6 @@ async function fileLetter({landlordId,propertyId,type,subject,html,to}){
   S.letters=S.letters||[]; S.letters.unshift({...row,created_at:new Date().toISOString()});
   return row;
 }
-window.fileLetter=o=>fileLetter(o);
 /* The stored copy, or null. Every "see what was sent" affordance keys off this
    rather than off the sent flag — letters sent before retention existed have a
    date but no copy, and offering to show one that cannot be shown is worse than
@@ -5401,7 +5399,6 @@ function hhMembers(rec){
    what it is for, that saying "not related" is not a problem, and what happens
    if the household changes. A form that frightens people gets guessed answers,
    and a guessed answer is worse than no declaration. */
-window._docStamp=p=>_docStamp(p);
 function _docStamp(prefix){
   const d=new Date();
   const pad=n=>String(n).padStart(2,'0');
@@ -5570,8 +5567,6 @@ async function sendCondensationForSigning(pid){
   toast(failed.length?'⚠ Sent, but these bounced: '+failed.join(', '):'✓ Sent to '+signatories.length+' for signature',failed.length?1:0);
 }
 function condensationDeclFor(tid){ return (S.tenancyAgreements||[]).filter(a=>a.tenant_id===tid&&a.doc_type==='condensation').sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0))[0]; }
-window.sendCondensationForSigning=pid=>sendCondensationForSigning(pid);
-window.condensationDeclFor=tid=>condensationDeclFor(tid);
 async function _hhSend(pid){
   const rec=_hhSave(pid); if(!rec) return;
   const unanswered=_hhUnanswered(pid);
