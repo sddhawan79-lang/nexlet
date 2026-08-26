@@ -1819,17 +1819,10 @@ function vLandlordDetail(){
           ${(d.isCompany||d.directorId)?docRow('Director / owner ID — 1',d.directorId,'🪪','directorId'):''}
           ${(d.directors||[]).map((dir,i)=>docRow('Director / owner ID — '+(i+2)+(dir.name?' ('+esc(dir.name)+')':''),dir.fileName,'🪪','directorExtra_'+i)).join('')}
           ${docRow('Proof of ownership',d.ownership,'📜','ownership',d.ownershipDate)}
-          ${(d.isMortgaged||d.mortgageConsent)?docRow('Mortgage consent-to-let <span class="faint">(landlord\'s own responsibility to obtain)</span>',d.mortgageConsent,'🏦','mortgageConsent'):''}
-          ${(d.isLeasehold||d.freeholderConsent)?docRow('Freeholder consent',d.freeholderConsent,'🔑','freeholderConsent'):''}
+          ${(d.isMortgaged||d.mortgageConsent)?docRow('Mortgage consent-to-let <span class="faint">(landlord\'s own responsibility to obtain)</span>',d.mortgageConsent,'🏦','mortgageConsent',d.mortgageConsentDate):''}
+          ${(d.isLeasehold||d.freeholderConsent)?docRow('Freeholder consent <span class="faint">(only if the lease requires it)</span>',d.freeholderConsent,'🔑','freeholderConsent',d.freeholderConsentDate):''}
           ${docRow('Signed management agreement',d.agreement,'✍️','agreement')}
-    ${docRow('Consent to let (mortgage lender)',d.mortgageConsent,'🏦','mortgageConsent',d.mortgageConsentDate)}
-    ${docRow('Freeholder consent to let',d.freeholderConsent,'🔑','freeholderConsent',d.freeholderConsentDate)}
-    ${(l.entity==='company'||d.incorporation||d.directorId)?`
-      ${docRow('Certificate of incorporation',d.incorporation,'🏢','incorporation',d.incorporationDate)}
-      ${docRow('Director photo ID',d.directorId,'👤','directorId',d.directorIdDate)}`:''}
-    ${(l.entity==='joint'||l.joint||d.id2||d.address2)?`
-      ${docRow('Owner 2 — photo ID'+(l.joint?' ('+esc(l.joint)+')':''),d.id2,'👤','id2',d.id2Date)}
-      ${docRow('Owner 2 — proof of address',d.address2,'🏠','address2',d.address2Date)}`:''}
+    ${(!d.isMortgaged&&!d.mortgageConsent)||(!d.isLeasehold&&!d.freeholderConsent)?`<div class="hint" style="padding:8px 2px 2px">${!d.isMortgaged&&!d.mortgageConsent?'<a href="#" onclick="event.preventDefault();llFlag(\'${l.id}\',\'isMortgaged\')">Property is mortgaged — add consent-to-let</a>':''}${((!d.isMortgaged&&!d.mortgageConsent)&&(!d.isLeasehold&&!d.freeholderConsent))?' · ':''}${!d.isLeasehold&&!d.freeholderConsent?'<a href="#" onclick="event.preventDefault();llFlag(\'${l.id}\',\'isLeasehold\')">Leasehold — add freeholder consent</a>':''}</div>`:''}
         </div></div>
       </div>
       <div>
@@ -4739,6 +4732,14 @@ async function udScanExpiry(file){
       if(st) st.innerHTML='<span style="color:var(--green)">✓ '+esc(file.name)+' attached · expiry '+esc(parsed.expiry)+' — review &amp; Save</span>';
     } else if(st) st.innerHTML='<span style="color:var(--green)">✓ '+esc(file.name)+' attached</span> — enter expiry manually.';
   }catch(e){ if(st) st.innerHTML='<span style="color:var(--green)">✓ '+esc(file.name)+' attached</span> — enter expiry manually.'; }
+}
+/* Reveals the matching consent row. These flags were settable only during
+   onboarding, so an existing landlord could never get the row at all. */
+async function llFlag(id,flag){
+  const l=L(id); l.docs=l.docs||{}; l.docs[flag]=true;
+  save();
+  if(!await pushLandlord(l)){ toast('⚠ Could not save — retry',1); return; }
+  render(); toast(flag==='isMortgaged'?'Mortgage consent row added':'Freeholder consent row added');
 }
 async function saveUploadDoc(id,col){
   const f=window._udFile; if(!f){ toast('Attach a file first',1); return; }
