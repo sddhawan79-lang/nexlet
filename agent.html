@@ -1822,6 +1822,14 @@ function vLandlordDetail(){
           ${(d.isMortgaged||d.mortgageConsent)?docRow('Mortgage consent-to-let <span class="faint">(landlord\'s own responsibility to obtain)</span>',d.mortgageConsent,'🏦','mortgageConsent'):''}
           ${(d.isLeasehold||d.freeholderConsent)?docRow('Freeholder consent',d.freeholderConsent,'🔑','freeholderConsent'):''}
           ${docRow('Signed management agreement',d.agreement,'✍️','agreement')}
+    ${docRow('Consent to let (mortgage lender)',d.mortgageConsent,'🏦','mortgageConsent',d.mortgageConsentDate)}
+    ${docRow('Freeholder consent to let',d.freeholderConsent,'🔑','freeholderConsent',d.freeholderConsentDate)}
+    ${(l.entity==='company'||d.incorporation||d.directorId)?`
+      ${docRow('Certificate of incorporation',d.incorporation,'🏢','incorporation',d.incorporationDate)}
+      ${docRow('Director photo ID',d.directorId,'👤','directorId',d.directorIdDate)}`:''}
+    ${(l.entity==='joint'||l.joint||d.id2||d.address2)?`
+      ${docRow('Owner 2 — photo ID'+(l.joint?' ('+esc(l.joint)+')':''),d.id2,'👤','id2',d.id2Date)}
+      ${docRow('Owner 2 — proof of address',d.address2,'🏠','address2',d.address2Date)}`:''}
         </div></div>
       </div>
       <div>
@@ -4696,7 +4704,11 @@ function saveComm(id){ const l=L(id); const note=val('cm-note'); if(!note){toast
 
 // ── DOC UPLOAD / PROPERTY ADD ──
 function uploadDoc(id,col,passedLabel){ const l=L(id);
-  const label=passedLabel||(col==='id'?'Photo ID (AML)':col==='ownership'?'Proof of ownership':'Signed agreement');
+  const DOC_LABELS={id:'Photo ID (AML)',address:'Proof of address (AML)',ownership:'Proof of ownership',
+    agreement:'Signed agreement',mortgageConsent:'Consent to let (mortgage lender)',
+    freeholderConsent:'Freeholder consent to let',incorporation:'Certificate of incorporation',
+    directorId:'Director photo ID',id2:'Owner 2 — photo ID',address2:'Owner 2 — proof of address'};
+  const label=passedLabel||DOC_LABELS[col]||'Document';
   const cur=l.docs&&l.docs[col]; const curExp=(col==='id'&&l.docs&&l.docs.idExpiry)||'';
   window._udFile=null;
   const body=`<div class="fg"><label>${label}</label>
@@ -4733,9 +4745,15 @@ async function saveUploadDoc(id,col){
   var l=S.landlords.find(x=>x.id===id); l.docs=l.docs||{}; l.docs[col]=f.name;
   const ext=(f.name.split('.').pop()||'pdf'); const url=await _storageUpload(f,id+'/'+col+'-'+Date.now()+'.'+ext,'property-documents');
   if(url) l.docs[col+'Url']=url;
+  l.docs[col+'Date']=today();
   if(col==='id'){ l.aml=true; const exp=val('ud-expiry'); if(exp) l.docs.idExpiry=exp; }
   if(col==='ownership')l.ownership=true; if(col==='agreement'){l.agreement=true;l.status='active';}
-  save(); pushLandlord(l); window._udFile=null; closeModal(); render(); toast('✓ Document attached');
+  save();
+  if(!await pushLandlord(l)){ toast('⚠ Attached, but the landlord could not be saved — retry',1); render(); return; }
+  window._udFile=null; closeModal(); render();
+  if(window.NexLetAudit) NexLetAudit.log({action:'doc.uploaded',entity:'landlord',entityId:l.id,
+    entityLabel:l.name||'',detail:{document:col,fileName:f.name}});
+  toast('✓ Document attached');
 }
 // ── Sanctions check post-onboarding (landlord detail page) ──
 async function ldRunSanctions(id){
