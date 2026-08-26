@@ -2370,9 +2370,45 @@ function editPropRent(pid){ const p=P(pid); const isLet=!!p.tenant;
   const body=`<div class="note" style="margin-bottom:14px">${isLet?'This property is let — enter the actual rent agreed with the tenant.':'This is the expected/asking rent while marketing. Once a tenant is set up, come back here to enter the achieved rent.'}</div>
     <div class="fg"><label>${isLet?'Achieved':'Expected'} rent (£/mo)</label><input id="pr-rent" type="number" value="${p.rent||''}"></div>`;
   modal((isLet?'Achieved':'Expected')+' rent — '+esc(p.address), body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="savePropRent('${pid}')">Save</button>`, true); }
-function savePropRent(pid){ const p=P(pid); const r=parseInt(val('pr-rent')); if(isNaN(r)||r<0){toast('Enter a valid rent',1);return;} p.rent=r;
+async function savePropRent(pid){ const p=P(pid); const r=parseInt(val('pr-rent')); if(isNaN(r)||r<0){toast('Enter a valid rent',1);return;} 
+  const oldRent=parseFloat(p.rent)||0;
+  p.rent=r;
   const l=L(p.landlordId); l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:(p.tenant?'Achieved':'Expected')+' rent for '+p.address+' set to '+gbp(r)+'/mo'});
-  save(); pushProperty(p); pushLandlord(l); closeModal(); render(); toast('✓ Rent updated'); }
+  /* The deposit is a multiple of weekly rent, so a rent change makes the stored
+     figure wrong. Re-derive it — but only where it was itself derived from the old
+     rent (within £15, so a figure rounded to the nearest £5 or £10 still matches).
+     A deposit the agent typed to some other number is left alone, and either way
+     we say what happened rather than changing money silently. */
+  let depNote='', depWarn=false;
+  const rec=tenantRecFor(pid);
+  if(rec&&rec.id&&oldRent&&r!==oldRent){
+    const dep=parseFloat(rec.deposit)||0;
+    const wkOld=w=>Math.floor((oldRent*12/52)*w*100)/100;
+    const derivedWeeks=[4,5,6].find(w=>Math.abs(dep-wkOld(w))<15);
+    if(dep&&!rec.depositReceived&&derivedWeeks){
+      /* The cap is rent-dependent — 6 weeks is lawful only at £50k+ annual rent —
+         so carrying the old week count across can produce an unlawful figure.
+         Clamp to whatever the NEW rent allows. */
+      const cap=depositCap(r);
+      const weeks=cap?Math.min(derivedWeeks,cap.weeks):derivedWeeks;
+      const nd=Math.min(depositForWeeks(r,weeks),cap?cap.cap:Infinity);
+      rec.deposit=nd.toFixed(2);
+      if(!await pushTenantRec(rec)){ toast('⚠ Rent saved, but the deposit could not be updated — retry',1); render(); return; }
+      depNote=' Deposit re-derived to '+gbp(nd)+' ('+weeks+' week'+(weeks===1?'':'s')+')'
+        +(weeks<derivedWeeks?' — reduced from '+derivedWeeks+' weeks, which is above the cap at this rent':'')+'.';
+    } else if(dep&&rec.depositReceived){
+      depNote=' Deposit left at '+gbp(dep)+' — already recorded as received.';
+    } else if(dep){
+      const cap=depositCap(r);
+      const over=cap&&dep>cap.cap+0.005;
+      depNote=' Deposit left at '+gbp(dep)+(over
+        ? ' — now ABOVE the '+cap.weeks+'-week cap of '+gbp(cap.cap)+' for this rent. A deposit over the cap is unlawfully taken; the excess must be repaid.'
+        : ' — not a standard week multiple, so check it.');
+      depWarn=true;
+    }
+  }
+  save(); pushProperty(p); pushLandlord(l); closeModal(); render();
+  toast('✓ Rent updated.'+depNote, depWarn?1:0); }
 function editPropFee(pid){ const p=P(pid);
   const body=`<div class="note" style="margin-bottom:14px">Set the management fee for <b>${esc(p.address)}</b>. This is per-property — charge a different rate here (e.g. a family/friends discount) without affecting the landlord's other properties. Invoices use each property's own rate.</div>
     <div class="fg"><label>Management fee (%)</label><div class="feebox"><input id="pf-fee" type="number" step="0.5" value="${propFee(p)}"> <span>% of ${gbp(p.rent)}/mo = <b id="pf-calc">${gbp(p.rent*propFee(p)/100)}/mo</b></span></div></div>`;
@@ -3368,6 +3404,7 @@ async function _sendMonies(pid,send){
     ${bank.length?`<table style="border-collapse:collapse;font-size:14px;margin:12px 0;background:#FAF6EE;border:1px solid #EADFC8;border-radius:8px">
       ${bank.map(x=>`<tr><td style="padding:7px 14px;color:#5A6B82">${x[0]}</td><td style="padding:7px 14px;font-weight:700;color:#1B2F4A">${esc(x[1])}</td></tr>`).join('')}
     </table>`:''}
+    ${bank.length?`<p><b>Your monthly rent goes to this same account.</b> Rent of &pound;${m.rent.toFixed(2)} is due on the <b>${esc(m.p.rentDueDay||'1st')}</b> of each month${m.rec.start?', starting the month after your tenancy begins':''}. Please set up a standing order for that amount, on that date, quoting the same reference — it saves you remembering and gives us both a clean record of every payment.</p>`:''}
     <p>Please make sure the funds are <b>cleared${m.by?' by '+fmtDate(m.by):''}</b>${m.by&&!m.manual?', which is three working days before your move-in date and allows time for the payment to reach the account':''}. Bank transfers are not always instant, so please do not leave it to the last day. Keys cannot be released until the money has cleared and the tenancy agreement has been signed by everyone named on it.</p>
     ${m.dep&&!m.depIn?`<p>Once your deposit is received it will be protected in a government-approved tenancy deposit scheme within 30 days, and you will be sent the prescribed information telling you where it is held and how to get it back at the end of the tenancy.</p>`:''}
     <p>If any of the figures or details above are not what you were expecting, please tell us before you send anything. We would rather answer a question than untangle a payment.</p>
