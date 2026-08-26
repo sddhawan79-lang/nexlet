@@ -2058,6 +2058,29 @@ function lifecycleStepper(p){
   return `<div class="panel" style="margin-bottom:14px"><div class="panel-bd" style="display:flex;padding:16px 20px 10px">${steps}</div></div>`;
 }
 // Shown only in the window between "everyone has signed" and "first day done".
+// The pre-signing counterpart to postSigningPanel: tenancy set up, agreement not
+// yet out. Shown only in that window, so it disappears once sent.
+function preSigningPanel(p){
+  const rec=tenantRecFor(p.id); if(!rec||!rec.id) return '';
+  const ta=tenancyAgreementFor(rec.id);
+  if(ta&&ta.status==='signed') return '';
+  if(rec.origContractName) return '';   // already-signed contract uploaded instead
+  const names=(typeof _tnPeopleView==='function'?_tnPeopleView(rec):[]).filter(x=>x.name).map(x=>x.name);
+  const who=names.length?names.join(', '):(rec.name||'the tenant');
+  if(ta&&ta.status==='sent') return `<div class="panel" style="margin-bottom:14px;border-color:var(--amber)">
+    <div class="panel-bd" style="display:flex;align-items:center;gap:10px;padding:12px 20px">
+      <span style="color:var(--amber);font-weight:700">⏳</span>
+      <span style="font-size:12.5px;font-weight:600;color:var(--navy)">Agreement sent ${esc(fmtDate(ta.created_at))} — awaiting signature from ${esc(who)}</span>
+      <button class="btn sm" style="margin-left:auto" onclick="openTenancyAgreement('${p.id}')">Resend</button>
+    </div></div>`;
+  return `<div class="panel" style="margin-bottom:14px;border-color:var(--navy)">
+    <div class="panel-hd"><h2 style="font-size:13px">Ready to send the tenancy agreement</h2>
+      <span class="faint" style="font-size:11.5px">${esc(who)}</span></div>
+    <div style="padding:13px 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <p class="hint" style="margin:0;flex:1;min-width:220px">Generates the agreement from this tenancy's details and emails it for e-signature. Each signatory signs in turn and everyone gets the completed copy.</p>
+      <button class="btn navy sm" onclick="openTenancyAgreement('${p.id}')">✨ Generate &amp; send for signing</button>
+    </div></div>`;
+}
 function postSigningPanel(p){
   const rec=tenantRecFor(p.id); if(!rec||!rec.id) return '';
   const ta=tenancyAgreementFor(rec.id);
@@ -2182,6 +2205,7 @@ function vPropertyDetail(){
       <div style="display:flex;gap:8px">${(()=>{ const a=agreementFor(l.id); return a&&a.status==='sent'?`<button class="btn sm" style="border-color:var(--amber);color:var(--amber)" onclick="sendAgreementReminder('${a.id}')">Send reminder</button><button class="btn sm" onclick="openAgreement('${l.id}')" title="Start over with a new agreement">Re-send agreement</button>`:`<button class="btn navy sm" onclick="openAgreement('${l.id}')">Send agreement to sign</button>`; })()}</div>
     </div>`:''}
     ${lifecycleStepper(p)}
+    ${preSigningPanel(p)}
     ${postSigningPanel(p)}
     ${tenancyChecklistPanel(p)}
     <div class="grid2">
