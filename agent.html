@@ -2739,8 +2739,26 @@ function editCert(pid,key){ const p=P(pid); const c=p.certs||(p.certs={}); const
   const label=CERT_LABELS[key]||key.toUpperCase();
   if(key==='smoke'||key==='co'){
     const existingFile=c[key+'Doc']||''; window._certFile=null;
-    const desc={smoke:'Confirm a working smoke alarm is fitted on every floor.',co:'Confirm a CO alarm is fitted in every room with a fixed combustion appliance (boiler cupboard, gas fire, log burner, etc.).'}[key];
-    const body=`<div class="note" style="margin-bottom:12px">${desc} Attach a photo of the fitted alarm or a professional test certificate as proof before confirming.</div>
+    const desc={smoke:'A working smoke alarm on every storey used as living accommodation.',co:'A CO alarm in every room with a fixed combustion appliance — boiler, gas fire, log burner. Gas cookers are excluded.'}[key];
+    const _rec=tenantRecFor(pid)||{};
+    const _tenants=(typeof _tnPeopleView==='function'?_tnPeopleView(_rec):[]).filter(x=>x.name).map(x=>x.name);
+    const body=`<div class="note" style="margin-bottom:12px">${desc}
+      <div style="margin-top:7px;font-size:12px">There is no certificate for alarms. The evidence is this record: the regulations require the alarm to be <b>tested on the first day of the tenancy</b>, and a penalty of up to £5,000 per breach applies. A photo shows an alarm exists — only a dated, witnessed test shows it worked.</div></div>
+      <div class="grid2" style="gap:10px">
+        <div class="fg"><label>${key==='smoke'?'Alarms fitted — how many':'CO alarms fitted — how many'}</label>
+          <input id="ct-count" type="number" min="0" value="${esc(c[key+'Count']||'')}" placeholder="${key==='smoke'?'one per storey':'one per room with an appliance'}"></div>
+        <div class="fg"><label>Tested by</label>
+          <input id="ct-by" value="${esc(c[key+'By']||S.agency.name||'')}" placeholder="Who pressed the test button"></div></div>
+      <div class="fg"><label>Where they are — storey by storey</label>
+        <input id="ct-where" value="${esc(c[key+'Where']||'')}" placeholder="${key==='smoke'?'e.g. hallway ground floor, landing first floor':'e.g. kitchen — boiler cupboard'}">
+        <span class="hint">Named locations are what a remedial notice is answered with.</span></div>
+      <div class="fg"><label style="display:flex;align-items:center;gap:8px;font-weight:400">
+        <input id="ct-sounded" type="checkbox" ${c[key+'Sounded']?'checked':''} style="width:auto;margin:0">
+        <span>Test button pressed and <b>every</b> alarm sounded</span></label></div>
+      <div class="fg"><label style="display:flex;align-items:center;gap:8px;font-weight:400">
+        <input id="ct-witness" type="checkbox" ${c[key+'Witnessed']?'checked':''} style="width:auto;margin:0">
+        <span>Tested with the tenant present, and recorded on the inventory</span></label>
+        <span class="hint">${_tenants.length?'Strongest evidence: do this at check-in with '+esc(_tenants.join(', '))+' and get their signature on the inventory.':'Do this at check-in and get the tenant\'s signature on the inventory.'}</span></div>
       <div class="fg"><label>Proof — photo of the alarm, or a test certificate</label>
         <label style="display:flex;align-items:center;gap:10px;padding:10px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer">
           <span style="font-size:18px">📷</span><div style="font-size:12.5px;font-weight:600;flex:1">${existingFile?'Replace file':'Click to attach'}</div>
@@ -2848,6 +2866,14 @@ async function saveCert(pid,key){ const p=P(pid); p.certs=p.certs||{};
   else if(window._certFile){ const ext=(window._certFile.name.split('.').pop()||'pdf'); const url=await _storageUpload(window._certFile,pid+'/'+key+'-'+Date.now()+'.'+ext,'property-documents');
     if(!url){ toast('⚠ File upload failed — check your connection and try again (not saved)',1); return; }
     p.certs[key+'Doc']=window._certFile.name; p.certs[key+'DocUrl']=url; window._certFile=null; }
+  if(key==='smoke'||key==='co'){
+    p.certs[key+'Count']=val('ct-count')||'';
+    p.certs[key+'By']=val('ct-by')||'';
+    p.certs[key+'Where']=val('ct-where')||'';
+    p.certs[key+'Sounded']=!!(document.getElementById('ct-sounded')||{}).checked;
+    p.certs[key+'Witnessed']=!!(document.getElementById('ct-witness')||{}).checked;
+    if(!p.certs[key+'Sounded']){ toast('Tick that every alarm sounded — that is the part that matters',1); return; }
+  }
   p.certs[key]=val('ct-date'); if(key==='epc')p.certs.epcRating=val('ct-rating'); if(key==='hmo'){p.certs.hmoNo=val('ct-hmono');p.certs.hmoAuthority=val('ct-hmoauth');} save(); pushProperty(p); closeModal(); render(); toast('✓ '+(CERT_LABELS[key]||key.toUpperCase())+' updated'); }
 function toggleCoNA(pid){ const p=P(pid); p.certs=p.certs||{}; p.certs.coNA=!p.certs.coNA; save(); pushProperty(p); render(); }
 function toggleHmoApplicable(pid,checked){ const p=P(pid); p.certs=p.certs||{}; p.certs.hmoApplicable=checked; save(); pushProperty(p); render(); }
