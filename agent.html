@@ -2175,6 +2175,11 @@ function _openDraft(){
   const w=window.open('','_blank'); if(!w){ toast('Allow pop-ups to open the draft',1); return; }
   w.document.write(_pendingSend.html||''); w.document.close();
   const b=document.getElementById('cs-send'), g=document.getElementById('cs-gate');
+  const missing=_hhUnanswered(pid);
+  if(missing.length){
+    if(g) g.innerHTML='<span style="color:var(--amber);font-weight:600">Set the relationship for '+esc(missing.join(', '))+' first.</span>';
+    return;
+  }
   if(b){ b.disabled=false; b.style.opacity=''; b.style.cursor=''; }
   if(g) g.innerHTML='<span style="color:var(--green);font-weight:600">✓ Draft read — sending is now enabled.</span>';
 }
@@ -2324,7 +2329,7 @@ function tenancyProgressBar(p){
   const g=tenancyProgress(p); if(!g) return '';
   const complete=g.pct===100;
   const tone=complete?'var(--green)':g.pct>=60?'var(--amber)':'var(--red)';
-  return `<div class="panel" style="margin-bottom:14px;position:relative;overflow:visible" onmouseover="this.querySelector('.tp-card').style.display='block'" onmouseout="this.querySelector('.tp-card').style.display='none'">
+  return `<div class="panel" style="margin-bottom:14px;position:relative;overflow:visible" onmouseenter="this.querySelector('.tp-card').style.display='block'" onmouseleave="this.querySelector('.tp-card').style.display='none'">
     <div style="padding:13px 20px">
       <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:9px">
         <span style="font-size:12px;font-weight:600;color:var(--navy)">Tenancy readiness</span>
@@ -2357,10 +2362,13 @@ function serveDocsPanel(p){
     dep?{t:'Prescribed information',
      why:'Where the deposit is held and how to get it back. Within 30 days of the deposit being received.',
      done:!!rec.piServedAt,go:"tnDepositPI('"+p.id+"')",label:'Serve'}:null,
-    {t:'Condensation and mould annexe',
-     why:'Signing the tenancy agreement covers this. Send separately only for a tenancy already running.',
-     done:!!(tenancyAgreementFor(rec.id)&&tenancyAgreementFor(rec.id).status==='signed')||!!rec.condensationAckAt,
-     go:"NexLetForms.condensation('"+p.id+"')",label:'Send'},
+    (()=>{ const cm=condensationDeclFor(rec.id);
+      return {t:'Condensation and mould annexe',
+        why:'Covered by signing the tenancy agreement. For a tenancy already running, send it for signature separately.',
+        done:!!(tenancyAgreementFor(rec.id)&&tenancyAgreementFor(rec.id).status==='signed')
+             ||!!(cm&&cm.status==='signed')||!!rec.condensationAckAt,
+        pending:cm&&cm.status==='sent'?(cm.signatories||[]).filter(s=>!s.signed_at).length:0,
+        go:"NexLetForms.condensation('"+p.id+"')",label:'Send'}; })(),
     hasOcc?{t:'Household composition declaration',
      why:'Decides whether the property is an HMO. Lead tenant first, then each adult signs.',
      done:!!(hh&&hh.status==='signed'),
@@ -3544,7 +3552,10 @@ function moveInTasks(pid){
     dep?{k:'dep',t:held==='landlord'?'Deposit protected by the landlord — certificate obtained':'Deposit protected in the scheme',done:!!rec.schemeRef||!!rec.depositCertName,go:"setTenant('"+pid+"')"}:null,
     dep?{k:'pi',t:'Prescribed information served on every tenant',done:!!rec.piServedAt,go:"tnDepositPI('"+pid+"')"}:null,
     {k:'inv',t:'Inventory and schedule of condition, signed at check-in',done:(S.inventories2||[]).some(v=>v.propertyId===pid&&v.tenantAck&&v.tenantAck.confirmed),go:"go('inventory')"},
-    {k:'cond',t:'Condensation and mould annexe issued',done:!!(ta&&ta.status==='signed')||!!rec.condensationAckAt,go:"NexLetForms.condensation('"+pid+"')"},
+    {k:'cond',t:'Condensation and mould annexe issued',
+     done:!!(ta&&ta.status==='signed')||!!rec.condensationAckAt
+          ||!!(()=>{ const cm=condensationDeclFor(rec.id); return cm&&cm.status==='signed'; })(),
+     go:"NexLetForms.condensation('"+pid+"')"},
     (rec.occupants||[]).filter(o=>o.name).length
       ? {k:'household',t:'Household composition declared and signed',
          done:(()=>{ const hh=householdDeclFor(rec.id); return !!(hh&&hh.status==='signed'); })(),
@@ -5349,10 +5360,10 @@ function householdDeclFor(tid){ return (S.tenancyAgreements||[]).filter(a=>a.ten
    it wrong. The relationships are therefore the whole question, and the only
    people who actually know them are the occupants. This list follows s.258 —
    half-blood counts as full blood, step-relations and foster children count. */
-const HH_RELATIONSHIPS=['Husband / wife / civil partner','Partner (living together as a couple)',
-  'Son / daughter','Stepson / stepdaughter','Father / mother','Stepfather / stepmother',
-  'Brother / sister','Half-brother / half-sister','Grandfather / grandmother','Grandson / granddaughter',
-  'Uncle / aunt','Nephew / niece','Cousin','Foster child / foster parent','Not related'];
+const HH_RELATIONSHIPS=['Husband / wife / civil partner','Partner — living together as a couple',
+  'Son / daughter','Father / mother','Brother / sister',
+  'Other relative — including step, half, cousin, uncle, aunt, niece, nephew, grandparent',
+  'Not related'];
 /* Anyone under 18 is part of the household but does not sign — a minor cannot
    give a binding declaration. Permitted occupiers DO sign this one, unlike the
    tenancy agreement: they are attesting to their own relationship, not taking on
@@ -5372,49 +5383,89 @@ function hhMembers(rec){
    what it is for, that saying "not related" is not a problem, and what happens
    if the household changes. A form that frightens people gets guessed answers,
    and a guessed answer is worse than no declaration. */
-function buildHouseholdDeclHtml(p,rec){
-  const b=agencyBrand(), mem=hhMembers(rec);
-  const lead=mem[0], others=mem.slice(1);
+window._docStamp=p=>_docStamp(p);
+function _docStamp(prefix){
+  const d=new Date();
+  const pad=n=>String(n).padStart(2,'0');
+  return {ref:prefix+'-'+d.getFullYear()+pad(d.getMonth()+1)+'-'+Math.random().toString(36).slice(2,7).toUpperCase(),
+    stamp:d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})+', '+pad(d.getUTCHours())+':'+pad(d.getUTCMinutes())+' UTC'};
+}
+/* Written to stand up if it is ever produced in evidence: it states its own
+   statutory basis, records each occupant individually rather than as a list of
+   names, and spells out what each signatory is attesting to and what happens if
+   it turns out to be wrong. A vague form signed by everyone proves very little. */
+function buildHouseholdDeclHtml(p,rec,stamp){
+  const b=agencyBrand(), mem=hhMembers(rec), l=L(p.landlordId)||{};
+  const others=mem.slice(1);
+  /* No stamp means this is a preview. It must NOT carry a reference: the only
+     reference that means anything is the one on the copy actually served, and a
+     draft bearing a different one is exactly what a challenger would seize on. */
+  const draft=!stamp;
+  const st=stamp||{ref:'DRAFT — not yet issued',stamp:'preview only'};
+  const age=m=>{ const a=(m.age!==''&&m.age!=null)?+m.age:ageFromDob(m.dob); return a==null?'—':a; };
+  const H=(t)=>`<h2 style="font-size:14.5px;color:#1B2F4A;margin:24px 0 8px;padding-bottom:5px;border-bottom:1px solid #E8DFCF">${t}</h2>`;
   const row=(m,i)=>`<tr>
-    <td style="padding:9px 10px;border-bottom:1px solid #E8DFCF;font-size:13px">${esc(m.name)}${m.lead?' <span style="color:#8A7D6E">(lead tenant)</span>':''}</td>
-    <td style="padding:9px 10px;border-bottom:1px solid #E8DFCF;font-size:13px">${m.lead?'—':esc(m.relationship||'not stated')}</td>
-    <td style="padding:9px 10px;border-bottom:1px solid #E8DFCF;font-size:13px">${m.lead?'Signs':(m.signs?'Signs':'Under 18 — does not sign')}</td></tr>`;
-  return `<div data-doc-label="Household composition declaration" style="font-family:Georgia,'Times New Roman',serif;max-width:760px;margin:0 auto;color:#2C2418;line-height:1.65">
-    <div style="border-bottom:2px solid #1B2F4A;padding-bottom:12px;margin-bottom:22px">
-      <div style="font-size:21px;font-weight:700;color:#1B2F4A;font-family:Georgia,serif">${esc(b.name||'')}</div>
-      ${b.tagline?`<div style="font-style:italic;color:#8A7D6E;font-size:13px">${esc(b.tagline)}</div>`:''}
+    <td style="padding:9px 10px;border-bottom:1px solid #E8DFCF;font-size:12.5px;vertical-align:top">${i+1}</td>
+    <td style="padding:9px 10px;border-bottom:1px solid #E8DFCF;font-size:12.5px;vertical-align:top"><b>${esc(m.name)}</b>${m.lead?'<br><span style="color:#8A7D6E;font-size:11.5px">Lead tenant — named on the tenancy agreement</span>':m.permitted?'<br><span style="color:#8A7D6E;font-size:11.5px">Permitted occupier</span>':'<br><span style="color:#8A7D6E;font-size:11.5px">Joint tenant</span>'}</td>
+    <td style="padding:9px 10px;border-bottom:1px solid #E8DFCF;font-size:12.5px;vertical-align:top">${age(m)}</td>
+    <td style="padding:9px 10px;border-bottom:1px solid #E8DFCF;font-size:12.5px;vertical-align:top">${m.lead?'— (relationships are stated by reference to this person)':esc(m.relationship||'<span style="color:#B3261E">not stated</span>')}</td>
+    <td style="padding:9px 10px;border-bottom:1px solid #E8DFCF;font-size:12.5px;vertical-align:top">${m.lead||m.signs?'Signs this declaration':'Under 18 — listed, does not sign'}</td></tr>`;
+  const unrelated=others.filter(m=>(m.relationship||'')==='Not related').length;
+  const adults=mem.filter(m=>m.lead||m.signs).length;
+  return `<div data-doc-label="Household composition declaration" style="font-family:Georgia,'Times New Roman',serif;max-width:780px;margin:0 auto;color:#2C2418;line-height:1.62">
+    <div style="border-bottom:2px solid #1B2F4A;padding-bottom:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-end;gap:16px">
+      <div><div style="font-size:21px;font-weight:700;color:#1B2F4A">${esc(b.name||'')}</div>
+        ${b.tagline?`<div style="font-style:italic;color:#8A7D6E;font-size:12.5px">${esc(b.tagline)}</div>`:''}</div>
+      <div style="text-align:right;font-size:10.5px;color:${draft?'#B3261E':'#8A7D6E'};line-height:1.5">
+        ${draft?'<b>DRAFT — FOR REVIEW</b><br>Reference and timestamp are applied when sent':esc(st.ref)+'<br>v1.0 · Generated '+esc(st.stamp)}</div>
     </div>
-    <h1 style="font-size:19px;color:#1B2F4A;margin:0 0 4px">Household composition declaration</h1>
-    <p style="color:#8A7D6E;font-size:13px;margin:0 0 20px">${esc(p.address||'')}</p>
+    <h1 style="font-size:19px;color:#1B2F4A;margin:18px 0 3px">Household composition declaration</h1>
+    <p style="color:#8A7D6E;font-size:12.5px;margin:0 0 18px">Made for the purposes of sections 254 to 259 of the Housing Act 2004</p>
 
-    <p>Hello,</p>
-    <p>Before your tenancy begins we ask everyone moving in to confirm who they are and how they are related to each other. It takes a minute and there is nothing to worry about — we ask every household we look after, whatever the answers.</p>
+    ${H('Particulars')}
+    <table style="width:100%;border-collapse:collapse;font-size:12.5px">
+      <tr><td style="padding:5px 0;width:180px;color:#8A7D6E">Property</td><td style="padding:5px 0"><b>${esc(p.address||'')}</b>${p.pc?', '+esc(p.pc):''}</td></tr>
+      <tr><td style="padding:5px 0;color:#8A7D6E">Landlord</td><td style="padding:5px 0">${esc(landlordName(l)||'')}</td></tr>
+      <tr><td style="padding:5px 0;color:#8A7D6E">Managing agent</td><td style="padding:5px 0">${esc(b.name||'')}</td></tr>
+      <tr><td style="padding:5px 0;color:#8A7D6E">Tenancy begins</td><td style="padding:5px 0">${rec.start?esc(fmtDate(rec.start)):'not yet set'}</td></tr>
+      <tr><td style="padding:5px 0;color:#8A7D6E">People listed below</td><td style="padding:5px 0">${mem.length} (${adults} aged 18 or over)</td></tr>
+    </table>
 
-    <p><b>Why we ask.</b> Whether a property counts as a house in multiple occupation depends on how the people living there are related. A family, a couple, or relatives sharing count as one household. People who are not related to each other count as separate households, and once there are three or more people in two or more households the property needs to be licensed and managed differently. Getting that wrong is a serious matter for your landlord and for us, and it is only answerable by the people actually living there.</p>
+    ${H('Why this declaration is being taken')}
+    <p style="margin:0 0 9px">A property is a house in multiple occupation where it is occupied by three or more persons forming two or more separate households. Under section 258 of the Housing Act 2004, people are treated as forming a <b>single household</b> where they are relatives of one another, or are a couple living together as though married or in a civil partnership. Relatives include parents, grandparents, children, grandchildren, brothers, sisters, uncles, aunts, nephews, nieces and cousins; a relationship of the half blood is treated as one of the whole blood, a stepchild is treated as a child, and a foster child is treated as a child of the foster parent.</p>
+    <p style="margin:0 0 9px">Whether the property is a house in multiple occupation therefore depends entirely on how the occupants are related to one another. That determines whether the property must be licensed, and the standards of management and amenity that apply to it. Neither the landlord nor the agent can know the answer; only the occupants can state it.</p>
+    <p style="margin:0 0 9px"><b>Stating that occupants are not related to one another is not a problem and has no effect on the tenancy.</b> It means the correct licence is applied for and the correct standards observed. The difficulty arises only where the position recorded at the outset differs from the true position.</p>
 
-    <p>Saying you are not related is <b>not</b> a problem and does not affect your tenancy. It simply means we arrange the right licence and standards for the property. What causes difficulty is finding out later that the position was different from what we recorded.</p>
-
-    <h2 style="font-size:15px;color:#1B2F4A;margin:24px 0 8px">Who will be living at the property</h2>
+    ${H('The household')}
     <table style="width:100%;border-collapse:collapse;border-top:2px solid #1B2F4A">
       <tr style="background:#FAF6EE">
-        <th style="padding:9px 10px;text-align:left;font-size:11.5px;letter-spacing:.04em;text-transform:uppercase;color:#8A7D6E">Name</th>
-        <th style="padding:9px 10px;text-align:left;font-size:11.5px;letter-spacing:.04em;text-transform:uppercase;color:#8A7D6E">Relationship to the lead tenant</th>
-        <th style="padding:9px 10px;text-align:left;font-size:11.5px;letter-spacing:.04em;text-transform:uppercase;color:#8A7D6E">Signing</th></tr>
+        <th style="padding:8px 10px;text-align:left;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:#8A7D6E;width:26px">#</th>
+        <th style="padding:8px 10px;text-align:left;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:#8A7D6E">Name and status</th>
+        <th style="padding:8px 10px;text-align:left;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:#8A7D6E;width:40px">Age</th>
+        <th style="padding:8px 10px;text-align:left;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:#8A7D6E">Relationship to the lead tenant</th>
+        <th style="padding:8px 10px;text-align:left;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:#8A7D6E">Signature required</th></tr>
       ${mem.map(row).join('')}
     </table>
-    ${others.length?'':'<p style="color:#8A7D6E;font-size:13px;margin-top:10px">No other occupants recorded.</p>'}
+    <p style="font-size:11.5px;color:#8A7D6E;margin:9px 0 0">On the relationships stated above, the occupants form <b>${unrelated?'more than one household':'a single household'}</b> for the purposes of section 258.${unrelated?' The property may therefore require a licence, and the agent will confirm the position with the local housing authority.':''}</p>
 
-    <h2 style="font-size:15px;color:#1B2F4A;margin:24px 0 8px">What you are confirming</h2>
-    <ol style="padding-left:20px">
-      <li style="margin-bottom:7px">The people listed above are everyone who will be living at the property as their only or main home.</li>
-      <li style="margin-bottom:7px">The relationships shown are accurate.</li>
-      <li style="margin-bottom:7px">Nobody else will move in without asking us first. This is not us being difficult — an extra person can change the licensing position, and we would rather sort it out in advance than find out afterwards.</li>
-      <li style="margin-bottom:7px">You will tell us within <b>14 days</b> if the household changes: someone moves out, someone new moves in, or a relationship changes.</li>
+    ${H('What each signatory declares')}
+    <ol style="padding-left:20px;margin:0">
+      <li style="margin-bottom:8px">That the persons listed in the table above are <b>all</b> of the persons who will occupy the property as their only or main residence, and that no other person will occupy it.</li>
+      <li style="margin-bottom:8px">That the relationships stated in the table are <b>accurate</b>. Where the exact description does not fit, the nearest one has been chosen honestly — what matters is whether the occupants are related at all, not the precise degree.</li>
+      <li style="margin-bottom:8px">That the age given for each person is accurate.</li>
+      <li style="margin-bottom:8px">That no additional person will take up residence at the property — as a lodger, subtenant, partner or additional occupant — without first telling the landlord or the agent. Guests and visitors are of course welcome and need no permission; what matters is somebody making the property their home, because that can change whether a licence is required. If a visitor is going to stay for <b>more than about a month</b>, a quick word with us is enough — we would rather know than not.</li>
+      <li style="margin-bottom:8px">That the landlord or the agent will be told <b>within 14 days</b> of any change to the household — someone moving out, someone moving in, someone reaching 18, or a stated relationship changing.</li>
+      <li style="margin-bottom:0">That the signatory understands that this declaration may be relied on by the landlord and the agent in deciding whether a licence is required, and may be produced to the local housing authority.</li>
     </ol>
 
-    <p style="background:#FAF6EE;border:1px solid #EADFC8;border-radius:8px;padding:13px 15px;font-size:13.5px">If anything on this form is wrong, or you are not sure how to describe a relationship, reply and tell us before you sign. We would much rather correct it now.</p>
+    ${H('If the position stated here is not correct')}
+    <p style="margin:0 0 9px">Operating an unlicensed house in multiple occupation is a criminal offence, and exposes a landlord to a financial penalty of up to £30,000, a rent repayment order of up to twelve months' rent, and the loss of the ability to recover possession. Where that arises because occupiers gave an inaccurate account of their relationships, the landlord may seek to recover its losses from those who gave it.</p>
+    <p style="margin:0 0 9px">This is set out so the significance of the declaration is plain, not to alarm anyone. Nothing here is aimed at ordinary life at home — having visitors, family staying, or circumstances changing. It is aimed only at the position recorded here being right. If any signatory is uncertain how to describe a relationship, or thinks the table is wrong in any respect, they should say so <b>before</b> signing. A correction costs nothing and takes a moment.</p>
 
-    <p style="font-size:12.5px;color:#8A7D6E;margin-top:22px">Each person aged 18 or over signs separately using their own link. Children living at the property are part of the household and are listed, but do not sign. This declaration does not change any term of your tenancy agreement.</p>
+    ${H('Signature and record')}
+    <p style="margin:0 0 9px">Each person aged 18 or over signs separately, using a link personal to them, on their own device and in their own time. The server records the date and time of each signature, together with the signatory's IP address and device, and neither the agent nor the signatory can alter those records. A copy of the completed declaration, showing every signature and the time it was given, is issued to every signatory and retained by the agent.</p>
+    <p style="margin:0 0 9px">Children occupying the property are listed above because they form part of the household, but do not sign: a minor cannot give a binding declaration.</p>
+    <p style="font-size:11.5px;color:#8A7D6E;margin:16px 0 0;padding-top:10px;border-top:1px solid #E8DFCF">This declaration is a statement of fact about occupation. It does not vary, add to or replace any term of the tenancy agreement, and nothing in it affects the signatories' rights as tenants.${draft?' <b style="color:#B3261E">This is a draft for review and has not been issued.</b>':' Document '+esc(st.ref)+', generated '+esc(st.stamp)+'.'}</p>
   </div>`;
 }
 function openHouseholdDecl(pid){
@@ -5423,7 +5474,16 @@ function openHouseholdDecl(pid){
   const existing=householdDeclFor(rec.id);
   const mem=hhMembers(rec), others=mem.slice(1);
   if(!others.length){ toast('Only one occupant recorded — a single person cannot form two households, so no declaration is needed',0); return; }
-  const opts=(sel)=>HH_RELATIONSHIPS.map(r=>`<option${r===sel?' selected':''}>${esc(r)}</option>`).join('');
+  /* A blank, selected placeholder must come FIRST, or the browser silently selects
+     option 1 and a guess becomes a declared fact. An unrecognised stored value is
+     kept as its own option so a legacy answer stays visible instead of collapsing
+     to "spouse". */
+  const opts=(sel)=>{
+    const known=HH_RELATIONSHIPS.indexOf(sel)>=0;
+    const legacy=sel&&!known?`<option value="${esc(sel)}" selected>${esc(sel)} — previously recorded</option>`:'';
+    return `<option value=""${sel?'':' selected'}>— select the relationship —</option>`+legacy
+      +HH_RELATIONSHIPS.map(r=>`<option${r===sel?' selected':''}>${esc(r)}</option>`).join('');
+  };
   const sent=existing&&existing.status==='sent', done=existing&&existing.status==='signed';
   modal('Household composition — '+esc(p.address||''),
     `${done?`<div class="note ok" style="margin-bottom:12px"><b>Signed by everyone ${esc(fmtDate(existing.completed_at||existing.created_at))}.</b> Send a new one only if the household has changed.</div>`
@@ -5441,8 +5501,63 @@ function openHouseholdDecl(pid){
      <button class="btn" onclick="_hhDraft('${pid}')">Open draft</button>
      <button class="btn navy" id="hh-send" disabled style="opacity:.45;cursor:not-allowed" onclick="_hhSend('${pid}')">${sent||done?'Send a new declaration':'Send for signing'}</button>`, true);
 }
+async function sendCondensationForSigning(pid){
+  const p=P(pid)||{}, rec=tenantRecFor(pid), l=L(p.landlordId)||{};
+  if(!rec||!rec.id){ toast('No tenant record on this property',1); return; }
+  if(!LIVE){ toast('Connect to send for signing',1); return; }
+  if(!window.NexLetForms||!NexLetForms.buildCondensation){ toast('Forms module not loaded',1); return; }
+  const mem=hhMembers(rec).filter(m=>m.lead||m.signs);
+  const missing=mem.filter(m=>!m.email);
+  if(missing.length){ toast('No email for '+missing.map(m=>m.name).join(', ')+' — add one first',1); return; }
+  const st=_docStamp('BRL-CMA');
+  const inner=NexLetForms.buildCondensation(p,rec);
+  const html='<div data-doc-label="Condensation and mould acknowledgement">'
+    +'<p style="font-family:Georgia,serif;font-size:11px;color:#8A7D6E;text-align:right;margin:0 0 10px">'
+    +esc(st.ref)+' · v1.0 · Generated '+esc(st.stamp)+'</p>'+inner
+    +'<p style="font-family:Georgia,serif;font-size:11.5px;color:#8A7D6E;margin-top:16px;padding-top:10px;border-top:1px solid #E8DFCF">'
+    +'By signing, you confirm you have read this and understand how to report damp, mould or condensation. '
+    +'This is information and a reporting route — it does not vary any term of your tenancy. '
+    +'The time of each signature is recorded by the server. Document '+esc(st.ref)+'.</p></div>';
+  const newToken=()=>{ const a=new Uint8Array(16); crypto.getRandomValues(a); return Array.from(a).map(x=>x.toString(16).padStart(2,'0')).join(''); };
+  const signatories=mem.map((m,i)=>({role:i===0?'tenant':'occupant',name:m.name,email:m.email,
+    token:newToken(),sig_png:null,signed_at:null}));
+  const row={id:uid('cm'),agency_id:window._agencyId,property_id:pid,tenant_id:rec.id,landlord_id:l.id||null,
+    token:signatories[0].token,doc_type:'condensation',document_html:html,
+    agent_name:S.agency.name||'',agent_email:window._agentEmail||'',agent_sig_png:null,
+    tenant_name:rec.name||'',tenant_email:rec.email||'',occupants:[],signatories,status:'sent'};
+  const {error}=await sb.from('agency_tenancy_agreements').insert(row);
+  if(error){ console.error(error); toast('⚠ Could not send — run nexlet-household-declaration.sql then retry',1); return; }
+  S.tenancyAgreements=S.tenancyAgreements||[]; S.tenancyAgreements.push(row);
+  const linkFor=tk=>new URL('tenancy-esign.html?t='+encodeURIComponent(tk),location.href).href;
+  const failed=[];
+  for(const sg of signatories){
+    const body=`<p>Hi ${esc((sg.name||'').split(' ')[0])},</p>
+      <p>We send this to every tenancy we look after. It explains how to prevent condensation and mould at <b>${esc(p.address||'')}</b>, and how to report it to us if you see any.</p>
+      <p>It is not a change to your tenancy. Please read it and sign to confirm you have — it takes a minute, and it means we both have a record that you know how to report a problem.</p>
+      <p>If you can see damp or mould <b>now</b>, tell us straight away. Reporting it never costs you anything and we will arrange to look.</p>
+      <p><a href="${linkFor(sg.token)}">Read and sign the acknowledgement</a></p>
+      <p style="font-size:12px;color:#6B7280">This link is personal to you. Everyone signs separately.</p>`;
+    const r=await agencyEmail(sg.email,'Condensation and mould — '+(p.address||''),letterWrap('Condensation and mould',body));
+    if(!r||!r.ok) failed.push(sg.email);
+  }
+  rec.condensationSentAt=new Date().toISOString().slice(0,10);
+  await pushTenantRec(rec);
+  await fileLetter({landlordId:l.id,propertyId:pid,type:'condensation',
+    subject:'Condensation and mould acknowledgement — '+(p.address||''),html,to:signatories.map(s=>s.email)});
+  if(window.NexLetAudit) NexLetAudit.log({action:'doc.sent',entity:'tenancy',entityId:rec.id,
+    entityLabel:(rec.name||'')+' — '+(p.address||''),
+    detail:{document:'Condensation and mould acknowledgement (for signature)',ref:st.ref,
+      signatories:signatories.map(s=>s.name+' <'+s.email+'>').join(', ')}});
+  closeModal(); render();
+  toast(failed.length?'⚠ Sent, but these bounced: '+failed.join(', '):'✓ Sent to '+signatories.length+' for signature',failed.length?1:0);
+}
+function condensationDeclFor(tid){ return (S.tenancyAgreements||[]).filter(a=>a.tenant_id===tid&&a.doc_type==='condensation').sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0))[0]; }
+window.sendCondensationForSigning=pid=>sendCondensationForSigning(pid);
+window.condensationDeclFor=tid=>condensationDeclFor(tid);
 async function _hhSend(pid){
   const rec=_hhSave(pid); if(!rec) return;
+  const unanswered=_hhUnanswered(pid);
+  if(unanswered.length){ toast('Set the relationship for '+unanswered.join(', ')+' before sending',1); return; }
   const p=P(pid)||{}, l=L(p.landlordId)||{};
   if(!LIVE){ toast('Connect to send for signing',1); return; }
   const mem=hhMembers(rec);
@@ -5455,7 +5570,8 @@ async function _hhSend(pid){
      Each person still gets their own token and signs on their own device. */
   const signatories=signers.map((m,i)=>({role:i===0?'tenant':'occupant',name:m.name,email:m.email,
     token:newToken(),sig_png:null,signed_at:null}));
-  const html=buildHouseholdDeclHtml(p,rec);
+  const st=_docStamp('BRL-HCD');
+  const html=buildHouseholdDeclHtml(p,rec,st);
   const row={id:uid('hh'),agency_id:window._agencyId,property_id:pid,tenant_id:rec.id,landlord_id:l.id||null,
     token:signatories[0].token,doc_type:'household',document_html:html,
     agent_name:S.agency.name||'',agent_email:window._agentEmail||'',agent_sig_png:null,
@@ -5479,10 +5595,10 @@ async function _hhSend(pid){
     if(!r||!r.ok) failed.push(s.email);
   }
   await fileLetter({landlordId:l.id,propertyId:pid,type:'household',
-    subject:'Household composition declaration — '+(p.address||''),html,to:signatories.map(s=>s.email)});
+    subject:'Household composition declaration '+st.ref+' — '+(p.address||''),html,to:signatories.map(s=>s.email)});
   if(window.NexLetAudit) NexLetAudit.log({action:'doc.sent',entity:'tenancy',entityId:rec.id,
     entityLabel:(rec.name||'')+' — '+(p.address||''),
-    detail:{document:'Household composition declaration',signatories:signatories.map(s=>s.name+' <'+s.email+'>').join(', '),
+    detail:{document:'Household composition declaration',ref:st.ref,generated:st.stamp,signatories:signatories.map(s=>s.name+' <'+s.email+'>').join(', '),
       relationships:mem.slice(1).map(m=>m.name+': '+(m.relationship||'not stated')).join('; ')}});
   closeModal(); render();
   toast(failed.length?'⚠ Sent, but these bounced: '+failed.join(', '):'✓ Declaration sent to '+signatories.length+' — lead tenant first',failed.length?1:0);
@@ -5490,15 +5606,28 @@ async function _hhSend(pid){
 function _hhSave(pid){
   const rec=tenantRecFor(pid); if(!rec) return null;
   (rec.occupants||[]).filter(o=>o.name).forEach((o,i)=>{
-    const el=document.getElementById('hh-rel-'+i); if(el) o.relationship=el.value;
+    const el=document.getElementById('hh-rel-'+i);
+    /* Only commit an actual choice. Writing the placeholder — or a browser default
+       — would manufacture a relationship nobody stated. */
+    if(el&&el.value) o.relationship=el.value;
   });
   return rec;
+}
+/* Names of signing occupants with no relationship set. */
+function _hhUnanswered(pid){
+  const rec=tenantRecFor(pid); if(!rec) return [];
+  return (rec.occupants||[]).filter(o=>o.name&&hhSignsDeclaration(o)&&!o.relationship).map(o=>o.name);
 }
 function _hhDraft(pid){
   const rec=_hhSave(pid); if(!rec) return;
   const w=window.open('','_blank'); if(!w){ toast('Allow pop-ups to open the draft',1); return; }
   w.document.write(buildHouseholdDeclHtml(P(pid)||{},rec)); w.document.close();
   const b=document.getElementById('hh-send'), g=document.getElementById('hh-gate');
+  const missing=_hhUnanswered(pid);
+  if(missing.length){
+    if(g) g.innerHTML='<span style="color:var(--amber);font-weight:600">Set the relationship for '+esc(missing.join(', '))+' first.</span>';
+    return;
+  }
   if(b){ b.disabled=false; b.style.opacity=''; b.style.cursor=''; }
   if(g) g.innerHTML='<span style="color:var(--green);font-weight:600">✓ Draft read — sending is now enabled.</span>';
 }

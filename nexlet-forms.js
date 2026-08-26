@@ -95,11 +95,19 @@
       <div class="fg"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
         <label style="margin:0">Condensation &amp; mould acknowledgement</label>
         <button type="button" class="btn sm" onclick="NexLetForms.print()">\u2399 Print / save as PDF</button></div>
+        <p style="font-size:11px;color:#8A7D6E;margin:0 0 6px">On screen only — the printed and emailed copies carry a document reference and timestamp.</p>
         <div id="cond-preview" style="max-height:330px;overflow-y:auto;border:1px solid #E3D9C8;border-radius:8px;padding:16px;background:var(--off)">${html}</div></div>
-      <p class="hint">Emailing it records that the information was given. Mark it acknowledged once the tenant replies or returns a signed copy \u2014 that is the evidence worth having.</p>`;
+      <p class="hint"><b>Send for signature</b> is the strongest of the three: each adult signs on their own device and the server records the time, so you get a dated signature without printing. <b>Email</b> records only that it was given. <b>Print</b> gets wet-ink initials against each line — scan it back and mark it acknowledged.</p>`;
     window._condPid = pid;
+    const signed = window.condensationDeclFor ? window.condensationDeclFor(rec.id) : null;
+    const sigNote = signed
+      ? (signed.status === 'signed'
+          ? '<span style="color:var(--green);font-weight:600;font-size:11.5px;margin-right:auto">\u2713 Signed by everyone</span>'
+          : '<span style="color:var(--amber);font-weight:600;font-size:11.5px;margin-right:auto">Awaiting ' + (signed.signatories || []).filter(x => !x.signed_at).length + ' signature(s)</span>')
+      : '';
     window.modal('Condensation &amp; mould \u2014 ' + esc2(p.address || ''), body,
-      `<button class="btn" onclick="closeModal()">Close</button>
+      `${sigNote}<button class="btn" onclick="closeModal()">Close</button>
+       ${(!signed || signed.status !== 'signed') && window.sendCondensationForSigning ? `<button class="btn navy" onclick="sendCondensationForSigning('${pid}')">\u2712 Send for signature</button>` : ''}
        ${ack ? '' : `<button class="btn" onclick="NexLetForms.markAck('${pid}')">Mark acknowledged</button>`}
        <button class="btn navy" onclick="NexLetForms.email('${pid}')">Email to tenant</button>`, true);
   }
@@ -151,6 +159,16 @@
 
   window.NexLetForms = {
     condensation: open, email, markAck, buildCondensation: build,
-    print() { window.NexLetPrint.fromEl('cond-preview', 'Condensation and mould', 'Acknowledgement'); }
+    print() {
+      const pid = window._condPid;
+      const p = pid ? window.P(pid) : null, rec = pid ? window.tenantRecFor(pid) : null;
+      if (!p || !rec) { window.NexLetPrint.fromEl('cond-preview', 'Condensation and mould', 'Acknowledgement'); return; }
+      /* Stamped at the moment of printing, so the sheet the tenant initials can be
+         identified later — the same standard as the e-signed copy. */
+      const st = window._docStamp ? window._docStamp('BRL-CMA') : null;
+      const head = st ? '<p style="font-family:Georgia,serif;font-size:11px;color:#8A7D6E;text-align:right;margin:0 0 10px">'
+        + esc2(st.ref) + ' \u00b7 v1.0 \u00b7 Issued ' + esc2(st.stamp) + '</p>' : '';
+      window.NexLetPrint.doc(head + build(p, rec), 'Condensation and mould', 'Acknowledgement');
+    }
   };
 })();
