@@ -543,7 +543,7 @@ function render(){
   const _titleMap={landlord:'Landlords',property:'Properties',llportal:'Landlord Portal',invoice:'Invoices',notice:'Possession & Notices',compliance:'Compliance',rent:'Rent & Arrears',maintenance:'Maintenance',inventory2:'Inventory & Check-out',inventorydetail:'Inventory & Check-out',statement:'Rent & Arrears'};
   document.getElementById('tb-title').textContent=(NAV.find(n=>n.k===view)||{}).t||_titleMap[view]||'';
   document.getElementById('tb-actions').innerHTML=topActions();
-  document.getElementById('view').innerHTML=({
+  const _viewFn=({
     dashboard:vDashboard, landlords:vLandlords, landlord:vLandlordDetail, valuation:vValuationDetail, valuationreport:vValuationReport, pipeline:vPipeline,
     marketing:vMarketing, listing:vListingDetail, applicants:vApplicants, offers:vOffers, inbox:vInbox,
     keys:vKeys, reports:vReports, clientmoney:vClientMoney, audit:()=>window.NexLetAudit.view(), health:()=>window.NexLetHealth.view(), calendar:()=>window.NexLetCalendar.view(), comms:()=>window.NexLetComms.view(),
@@ -551,10 +551,11 @@ function render(){
     invoices:vInvoices, invoice:vInvoiceDetail, business:vBusiness, settings:vSettings, templates:vTemplates, notices:vNotices, notice:vNoticeDetail, compliance:vCompliance,
     rent:vRentArrears, maintenance:vMaintenance, inventory2:vInventoryList, inventorydetail:vInventoryDetail, statement:vStatement
   }[view]||vDashboard);
-  try{ return fn(); }
+  let _html;
+  try{ _html=_viewFn(); }
   catch(e){
     console.error('View "'+view+'" failed to render:',e);
-    return `<div class="panel" style="border-color:var(--red)">
+    _html=`<div class="panel" style="border-color:var(--red)">
       <div class="panel-hd" style="background:var(--red-bg);border-color:var(--red)">
         <h2 style="font-size:13px;color:var(--red)">This page could not be displayed</h2></div>
       <div style="padding:16px 20px">
@@ -567,6 +568,7 @@ function render(){
         <p class="hint" style="margin:11px 0 0">Send the message above to your developer — it names the exact cause.</p>
       </div></div>`;
   }
+  document.getElementById('view').innerHTML=_html;
 }
 function topActions(){
   if(view==='landlords'||view==='dashboard') return `<button class="btn navy" onclick="openOnboard()">＋ Onboard a landlord</button>`;
