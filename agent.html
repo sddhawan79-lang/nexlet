@@ -247,8 +247,8 @@ const pushRent    =r  =>_w(sb.from('agency_rent_ledger').upsert(rentToRow(r)),'a
 const pushJob     =j  =>_w(sb.from('agency_maintenance').upsert(jobToRow(j)),'agency_maintenance','upsert',j);
 const pushInv2    =v  =>_w(sb.from('agency_inventories').upsert(inv2ToRow(v)),'agency_inventories','upsert',v);
 const pushValuation=v =>_w(sb.from('agency_valuations').upsert(valToRow(v)),'agency_valuations','upsert',v);
-const rowToTenant=r=>({id:r.id,propertyId:r.property_id,landlordId:r.landlord_id,userId:r.user_id,name:r.name||'',email:r.email||'',phone:r.phone||'',start:r.start_date||'',end:r.end_date||'',rent:r.rent||0,deposit:r.deposit,scheme:r.scheme||'',schemeRef:r.scheme_ref||'',depositHolder:r.deposit_holder||'landlord',depositReceived:r.deposit_received||'',landlordSchemeNo:r.landlord_scheme_no||'',depositPaidBy:r.deposit_paid_by||'',piServedAt:r.pi_served_at||'',holdingDeposit:r.holding_deposit||0,payDetails:r.pay_details||'',moniesDueBy:r.monies_due_by||'',moniesSentAt:r.monies_sent_at||'',condensationSentAt:r.condensation_sent_at||'',condensationAckAt:r.condensation_ack_at||'',landlordDepositConfirmedAt:r.landlord_deposit_confirmed_at||'',welcomeSentAt:r.welcome_sent_at||'',status:r.status||'active',inviteToken:r.invite_token||'',invitedAt:r.invited_at||'',invited:!!r.invited_at,occupants:r.occupants||[],guarantor:r.guarantor||null,depositCertName:r.deposit_cert_name||'',depositCertUrl:r.deposit_cert_url||'',depositCertExpiry:r.deposit_cert_expiry||'',refDocName:r.ref_doc_name||'',refDocUrl:r.ref_doc_url||'',shareCode:r.share_code||'',dob:r.dob||'',rtrResult:r.rtr_result||'',rtrExpiry:r.rtr_expiry||'',rtrCheckDate:r.rtr_check_date||'',rtrDocName:r.rtr_doc_name||'',rtrDocUrl:r.rtr_doc_url||'',rtrDocs:r.rtr_docs||[],rtrCheckMethod:r.rtr_check_method||'',origContractName:r.orig_contract_name||'',origContractUrl:r.orig_contract_url||'',id1DocName:r.id1_doc_name||'',id1DocUrl:r.id1_doc_url||'',id2DocName:r.id2_doc_name||'',id2DocUrl:r.id2_doc_url||'',addressProofName:r.address_proof_name||'',addressProofUrl:r.address_proof_url||'',addressProofDocs:r.address_proof_docs||[],forwardingAddress:r.forwarding_address||'',finalMeters:r.final_meters||null,endNotes:r.end_notes||'',checkoutPackSentAt:r.checkout_pack_sent_at||'',moveInPackSentAt:r.move_in_pack_sent_at||'',moveInPackConfirmedAt:r.move_in_pack_confirmed_at||''});
-const tenantToRow=t=>({id:t.id,agency_id:window._agencyId,property_id:t.propertyId,landlord_id:t.landlordId,name:t.name,email:t.email||'',phone:t.phone||'',start_date:t.start||null,end_date:t.end||null,rent:t.rent||0,deposit:t.deposit,scheme:t.scheme||'',scheme_ref:t.schemeRef||'',deposit_holder:t.depositHolder||'landlord',deposit_received:t.depositReceived||null,landlord_scheme_no:t.landlordSchemeNo||'',deposit_paid_by:t.depositPaidBy||'',pi_served_at:t.piServedAt||null,holding_deposit:t.holdingDeposit||null,pay_details:t.payDetails||'',monies_due_by:t.moniesDueBy||null,monies_sent_at:t.moniesSentAt||null,condensation_sent_at:t.condensationSentAt||null,condensation_ack_at:t.condensationAckAt||null,landlord_deposit_confirmed_at:t.landlordDepositConfirmedAt||null,welcome_sent_at:t.welcomeSentAt||null,status:t.status||'active',invite_token:t.inviteToken||null,invited_at:t.invitedAt||null,occupants:t.occupants||[],guarantor:t.guarantor||null,deposit_cert_name:t.depositCertName||'',deposit_cert_url:t.depositCertUrl||'',deposit_cert_expiry:t.depositCertExpiry||null,ref_doc_name:t.refDocName||'',ref_doc_url:t.refDocUrl||'',share_code:t.shareCode||'',dob:t.dob||null,rtr_result:t.rtrResult||'',rtr_expiry:t.rtrExpiry||null,rtr_check_date:t.rtrCheckDate||null,rtr_doc_name:t.rtrDocName||'',rtr_doc_url:t.rtrDocUrl||'',rtr_docs:t.rtrDocs||[],rtr_check_method:t.rtrCheckMethod||'',orig_contract_name:t.origContractName||'',orig_contract_url:t.origContractUrl||'',id1_doc_name:t.id1DocName||'',id1_doc_url:t.id1DocUrl||'',id2_doc_name:t.id2DocName||'',id2_doc_url:t.id2DocUrl||'',address_proof_name:t.addressProofName||'',address_proof_url:t.addressProofUrl||'',address_proof_docs:t.addressProofDocs||[],forwarding_address:t.forwardingAddress||'',final_meters:t.finalMeters||null,end_notes:t.endNotes||'',checkout_pack_sent_at:t.checkoutPackSentAt||null,move_in_pack_sent_at:t.moveInPackSentAt||null,move_in_pack_confirmed_at:t.moveInPackConfirmedAt||null,updated_at:new Date().toISOString()});
+const rowToTenant=r=>({id:r.id,propertyId:r.property_id,landlordId:r.landlord_id,userId:r.user_id,name:r.name||'',email:r.email||'',phone:r.phone||'',start:r.start_date||'',end:r.end_date||'',rent:r.rent||0,deposit:r.deposit,scheme:r.scheme||'',schemeRef:r.scheme_ref||'',depositHolder:r.deposit_holder||'landlord',depositReceived:r.deposit_received||'',landlordSchemeNo:r.landlord_scheme_no||'',depositPaidBy:r.deposit_paid_by||'',piServedAt:r.pi_served_at||'',holdingDeposit:r.holding_deposit||0,firstRentReceived:r.first_rent_received||'',payDetails:r.pay_details||'',moniesDueBy:r.monies_due_by||'',moniesSentAt:r.monies_sent_at||'',condensationSentAt:r.condensation_sent_at||'',condensationAckAt:r.condensation_ack_at||'',landlordDepositConfirmedAt:r.landlord_deposit_confirmed_at||'',welcomeSentAt:r.welcome_sent_at||'',status:r.status||'active',inviteToken:r.invite_token||'',invitedAt:r.invited_at||'',invited:!!r.invited_at,occupants:r.occupants||[],guarantor:r.guarantor||null,depositCertName:r.deposit_cert_name||'',depositCertUrl:r.deposit_cert_url||'',depositCertExpiry:r.deposit_cert_expiry||'',refDocName:r.ref_doc_name||'',refDocUrl:r.ref_doc_url||'',shareCode:r.share_code||'',dob:r.dob||'',rtrResult:r.rtr_result||'',rtrExpiry:r.rtr_expiry||'',rtrCheckDate:r.rtr_check_date||'',rtrDocName:r.rtr_doc_name||'',rtrDocUrl:r.rtr_doc_url||'',rtrDocs:r.rtr_docs||[],rtrCheckMethod:r.rtr_check_method||'',origContractName:r.orig_contract_name||'',origContractUrl:r.orig_contract_url||'',id1DocName:r.id1_doc_name||'',id1DocUrl:r.id1_doc_url||'',id2DocName:r.id2_doc_name||'',id2DocUrl:r.id2_doc_url||'',addressProofName:r.address_proof_name||'',addressProofUrl:r.address_proof_url||'',addressProofDocs:r.address_proof_docs||[],forwardingAddress:r.forwarding_address||'',finalMeters:r.final_meters||null,endNotes:r.end_notes||'',checkoutPackSentAt:r.checkout_pack_sent_at||'',moveInPackSentAt:r.move_in_pack_sent_at||'',moveInPackConfirmedAt:r.move_in_pack_confirmed_at||''});
+const tenantToRow=t=>({id:t.id,agency_id:window._agencyId,property_id:t.propertyId,landlord_id:t.landlordId,name:t.name,email:t.email||'',phone:t.phone||'',start_date:t.start||null,end_date:t.end||null,rent:t.rent||0,deposit:t.deposit,scheme:t.scheme||'',scheme_ref:t.schemeRef||'',deposit_holder:t.depositHolder||'landlord',deposit_received:t.depositReceived||null,landlord_scheme_no:t.landlordSchemeNo||'',deposit_paid_by:t.depositPaidBy||'',pi_served_at:t.piServedAt||null,holding_deposit:t.holdingDeposit||null,first_rent_received:t.firstRentReceived||null,pay_details:t.payDetails||'',monies_due_by:t.moniesDueBy||null,monies_sent_at:t.moniesSentAt||null,condensation_sent_at:t.condensationSentAt||null,condensation_ack_at:t.condensationAckAt||null,landlord_deposit_confirmed_at:t.landlordDepositConfirmedAt||null,welcome_sent_at:t.welcomeSentAt||null,status:t.status||'active',invite_token:t.inviteToken||null,invited_at:t.invitedAt||null,occupants:t.occupants||[],guarantor:t.guarantor||null,deposit_cert_name:t.depositCertName||'',deposit_cert_url:t.depositCertUrl||'',deposit_cert_expiry:t.depositCertExpiry||null,ref_doc_name:t.refDocName||'',ref_doc_url:t.refDocUrl||'',share_code:t.shareCode||'',dob:t.dob||null,rtr_result:t.rtrResult||'',rtr_expiry:t.rtrExpiry||null,rtr_check_date:t.rtrCheckDate||null,rtr_doc_name:t.rtrDocName||'',rtr_doc_url:t.rtrDocUrl||'',rtr_docs:t.rtrDocs||[],rtr_check_method:t.rtrCheckMethod||'',orig_contract_name:t.origContractName||'',orig_contract_url:t.origContractUrl||'',id1_doc_name:t.id1DocName||'',id1_doc_url:t.id1DocUrl||'',id2_doc_name:t.id2DocName||'',id2_doc_url:t.id2DocUrl||'',address_proof_name:t.addressProofName||'',address_proof_url:t.addressProofUrl||'',address_proof_docs:t.addressProofDocs||[],forwarding_address:t.forwardingAddress||'',final_meters:t.finalMeters||null,end_notes:t.endNotes||'',checkout_pack_sent_at:t.checkoutPackSentAt||null,move_in_pack_sent_at:t.moveInPackSentAt||null,move_in_pack_confirmed_at:t.moveInPackConfirmedAt||null,updated_at:new Date().toISOString()});
 const rowToMsg=r=>({id:r.id,landlordId:r.landlord_id,tenantId:r.tenant_id,propertyId:r.property_id,sender:r.sender||'agent',body:r.body||'',createdAt:r.created_at});
 const msgToRow=m=>({id:m.id,agency_id:window._agencyId,landlord_id:m.landlordId||null,tenant_id:m.tenantId||null,property_id:m.propertyId||null,sender:m.sender||'agent',body:m.body||''});
 const pushMessage=m=>_w(sb.from('agency_messages').insert(msgToRow(m)),'agency_messages','upsert',m);
@@ -2078,6 +2078,7 @@ function preSigningPanel(p){
       <span class="faint" style="font-size:11.5px">${esc(who)}</span></div>
     <div style="padding:13px 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <p class="hint" style="margin:0;flex:1;min-width:220px">Generates the agreement from this tenancy's details and emails it for e-signature. Each signatory signs in turn and everyone gets the completed copy.</p>
+      <button class="btn sm" onclick="openMoveInMonies('${p.id}')">${rec.moniesSentAt?'Monies letter — sent '+esc(fmtDate(rec.moniesSentAt)):'Move-in monies letter'}</button>
       <button class="btn navy sm" onclick="openTenancyAgreement('${p.id}')">✨ Generate &amp; send for signing</button>
     </div></div>`;
 }
@@ -2564,9 +2565,63 @@ function _tnTabBarHtml(){
   return `<div style="display:flex;border-bottom:1px solid var(--border);margin-bottom:18px;overflow-x:auto">${btn('tenancy','Tenancy')}${personTabs}<button type="button" onclick="tnAddPerson()" style="background:none;border:none;color:var(--blue);font-size:13px;font-weight:600;cursor:pointer;padding:8px 4px;white-space:nowrap">+ Add person</button></div>`;
 }
 function _stepDivider(n,label){ return `<div style="display:flex;align-items:center;gap:8px;margin:${n>1?'18px':'2px'} 0 8px;${n>1?'padding-top:14px;border-top:1px solid var(--border)':''}"><span style="width:20px;height:20px;border-radius:50%;background:var(--navy);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${n}</span><span style="font-size:11.5px;font-weight:700;color:var(--navy)">${esc(label)}</span></div>`; }
+function depositCap(monthlyRent){
+  const r=parseFloat(monthlyRent)||0; if(!r) return null;
+  const weekly=r*12/52;
+  const weeks=(r*12)>=50000?6:5;   // TFA 2019 s.1 — 6 weeks only at £50k+ annual rent
+  return {weeks,cap:Math.floor(weekly*weeks*100)/100,weekly};
+}
+function depositForWeeks(monthlyRent,weeks){
+  const r=parseFloat(monthlyRent)||0; if(!r) return 0;
+  return Math.floor((r*12/52)*(parseFloat(weeks)||5)*100)/100;
+}
+/* Reads the Tenancy tab's DOM back into _tnCore. Must run before anything that
+   re-renders that tab, or its inputs silently revert to the last saved values. */
+function _tnSyncCore(){
+  const core=window._tnCore; if(!core) return;
+  const g=id=>document.getElementById(id);
+  if(!g('tn-start')) return;   // tab not currently rendered
+  const s=g('tn-start'); if(s) core.start=s.value;
+  const d=g('tn-deposit'); if(d) core.deposit=d.value;
+  const de=g('tn-deposit-expiry'); if(de) core.depositCertExpiry=de.value;
+  const sr=g('tn-schemeref'); if(sr) core.schemeRef=sr.value;
+  ['depholder|depositHolder','depreceived|depositReceived','llschemeno|landlordSchemeNo','deppaidby|depositPaidBy']
+    .forEach(pair=>{ const [id,key]=pair.split('|'); const el=g('tn-'+id); if(el) core[key]=el.value; });
+}
+function _tnDepWeeks(pid,weeks){
+  _tnSyncCore();
+  const rec=tenantRecFor(pid)||{}, p=P(pid)||{};
+  const rent=parseFloat(rec.rent||p.rent)||0;
+  const core=window._tnCore||{};
+  /* Transient only — not persisted. On reload the weeks figure is inferred from
+     the stored rent and deposit, so it cannot disagree with them. */
+  core.depositWeeks=weeks;
+  core.deposit=depositForWeeks(rent,weeks).toFixed(2);
+  const el=document.getElementById('tn-deposit'); if(el) el.value=core.deposit;
+  tnTab('tenancy');
+}
 function _tnTenancyTabHtml(pid){ const rec=tenantRecFor(pid); const d=window._tnCore;
+  const p=P(pid)||{}; const rent=parseFloat((rec&&rec.rent)||p.rent)||0;
+  const cap=depositCap(rent);
+  const dpNow=parseFloat(d.deposit)||0;
+  const weeks=d.depositWeeks!=null?parseFloat(d.depositWeeks)
+    :(rent&&dpNow?Math.round(dpNow/(rent*12/52)):5);
+  /* Derive on first setup only. Overwriting a deposit already recorded would
+     rewrite a real money figure the tenant may already have paid. */
+  if(rent&&(d.deposit===''||d.deposit==null)){ d.deposit=depositForWeeks(rent,weeks).toFixed(2); }
+  const dep=parseFloat(d.deposit)||0;
+  const over=cap&&dep>cap.cap+0.005;
+  const suggested=depositForWeeks(rent,weeks);
+  const stale=rent&&dep&&Math.abs(dep-suggested)>0.5;
   return `<div class="grid2" style="gap:10px"><div class="fg"><label>Tenancy start</label><input id="tn-start" type="date" value="${esc(d.start)}"></div>
-  <div class="fg"><label>Deposit held (£)</label><input id="tn-deposit" type="number" value="${esc(d.deposit)}"></div></div>
+  <div class="fg"><label>Deposit held (£)</label><input id="tn-deposit" type="number" value="${esc(d.deposit)}" oninput="_tnDepHint()">
+    <span class="hint" id="tn-dep-hint">${cap?`${cap.weeks}-week cap for \u00a3${rent.toFixed(0)}pcm is \u00a3${cap.cap.toFixed(2)}.`:'Set the rent on the property to derive the deposit.'}</span></div></div>
+  ${rent?`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:-4px 0 10px">
+    <span class="faint" style="font-size:11.5px">Weeks of rent:</span>
+    ${[4,5,cap&&cap.weeks===6?6:null].filter(Boolean).map(w=>`<button type="button" class="btn sm${weeks===w?' navy':''}" onclick="_tnDepWeeks('${pid}',${w})">${w} — \u00a3${depositForWeeks(rent,w).toFixed(2)}</button>`).join('')}
+    ${stale?`<span style="font-size:11.5px;color:var(--amber);font-weight:600">Currently \u00a3${dep.toFixed(2)} — doesn't match ${weeks} weeks at the current rent</span>`:''}
+  </div>`:''}
+  ${over?`<div class="note warn" style="margin:-4px 0 10px"><b>Over the statutory cap.</b> \u00a3${dep.toFixed(2)} exceeds the ${cap.weeks}-week maximum of \u00a3${cap.cap.toFixed(2)} for this rent. A deposit above the cap is unlawfully taken under the Tenant Fees Act 2019 — the excess must be repaid before it can be protected.</div>`:''}
   <div style="background:#F6F8FB;border:1px solid var(--border);border-radius:10px;padding:16px;margin-top:6px">
     <div style="font-size:12.5px;font-weight:700;color:var(--navy)">📁 Tenancy documents</div>
     <div class="faint" style="font-size:11.5px;margin-bottom:10px">Deposit, referencing &amp; the signed agreement</div>
@@ -2661,6 +2716,19 @@ function _tnOpenModal(pid){
   const rec=tenantRecFor(pid);
   modal(rec&&rec.name?'Set up tenant — '+esc(rec.name):'Set up tenant', _tnBodyHtml(pid), `<button class="btn" onclick="window._tnPeople=null;window._tnPid=null;closeModal()">Cancel</button><button class="btn navy" id="tn-save-btn" onclick="saveTenant('${pid}')">Save tenancy</button>`, true);
 }
+function _tnDepHint(){
+  const el=document.getElementById('tn-deposit'), hint=document.getElementById('tn-dep-hint');
+  if(!el||!hint) return;
+  const pid=window._tnPid; const rec=tenantRecFor(pid)||{}; const p=P(pid)||{};
+  const cap=depositCap(parseFloat(rec.rent||p.rent)||0); if(!cap) return;
+  const dep=parseFloat(el.value)||0; const over=dep>cap.cap+0.005;
+  el.style.borderColor=over?'var(--red)':'';
+  hint.innerHTML=over
+    ? '<b style="color:var(--red)">\u00a3'+dep.toFixed(2)+' is over the '+cap.weeks+'-week cap of \u00a3'+cap.cap.toFixed(2)+'.</b> '+
+      '<a href="#" onclick="event.preventDefault();document.getElementById(\'tn-deposit\').value=\''+cap.cap.toFixed(2)+'\';_tnDepHint()">Use the cap</a>'
+    : 'Cap is \u00a3'+cap.cap.toFixed(2)+' — '+cap.weeks+' weeks at \u00a3'+(parseFloat(rec.rent||p.rent)||0).toFixed(0)+'pcm.'+
+      (dep&&dep<cap.cap?' <a href="#" onclick="event.preventDefault();document.getElementById(\'tn-deposit\').value=\''+cap.cap.toFixed(2)+'\';_tnDepHint()">Use the cap</a>':'');
+}
 function tnSyncPerson(idx){
   const per=window._tnPeople&&window._tnPeople[idx]; if(!per) return;
   const nameEl=document.getElementById('tn-p'+idx+'-name'); if(!nameEl) return; // tab not currently rendered
@@ -2672,7 +2740,7 @@ function tnSyncPerson(idx){
 }
 function tnTab(id){
   const cur=window._tnActiveTab; const m=cur&&cur.match(/^person-(\d+)$/);
-  if(m) tnSyncPerson(parseInt(m[1],10));
+  if(m) tnSyncPerson(parseInt(m[1],10)); else _tnSyncCore();
   window._tnActiveTab=id;
   _tnOpenModal(window._tnPid);
 }
@@ -3177,8 +3245,10 @@ function moveInMonies(pid){
   const hold=parseFloat(rec.holdingDeposit)||0;
   const held=window.NexLetDeposit?NexLetDeposit.holderOf(rec):'landlord';
   const agentTakesMoney=typeof holdsClientMoney==='function'?holdsClientMoney():false;
-  const due=Math.max(0,rent+dep-hold);
-  return {p,rec,l,rent,dep,hold,due,held,agentTakesMoney};
+  const depIn=!!rec.depositReceived;          // recorded as received — do not ask again
+  const rentIn=!!rec.firstRentReceived;
+  const due=Math.max(0,(rentIn?0:rent)+(depIn?0:dep)-hold);
+  return {p,rec,l,rent,dep,hold,due,held,agentTakesMoney,depIn,rentIn};
 }
 function openMoveInMonies(pid){
   const m=moveInMonies(pid);
@@ -3190,8 +3260,10 @@ function openMoveInMonies(pid){
     <div class="note${m.due?'':' ok'}" style="margin-bottom:14px">
       <b>${esc(m.p.address||'')}</b> · move-in ${m.rec.start?esc(fmtDate(m.rec.start)):'date not set'}<br>
       ${m.due?'Cleared funds are needed before keys are released.':'Nothing outstanding.'}</div>
-    ${row('First month\'s rent',m.rent)}
-    ${m.dep?row('Deposit',m.dep):''}
+    ${row('First month\'s rent'+(m.rentIn?' — received':''),m.rent)}
+    ${m.rentIn?row('Rent already received',m.rent,true):''}
+    ${m.dep?row('Deposit'+(m.depIn?' — received '+fmtDate(m.rec.depositReceived):''),m.dep):''}
+    ${m.dep&&m.depIn?row('Deposit already received',m.dep,true):''}
     ${m.hold?row('Holding deposit already paid',m.hold,true):''}
     <div style="display:flex;justify-content:space-between;padding:11px 0;font-size:15px">
       <span style="font-weight:700;color:var(--navy)">Due before move-in</span>
@@ -3201,6 +3273,10 @@ function openMoveInMonies(pid){
     <div class="fg"><label>Payment details to quote in the letter</label>
       <textarea id="mim-pay" rows="3" placeholder="Account name, sort code, account number, reference">${esc(m.rec.payDetails||'')}</textarea>
       <span class="hint">${m.agentTakesMoney?'Your client account details.':'The <b>landlord\'s</b> account details — rent and deposit are paid direct to them, not to us.'}</span></div>
+    <div class="fg"><label style="display:flex;align-items:center;gap:8px;font-weight:400">
+      <input id="mim-rentin" type="checkbox" ${m.rentIn?'checked':''} style="width:auto;margin:0">
+      First month's rent already received</label>
+      <span class="hint">${m.depIn?'The deposit is recorded as received on '+esc(fmtDate(m.rec.depositReceived))+', so it is not asked for again.':'Tick once rent has cleared, so the letter does not ask for it twice.'}</span></div>
     <div class="fg"><label>Deadline for cleared funds</label>
       <input id="mim-by" type="date" value="${esc(m.rec.moniesDueBy||m.rec.start||'')}"></div>`;
   modal('Move-in monies — '+esc(m.rec.name||''), body,
@@ -3210,8 +3286,10 @@ function openMoveInMonies(pid){
 }
 async function _sendMonies(pid,send){
   const hold=parseFloat(val('mim-hold'))||0, pay=val('mim-pay')||'', by=val('mim-by')||'';
+  const rentEl=document.getElementById('mim-rentin');
   const rec=tenantRecFor(pid); if(!rec) return;
   rec.holdingDeposit=hold; rec.payDetails=pay; rec.moniesDueBy=by;
+  if(rentEl) rec.firstRentReceived=rentEl.checked?(rec.firstRentReceived||new Date().toISOString()):'';
   pushTenantRec(rec);   // persist before branching — preview must not lose typed input
   const m=moveInMonies(pid), b=agencyBrand();
   const payee=m.agentTakesMoney?b.name:(landlordName(m.l)||'your landlord');
@@ -3220,7 +3298,9 @@ async function _sendMonies(pid,send){
     <p>Thank you for completing the paperwork for <b>${esc(m.p.address||'')}</b>. This letter sets out the monies needed before the tenancy begins${m.rec.start?' on '+fmtDate(m.rec.start):''}.</p>
     <table style="width:100%;border-collapse:collapse;font-size:14px;margin:14px 0">
       ${line('First month\'s rent',m.rent)}
+      ${m.rentIn?line('Rent already received',m.rent,true):''}
       ${m.dep?line('Deposit',m.dep):''}
+      ${m.depIn?line('Deposit received '+fmtDate(m.rec.depositReceived),m.dep,true):''}
       ${m.hold?line('Holding deposit already received',m.hold,true):''}
       <tr><td style="padding:9px 0;border-top:2px solid #1B2F4A;font-weight:700">Due before move-in</td>
           <td style="padding:9px 0;border-top:2px solid #1B2F4A;text-align:right;font-weight:700">&pound;${m.due.toFixed(2)}</td></tr>
@@ -3287,11 +3367,17 @@ async function saveTenant(pid){
     if(url) applyTo(f.name,url); else failed.push(kind);
   }
   const core=window._tnCore||{};
-  const coreStart=document.getElementById('tn-start'), coreDeposit=document.getElementById('tn-deposit'), coreDepositExp=document.getElementById('tn-deposit-expiry'), coreSchemeRef=document.getElementById('tn-schemeref');
-  if(coreStart) core.start=coreStart.value; if(coreDeposit) core.deposit=coreDeposit.value; if(coreDepositExp) core.depositCertExpiry=coreDepositExp.value;
-  if(coreSchemeRef) core.schemeRef=coreSchemeRef.value;
-  ['depholder|depositHolder','depreceived|depositReceived','llschemeno|landlordSchemeNo','deppaidby|depositPaidBy'].forEach(pair=>{
-    const [id,key]=pair.split('|'); const el=document.getElementById('tn-'+id); if(el) core[key]=el.value; });
+  _tnSyncCore();
+  const _cd=document.getElementById('tn-deposit');
+  if(_cd){
+    const _cap=depositCap(parseFloat((tenantRecFor(pid)||{}).rent||(P(pid)||{}).rent)||0);
+    const _d=parseFloat(_cd.value)||0;
+    if(_cap&&_d>_cap.cap+0.005){
+      const ok=confirm('£'+_d.toFixed(2)+' is above the '+_cap.weeks+'-week statutory cap of £'+_cap.cap.toFixed(2)+
+        ' for this rent.\n\nA deposit above the cap is unlawfully taken under the Tenant Fees Act 2019. The excess must be repaid.\n\nSave anyway?');
+      if(!ok){ const btn=document.getElementById('tn-save-btn'); if(btn){btn.disabled=false;btn.textContent='Save tenancy';} return; }
+    }
+  }
   await slot('deposit',null,(n,u)=>{ core.depositCertName=n; core.depositCertUrl=u; });
   await slot('ref',null,(n,u)=>{ core.refDocName=n; core.refDocUrl=u; });
   await slot('origcontract',null,(n,u)=>{ core.origContractName=n; core.origContractUrl=u; });
