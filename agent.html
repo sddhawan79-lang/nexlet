@@ -91,7 +91,7 @@ h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px
 .modal-hd{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
 .modal-hd h3{font-size:16px;color:var(--navy)}
 .modal-bd{padding:20px 22px}
-.modal-ft{padding:14px 22px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:9px}
+.modal-ft{padding:14px 22px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:flex-end;gap:9px}
 .x{background:none;border:none;font-size:20px;color:var(--faint);cursor:pointer;line-height:1}
 .chk{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;margin-bottom:8px;cursor:pointer}
 .chk.on{border-color:var(--green);background:var(--green-bg)}
@@ -1566,12 +1566,21 @@ function markValuationSent(vid){
   const lead=(S.landlordLeads||[]).find(l=>l.id===v.leadId); if(lead){ lead.status='contacted'; lead.comms=lead.comms||[]; lead.comms.push({id:uid('c'),date:today(),type:'Note',note:'Valuation report sent to landlord (offline/printed).'}); }
   save(); _valPush(v); render(); toast('✓ Marked as sent to landlord');
 }
-async function emailValuationReport(vid){
+function emailValuationReport(vid){
   const v=VAL(vid); const lead=(S.landlordLeads||[]).find(l=>l.id===v.leadId); if(!lead){ toast('No enquiry on file',1); return; }
   if(!lead.email){ toast('No email on file for this landlord — add one on the enquiry first',1); return; }
+  confirmSend({title:'Valuation & letting proposal',subject:'Your rental valuation & letting proposal',
+    to:[lead.email],html:valuationEmailHtml(v,lead),sendLabel:'Email the landlord',
+    onSend:()=>_emailValuationNow(vid)});
+}
+async function _emailValuationNow(vid){
+  const v=VAL(vid); const lead=(S.landlordLeads||[]).find(l=>l.id===v.leadId); if(!lead) return;
   if(!LIVE){ toast('Connect to Supabase to send (not available in demo)',1); return; }
-  const r=await agencyEmail(lead.email,'Your rental valuation & letting proposal — '+(S.agency.name||'NexLet'), valuationEmailHtml(v,lead));
-  if(r.ok){ v.status='sent'; v.sentAt=new Date().toISOString(); lead.status='contacted';
+  const vhtml=valuationEmailHtml(v,lead);
+  const r=await agencyEmail(lead.email,'Your rental valuation & letting proposal — '+(S.agency.name||'NexLet'), vhtml);
+  if(r.ok){ v.status='sent'; v.sentAt=new Date().toISOString();
+    await fileLetter({landlordId:(existingLandlordForLead(lead)||{}).id,type:'valuation',
+      subject:'Rental valuation & letting proposal',html:vhtml,to:[lead.email]}); lead.status='contacted';
     lead.comms=lead.comms||[]; lead.comms.push({id:uid('c'),date:today(),type:'Note',note:'Valuation report emailed to '+lead.email+'.'});
     const existing=existingLandlordForLead(lead); if(existing){ existing.comms=existing.comms||[]; existing.comms.push({id:uid('c'),date:today(),type:'Note',note:'Valuation report emailed to '+lead.email+'.'}); pushLandlord(existing); }
     save(); _valPush(v); render(); toast('✓ Emailed to '+lead.email); }
@@ -1853,7 +1862,12 @@ function msgSend(kind,id){
 function _landlordDocs(l){
   const out=[];
   (S.agreements||[]).filter(a=>a.landlord_id===l.id).forEach(a=>out.push({label:(a.service==='letonly'?'Tenant-Find':'Management')+' Agreement',type:'Agreement',date:a.landlord_signed_at||a.agent_signed_at||a.created_at,status:a.status==='signed'?'Signed':a.status==='declined'?'Declined':a.status==='void'?'Archived':'Sent — awaiting signature'}));
-  (S.letters||[]).filter(x=>x.landlord_id===l.id).forEach(x=>out.push({label:x.subject||x.type,type:'Letter',date:x.created_at,status:'Sent'}));
+  /* Carry the id and the stored HTML so the trail can actually open what was
+     sent. A tenant-facing letter is filed under the landlord for lookup but must
+     say who received it — otherwise the trail cannot show who was told what. */
+  (S.letters||[]).filter(x=>x.landlord_id===l.id).forEach(x=>out.push({id:x.id,label:x.subject||x.type,
+    type:'Letter',date:x.created_at,status:'Sent',html:!!x.body_html,
+    audience:letterAudience(x.type)}));
   S.properties.filter(p=>p.landlordId===l.id).forEach(p=>{ (S.notices||[]).filter(n=>n.propertyId===p.id).forEach(n=>out.push({label:(n.kind==='section13'?'Section 13 rent increase':'Section 8 notice')+' — '+p.address,type:'Notice',date:n.served||n.createdAt,status:n.status==='served'?'Served':n.status==='withdrawn'?'Archived':'Draft'})); });
   return out.sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
 }
@@ -1861,7 +1875,7 @@ function docTrailPanel(l){
   const docs=_landlordDocs(l);
   const pillColor={Signed:['var(--green-bg)','var(--green)'],Served:['var(--amber-bg)','var(--amber)'],Sent:['var(--blue-bg)','var(--blue)'],'Sent — awaiting signature':['var(--amber-bg)','var(--amber)'],Archived:['var(--off)','#94A3B8'],Declined:['var(--red-bg)','var(--red)'],Draft:['var(--off)','#8A7D6E']};
   return `<div class="panel"><div class="panel-hd"><h2>Documents</h2><span class="faint" style="font-size:12px">Sent, signed &amp; archived — full trail</span></div>
-    ${docs.length?docs.map(d=>{ const c=pillColor[d.status]||['var(--off)','#8A7D6E']; return `<div class="row"><div class="av" style="font-size:15px">${d.type==='Agreement'?'✍️':d.type==='Notice'?'⚖':'✉'}</div><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:var(--navy)">${esc(d.label)}</div><div class="faint" style="font-size:11.5px">${d.type} · ${d.date?fmtDate(d.date):'—'}</div></div><span class="pill" style="background:${c[0]};color:${c[1]}">${d.status}</span></div>`; }).join(''):`<div class="empty">No documents yet.</div>`}
+    ${docs.length?docs.map(d=>{ const c=pillColor[d.status]||['var(--off)','#8A7D6E']; return `<div class="row"><div class="av" style="font-size:15px">${d.type==='Agreement'?'✍️':d.type==='Notice'?'⚖':'✉'}</div><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:var(--navy)">${esc(d.label)}</div><div class="faint" style="font-size:11.5px">${d.type} · ${d.date?fmtDate(d.date):'—'}${d.audience==='tenant'?' · sent to the tenant':''}</div></div><span class="pill" style="background:${c[0]};color:${c[1]}">${d.status}</span>${d.html?`<button class="btn sm" onclick="_openLetter((S.letters||[]).find(x=>x.id==='${d.id}'))">Open</button>`:''}</div>`; }).join(''):`<div class="empty">No documents yet.</div>`}
   </div>`;
 }
 
@@ -2061,6 +2075,17 @@ function lifecycleStepper(p){
 // Shown only in the window between "everyone has signed" and "first day done".
 // The pre-signing counterpart to postSigningPanel: tenancy set up, agreement not
 // yet out. Shown only in that window, so it disappears once sent.
+/* Audience derived from the PERSISTED letter type, so it survives a reload.
+   TEMPLATES already carry audience per key; the built-in letters are listed here. */
+const LETTER_AUDIENCE={move_in_monies:'tenant',condensation:'tenant',notice:'tenant',
+  welcome:'landlord',fee_change:'landlord',rent_statement:'landlord',statement:'landlord',
+  invoice:'landlord',valuation:'landlord'};
+function letterAudience(type){
+  if(!type) return 'landlord';
+  if(LETTER_AUDIENCE[type]) return LETTER_AUDIENCE[type];
+  const t=typeof tplByKey==='function'?tplByKey(type):null;
+  return (t&&t.audience)||'landlord';
+}
 /* True when the stored deposit does not match any lawful week multiple of the
    CURRENT rent. Independent of rent history, so it also catches figures that
    went stale before the re-derive existed. */
@@ -2082,6 +2107,69 @@ async function fixDeposit(pid){
   rec.deposit=m.suggested.toFixed(2);
   if(!await pushTenantRec(rec)){ toast('⚠ Could not save the deposit — retry',1); return; }
   render(); toast('✓ Deposit set to '+gbp(m.suggested)+' ('+m.weeks+' weeks of '+gbp(m.rent)+')');
+}
+/* Shared draft gate. Callers hand over the rendered HTML and a send function;
+   the send button stays disabled until the draft has been opened. */
+let _pendingSend=null;
+function confirmSend(o){
+  _pendingSend=o;
+  const to=[].concat(o.to||[]).filter(Boolean);
+  modal(o.title||'Send document',
+    `<div class="note" style="margin-bottom:12px"><b>${esc(o.subject||'')}</b></div>
+     <div class="kv"><span class="k">${to.length>1?'Recipients':'Recipient'}</span><span class="v">${to.length?esc(to.join(', ')):'—'}</span></div>
+     ${o.note?`<p class="hint" style="margin:10px 0 0">${o.note}</p>`:''}
+     <p class="hint" style="margin:10px 0 0">Open the draft to check it. Sending unlocks once you have.</p>`,
+    `<span class="hint" id="cs-gate" style="flex:1;text-align:left">Read the draft before it can be sent.</span>
+     <button class="btn" onclick="closeModal()">Cancel</button>
+     <button class="btn" onclick="_openDraft()">Open draft</button>
+     <button class="btn navy" id="cs-send" disabled style="opacity:.45;cursor:not-allowed" onclick="_doSend()">${esc(o.sendLabel||'Send')}</button>`);
+}
+function _openDraft(){
+  if(!_pendingSend) return;
+  const w=window.open('','_blank'); if(!w){ toast('Allow pop-ups to open the draft',1); return; }
+  w.document.write(_pendingSend.html||''); w.document.close();
+  const b=document.getElementById('cs-send'), g=document.getElementById('cs-gate');
+  if(b){ b.disabled=false; b.style.opacity=''; b.style.cursor=''; }
+  if(g) g.innerHTML='<span style="color:var(--green);font-weight:600">✓ Draft read — sending is now enabled.</span>';
+}
+async function _doSend(){
+  const o=_pendingSend; if(!o) return;
+  const b=document.getElementById('cs-send');
+  if(b){ b.disabled=true; b.textContent='Sending…'; }
+  closeModal();
+  try{ await o.onSend(); }catch(e){ console.error(e); toast('⚠ Could not send — '+(e.message||'retry'),1); }
+  _pendingSend=null;
+}
+window.confirmSend=o=>confirmSend(o);
+/* Records a sent document in agency_letters so it can be re-opened exactly as
+   sent. Shared, because every send needs it and each one was doing it or not. */
+async function fileLetter({landlordId,propertyId,type,subject,html,to}){
+  const row={id:uid('lt'),agency_id:window._agencyId,landlord_id:landlordId||null,property_id:propertyId||null,
+    type,subject:subject+([].concat(to||[]).filter(Boolean).length?' — '+[].concat(to).filter(Boolean).join(', '):''),
+    body_html:html,status:'sent'};
+  if(LIVE){ const {error}=await sb.from('agency_letters').insert(row); if(error) console.error(error); }
+  S.letters=S.letters||[]; S.letters.unshift({...row,created_at:new Date().toISOString()});
+  return row;
+}
+window.fileLetter=o=>fileLetter(o);
+function viewSentMonies(pid){
+  const p=P(pid)||{};
+  const rows=(S.letters||[]).filter(x=>x.property_id===pid&&x.type==='move_in_monies')
+    .sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
+  if(!rows.length){ toast('No sent copy on file — letters sent before this was added were not retained',1); return; }
+  if(rows.length===1) return _openLetter(rows[0]);
+  modal('Move-in payment letters sent',
+    rows.map(r=>`<div class="doc" style="padding:9px 0">
+      <div class="di">✉</div>
+      <div style="flex:1"><div style="font-size:12.5px;font-weight:600;color:var(--navy)">${esc(r.subject||'')}</div>
+        <div class="faint" style="font-size:11.5px">Sent ${esc(fmtDate(r.created_at))}</div></div>
+      <button class="btn sm" onclick="_openLetter((S.letters||[]).find(x=>x.id==='${r.id}'))">Open</button></div>`).join(''),
+    `<button class="btn" onclick="closeModal()">Close</button>`);
+}
+function _openLetter(row){
+  if(!row||!row.body_html){ toast('That copy is not on file',1); return; }
+  const w=window.open('','_blank'); if(!w){ toast('Allow pop-ups to open it',1); return; }
+  w.document.write(row.body_html); w.document.close();
 }
 function depositMismatchBanner(p){
   const m=depositMismatch(p.id); if(!m) return '';
@@ -3395,9 +3483,11 @@ function openMoveInMonies(pid){
       First month's rent already received</label>
       <span class="hint">${m.depIn?'The deposit is recorded as received on '+esc(fmtDate(m.rec.depositReceived))+', so it is not asked for again.':'Tick once rent has cleared, so the letter does not ask for it twice.'}</span></div>`;
   modal('Move-in monies — '+esc(m.rec.name||''), body,
-    `<button class="btn" onclick="closeModal()">Cancel</button>
-     <button class="btn" onclick="_sendMonies('${pid}',0)">Preview</button>
-     <button class="btn navy" onclick="_sendMonies('${pid}',1)">${sent?'Resend to the tenant':'Email the tenant'}</button>`, true);
+    `<span class="hint" id="mim-gate" style="flex:1;text-align:left">Read the draft before it can be sent.</span>
+     <button class="btn" onclick="closeModal()">Cancel</button>
+     ${sent?`<button class="btn" onclick="viewSentMonies('${pid}')">See what was sent</button>`:''}
+     <button class="btn" onclick="_sendMonies('${pid}',0)">Open draft</button>
+     <button class="btn navy" id="mim-send" disabled style="opacity:.45;cursor:not-allowed" onclick="_sendMonies('${pid}',1)">${sent?'Resend to the tenant':'Email the tenant'}</button>`, true);
 }
 async function _sendMonies(pid,send){
   const rec=tenantRecFor(pid); if(!rec) return;
@@ -3444,12 +3534,30 @@ async function _sendMonies(pid,send){
     <p>We are looking forward to welcoming you to your new home.</p>`;
   const subject='Move-in payment — '+(m.p.address||'');
   const html=letterWrap(subject,inner);
-  if(!send){ const w=window.open('','_blank'); if(!w){ toast('Allow pop-ups to preview',1); return; } w.document.write(html); w.document.close(); return; }
+  if(!send){
+    const w=window.open('','_blank'); if(!w){ toast('Allow pop-ups to open the draft',1); return; }
+    w.document.write(html); w.document.close();
+    const btn=document.getElementById('mim-send'), gate=document.getElementById('mim-gate');
+    if(btn){ btn.disabled=false; btn.style.opacity=''; btn.style.cursor=''; }
+    if(gate) gate.innerHTML='<span style="color:var(--green);font-weight:600">✓ Draft read — sending is now enabled.</span>';
+    return; }
   if(!m.rec.email){ toast('No email address on the tenancy',1); return; }
   const to=[m.rec.email].concat(others.map(o=>o.email).filter(Boolean));
   for(const addr of to) await agencyEmail(addr,subject,html);
   rec.moniesSentAt=new Date().toISOString();
   await pushTenantRec(rec);
+  /* Keep the letter exactly as sent. Regenerating it later would reflect whatever
+     the figures have since become, which is no answer to "what did the tenant
+     get". Reuses agency_letters, so no new table. */
+  const ltRow={id:uid('lt'),agency_id:window._agencyId,landlord_id:m.p.landlordId||null,property_id:m.p.id,
+    type:'move_in_monies',
+    /* Recipients in the subject because that column persists and there is no
+       recipient column — this letter's purpose is evidencing what the tenant was
+       told, so who received it must survive a reload. */
+    subject:subject+' — '+to.join(', '),body_html:html,status:'sent'};
+  const ltLocal={...ltRow,created_at:new Date().toISOString()};
+  if(LIVE){ const {error}=await sb.from('agency_letters').insert(ltRow); if(error) console.error(error); }
+  S.letters=S.letters||[]; S.letters.unshift(ltLocal);
   if(window.NexLetAudit) NexLetAudit.log({action:'email.sent',entity:'tenant',entityId:rec.id,
     entityLabel:(rec.name||'')+' — '+(m.p.address||''),
     detail:{document:'Move-in payment letter',finalAmount:'£'+m.due.toFixed(2),holdingDepositCredited:m.hold?'£'+m.hold.toFixed(2):'none',
@@ -3916,15 +4024,28 @@ function invoiceEmailHtml(inv,l,a,t,due){
     <p style="font-size:12px;color:#8A7D6E;margin-top:24px">${esc(a.name||'Your agency')}${a.address?' · '+esc(a.address):''}</p>
   </div>`;
 }
-async function sendInvoiceToLandlord(id){
+function sendInvoiceToLandlord(id){
   const inv=(S.invoices||[]).find(i=>i.id===id); if(!inv) return;
   const l=L(inv.landlordId);
   if(!l||!l.email){ toast('⚠ No landlord email on file — add one first',1); return; }
+  const a0=S.agency, t0=invTotal(inv);
+  const due0=new Date(new Date(inv.issued).getTime()+(a0.paymentTerms||14)*864e5).toISOString().slice(0,10);
+  const lbl=(inv.type==='remittance'?'Remittance statement ':'Invoice ')+inv.no;
+  confirmSend({title:lbl,subject:lbl+' — '+(a0.name||'NexLet'),to:[l.email],
+    html:invoiceEmailHtml(inv,l,a0,t0,due0),sendLabel:'Email the landlord',
+    onSend:()=>_sendInvoiceNow(id)});
+}
+async function _sendInvoiceNow(id){
+  const inv=(S.invoices||[]).find(i=>i.id===id); if(!inv) return;
+  const l=L(inv.landlordId);
   const a=S.agency, t=invTotal(inv);
   const due=new Date(new Date(inv.issued).getTime()+(a.paymentTerms||14)*864e5).toISOString().slice(0,10);
   const subject=(inv.type==='remittance'?'Remittance statement ':'Invoice ')+inv.no+' — '+(a.name||'NexLet');
-  const r=await agencyEmail(l.email, subject, invoiceEmailHtml(inv,l,a,t,due));
-  if(r.ok){ inv.status='sent'; save(); pushInvoice(inv); render(); toast('✓ '+inv.no+' emailed to '+l.email); }
+  const html=invoiceEmailHtml(inv,l,a,t,due);
+  const r=await agencyEmail(l.email, subject, html);
+  if(r.ok){ inv.status='sent'; save(); pushInvoice(inv);
+    await fileLetter({landlordId:l.id,propertyId:inv.propertyId,type:'invoice',subject,html,to:[l.email]});
+    render(); toast('✓ '+inv.no+' emailed to '+l.email); }
   else toast('⚠ Could not send '+inv.no+' — '+(r.error||'check landlord email and retry'),1);
 }
 
@@ -5923,8 +6044,15 @@ async function tplPolish(){
 function _tplFinalBody(){ const built=_tplBuild(); return { subject:built.subject, body:_tplAiBody||built.body }; }
 function tplCopy(){ const f=_tplFinalBody(); const tmp=document.createElement('textarea'); tmp.value=f.body.replace(/<[^>]+>/g,'\n').replace(/\n{2,}/g,'\n\n').trim(); document.body.appendChild(tmp); tmp.select(); try{document.execCommand('copy');toast('Copied');}catch(e){} tmp.remove(); }
 async function tplSend(){
-  const t=tplByKey(TPL.key); const l=_tplLandlord(); const recip=_tplRecipient();
+  const t=tplByKey(TPL.key); const recip=_tplRecipient();
   if(!recip.email){ toast('No email on file for '+(recip.name||'recipient')+' — add one first',1); return; }
+  const f0=_tplFinalBody();
+  confirmSend({title:t.title,subject:f0.subject,to:[recip.email],html:letterWrap(f0.subject,f0.body),
+    sendLabel:'Send via NexLet',note:t.audience==='tenant'?'This goes to the tenant.':'This goes to the landlord.',
+    onSend:()=>_tplSendNow()});
+}
+async function _tplSendNow(){
+  const t=tplByKey(TPL.key); const l=_tplLandlord(); const recip=_tplRecipient();
   const p=_tplProp(); const f=_tplFinalBody();
   const html=letterWrap(f.subject,f.body);
   if(LIVE){ const row={id:uid('lt'),agency_id:window._agencyId,landlord_id:l.id,property_id:p?p.id:null,type:t.key,subject:f.subject,body_html:html,status:'sent'};
@@ -6168,13 +6296,25 @@ function _noticeRecipients(n){
 async function noticeAttachOfficial(id,input){ const f=input.files&&input.files[0]; if(!f) return; const n=S.notices.find(x=>x.id===id); if(!n)return;
   const ext=(f.name.split('.').pop()||'pdf'); const url=await _storageUpload(f,id+'-official-'+Date.now()+'.'+ext,'property-documents');
   n.officialDoc={name:f.name,url:url||'',uploadedAt:today()}; save(); pushNotice(n); render(); toast('✓ Signed form attached'); }
-async function emailNotice(id){
+function emailNotice(id){
   const n=S.notices.find(x=>x.id===id); if(!n) return; const p=P(n.propertyId)||{};
   const recips=_noticeRecipients(n);
   if(!recips.length){ toast('No email on file for the tenant, occupants or guarantor',1); return; }
+  const lbl=n.kind==='section13'?'Section 13 rent increase notice':'Section 8 possession notice';
+  confirmSend({title:lbl,subject:lbl+' — '+(p.address||''),to:recips.map(r=>r.email),
+    html:'<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#4A4038">'+(n.docHtml||'')+'</div>',
+    sendLabel:'Email the tenant(s)',
+    note:'A notice takes effect from service, so check every date on it before sending.',
+    onSend:()=>_emailNoticeNow(id)});
+}
+async function _emailNoticeNow(id){
+  const n=S.notices.find(x=>x.id===id); if(!n) return; const p=P(n.propertyId)||{};
+  const recips=_noticeRecipients(n);
   const label=n.kind==='section13'?'Section 13 rent increase notice':'Section 8 possession notice';
   const html=n.officialDoc?`<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#4A4038"><p>Please find your ${label} attached/linked below.</p><p><a href="${n.officialDoc.url}">View the signed notice →</a></p><hr style="margin:20px 0;border:none;border-top:1px solid #ddd"><div style="font-size:12px;color:#8A7D6E">For reference, a summary of the notice:</div>${n.docHtml}</div>`:`<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#4A4038">${n.docHtml}</div>`;
   for(const r of recips){ await agencyEmail(r.email, label+' — '+esc(p.address||''), html); }
+  await fileLetter({landlordId:n.landlordId||p.landlordId,propertyId:n.propertyId,type:'notice',
+    subject:label+' — '+(p.address||''),html,to:recips.map(r=>r.email)});
   n.emailedTo=recips.map(r=>r.email); n.emailedAt=new Date().toISOString();
   const l=L(n.landlordId||p.landlordId); if(l&&l.id){ l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Notice',note:label+' emailed to '+recips.map(r=>r.label+' ('+r.email+')').join(', ')+' — '+(p.address||'')}); pushLandlord(l); }
   save(); pushNotice(n); render();

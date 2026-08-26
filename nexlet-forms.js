@@ -34,7 +34,7 @@
 
   function build(p, rec) {
     const b = window.agencyBrand ? agencyBrand() : {};
-    const isPerm = o => (o.personType || 'joint') === 'permitted' || (o.age !== '' && o.age != null && +o.age < 18);
+    const isPerm = o => window.isPermittedOccupier ? window.isPermittedOccupier(o) : (o.personType || 'joint') === 'permitted';
     const names = [rec.name].concat((rec.occupants || []).filter(o => o.name && !isPerm(o)).map(o => o.name)).filter(Boolean);
     const prop = [p.address, p.city, p.postcode].filter(Boolean).join(', ');
     const contact = [b.email, b.phone].filter(Boolean).join(' \u00b7 ');
@@ -104,9 +104,22 @@
        <button class="btn navy" onclick="NexLetForms.email('${pid}')">Email to tenant</button>`, true);
   }
 
-  async function email(pid) {
+  function email(pid) {
     const p = window.P(pid), rec = window.tenantRecFor(pid);
-    const isPerm = o => (o.personType || 'joint') === 'permitted' || (o.age !== '' && o.age != null && +o.age < 18);
+    const isPerm0 = o => window.isPermittedOccupier ? window.isPermittedOccupier(o) : (o.personType || 'joint') === 'permitted';
+    const to0 = [rec.email].concat((rec.occupants || []).filter(o => o.email && !isPerm0(o)).map(o => o.email)).filter(Boolean);
+    if (!to0.length) { window.toast('No tenant email on file', 1); return; }
+    if (!window.confirmSend) return _emailNow(pid);
+    window.confirmSend({
+      title: 'Condensation and mould', subject: 'Condensation and mould — how to prevent and report it',
+      to: to0, html: build(p, rec), sendLabel: 'Email the tenant(s)',
+      note: 'Information plus a reporting duty — not a variation of their tenancy.',
+      onSend: () => _emailNow(pid)
+    });
+  }
+  async function _emailNow(pid) {
+    const p = window.P(pid), rec = window.tenantRecFor(pid);
+    const isPerm = o => window.isPermittedOccupier ? window.isPermittedOccupier(o) : (o.personType || 'joint') === 'permitted';
     const to = [rec.email].concat((rec.occupants || []).filter(o => o.email && !isPerm(o)).map(o => o.email)).filter(Boolean);
     if (!to.length) { window.toast('No tenant email on file', 1); return; }
     const intro = `<p>Hello,</p><p>We are sending this to every tenancy we look after. It explains how to prevent condensation and mould, and how to report it to us. It is not a change to your tenancy.</p>
@@ -115,7 +128,10 @@
     const failed = [];
     for (const e of to) { const r = await window.agencyEmail(e, 'Condensation and mould \u2014 how to prevent and report it', html); if (!r || !r.ok) failed.push(e); }
     rec.condensationSentAt = new Date().toISOString().slice(0, 10);
-    window.pushTenantRec(rec); window.save();
+    await window.pushTenantRec(rec); window.save();
+    /* Keep the copy actually sent, in the same trail as every other document. */
+    if (window.fileLetter) await window.fileLetter({ landlordId: p.landlordId, propertyId: p.id,
+      type: 'condensation', subject: 'Condensation and mould — ' + (p.address || ''), html, to });
     if (window.NexLetAudit) NexLetAudit.log({ action: 'doc.generated', entity: 'tenancy', entityId: rec.id,
       entityLabel: (rec.name || '') + ' \u2014 ' + (p.address || ''),
       detail: { document: 'Condensation and mould acknowledgement', sentTo: to.join(', ') } });

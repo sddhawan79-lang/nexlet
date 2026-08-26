@@ -130,13 +130,51 @@
     return r;
   }
 
+  /* Letter HTML → readable plain text: block boundaries become real paragraph
+     breaks, table rows keep label and value on one line, and the entities a
+     letter actually uses are decoded rather than shown raw. */
+  function toReadable(html) {
+    let t = String(html || '');
+    t = t.replace(/<(script|style)[\s\S]*?<\/\1>/gi, '');
+    t = t.replace(/<\/t[dh]>\s*/gi, '  ').replace(/<\/tr>/gi, '\n');
+    t = t.replace(/<br\s*\/?>/gi, '\n');
+    t = t.replace(/<\/(p|div|li|h[1-6]|tr|table|blockquote)>/gi, '\n\n');
+    t = t.replace(/<li[^>]*>/gi, '\u2022 ');
+    t = t.replace(/<hr[^>]*>/gi, '\n\u2014\u2014\u2014\n');
+    t = t.replace(/<[^>]+>/g, '');
+    const ENT = { nbsp: ' ', pound: '\u00a3', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'",
+      minus: '\u2212', ndash: '\u2013', mdash: '\u2014', rsquo: '\u2019', lsquo: '\u2018',
+      ldquo: '\u201c', rdquo: '\u201d', hellip: '\u2026', deg: '\u00b0' };
+    t = t.replace(/&([a-z]+);/gi, (m, e) => ENT[e.toLowerCase()] !== undefined ? ENT[e.toLowerCase()] : m);
+    t = t.replace(/&#(\d+);/g, (m, d) => String.fromCharCode(+d));
+    t = t.replace(/&#x([0-9a-f]+);/gi, (m, x) => String.fromCharCode(parseInt(x, 16)));
+    t = t.replace(/[ \t]*\n[ \t]*/g, '\n').replace(/[ ]{3,}/g, '  ');
+    t = t.replace(/\n{3,}/g, '\n\n');
+    return t.trim();
+  }
+
+  /* A stored copy exists when a letter with that subject was filed. Matched on
+     the persisted subject, which fileLetter writes with recipients appended. */
+  function _sentCopy(r) {
+    if (!r || r.direction === 'in') return null;
+    const subj = String(r.subject || '').trim();
+    if (!subj) return null;
+    return (ST().letters || []).find(x => x.body_html && String(x.subject || '').indexOf(subj) === 0) || null;
+  }
+  function openSent(subject) {
+    const row = (ST().letters || []).find(x => x.body_html && String(x.subject || '').indexOf(String(subject || '').trim()) === 0);
+    if (!row) { window.toast('No stored copy on file \u2014 letters sent before this was added were not retained', 1); return; }
+    const w = window.open('', '_blank');
+    if (!w) { window.toast('Allow pop-ups to open it', 1); return; }
+    w.document.write(row.body_html); w.document.close();
+  }
+
   /* Called from inside agencyEmail — one entry per recipient, per send. */
   function noteEmail(to, subject, html, result) {
     const list = Array.isArray(to) ? to : String(to || '').split(/[;,]/);
     // Strip the [Brand] prefix agencyEmail adds, so the log reads like the subject.
     const subj = String(subject || '').replace(/^\[[^\]]+\]\s*/, '');
-    const text = String(html || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ')
-      .replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+    const text = toReadable(html);
     list.map(s => s.trim()).filter(Boolean).forEach(addr => {
       log({ direction: 'out', channel: 'email', to: addr, subject: subj, body: text,
         delivery: (result && result.ok) ? 'sent' : 'failed',
@@ -271,12 +309,13 @@
         ${r.entity_label ? `<tr><td style="padding:5px 12px 5px 0;color:var(--faint)">Relates to</td><td>${esc2(r.entity_label)}</td></tr>` : ''}
         <tr><td style="padding:5px 12px 5px 0;color:var(--faint)">Delivery</td><td>${r.delivery === 'failed' ? '<span style="color:var(--red)">Failed \u2014 ' + esc2(r.error || 'unknown') + '</span>' : 'Sent'}</td></tr>
       </table>
-      <div style="border:1px solid var(--border);border-radius:8px;padding:14px;background:var(--off);font-size:12.5px;line-height:1.7;max-height:340px;overflow-y:auto;white-space:pre-wrap">${esc2(r.body || '(no content recorded)')}</div>`,
+      <div style="border:1px solid var(--border);border-radius:8px;padding:16px 18px;background:#fff;font-size:13px;line-height:1.75;max-height:360px;overflow-y:auto;white-space:pre-line;color:var(--navy)">${esc2(r.body || '(no content recorded)')}</div>
+      ${_sentCopy(r) ? '<p class="hint" style="margin:9px 0 0">Plain-text transcript. <a href="#" onclick="event.preventDefault();NexLetComms.openSent(\'' + escJs(r.subject || '') + '\')">Open the letter exactly as it was sent →</a></p>' : ''}`,
       `<button class="btn" onclick="closeModal()">Close</button>`, true);
   }
 
   window.NexLetComms = {
-    view, strip, log, noteEmail, whois, show,
+    view, strip, log, noteEmail, whois, show, openSent, toReadable,
     add: openLog,
     _f(k, v) { filters[k] = v; if (window.render) window.render(); },
     _s(k, v) { D[k] = v; },
