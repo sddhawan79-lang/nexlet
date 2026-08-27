@@ -2023,7 +2023,7 @@ function _tenancyChecklist(p){
       items.push({k,label:it[1],done:r.k==='ok'||r.k==='soon',warn:r.k==='soon',go}); });
     const rec=tenantRecFor(p.id);
     const ta=rec&&tenancyAgreementFor(rec.id);
-    items.push({k:'tenancyagreement',label:'Tenancy terms & conditions signed',done:!!(ta&&ta.status==='signed')||!!(rec&&rec.origContractName),warn:!!(ta&&ta.status==='sent'),go:`openTenancyAgreement('${p.id}')`});
+    items.push({k:'tenancyagreement',label:'Tenancy terms & conditions signed',done:!!(ta&&ta.status==='signed')||!!(rec&&rec.origContractName),warn:taOut(ta),go:`openTenancyAgreement('${p.id}')`});
     items.push({k:'moveinpack',already:'moveinpack',label:'Move-in document pack sent',done:!!(rec&&rec.moveInPackSentAt),go:`openMoveInPack('${p.id}')`});
     if(rec&&rec.deposit) items.push({k:'pi',already:'pi',label:'Prescribed information served',done:!!rec.piServedAt,go:`tnDepositPI('${p.id}')`});
     items.push({k:'portal',already:'portal',label:'Tenant invited to portal',done:!!(rec&&rec.invited),go:`inviteTenantToPortal('${p.id}')`});
@@ -2059,7 +2059,7 @@ function _notifications(){
   (_nextInvoiceReminders()||[]).forEach(r=>{ out.push({sev:r.days<0?'red':'amber',pid:null,label:'Invoice — '+r.l.name,taskLabel:'Invoice due',detail:r.days<0?'Overdue by '+(-r.days)+' days':'Due in '+r.days+' days',go:`go('invoices')`}); });
   S.properties.filter(p=>p.tenant).forEach(p=>{ const cl=_tenancyChecklist(p); const missing=cl.items.filter(i=>!i.done&&!i.warn); if(missing.length) out.push({sev:'red',pid:p.id,label:'Tenancy setup — '+(p.address||''),taskLabel:'Tenancy setup',detail:'Missing: '+missing.map(i=>i.label).join(', '),go:`go('property','${p.id}')`}); });
   (S.agreements||[]).filter(a=>a.status==='sent').forEach(a=>{ const days=Math.floor((Date.now()-new Date(a.agent_signed_at||0).getTime())/86400000); if(days>=2){ const l=L(a.landlord_id); out.push({sev:days>=5?'red':'amber',pid:null,label:'Instruction not signed — '+(l.name||a.landlord_name||''),taskLabel:'Instruction not signed',detail:'Sent '+days+' day'+(days===1?'':'s')+' ago, still awaiting landlord signature',go:`sendAgreementReminder('${a.id}')`}); } });
-  (S.tenancyAgreements||[]).filter(a=>a.status==='sent'&&(a.doc_type||'tenancy')==='tenancy').forEach(a=>{ const days=Math.floor((Date.now()-new Date(a.agent_signed_at||0).getTime())/86400000); if(days>=2){ const p=P(a.property_id)||{}; out.push({sev:days>=5?'red':'amber',pid:p.id,label:'Tenancy terms unsigned — '+(a.tenant_name||''),taskLabel:'Tenancy terms unsigned',detail:(p.address?p.address+' — ':'')+'Sent '+days+' day'+(days===1?'':'s')+' ago, still awaiting signature',go:`sendTenancyReminder('${a.id}')`}); } });
+  (S.tenancyAgreements||[]).filter(a=>taOut(a)&&(a.doc_type||'tenancy')==='tenancy').forEach(a=>{ const days=Math.floor((Date.now()-new Date(a.agent_signed_at||0).getTime())/86400000); if(days>=2){ const p=P(a.property_id)||{}; out.push({sev:days>=5?'red':'amber',pid:p.id,label:'Tenancy terms unsigned — '+(a.tenant_name||''),taskLabel:'Tenancy terms unsigned',detail:(p.address?p.address+' — ':'')+'Sent '+days+' day'+(days===1?'':'s')+' ago, still awaiting signature',go:`sendTenancyReminder('${a.id}')`}); } });
   const needsReview=(S.inboundEnquiries||[]).filter(e=>e.status==='needs_review');
   if(needsReview.length) out.push({sev:'amber',pid:null,label:needsReview.length+' forwarded email'+(needsReview.length>1?'s':'')+' need review',taskLabel:'Inbox review',detail:'Confirm or dismiss in Inbox',go:`go('inbox')`});
   return out.sort((a,b)=>(a.sev==='red'?0:1)-(b.sev==='red'?0:1));
@@ -2107,14 +2107,18 @@ function lifecycleStepper(p){
 // yet out. Shown only in that window, so it disappears once sent.
 /* Audience derived from the PERSISTED letter type, so it survives a reload.
    TEMPLATES already carry audience per key; the built-in letters are listed here. */
-const LETTER_AUDIENCE={move_in_monies:'tenant',condensation:'tenant',notice:'tenant',household:'tenant',
+const LETTER_AUDIENCE={move_in_monies:'tenant',condensation:'tenant',notice:'tenant',household:'tenant',signed_copy:'tenant',
   welcome:'landlord',fee_change:'landlord',rent_statement:'landlord',statement:'landlord',
   invoice:'landlord',valuation:'landlord'};
 function letterAudience(type){
   if(!type) return 'landlord';
   if(LETTER_AUDIENCE[type]) return LETTER_AUDIENCE[type];
   const t=typeof tplByKey==='function'?tplByKey(type):null;
-  return (t&&t.audience)||'landlord';
+  if(t&&t.audience) return t.audience;
+  /* Defaulting silently is how tenant-facing letters kept ending up in the
+     landlord's trail. Any new filed type must be registered above. */
+  console.warn('[NexLet] letter type "'+type+'" has no registered audience — add it to LETTER_AUDIENCE. Defaulting to landlord.');
+  return 'landlord';
 }
 const _ord=n=>n+(n%10===1&&n!==11?'st':n%10===2&&n!==12?'nd':n%10===3&&n!==13?'rd':'th');
 /* Rent is normally due on the same day of the month the tenancy starts. Where it
@@ -2212,6 +2216,9 @@ async function _doSend(){
 /* Records a sent document in agency_letters so it can be re-opened exactly as
    sent. Shared, because every send needs it and each one was doing it or not. */
 async function fileLetter({landlordId,propertyId,type,subject,html,to}){
+  if(type&&!LETTER_AUDIENCE[type]&&!(typeof tplByKey==='function'&&tplByKey(type)))
+    console.warn('[NexLet] filing unregistered letter type "'+type+'" — it will be attributed to the landlord. Add it to LETTER_AUDIENCE.');
+  if(html===undefined) console.warn('[NexLet] fileLetter called without html for type "'+type+'" — the filed copy will be empty and unretrievable.');
   const row={id:uid('lt'),agency_id:window._agencyId,landlord_id:landlordId||null,property_id:propertyId||null,
     type,subject:subject+([].concat(to||[]).filter(Boolean).length?' — '+[].concat(to).filter(Boolean).join(', '):''),
     body_html:html,status:'sent'};
@@ -2268,10 +2275,13 @@ function preSigningPanel(p){
       :'Move-in monies letter'}</button>
     ${copy?`<button class="btn sm" onclick="viewSentMonies('${p.id}')">See what was sent</button>`:''}
     ${householdBtn(p,rec)}`;
-  if(ta&&ta.status==='sent') return `<div class="panel" style="margin-bottom:14px;border-color:var(--amber)">
+  if(taOut(ta)) return `<div class="panel" style="margin-bottom:14px;border-color:var(--amber)">
     <div class="panel-bd" style="padding:12px 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <span style="color:var(--amber);font-weight:700">⏳</span>
-      <span style="font-size:12.5px;font-weight:600;color:var(--navy);flex:1;min-width:230px">Agreement sent ${esc(fmtDate(ta.created_at))} — awaiting signature from ${esc(who)}</span>
+      ${(()=>{ const sigs=ta.signatories||[];
+        const signed=sigs.filter(s=>s.signed_at), waiting=sigs.filter(s=>!s.signed_at);
+        return `<span style="font-size:12.5px;font-weight:600;color:var(--navy);flex:1;min-width:230px">Agreement sent ${esc(fmtDate(ta.created_at))} — ${signed.length?signed.length+' of '+sigs.length+' signed':'awaiting all '+sigs.length}
+          ${waiting.length?`<span class="faint" style="font-weight:400;display:block;margin-top:2px">Still to sign: ${esc(waiting.map(s=>s.name).filter(Boolean).join(', ')||'the remaining signatories')}${signed.length?' · signed: '+esc(signed.map(s=>s.name).filter(Boolean).join(', ')):''}</span>`:''}</span>`; })()}
       ${moniesBtns}
       <button class="btn sm" onclick="openTenancyAgreement('${p.id}')">Resend</button>
     </div></div>`;
@@ -2383,29 +2393,39 @@ function serveDocsPanel(p){
         why:'Covered by signing the tenancy agreement. For a tenancy already running, send it for signature separately.',
         done:!!(tenancyAgreementFor(rec.id)&&tenancyAgreementFor(rec.id).status==='signed')
              ||!!(cm&&cm.status==='signed')||!!rec.condensationAckAt,
-        pending:cm&&cm.status==='sent'?(cm.signatories||[]).filter(s=>!s.signed_at).length:0,
+        pending:taOut(cm)?(cm.signatories||[]).filter(s=>!s.signed_at).length:0,
         go:"NexLetForms.condensation('"+p.id+"')",label:'Send'}; })(),
     hasOcc?{t:'Household composition declaration',
      why:'Decides whether the property is an HMO. Lead tenant first, then each adult signs.',
      done:!!(hh&&hh.status==='signed'),
-     pending:hh&&hh.status==='sent'?(hh.signatories||[]).filter(s=>!s.signed_at).length:0,
+     pending:taOut(hh)?(hh.signatories||[]).filter(s=>!s.signed_at).length:0,
      go:"openHouseholdDecl('"+p.id+"')",label:'Send for signing'}:null,
     {t:'Move-in document pack',
      why:'One email with the certificates, info sheet and complaints procedure. This is the send-everything-at-once option.',
      done:!!rec.moveInPackSentAt,go:"openMoveInPack('"+p.id+"')",label:'Send pack'}
   ].filter(Boolean);
-  const left=rows.filter(r=>!r.done).length;
+  /* sent-but-unsigned is its own state — the action there is chasing, not sending. */
+  rows.forEach(r=>{ r.state=r.done?'done':(r.pending?'waiting':'todo'); });
+  const left=rows.filter(r=>r.state==='todo').length;
+  const waiting=rows.filter(r=>r.state==='waiting').length;
   return `<div class="panel" style="margin-bottom:14px">
     <div class="panel-hd"><h2 style="font-size:13px">Documents to serve on the tenant</h2>
-      <span class="${left?'faint':''}" style="font-size:11.5px;${left?'':'color:var(--green);font-weight:600'}">${left?left+' outstanding':'✓ All served'}</span></div>
+      <span class="${left||waiting?'faint':''}" style="font-size:11.5px;${left||waiting?'':'color:var(--green);font-weight:600'}">${left?left+' to send':waiting?waiting+' awaiting signature':'✓ All served'}${left&&waiting?' · '+waiting+' awaiting signature':''}</span></div>
     <div style="padding:4px 20px 14px">
-      ${rows.map(r=>`<div class="doc" style="padding:10px 0">
-        <div class="di" style="background:${r.done?'var(--green-bg)':'var(--amber-bg)'};color:${r.done?'var(--green)':'var(--amber)'}">${r.done?'✓':'!'}</div>
+      ${rows.map(r=>{
+        const ic=r.state==='done'?'✓':r.state==='waiting'?'⏳':'!';
+        const col=r.state==='done'?'green':'amber';
+        const btn=r.state==='done'?'Send again':r.state==='waiting'?'Chase or resend':esc(r.label);
+        const note=r.state==='waiting'
+          ? `<span style="color:var(--amber);font-weight:600"> — already sent, awaiting ${r.pending} signature${r.pending===1?'':'s'}</span>`
+          : r.state==='done' ? '<span style="color:var(--green);font-weight:600"> — done</span>' : '';
+        return `<div class="doc" style="padding:10px 0">
+        <div class="di" style="background:var(--${col}-bg);color:var(--${col})">${ic}</div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:12.5px;font-weight:600;color:var(--navy)">${esc(r.t)}${r.pending?` <span class="faint" style="font-weight:400">— awaiting ${r.pending} signature${r.pending===1?'':'s'}</span>`:''}</div>
-          <div class="faint" style="font-size:11.5px">${r.why}</div></div>
-        <button class="btn sm${r.done?'':' navy'}" onclick="${r.go}">${r.done?'Resend':esc(r.label)}</button>
-      </div>`).join('')}
+          <div style="font-size:12.5px;font-weight:600;color:var(--navy)">${esc(r.t)}${note}</div>
+          <div class="faint" style="font-size:11.5px">${r.state==='waiting'?'Nothing more to do until they sign. Use this to remind them or issue a fresh copy.':r.why}</div></div>
+        <button class="btn sm${r.state==='todo'?' navy':''}" onclick="${r.go}">${btn}</button>
+      </div>`; }).join('')}
     </div></div>`;
 }
 function tenancyChecklistPanel(p){
@@ -2553,8 +2573,8 @@ function vPropertyDetail(){
         ${_grpHead('Tenant documents on file',false)}${(()=>{ const rec=tenantRecFor(p.id); if(!rec) return '';
           return `${rec.refDocName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">📄</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Reference report</div><div class="faint" style="font-size:11.5px">${esc(rec.refDocName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.refDocUrl?`<button class="btn sm" onclick="viewDoc('${rec.refDocUrl}','Reference report')">View</button>`:''}</div>`:''}
     ${(()=>{ const ta=tenancyAgreementFor(rec.id); if(!ta) return '';
-      if(ta.status==='signed') return `<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">✍</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Tenancy terms &amp; conditions (e-signed)</div><div class="faint" style="font-size:11.5px">Signed ${fmtDate(ta.tenant_signed_at)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">Signed</span><button class="btn sm" onclick="viewSignedTenancyAgreement('${p.id}')">View</button></div>`;
-      if(ta.status==='sent') return `<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--amber-bg);color:var(--amber)">⏳</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Tenancy terms &amp; conditions (e-signed)</div><div class="faint" style="font-size:11.5px">Awaiting tenant signature</div></div><span class="pill" style="background:var(--amber-bg);color:var(--amber)">Sent</span><button class="btn sm" onclick="sendTenancyReminder('${ta.id}')">Send reminder</button></div>`;
+      if(ta.status==='signed') return `<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">✍</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Tenancy terms &amp; conditions (e-signed)</div><div class="faint" style="font-size:11.5px">Signed ${fmtDate(ta.tenant_signed_at)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">Signed</span><button class="btn sm" onclick="reissueSignedCopies('${p.id}')" title="Email the countersigned copy to every signatory again">Send copies</button><button class="btn sm" onclick="viewSignedTenancyAgreement('${p.id}')">View</button></div>`;
+      if(taOut(ta)) return `<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--amber-bg);color:var(--amber)">⏳</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Tenancy terms &amp; conditions (e-signed)</div><div class="faint" style="font-size:11.5px">Awaiting tenant signature</div></div><span class="pill" style="background:var(--amber-bg);color:var(--amber)">Sent</span><button class="btn sm" onclick="sendTenancyReminder('${ta.id}')">Send reminder</button></div>`;
       return ''; })()}
           ${rec.origContractName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">📄</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Original tenancy agreement</div><div class="faint" style="font-size:11.5px">${esc(rec.origContractName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.origContractUrl?`<button class="btn sm" onclick="viewDoc('${rec.origContractUrl}','Original tenancy agreement')">View</button>`:''}</div>`:''}
           ${_tnPeopleView(rec).filter(pp=>pp.name).map(pp=>{ const src=pp._occ; const rows=[];
@@ -3005,8 +3025,8 @@ function _tnTenancyTabHtml(pid){ const rec=tenantRecFor(pid); const d=window._tn
     <div class="fg"><label class="faint">(e-sign with the tenant — recommended for new tenancies; skip if uploading an already-signed contract below)</label>
     ${(()=>{ if(!rec||!rec.id) return '<div class="hint">Save once to enable e-signature.</div>';
       const ta=tenancyAgreementFor(rec.id);
-      if(ta&&ta.status==='signed') return `<div class="doc" style="border:1px solid var(--border);border-radius:8px;padding:8px 10px"><div class="di" style="background:var(--green-bg);color:var(--green)">✓</div><div style="flex:1;font-size:12.5px">Signed ${fmtDate(ta.tenant_signed_at)}</div><button class="btn sm" onclick="viewSignedTenancyAgreement('${pid}')">View</button><button class="btn sm" onclick="viewTenancySigningReceipt('${pid}')">Receipt</button></div>`;
-      if(ta&&ta.status==='sent') return `<div class="doc" style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:var(--amber-bg)"><div class="di" style="background:#fff;color:var(--amber)">⏳</div><div style="flex:1;font-size:12.5px">Awaiting tenant signature — sent ${fmtDate(ta.created_at)}</div><button class="btn sm" onclick="openTenancyAgreement('${pid}')">Resend</button></div>`;
+      if(ta&&ta.status==='signed') return `<div class="doc" style="border:1px solid var(--border);border-radius:8px;padding:8px 10px"><div class="di" style="background:var(--green-bg);color:var(--green)">✓</div><div style="flex:1;font-size:12.5px">Signed ${fmtDate(ta.tenant_signed_at)}</div><button class="btn sm" onclick="viewSignedTenancyAgreement('${pid}')">View</button><button class="btn sm" onclick="viewTenancySigningReceipt('${pid}')">Receipt</button><button class="btn sm" onclick="reissueSignedCopies('${pid}')" title="Email the countersigned copy to every signatory again">Send copies</button></div>`;
+      if(taOut(ta)) return `<div class="doc" style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:var(--amber-bg)"><div class="di" style="background:#fff;color:var(--amber)">⏳</div><div style="flex:1;font-size:12.5px">Awaiting tenant signature — sent ${fmtDate(ta.created_at)}</div><button class="btn sm" onclick="openTenancyAgreement('${pid}')">Resend</button></div>`;
       return `<button type="button" class="btn sm" onclick="openTenancyAgreement('${pid}')">✨ Generate &amp; send for e-signature</button>`;
     })()}
     </div>
@@ -5393,6 +5413,13 @@ function viewSigningReceipt(id){
 // management agreement), then the tenant + every named occupant sign
 // together at tenancy-esign.html?t=<token>. See tenancy-agreement-esign-migration.sql.
 // ============================================================================
+/* Out for signature and not yet complete: 'sent' before anyone has signed,
+   'partial' once some have. Anything testing only 'sent' silently treats a
+   part-signed document as unsent. */
+const TA_DOC_LABEL={tenancy:'Tenancy agreement',condensation:'Condensation and mould annexe',household:'Household composition declaration'};
+function taDocLabel(a){ return TA_DOC_LABEL[(a&&a.doc_type)||'tenancy']||'Tenancy agreement'; }
+function taOut(a){ return !!a && (a.status==='sent' || a.status==='partial'); }
+function taUnsigned(a){ return a?(a.signatories||[]).filter(s=>!s.signed_at).length:0; }
 function tenancyAgreementFor(tid){ return (S.tenancyAgreements||[]).filter(a=>a.tenant_id===tid&&(a.doc_type||'tenancy')==='tenancy').sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0))[0]; }
 function householdDeclFor(tid){ return (S.tenancyAgreements||[]).filter(a=>a.tenant_id===tid&&a.doc_type==='household').sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0))[0]; }
 
@@ -5525,7 +5552,7 @@ function openHouseholdDecl(pid){
     return `<option value=""${sel?'':' selected'}>— select the relationship —</option>`+legacy
       +HH_RELATIONSHIPS.map(r=>`<option${r===sel?' selected':''}>${esc(r)}</option>`).join('');
   };
-  const sent=existing&&existing.status==='sent', done=existing&&existing.status==='signed';
+  const sent=taOut(existing), done=existing&&existing.status==='signed';
   modal('Household composition — '+esc(p.address||''),
     `${done?`<div class="note ok" style="margin-bottom:12px"><b>Signed by everyone ${esc(fmtDate(existing.completed_at||existing.created_at))}.</b> Send a new one only if the household has changed.</div>`
       :sent?`<div class="note warn" style="margin-bottom:12px"><b>Sent ${esc(fmtDate(existing.created_at))} — awaiting signatures.</b> ${(existing.signatories||[]).filter(s=>s.signed_at).length} of ${(existing.signatories||[]).length} signed.</div>`:''}
@@ -6265,21 +6292,53 @@ async function pollTenancyAgreements(){
       // Count signatures already seen, so each new one is logged exactly once.
       const prevCount={}; (S.tenancyAgreements||[]).forEach(a=>{ prevCount[a.id]=(a.signatories||[]).filter(s=>s.signed_at).length; });
       const newlySigned=data.filter(a=>a.status==='signed'&&!prevSigned.has(a.id));
-      if(window.NexLetAudit) data.forEach(a=>{
+      let grew=0;
+      data.forEach(a=>{
         const now=(a.signatories||[]).filter(s=>s.signed_at).length;
-        if(prevCount[a.id]!==undefined&&now>prevCount[a.id]){
-          const p=P(a.property_id)||{};
-          (a.signatories||[]).filter(s=>s.signed_at).slice(prevCount[a.id]).forEach(s=>{
-            NexLetAudit.log({action:'agreement.signed',entity:'tenancy',entityId:a.tenant_id,
-              entityLabel:(s.name||'')+' — '+(p.address||''),
-              detail:{document:'Tenancy agreement',signedAt:s.signed_at,ip:s.ip||'',device:(s.ua||'').slice(0,80),
-                complete:a.status==='signed'?'yes':'awaiting others'}});
-          });
+        if(prevCount[a.id]===undefined||now<=prevCount[a.id]) return;
+        grew++;
+        const p=P(a.property_id)||{};
+        const fresh=(a.signatories||[]).filter(s=>s.signed_at).slice(prevCount[a.id]);
+        if(window.NexLetAudit) fresh.forEach(s=>{
+          NexLetAudit.log({action:'agreement.signed',entity:'tenancy',entityId:a.tenant_id,
+            entityLabel:(s.name||'')+' — '+(p.address||''),
+            detail:{document:taDocLabel(a),
+              signedAt:s.signed_at,ip:s.ip||'',device:(s.ua||'').slice(0,80),
+              complete:a.status==='signed'?'yes':'awaiting others'}});
+        });
+        // Tell the agent as each signature lands, not only at the end.
+        if(a.status!=='signed'){
+          const left=(a.signatories||[]).filter(s=>!s.signed_at).length;
+          toast('✓ '+(fresh.map(s=>s.name).filter(Boolean).join(', ')||'A signatory')+' signed — awaiting '+left+' more');
         }
       });
       S.tenancyAgreements=data;
       newlySigned.forEach(a=>{ if(a.property_id) _advanceStage(a.property_id,'managed'); });
-      if(newlySigned.length) render(); } }catch(e){}
+      newlySigned.forEach(a=>{ const p=P(a.property_id)||{};
+        toast('✓ Fully signed — '+taDocLabel(a).toLowerCase()+(p.address?' for '+p.address:'')); });
+      if(newlySigned.length||grew) render(); } }catch(e){}
+}
+async function reissueSignedCopies(pid){
+  const rec=tenantRecFor(pid); if(!rec){ toast('No tenancy on this property',1); return; }
+  const ta=tenancyAgreementFor(rec.id);
+  if(!ta||ta.status!=='signed'){ toast('Not fully signed yet',1); return; }
+  const sigs=(ta.signatories||[]).filter(s=>s.email);
+  if(!sigs.length){ toast('No email addresses on the signatories',1); return; }
+  const p=P(pid)||{};
+  const html=letterWrap('Your signed '+taDocLabel(ta).toLowerCase(),
+    `<p>Dear ${esc(sigs.map(s=>s.name).filter(Boolean).join(' and ')||'all')},</p>
+     <p>Attached below is the fully signed ${esc(taDocLabel(ta).toLowerCase())} for <b>${esc(p.address||'')}</b>, countersigned by everyone named on it. Please keep this for your records — you can print or save it from this email.</p>
+     ${signedCertHtml(ta)}
+     <hr style="border:none;border-top:1px solid #E4EAF1;margin:24px 0">
+     <div style="font-size:12.5px;line-height:1.7">${ta.document_html||''}</div>`);
+  if(!confirm('Send the signed copy again to '+sigs.length+' signatory'+(sigs.length===1?'':'ies')+'?\n\n'+sigs.map(s=>(s.name||'')+' — '+s.email).join('\n'))) return;
+  let ok=0;
+  for(const s of sigs){ try{ await agencyEmail(s.email,'Your signed '+taDocLabel(ta).toLowerCase()+' — '+(p.address||''),html); ok++; }catch(e){ console.error(e); } }
+  fileLetter({propertyId:pid,type:'signed_copy',subject:'Signed '+taDocLabel(ta).toLowerCase()+' reissued',html,to:sigs.map(s=>s.email)});
+  if(window.NexLetAudit) NexLetAudit.log({action:'email.sent',entity:'tenancy',entityId:rec.id,
+    entityLabel:(rec.name||'')+' — '+(p.address||''),
+    detail:{document:taDocLabel(ta)+' (signed copy reissued)',sentTo:sigs.map(s=>s.email).join(', '),count:ok}});
+  render(); toast(ok===sigs.length?'✓ Signed copy sent to all '+ok:'⚠ Sent to '+ok+' of '+sigs.length+' — check Communications',ok!==sigs.length);
 }
 function signedCertHtml(a){
   const fmt=d=>d?new Date(d).toLocaleString('en-GB',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
