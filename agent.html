@@ -6332,13 +6332,27 @@ async function reissueSignedCopies(pid){
      <hr style="border:none;border-top:1px solid #E4EAF1;margin:24px 0">
      <div style="font-size:12.5px;line-height:1.7">${ta.document_html||''}</div>`);
   if(!confirm('Send the signed copy again to '+sigs.length+' signatory'+(sigs.length===1?'':'ies')+'?\n\n'+sigs.map(s=>(s.name||'')+' — '+s.email).join('\n'))) return;
-  let ok=0;
-  for(const s of sigs){ try{ await agencyEmail(s.email,'Your signed '+taDocLabel(ta).toLowerCase()+' — '+(p.address||''),html); ok++; }catch(e){ console.error(e); } }
-  fileLetter({propertyId:pid,type:'signed_copy',subject:'Signed '+taDocLabel(ta).toLowerCase()+' reissued',html,to:sigs.map(s=>s.email)});
+  const sent=[], failed=[];
+  for(const s of sigs){
+    const r=await agencyEmail(s.email,'Your signed '+taDocLabel(ta).toLowerCase()+' — '+(p.address||''),html);
+    if(r&&r.ok) sent.push(s.email); else failed.push(s.email+(r&&r.error?' ('+r.error+')':''));
+  }
+  if(!sent.length){
+    toast('⚠ Nothing sent — '+(failed[0]||'the mail service did not accept it')+'. Nothing has been filed.',1);
+    return;
+  }
+  // Only record what actually went out — the filed copy and the audit entry are
+  // evidence, so they must not claim recipients who never received it.
+  await fileLetter({propertyId:pid,type:'signed_copy',
+    subject:'Signed '+taDocLabel(ta).toLowerCase()+' reissued',html,to:sent});
   if(window.NexLetAudit) NexLetAudit.log({action:'email.sent',entity:'tenancy',entityId:rec.id,
     entityLabel:(rec.name||'')+' — '+(p.address||''),
-    detail:{document:taDocLabel(ta)+' (signed copy reissued)',sentTo:sigs.map(s=>s.email).join(', '),count:ok}});
-  render(); toast(ok===sigs.length?'✓ Signed copy sent to all '+ok:'⚠ Sent to '+ok+' of '+sigs.length+' — check Communications',ok!==sigs.length);
+    detail:{document:taDocLabel(ta)+' (signed copy reissued)',sentTo:sent.join(', '),
+      count:sent.length,failed:failed.length?failed.join(', '):undefined}});
+  render();
+  toast(failed.length
+    ? '⚠ Sent to '+sent.length+' of '+sigs.length+' — failed: '+failed.join(', ')
+    : '✓ Signed copy sent to all '+sent.length, failed.length?1:0);
 }
 function signedCertHtml(a){
   const fmt=d=>d?new Date(d).toLocaleString('en-GB',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
