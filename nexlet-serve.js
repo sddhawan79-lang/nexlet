@@ -186,9 +186,12 @@
       .filter(x => x.property_id === pid && /^serve_/.test(x.type || '') && x.body_html)
       .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0))
       .forEach(x => {
-        const m = String(x.body_html).match(/<!--nexlet-served:([^>]*)-->/);
-        if (!m) return;
-        m[1].split(',').filter(Boolean).forEach(k => { out[k] = x.created_at; });
+        const body = String(x.body_html);
+        const m = body.match(/<!--nexlet-served:([^>]*)-->/);
+        if (m) { m[1].split(',').filter(Boolean).forEach(k => { out[k] = x.created_at; }); return; }
+        /* Filed before the stamp existed: the copy still names each document it
+           carried, so read the labels back out of it. */
+        REG.forEach(r => { if (r.label && body.indexOf(r.label) >= 0) out[r.key] = x.created_at; });
       });
     return out;
   }
