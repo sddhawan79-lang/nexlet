@@ -4433,7 +4433,7 @@ function vInvoiceDetail(){
 // ── BUSINESS — the agency's own documents (licensing, insurance, incorporation, domain) and
 // bills/invoices it pays (as opposed to landlord/tenant invoices tracked elsewhere). One place
 // so redress, CMP, PII insurance and domain paperwork don't scatter across laptops/email.
-const BIZ_DOC_SUGGESTIONS=['Professional indemnity insurance','Complaints handling procedure','Redress scheme certificate','CMP certificate','Certificate of incorporation','ICO registration certificate','Domain registration receipt','AML supervision certificate'];
+const BIZ_DOC_SUGGESTIONS=['Renters\u2019 Rights Act Information Sheet 2026','Professional indemnity insurance','Complaints handling procedure','Redress scheme certificate','CMP certificate','Certificate of incorporation','ICO registration certificate','Domain registration receipt','AML supervision certificate'];
 function vBusiness(){
   const a=S.agency; const docs=a.bizDocs||[]; const exps=(a.bizExpenses||[]).slice().sort((x,y)=>(y.date||'').localeCompare(x.date||''));
   const totalYtd=exps.filter(e=>(e.date||'').slice(0,4)===String(new Date().getFullYear())).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);

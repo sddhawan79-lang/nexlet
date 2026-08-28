@@ -23,6 +23,15 @@
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const dt = d => { try { return d && window.fmtDate ? window.fmtDate(d) : ''; } catch (e) { return ''; } };
 
+  /* The Information Sheet is the same document for every tenancy, so it lives
+     once against the agency rather than per property. Matched on label so the
+     agent files it in Settings → Business documents like anything else. */
+  function infoSheetDoc() {
+    return ((ST().agency || {}).bizDocs || [])
+      .filter(d => d && d.url && /information sheet/i.test(d.label || ''))
+      .sort((a, b) => String(b.addedAt || '').localeCompare(String(a.addedAt || '')))[0] || null;
+  }
+
   function ctx(pid) {
     const p = (window.P && window.P(pid)) || {};
     const rec = (window.tenantRecFor && window.tenantRecFor(pid)) || {};
@@ -41,10 +50,12 @@
                ticked as sent by hand — but it still APPEARS, which is the point
      required  true = serving late or not at all has a legal consequence      */
   const REG = [
-    { key: 'infosheet', to: 'tenant', required: true, kind: 'manual',
+    { key: 'infosheet', to: 'tenant', required: true, kind: 'file',
       label: 'Renters\u2019 Rights Act Information Sheet 2026',
       why: 'Before the tenancy starts. Replaced the How to Rent guide on 1 May 2026. Penalty up to \u00a37,000 and it blocks possession.',
-      has: c => !!c.certs.infosheet, note: 'GOV.UK PDF \u2014 attach it to the email yourself' },
+      has: () => !!infoSheetDoc(),
+      file: () => { const d = infoSheetDoc(); return d ? { name: d.name, url: d.url, on: d.addedAt } : null; },
+      note: 'Not filed yet — download it from GOV.UK and add it under Settings → Business documents. Held once, then served automatically for every tenancy.' },
 
     { key: 'keyterms', to: 'both', required: true, kind: 'inline',
       label: 'Written key terms',
