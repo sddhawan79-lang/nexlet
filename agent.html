@@ -464,8 +464,8 @@ window.isPermittedOccupier=isPermittedOccupier;
 window.ageFromDob=ageFromDob;
 function _tnPeopleView(rec){
   if(!rec) return [];
-  const lead={idx:0,isLead:true,name:rec.name||'',rtrResult:rec.rtrResult||'',rtrExpiry:rec.rtrExpiry||'',rtrCheckDate:rec.rtrCheckDate||'',_occ:rec};
-  const occ=(rec.occupants||[]).map((o,i)=>({idx:i+1,isLead:false,name:o.name||'',rtrResult:o.rtrResult||'',rtrExpiry:o.rtrExpiry||'',rtrCheckDate:o.rtrCheckDate||'',_occ:o}));
+  const lead={idx:0,isLead:true,name:rec.name||'',email:rec.email||'',phone:rec.phone||'',rtrResult:rec.rtrResult||'',rtrExpiry:rec.rtrExpiry||'',rtrCheckDate:rec.rtrCheckDate||'',_occ:rec};
+  const occ=(rec.occupants||[]).map((o,i)=>({idx:i+1,isLead:false,name:o.name||'',email:o.email||'',phone:o.phone||'',rtrResult:o.rtrResult||'',rtrExpiry:o.rtrExpiry||'',rtrCheckDate:o.rtrCheckDate||'',_occ:o}));
   return [lead,...occ];
 }
 function _rtrPersonRAG(person){
@@ -2590,7 +2590,7 @@ function vPropertyDetail(){
     <div class="back" onclick="go('properties')">← All properties</div>
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">
       <div class="av" style="width:50px;height:50px;font-size:20px">⌂</div>
-      <div style="flex:1"><h1 class="pg" style="margin:0">${esc(p.address)}</h1>
+      <div style="flex:1"><h1 class="pg" style="margin:0">${esc(p.address)} <a href="#" onclick="editPropAddress('${p.id}');return false" style="color:var(--blue);font-size:12px;font-weight:400;vertical-align:middle;margin-left:4px">edit</a></h1>
         <div class="faint" style="font-size:13px">${esc(p.city||'')} · ${p.beds} bed · <b>${gbp(p.rent)}/mo</b> ${p.tenant?'achieved':'expected'} <a href="#" onclick="editPropRent('${p.id}');return false" style="color:var(--blue);font-size:12px;margin-left:2px">edit</a> · Managed for <a href="#" onclick="go('landlord','${l.id}');return false" style="color:var(--blue)">${esc(landlordName(l)||'—')}</a></div></div>
       <span class="pill" style="background:${comp.pct===100?'var(--green-bg)':'var(--amber-bg)'};color:${comp.pct===100?'var(--green)':'var(--amber)'}">Compliance ${comp.pct}%</span>
     </div>
@@ -2777,6 +2777,28 @@ function saveLeasehold(pid){
     freeholderNotified:!!(document.getElementById('hl-notified')||{}).checked,restrictions:r};
   save(); pushProperty(p); closeModal(); render();
   toast(on?'✓ Head lease saved — restrictions will be disclosed in the tenancy agreement':'✓ Saved');
+}
+function editPropAddress(pid){
+  const p=P(pid);
+  modal('Address — '+esc(p.address),
+    `<div class="note" style="margin-bottom:12px">This address appears on the tenancy agreement, the prescribed information, the key terms and every letter. Correcting it here corrects all of them from now on — documents already sent keep the old wording.</div>
+     <div class="fg"><label>Address</label><input id="pa-addr" value="${esc(p.address||'')}"></div>
+     <div class="grid2" style="gap:10px">
+       <div class="fg"><label>Town / city</label><input id="pa-city" value="${esc(p.city||'')}"></div>
+       <div class="fg"><label>Postcode</label><input id="pa-pc" value="${esc(p.postcode||'')}"></div></div>`,
+    `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="savePropAddress('${pid}')">Save</button>`, true);
+}
+async function savePropAddress(pid){
+  const p=P(pid); const addr=(val('pa-addr')||'').trim();
+  if(!addr){ toast('Enter an address',1); return; }
+  const was=p.address;
+  p.address=addr; p.city=(val('pa-city')||'').trim(); p.postcode=(val('pa-pc')||'').trim();
+  if(p.tenant) p.tenant.address=addr;
+  save();
+  if(!await pushProperty(p)){ toast('⚠ Could not save — retry',1); return; }
+  if(was!==addr&&window.NexLetAudit) NexLetAudit.log({action:'property.updated',entity:'property',entityId:p.id,
+    entityLabel:addr,detail:{field:'address',from:was,to:addr}});
+  closeModal(); render(); toast('✓ Address updated');
 }
 function editPropRent(pid){ const p=P(pid); const isLet=!!p.tenant;
   const body=`<div class="note" style="margin-bottom:14px">${isLet?'This property is let — enter the actual rent agreed with the tenant.':'This is the expected/asking rent while marketing. Once a tenant is set up, come back here to enter the achieved rent.'}</div>
