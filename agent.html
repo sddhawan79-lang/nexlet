@@ -2682,12 +2682,25 @@ function vPropertyDetail(){
           <div class="kv"><span class="k">Start date</span><span class="v">${fmtDate(p.tenant.start)}</span></div>
           ${(()=>{ const rec=tenantRecFor(p.id); if(!rec) return ''; const g=rec.guarantor;
             return g&&g.name?`<div class="kv"><span class="k">Guarantor</span><span class="v">${esc(g.name)}${g.email?' · '+esc(g.email):''}${g.phone?' · '+esc(g.phone):''}</span></div>`:''; })()}
+          ${(()=>{ const rec=tenantRecFor(p.id); if(!rec||!rec.id) return '';
+            const ta=tenancyAgreementFor(rec.id);
+            if(!ta) return `<div class="kv"><span class="k">Agreement</span><span class="v"><span class="faint">Not sent yet</span> <a href="#" onclick="openTenancyAgreement('${p.id}');return false" style="color:var(--blue);font-size:12px;margin-left:4px">send…</a></span></div>`;
+            if(ta.status==='signed') return `<div class="kv"><span class="k">Agreement</span><span class="v">
+              <span style="color:var(--green);font-weight:600">✓ Signed ${esc(fmtDate(ta.completed_at||ta.updated_at||ta.created_at))}</span>
+              <a href="#" onclick="viewSignedTenancyAgreement('${p.id}');return false" style="color:var(--blue);font-size:12px;margin-left:6px">view</a>
+              <a href="#" onclick="viewTenancySigningReceipt('${p.id}');return false" style="color:var(--blue);font-size:12px;margin-left:6px">receipt</a>
+              <a href="#" onclick="reissueSignedCopies('${p.id}');return false" style="color:var(--blue);font-size:12px;margin-left:6px">send copies</a></span></div>`;
+            const sg=ta.signatories||[], done=sg.filter(s=>s.signed_at);
+            return `<div class="kv"><span class="k">Agreement</span><span class="v">
+              <span style="color:var(--amber);font-weight:600">${done.length} of ${sg.length} signed</span>
+              <span class="faint" style="font-size:12px"> · waiting on ${esc(sg.filter(s=>!s.signed_at).map(s=>s.name).filter(Boolean).join(', ')||'the rest')}</span>
+              <a href="#" onclick="chaseSignatories('${ta.id}','tenancy agreement');return false" style="color:var(--blue);font-size:12px;margin-left:6px">chase</a></span></div>`; })()}
           <div class="kv" style="border:none"><span class="k">Rent due day</span><span class="v">${esc(p.rentDueDay||'1st')} <a href="#" onclick="editRentDueDay('${p.id}');return false" style="color:var(--blue);font-size:12px;margin-left:4px">edit</a></span></div>
           <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">${(()=>{ const rec=tenantRecFor(p.id);
             return (rec&&rec.invited)?`<span class="faint" style="font-size:12.5px">✓ Portal invited ${fmtDate(rec.invitedAt)}</span><button class="btn sm" onclick="inviteTenantToPortal('${p.id}')">Resend</button>`
               :`<button class="btn sm navy" onclick="inviteTenantToPortal('${p.id}')">📧 Invite to tenant portal — next step</button>`; })()}${(()=>{ const rec=tenantRecFor(p.id);
             return rec&&rec.welcomeSentAt?`<span class="faint" style="font-size:12.5px">✓ Welcome letter sent ${fmtDate(rec.welcomeSentAt)}</span><button class="btn sm" onclick="sendTenantWelcomeLetter('${p.id}')">Resend</button>`
-              :`<button class="btn sm" onclick="sendTenantWelcomeLetter('${p.id}')">👋 Send welcome letter</button>`; })()}<button class="btn sm navy" onclick="openMoveIn('${p.id}')">✓ Move-in checklist</button><button class="btn sm" onclick="openLeasehold('${p.id}')">🔑 Head lease</button><button class="btn sm" onclick="setTenant('${p.id}')">Edit tenant</button><button class="btn sm" onclick="openNotice('${p.id}')">⚖ Prepare notice</button><button class="btn sm" onclick="sendCheckoutPack('${p.id}')">📦 Send checkout pack</button><button class="btn sm" style="color:var(--red)" onclick="endTenancy('${p.id}')">End tenancy</button></div>`
+              :`<button class="btn sm" onclick="sendTenantWelcomeLetter('${p.id}')">👋 Send welcome letter</button>`; })()}<button class="btn sm navy" onclick="NexLetServe.open('${p.id}','tenant')">✉ Serve on tenant</button><button class="btn sm" onclick="NexLetServe.open('${p.id}','landlord')">✉ Send to landlord</button><button class="btn sm" onclick="NexLetMoveIn.open('${p.id}')">⌘ Print move-in pack</button><button class="btn sm navy" onclick="openMoveIn('${p.id}')">✓ Move-in checklist</button><button class="btn sm" onclick="openLeasehold('${p.id}')">🔑 Head lease</button><button class="btn sm" onclick="setTenant('${p.id}')">Edit tenant</button><button class="btn sm" onclick="openNotice('${p.id}')">⚖ Prepare notice</button><button class="btn sm" onclick="sendCheckoutPack('${p.id}')">📦 Send checkout pack</button><button class="btn sm" style="color:var(--red)" onclick="endTenancy('${p.id}')">End tenancy</button></div>`
           :lst?`<div class="faint" style="font-size:13px;margin-bottom:12px">Marketing in progress — ${_pill(LISTING_STATUS,lst.status)} · ${_listingApps(lst.id).length} enquir${_listingApps(lst.id).length===1?'y':'ies'} so far.</div><button class="btn sm navy" onclick="go('listing','${lst.id}')">Manage listing</button>`
           :`<div class="faint" style="font-size:13px;margin-bottom:12px">No tenant yet.</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
