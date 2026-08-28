@@ -2262,6 +2262,77 @@ function depositMismatchBanner(p){
     <button class="btn sm ${m.over?'':'navy'}" onclick="fixDeposit('${p.id}')">Set to £${m.suggested.toFixed(2)}</button>
   </div>`;
 }
+/* Shared pre-send guard for every signable document. Returns false to abort.
+   Names whoever has already signed, states plainly that a resend voids them,
+   and voids the superseded row so no stale row stays live and signable. */
+async function confirmSupersede(prior,label){
+  if(!prior) return true;
+  const done=(prior.signatories||[]).filter(s=>s.signed_at);
+  if(prior.status==='signed'){
+    if(!confirm('This '+label+' is already fully signed by '+(done.map(s=>s.name).filter(Boolean).join(', ')||'all parties')+'.\n\nSending a new one means everyone signs again. The signed copy stays on file.\n\nContinue?')) return false;
+  } else if(done.length){
+    if(!confirm('WARNING \u2014 '+done.length+' of '+(prior.signatories||[]).length+' have already signed this '+label+':\n'+done.map(s=>'  \u2022 '+(s.name||s.email||'')).join('\n')+'\n\nSending a new one VOIDS those signatures and everyone starts again.\n\nTo remind only those who have not signed, cancel and use Chase instead.\n\nReally start again?')) return false;
+  }
+  return true;
+}
+async function voidSuperseded(prior,newId){
+  if(!prior||prior.status==='signed') return;
+  prior.status='void'; prior.superseded_by=newId;
+  const {error}=await sb.from('agency_tenancy_agreements').update({status:'void'}).eq('id',prior.id);
+  if(error) console.error(error);
+}
+/* Reminds only the signatories who have not signed, reusing each person's
+   existing personal link, so nothing already collected is disturbed. */
+async function chaseSignatories(aid,label){
+  const a=(S.tenancyAgreements||[]).find(x=>x.id===aid);
+  if(!a){ toast('Document not found',1); return; }
+  if(!LIVE){ toast('Connect to Supabase to send',1); return; }
+  const p=P(a.property_id)||{};
+  const pending=(a.signatories||[]).filter(s=>!s.signed_at&&s.email);
+  if(!pending.length){ toast('Everyone has already signed'); return; }
+  const subj='Reminder: please sign your '+label+' \u2014 '+(p.address||'');
+  const sent=[],failed=[];
+  for(const s of pending){
+    const body='<p>Hi '+esc((s.name||'').split(' ')[0])+',</p><p>Just a reminder \u2014 please sign the '+esc(label)+' for <b>'+esc(p.address||'')+'</b>.</p>'
+      +'<p><a href="'+new URL('tenancy-esign.html?t='+encodeURIComponent(s.token),location.href).href+'">Sign now</a></p>'
+      +'<p style="font-size:12px;color:#6B7280">This link is personal to you. Anyone else named signs with their own.</p>';
+    const r=await agencyEmail(s.email,subj,letterWrap(subj,body));
+    if(r&&r.ok) sent.push(s.name||s.email); else failed.push((s.name||s.email)+(r&&r.error?' ('+r.error+')':''));
+  }
+  if(!sent.length){ toast('\u26a0 No reminder sent \u2014 '+(failed[0]||'the mail service refused it'),1); return; }
+  if(window.NexLetAudit) NexLetAudit.log({action:'email.sent',entity:'tenancy',entityId:a.tenant_id,
+    entityLabel:(a.tenant_name||'')+' \u2014 '+(p.address||''),
+    detail:{document:label+' reminder',sentTo:sent.join(', '),failed:failed.length?failed.join(', '):undefined}});
+  toast(failed.length?'\u26a0 Reminded '+sent.length+' of '+pending.length+' \u2014 failed: '+failed.join(', ')
+    :'\u2713 Reminder sent to '+sent.join(', '), failed.length?1:0);
+}
+/* Every tenancy-agreement row for this tenancy, newest first, so signatures on a
+   superseded row stay retrievable rather than becoming invisible. */
+function taHistoryHtml(pid){
+  const rec=tenantRecFor(pid); if(!rec||!rec.id) return '';
+  const all=(S.tenancyAgreements||[]).filter(a=>a.tenant_id===rec.id&&(a.doc_type||'tenancy')==='tenancy')
+    .sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
+  if(all.length<2) return '';
+  const rows=all.slice(1).map(a=>{
+    const sigs=a.signatories||[], done=sigs.filter(s=>s.signed_at);
+    return `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;font-size:11.5px">
+      <span class="pill" style="background:var(--border);color:var(--navy)">${a.status==='void'?'Superseded':esc(a.status||'')}</span>
+      <span class="faint">Sent ${esc(fmtDate(a.created_at))} · ${done.length} of ${sigs.length} signed${done.length?': '+esc(done.map(s=>s.name).filter(Boolean).join(', ')):''}</span>
+      ${done.length?`<button class="btn sm" style="margin-left:auto" onclick="viewArchivedAgreement('${a.id}')">View</button>`:''}
+    </div>`;}).join('');
+  return `<details style="margin-top:8px"><summary style="font-size:11.5px;color:var(--navy);cursor:pointer">Previous versions (${all.length-1})</summary>
+    <div style="padding:4px 0 2px">${rows}</div></details>`;
+}
+function viewArchivedAgreement(aid){
+  const a=(S.tenancyAgreements||[]).find(x=>x.id===aid);
+  if(!a){ toast('Not found',1); return; }
+  const w=window.open('','_blank'); if(!w){ toast('Allow pop-ups to view',1); return; }
+  w.document.write(letterWrap('Superseded agreement — '+esc(fmtDate(a.created_at)),
+    `<div class="note warn" style="margin-bottom:14px"><b>This version was superseded.</b> It is kept because ${(a.signatories||[]).filter(s=>s.signed_at).length} signature(s) were collected on it. It is not the agreement in force.</div>
+     ${signedCertHtml(a)}<hr style="border:none;border-top:1px solid #E4EAF1;margin:24px 0">
+     <div style="font-size:12.5px;line-height:1.7">${a.document_html||''}</div>`));
+  w.document.close();
+}
 function preSigningPanel(p){
   const rec=tenantRecFor(p.id); if(!rec||!rec.id) return '';
   const ta=tenancyAgreementFor(rec.id);
@@ -2283,7 +2354,8 @@ function preSigningPanel(p){
         return `<span style="font-size:12.5px;font-weight:600;color:var(--navy);flex:1;min-width:230px">Agreement sent ${esc(fmtDate(ta.created_at))} — ${signed.length?signed.length+' of '+sigs.length+' signed':'awaiting all '+sigs.length}
           ${waiting.length?`<span class="faint" style="font-weight:400;display:block;margin-top:2px">Still to sign: ${esc(waiting.map(s=>s.name).filter(Boolean).join(', ')||'the remaining signatories')}${signed.length?' · signed: '+esc(signed.map(s=>s.name).filter(Boolean).join(', ')):''}</span>`:''}</span>`; })()}
       ${moniesBtns}
-      <button class="btn sm" onclick="openTenancyAgreement('${p.id}')">Resend</button>
+      <button class="btn sm navy" onclick="sendTenancyReminder('${ta.id}')" title="Emails a reminder to the people who have not signed, using their existing link. Signatures already given are kept.">Chase ${taUnsigned(ta)} outstanding</button>
+      <button class="btn sm" onclick="openTenancyAgreement('${p.id}')" title="Replaces the agreement with a new one — everyone must sign again">Start again…</button>
     </div></div>`;
   return `<div class="panel" style="margin-bottom:14px;border-color:var(--navy)">
     <div class="panel-hd"><h2 style="font-size:13px">Ready to send the tenancy agreement</h2>
@@ -2299,8 +2371,9 @@ function householdBtn(p,rec){
   if(!(rec.occupants||[]).filter(o=>o.name).length) return '';
   const hh=householdDeclFor(rec.id);
   const left=hh?(hh.signatories||[]).filter(s=>!s.signed_at).length:0;
+  if(hh&&hh.status!=='signed'&&left) return `<button class="btn sm navy" onclick="chaseSignatories('${hh.id}','household declaration')" title="Reminds only those who have not signed, using their existing link">Household — chase ${left}</button><button class="btn sm" onclick="openHouseholdDecl('${p.id}')" title="Review or start again">…</button>`;
   return `<button class="btn sm" onclick="openHouseholdDecl('${p.id}')">${hh
-    ?(hh.status==='signed'?'Household — signed':'Household — awaiting '+left)
+    ?(hh.status==='signed'?'Household — signed':'Household declaration')
     :'Household declaration'}</button>`;
 }
 function postSigningPanel(p){
@@ -2394,11 +2467,13 @@ function serveDocsPanel(p){
         done:!!(tenancyAgreementFor(rec.id)&&tenancyAgreementFor(rec.id).status==='signed')
              ||!!(cm&&cm.status==='signed')||!!rec.condensationAckAt,
         pending:taOut(cm)?(cm.signatories||[]).filter(s=>!s.signed_at).length:0,
+        chase:taOut(cm)?"chaseSignatories('"+(cm?cm.id:'')+"','condensation annexe')":'',
         go:"NexLetForms.condensation('"+p.id+"')",label:'Send'}; })(),
     hasOcc?{t:'Household composition declaration',
      why:'Decides whether the property is an HMO. Lead tenant first, then each adult signs.',
      done:!!(hh&&hh.status==='signed'),
      pending:taOut(hh)?(hh.signatories||[]).filter(s=>!s.signed_at).length:0,
+     chase:taOut(hh)?"chaseSignatories('"+(hh?hh.id:'')+"','household declaration')":'',
      go:"openHouseholdDecl('"+p.id+"')",label:'Send for signing'}:null,
     {t:'Move-in document pack',
      why:'One email with the certificates, info sheet and complaints procedure. This is the send-everything-at-once option.',
@@ -2415,7 +2490,8 @@ function serveDocsPanel(p){
       ${rows.map(r=>{
         const ic=r.state==='done'?'✓':r.state==='waiting'?'⏳':'!';
         const col=r.state==='done'?'green':'amber';
-        const btn=r.state==='done'?'Send again':r.state==='waiting'?'Chase or resend':esc(r.label);
+        const canChase=r.state==='waiting'&&r.chase;
+        const btn=r.state==='done'?'Send again':canChase?'Chase '+r.pending:r.state==='waiting'?'Resend':esc(r.label);
         const note=r.state==='waiting'
           ? `<span style="color:var(--amber);font-weight:600"> — already sent, awaiting ${r.pending} signature${r.pending===1?'':'s'}</span>`
           : r.state==='done' ? '<span style="color:var(--green);font-weight:600"> — done</span>' : '';
@@ -2423,8 +2499,9 @@ function serveDocsPanel(p){
         <div class="di" style="background:var(--${col}-bg);color:var(--${col})">${ic}</div>
         <div style="flex:1;min-width:0">
           <div style="font-size:12.5px;font-weight:600;color:var(--navy)">${esc(r.t)}${note}</div>
-          <div class="faint" style="font-size:11.5px">${r.state==='waiting'?'Nothing more to do until they sign. Use this to remind them or issue a fresh copy.':r.why}</div></div>
-        <button class="btn sm${r.state==='todo'?' navy':''}" onclick="${r.go}">${btn}</button>
+          <div class="faint" style="font-size:11.5px">${r.state==='waiting'?(canChase?'Reminds only those who have not signed, using their existing link — signatures already given are kept.':'Already sent — nothing more to do until they respond.'):r.why}</div></div>
+        <button class="btn sm${r.state==='todo'||canChase?' navy':''}" onclick="${canChase?r.chase:r.go}">${btn}</button>
+        ${canChase?`<button class="btn sm" onclick="${r.go}" title="Replaces the document — everyone signs again">Start again…</button>`:''}
       </div>`; }).join('')}
     </div></div>`;
 }
@@ -2574,8 +2651,11 @@ function vPropertyDetail(){
           return `${rec.refDocName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">📄</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Reference report</div><div class="faint" style="font-size:11.5px">${esc(rec.refDocName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.refDocUrl?`<button class="btn sm" onclick="viewDoc('${rec.refDocUrl}','Reference report')">View</button>`:''}</div>`:''}
     ${(()=>{ const ta=tenancyAgreementFor(rec.id); if(!ta) return '';
       if(ta.status==='signed') return `<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">✍</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Tenancy terms &amp; conditions (e-signed)</div><div class="faint" style="font-size:11.5px">Signed ${fmtDate(ta.tenant_signed_at)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">Signed</span><button class="btn sm" onclick="reissueSignedCopies('${p.id}')" title="Email the countersigned copy to every signatory again">Send copies</button><button class="btn sm" onclick="viewSignedTenancyAgreement('${p.id}')">View</button></div>`;
-      if(taOut(ta)) return `<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--amber-bg);color:var(--amber)">⏳</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Tenancy terms &amp; conditions (e-signed)</div><div class="faint" style="font-size:11.5px">Awaiting tenant signature</div></div><span class="pill" style="background:var(--amber-bg);color:var(--amber)">Sent</span><button class="btn sm" onclick="sendTenancyReminder('${ta.id}')">Send reminder</button></div>`;
+      if(taOut(ta)) return `<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--amber-bg);color:var(--amber)">⏳</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Tenancy terms &amp; conditions (e-signed)</div><div class="faint" style="font-size:11.5px">${(()=>{ const sg=ta.signatories||[], dn=sg.filter(s=>s.signed_at);
+              return dn.length? dn.length+' of '+sg.length+' signed · still to sign: '+esc(sg.filter(s=>!s.signed_at).map(s=>s.name).filter(Boolean).join(', '))
+                : 'Sent to '+sg.length+' — none signed yet'; })()}</div></div><span class="pill" style="background:var(--amber-bg);color:var(--amber)">${taUnsigned(ta)?'Awaiting '+taUnsigned(ta):'Sent'}</span><button class="btn sm" onclick="sendTenancyReminder('${ta.id}')">Chase</button></div>`;
       return ''; })()}
+          ${taHistoryHtml(p.id)}
           ${rec.origContractName?`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">📄</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Original tenancy agreement</div><div class="faint" style="font-size:11.5px">${esc(rec.origContractName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${rec.origContractUrl?`<button class="btn sm" onclick="viewDoc('${rec.origContractUrl}','Original tenancy agreement')">View</button>`:''}</div>`:''}
           ${_tnPeopleView(rec).filter(pp=>pp.name).map(pp=>{ const src=pp._occ; const rows=[];
             if(src.id1DocName) rows.push(`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">🪪</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Photo ID — 1 of 2 (${esc(pp.name)})</div><div class="faint" style="font-size:11.5px">${esc(src.id1DocName)}</div></div><span class="pill" style="background:var(--green-bg);color:var(--green)">On file</span>${src.id1DocUrl?`<button class="btn sm" onclick="viewDoc('${src.id1DocUrl}','Photo ID')">View</button>`:''}</div>`);
@@ -5593,8 +5673,11 @@ async function sendCondensationForSigning(pid){
     token:signatories[0].token,doc_type:'condensation',document_html:html,
     agent_name:S.agency.name||'',agent_email:window._agentEmail||'',agent_sig_png:null,
     tenant_name:rec.name||'',tenant_email:rec.email||'',occupants:[],signatories,status:'sent'};
+  const _prior=condensationDeclFor(rec.id);
+  if(!await confirmSupersede(_prior,'condensation annexe')) return;
   const {error}=await sb.from('agency_tenancy_agreements').insert(row);
   if(error){ console.error(error); toast('⚠ Could not send — run nexlet-household-declaration.sql then retry',1); return; }
+  await voidSuperseded(_prior,row.id);
   S.tenancyAgreements=S.tenancyAgreements||[]; S.tenancyAgreements.push(row);
   const linkFor=tk=>new URL('tenancy-esign.html?t='+encodeURIComponent(tk),location.href).href;
   const failed=[];
@@ -5644,8 +5727,11 @@ async function _hhSend(pid){
     tenant_name:rec.name||'',tenant_email:rec.email||'',
     occupants:mem.slice(1).map(m=>({name:m.name,email:m.email,relationship:m.relationship})),
     signatories,status:'sent'};
+  const _prior=householdDeclFor(rec.id);
+  if(!await confirmSupersede(_prior,'household declaration')) return;
   const {error}=await sb.from('agency_tenancy_agreements').insert(row);
   if(error){ console.error(error); toast('⚠ Could not send — run nexlet-household-declaration.sql then retry',1); return; }
+  await voidSuperseded(_prior,row.id);
   S.tenancyAgreements=S.tenancyAgreements||[]; S.tenancyAgreements.push(row);
   if(!await pushTenantRec(rec)){ toast('⚠ Sent, but the relationships could not be saved — check the tenancy',1); }
   const linkFor=tk=>new URL('tenancy-esign.html?t='+encodeURIComponent(tk),location.href).href;
@@ -6163,6 +6249,17 @@ async function sendTenancyAgreement(pid){
   const sigDataUrl=getSigDataUrl('ta');
   if(!sigDataUrl){ toast('Please add your signature',1); return; }
   if(!LIVE){ toast('Connect to Supabase to send (not available in demo)',1); return; }
+  // A resend replaces the document and mints fresh tokens, so any signature
+  // already collected belongs to the superseded row. Never do that silently.
+  const _prior=tenancyAgreementFor(rec.id);
+  if(_prior){
+    const _done=(_prior.signatories||[]).filter(s=>s.signed_at);
+    if(_prior.status==='signed'){
+      if(!confirm('This agreement is already fully signed by '+(_done.map(s=>s.name).filter(Boolean).join(', ')||'all parties')+'.\n\nSending a new one means everyone signs again. The signed copy stays on file.\n\nContinue?')) return;
+    } else if(_done.length){
+      if(!confirm('WARNING \u2014 '+_done.length+' of '+(_prior.signatories||[]).length+' have already signed:\n'+_done.map(s=>'  \u2022 '+(s.name||s.email||'')).join('\n')+'\n\nSending a new agreement VOIDS those signatures and everyone must start again.\n\nTo remind only the people who have not signed, cancel and use Chase instead.\n\nReally start again?')) return;
+    }
+  }
   // Each signatory gets their OWN token, so nobody can sign on anyone else's
   // behalf and each person can sign separately, on their own device.
   const newToken=()=>{ const a=new Uint8Array(16); crypto.getRandomValues(a);
@@ -6179,6 +6276,11 @@ async function sendTenancyAgreement(pid){
     tenant_name:rec.name, tenant_email:email, occupants, signatories, status:'sent' };
   const { error }=await sb.from('agency_tenancy_agreements').insert(row);
   if(error){ console.error(error); toast('⚠ Could not send — run tenancy-agreement-esign-migration.sql then retry',1); return; }
+  if(_prior&&_prior.status!=='signed'){
+    _prior.status='void'; _prior.superseded_by=row.id;
+    const {error:_ve}=await sb.from('agency_tenancy_agreements').update({status:'void'}).eq('id',_prior.id);
+    if(_ve) console.error(_ve);
+  }
   S.tenancyAgreements=S.tenancyAgreements||[]; S.tenancyAgreements.push(row);
   _advanceStage(pid,'contract');
   rec.email=rec.email||email; pushTenantRec(rec);
@@ -6209,12 +6311,13 @@ async function sendTenancyReminder(id){
   if(!pending.length){ toast('Everyone has already signed'); return; }
   const occResults=[];
   for(const s of pending) occResults.push({email:s.email, r:await agencyEmail(s.email,subj,mailBody((s.name||'').split(' ')[0],s.token))});
-  const r1={ok:true};
   const l=L(a.landlord_id); if(l&&l.id){ l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:'Tenancy terms & conditions signature reminder emailed to '+(a.tenant_name||'tenant')+' for '+(p.address||'the property')+'.'}); pushLandlord(l); }
   render();
-  const failed=[!r1.ok?a.tenant_email:null, ...occResults.filter(x=>!x.r.ok).map(x=>x.email)].filter(Boolean);
-  if(!failed.length) toast('✓ Reminder sent to tenant');
-  else toast('⚠ Reminder failed for: '+failed.join(', '),1);
+  const failed=occResults.filter(x=>!x.r||!x.r.ok).map(x=>x.email);
+  const ok=occResults.length-failed.length;
+  if(!ok) toast('⚠ No reminder sent — '+(failed.join(', ')||'the mail service refused it'),1);
+  else if(failed.length) toast('⚠ Reminded '+ok+' of '+occResults.length+' — failed: '+failed.join(', '),1);
+  else toast('✓ Reminder sent to '+ok+' outstanding signator'+(ok===1?'y':'ies'));
 }
 function viewSignedTenancyAgreement(pid){
   const p=P(pid); const rec=tenantRecFor(pid); if(!rec) return;
@@ -6225,11 +6328,7 @@ function viewSignedTenancyAgreement(pid){
     :[{name:a.tenant_name,signed_at:a.tenant_signed_at}].concat((a.occupants||[]).map(o=>{
         const s=(a.occupant_sigs||[]).find(x=>x.name===o.name); return {name:o.name,signed_at:s?s.signed_at:null}; }));
   const allDone=sgs.every(s=>s.signed_at);
-  const cert=`<div style="border:1px solid #E3D9C8;border-radius:10px;padding:20px 22px"><div style="font-size:15px;font-weight:700;color:${allDone?'#1B2F4A':'#B4863A'};margin-bottom:4px">${allDone?'✔ Fully signed tenancy agreement':'○ Partially signed — awaiting '+sgs.filter(s=>!s.signed_at).length+' signature(s)'}</div>
-    <table style="width:100%;font-size:12.5px;border-collapse:collapse">
-      <tr><td style="padding:6px 0;color:#8A7D6E">Agent</td><td style="padding:6px 0;font-weight:600">${esc(a.agent_name||'')}</td><td style="padding:6px 0">${fmt(a.agent_signed_at)}</td></tr>
-      ${sgs.map(s=>`<tr><td style="padding:6px 0;color:#8A7D6E">Tenant</td><td style="padding:6px 0;font-weight:600">${esc(s.name||'')}</td><td style="padding:6px 0">${s.signed_at?fmt(s.signed_at):'<span style="color:#B4863A">Awaiting signature</span>'}${s.ip?' <span style="color:#8A7D6E">· '+esc(s.ip)+'</span>':''}</td></tr>`).join('')}
-    </table></div>`;
+  const cert=tenancySigBlock(a);
   w.document.write(`<html><head><title>Signed Tenancy Terms &amp; Conditions</title><style>body{font-family:Arial,sans-serif;max-width:760px;margin:24px auto;padding:0 20px;color:#4A4038;line-height:1.7}@media print{button{display:none}}</style></head><body><button onclick="print()" style="padding:10px 18px;background:#1B2F4A;color:#fff;border:none;border-radius:8px;cursor:pointer;margin-bottom:16px">Print / Save as PDF</button>${cert}<hr style="margin:24px 0;border:none;border-top:1px solid #E3D9C8">${a.document_html}</body></html>`);
   w.document.close();
 }
@@ -6323,12 +6422,14 @@ async function reissueSignedCopies(pid){
   const ta=tenancyAgreementFor(rec.id);
   if(!ta||ta.status!=='signed'){ toast('Not fully signed yet',1); return; }
   const sigs=(ta.signatories||[]).filter(s=>s.email);
+  const p=P(pid)||{}, _ll=L(p.landlordId)||{};
+  if(_ll.email && confirm('Also send a copy to the landlord, '+(landlordName(_ll)||_ll.email)+'?'))
+    sigs.push({name:landlordName(_ll)||'Landlord',email:_ll.email});
   if(!sigs.length){ toast('No email addresses on the signatories',1); return; }
-  const p=P(pid)||{};
   const html=letterWrap('Your signed '+taDocLabel(ta).toLowerCase(),
     `<p>Dear ${esc(sigs.map(s=>s.name).filter(Boolean).join(' and ')||'all')},</p>
      <p>Attached below is the fully signed ${esc(taDocLabel(ta).toLowerCase())} for <b>${esc(p.address||'')}</b>, countersigned by everyone named on it. Please keep this for your records — you can print or save it from this email.</p>
-     ${signedCertHtml(ta)}
+     ${tenancySigBlock(ta)}
      <hr style="border:none;border-top:1px solid #E4EAF1;margin:24px 0">
      <div style="font-size:12.5px;line-height:1.7">${ta.document_html||''}</div>`);
   if(!confirm('Send the signed copy again to '+sigs.length+' signatory'+(sigs.length===1?'':'ies')+'?\n\n'+sigs.map(s=>(s.name||'')+' — '+s.email).join('\n'))) return;
@@ -6353,6 +6454,28 @@ async function reissueSignedCopies(pid){
   toast(failed.length
     ? '⚠ Sent to '+sent.length+' of '+sigs.length+' — failed: '+failed.join(', ')
     : '✓ Signed copy sent to all '+sent.length, failed.length?1:0);
+}
+/* Visible signature block for a tenancy-style document: each person's drawn
+   signature as an image, with the server-recorded time, IP and device beneath.
+   signedCertHtml covers the landlord agreement's agent/landlord slots only. */
+function tenancySigBlock(a){
+  const fmt=d=>d?new Date(d).toLocaleString('en-GB',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
+  const sgs=a.signatories||[];
+  const cell=(nm,role,png,at,ip,ua)=>`<div style="border:1px solid #E3D9C8;border-radius:8px;padding:12px 14px;background:#fff">
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:#8A7D6E">${esc(role)}</div>
+    <div style="font-size:13.5px;font-weight:700;color:#1B2F4A;margin:2px 0 8px">${esc(nm||'—')}</div>
+    ${png?`<img src="${png}" alt="Signature of ${esc(nm||'')}" style="display:block;max-width:230px;max-height:70px;border-bottom:1px solid #1B2F4A;padding-bottom:4px">`
+        :`<div style="height:52px;display:flex;align-items:flex-end;color:#B4863A;font-size:12px;border-bottom:1px dashed #C9BCA6">Not yet signed</div>`}
+    <div style="font-size:11px;color:#8A7D6E;margin-top:7px;line-height:1.6">${at?'Signed '+fmt(at):'Awaiting signature'}${ip?'<br>IP '+esc(ip):''}${ua?'<br>'+esc(String(ua).slice(0,58)):''}</div>
+  </div>`;
+  return `<div style="margin:18px 0">
+    <div style="font-size:13px;font-weight:700;color:#1B2F4A;margin-bottom:10px">Signatures</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px">
+      ${cell(a.agent_name,'Agent',a.agent_sig_png,a.agent_signed_at,a.agent_ip,a.agent_ua)}
+      ${sgs.map((s,i)=>cell(s.name,i===0?'Tenant (lead)':'Tenant',s.sig_png,s.signed_at,s.ip,s.ua)).join('')}
+    </div>
+    <div style="font-size:11px;color:#8A7D6E;margin-top:9px;line-height:1.6">Each person signed using a personal link on their own device. The time, IP address and device of every signature were recorded by the server and cannot be altered.</div>
+  </div>`;
 }
 function signedCertHtml(a){
   const fmt=d=>d?new Date(d).toLocaleString('en-GB',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
