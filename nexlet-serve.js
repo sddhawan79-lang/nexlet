@@ -36,7 +36,11 @@
     const p = (window.P && window.P(pid)) || {};
     const rec = (window.tenantRecFor && window.tenantRecFor(pid)) || {};
     const l = (window.L && window.L(p.landlordId)) || {};
-    const people = (window._tnPeopleView ? window._tnPeopleView(rec) : []).filter(x => x && x.name);
+    let people = (window._tnPeopleView ? window._tnPeopleView(rec) : []).filter(x => x && x.name);
+    /* The lead's address lives on the record itself; older person views did not
+       carry it, which reported "no email on file" for a tenancy that had one. */
+    if (people.length && !people[0].email && rec.email) people[0] = { ...people[0], email: rec.email };
+    if (!people.length && rec.name) people = [{ name: rec.name, email: rec.email || '' }];
     const ta = (window.tenancyAgreementFor && rec.id) ? window.tenancyAgreementFor(rec.id) : null;
     return { p, rec, l, people, ta, certs: p.certs || {},
              brand: window.agencyBrand ? window.agencyBrand() : { name: 'Agency' },
@@ -127,10 +131,22 @@
 
   /* Prescribed information, generated. Wording follows who actually holds the
      deposit — the duty sits on the recipient, not on the agent by default. */
+  /* Placeholder settings must never reach a document. */
+  const PLACEHOLDER = /^(not yet a member|not applicable|n\/a|none|not holding client money|tbc)$/i;
+  function schemeName(c, held) {
+    if (held !== 'landlord') {
+      const a = (ST().agency || {}).depScheme || '';
+      return PLACEHOLDER.test(a.trim()) ? '' : a;
+    }
+    /* Landlord-held: the scheme is the landlord's. The agency setting says
+       nothing about it, so print a rule rather than assert the wrong scheme. */
+    return '';
+  }
+
   function piHtml(c) {
     const held = window.NexLetDeposit ? window.NexLetDeposit.holderOf(c.rec) : 'landlord';
     const dep = parseFloat(c.rec.deposit) || 0;
-    const scheme = (ST().agency || {}).depScheme || '';
+    const scheme = schemeName(c, held);
     const row = (k, v) => '<tr><td style="padding:7px 12px 7px 0;color:#6B6055;width:36%;vertical-align:top;' +
       'border-bottom:1px solid #F0EAE0">' + k + '</td><td style="padding:7px 0;color:#1B2F4A;font-weight:600;' +
       'vertical-align:top;border-bottom:1px solid #F0EAE0">' + v + '</td></tr>';
@@ -144,7 +160,8 @@
       row('Date received', c.rec.depositReceived ? esc(dt(c.rec.depositReceived)) : blank) +
       row('Held by', held === 'landlord' ? esc(c.llName || 'The landlord') + ' \u2014 paid to them direct'
         : held === 'scheme' ? 'A government-approved custodial scheme' : esc(c.brand.name)) +
-      row('Protection scheme', scheme ? esc(scheme) : blank) +
+      row('Protection scheme' + (held === 'landlord' ? ' (the landlord\u2019s)' : ''),
+        scheme ? esc(scheme) : blank) +
       row('Scheme reference', c.rec.schemeRef ? esc(c.rec.schemeRef) : blank) +
       (c.rec.landlordSchemeNo ? row('Scheme membership no.', esc(c.rec.landlordSchemeNo)) : '') +
       row('Landlord', esc(c.llName) || blank) +

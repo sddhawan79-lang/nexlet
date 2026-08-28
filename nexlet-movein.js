@@ -76,7 +76,11 @@
     const dep = parseFloat(c.rec.deposit) || 0;
     const cap = window.depositCap ? window.depositCap(rent) : null;
     const payee = c.agentMoney ? c.brand.name : (c.llName || 'the landlord');
-    const scheme = (ST().agency || {}).depScheme || '';
+    /* Never print a placeholder setting, and where the landlord holds the deposit
+       the scheme is theirs — the agency setting says nothing about it. */
+    const _a = ((ST().agency || {}).depScheme || '').trim();
+    const scheme = (c.held === 'landlord' ||
+      /^(not yet a member|not applicable|n\/a|none|not holding client money|tbc)$/i.test(_a)) ? '' : _a;
 
     const rows = [
       ['Landlord', esc(c.llName) || rule(200)],
@@ -97,7 +101,8 @@
         (cap ? ' (' + cap.weeks + ' weeks\u2019 rent — the statutory maximum is ' + money(cap.cap) + ')' : '') : rule(120)],
       ['Deposit held by', c.held === 'landlord' ? esc(c.llName || 'The landlord') + ' — paid to them direct'
         : c.held === 'scheme' ? 'A government-approved custodial scheme' : esc(c.brand.name)],
-      ['Protection scheme', scheme ? esc(scheme) : rule(180)],
+      ['Protection scheme' + (c.held === 'landlord' ? ' (the landlord\u2019s)' : ''),
+        scheme ? esc(scheme) : rule(180)],
       ['Scheme reference', c.rec.schemeRef ? esc(c.rec.schemeRef) : rule(180)],
       ['Deposit deductions', 'Only for unpaid rent, damage beyond fair wear and tear, cleaning to the standard at check-in, or unreturned keys. Evidenced against the signed inventory. Disputes are decided free of charge by the scheme\u2019s adjudicator.'],
       '-',
