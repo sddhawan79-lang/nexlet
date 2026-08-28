@@ -3658,6 +3658,11 @@ function _commitTenant(pid,info,stage){
   rec.propertyId=pid; rec.landlordId=p.landlordId; rec.name=info.name; rec.email=info.email||''; rec.phone=info.phone||''; rec.start=info.start||today(); rec.rent=p.rent||0; rec.deposit=info.deposit!=null?info.deposit:rec.deposit; rec.occupants=info.occupants||[];
   if(info.guarantor!==undefined) rec.guarantor=info.guarantor;
   if(info.depositCertExpiry!==undefined) rec.depositCertExpiry=info.depositCertExpiry;
+  if(info.depositHolder!==undefined)     rec.depositHolder=info.depositHolder;
+  if(info.depositReceived!==undefined)   rec.depositReceived=info.depositReceived;
+  if(info.schemeRef!==undefined)         rec.schemeRef=info.schemeRef;
+  if(info.landlordSchemeNo!==undefined)  rec.landlordSchemeNo=info.landlordSchemeNo;
+  if(info.depositPaidBy!==undefined)     rec.depositPaidBy=info.depositPaidBy;
   if(info.depositCertName){ rec.depositCertName=info.depositCertName; rec.depositCertUrl=info.depositCertUrl||rec.depositCertUrl; }
   if(info.refDocName){ rec.refDocName=info.refDocName; rec.refDocUrl=info.refDocUrl||rec.refDocUrl; }
   if(info.origContractName){ rec.origContractName=info.origContractName; rec.origContractUrl=info.origContractUrl||rec.origContractUrl; }
