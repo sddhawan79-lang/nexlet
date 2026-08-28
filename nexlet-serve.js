@@ -177,6 +177,23 @@
   }
 
   /* ── Status, derived ────────────────────────────────────────────────────── */
+  /* Which documents have actually gone out, and when — read back from the stamp
+     on the filed copy, so it reflects what was sent rather than a separate flag
+     that can drift out of step with it. */
+  function servedKeys(pid) {
+    const out = {};
+    (ST().letters || [])
+      .filter(x => x.property_id === pid && /^serve_/.test(x.type || '') && x.body_html)
+      .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0))
+      .forEach(x => {
+        const m = String(x.body_html).match(/<!--nexlet-served:([^>]*)-->/);
+        if (!m) return;
+        m[1].split(',').filter(Boolean).forEach(k => { out[k] = x.created_at; });
+      });
+    return out;
+  }
+  function servedAt(pid, key) { return servedKeys(pid)[key] || null; }
+
   function sentAt(pid, audience) {
     const rows = (ST().letters || []).filter(x => x.property_id === pid && x.type === 'serve_' + audience);
     if (!rows.length) return null;
@@ -214,7 +231,8 @@
     const prev = sentAt(pid, audience);
 
     const row = x => {
-      const state = x.ready ? ['Ready', 'green']
+      const was = servedAt(c.p.id, x.key);
+      const state = was ? ['Served ' + (dt(was) || ''), 'green'] : x.ready ? ['Ready', 'green']
         : x.kind === 'manual' ? [x.required ? 'Tick to confirm attached' : 'Attach yourself', 'amber']
         : x.kind === 'note' ? ['Attach when ready', 'amber'] : ['Not on file', 'red'];
       return '<label style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;' +
@@ -307,7 +325,8 @@
 
     const subject = (audience === 'tenant' ? 'Your tenancy documents \u2014 ' : 'Tenancy documents \u2014 ') +
       (c.p.address || '');
-    return { subject, html: window.letterWrap(subject, body),
+    const stamp = '<!--nexlet-served:' + chosen.map(x => x.key).join(',') + '-->';
+    return { subject, html: window.letterWrap(subject, body) + stamp,
              to: audience === 'tenant' ? c.people.filter(x => x.email).map(x => x.email)
                                        : (c.l.email ? [c.l.email] : []),
              urls: links.map(x => x.file.url), chosen };
@@ -316,7 +335,7 @@
   const pickedKeys = () => [...document.querySelectorAll('.srv-item')].filter(x => x.checked).map(x => x.value);
 
   window.NexLetServe = {
-    open, items, sentAt,
+    open, items, sentAt, servedAt, servedKeys,
 
     preview(pid, audience) {
       const m = compose(pid, audience, pickedKeys(), (document.getElementById('srv-note') || {}).value || '');

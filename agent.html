@@ -2455,6 +2455,8 @@ function tenancyProgressBar(p){
 }
 function serveDocsPanel(p){
   const rec=tenantRecFor(p.id); if(!rec||!rec.id) return '';
+  /* What the serve pack has already sent, by registry key. */
+  const _srv=(window.NexLetServe&&NexLetServe.servedKeys)?NexLetServe.servedKeys(p.id):{};
   const c=p.certs||{}, dep=parseFloat(rec.deposit)||0;
   const hh=householdDeclFor(rec.id);
   const hasOcc=(rec.occupants||[]).filter(o=>o.name).length>0;
@@ -2462,10 +2464,10 @@ function serveDocsPanel(p){
   const rows=[
     {t:"Renters' Rights Act Information Sheet",
      why:preSwitch?'Due by 31 May 2026 — penalty up to £7,000 if missed.':'Replaced the How to Rent guide on 1 May 2026. Give before the tenancy starts.',
-     done:!!c.infosheet,go:"editCert('"+p.id+"','infosheet')",label:'Serve'},
+     done:!!c.infosheet||!!_srv.infosheet,servedAt:_srv.infosheet,go:"editCert('"+p.id+"','infosheet')",label:'Serve'},
     dep?{t:'Prescribed information',
      why:'Where the deposit is held and how to get it back. Within 30 days of the deposit being received.',
-     done:!!rec.piServedAt,go:"tnDepositPI('"+p.id+"')",label:'Serve'}:null,
+     done:!!rec.piServedAt||!!_srv.pi,servedAt:_srv.pi,go:"tnDepositPI('"+p.id+"')",label:'Serve'}:null,
     (()=>{ const cm=condensationDeclFor(rec.id);
       return {t:'Condensation and mould annexe',
         why:'Covered by signing the tenancy agreement. For a tenancy already running, send it for signature separately.',
@@ -2497,9 +2499,10 @@ function serveDocsPanel(p){
         const col=r.state==='done'?'green':'amber';
         const canChase=r.state==='waiting'&&r.chase;
         const btn=r.state==='done'?'Send again':canChase?'Chase '+r.pending:r.state==='waiting'?'Resend':esc(r.label);
+        const served=r.servedAt?' · emailed '+esc(fmtDate(r.servedAt)):'';
         const note=r.state==='waiting'
           ? `<span style="color:var(--amber);font-weight:600"> — already sent, awaiting ${r.pending} signature${r.pending===1?'':'s'}</span>`
-          : r.state==='done' ? '<span style="color:var(--green);font-weight:600"> — done</span>' : '';
+          : r.state==='done' ? '<span style="color:var(--green);font-weight:600"> — done'+served+'</span>' : '';
         return `<div class="doc" style="padding:10px 0">
         <div class="di" style="background:var(--${col}-bg);color:var(--${col})">${ic}</div>
         <div style="flex:1;min-width:0">
