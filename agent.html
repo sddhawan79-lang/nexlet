@@ -166,6 +166,7 @@ h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px
 <script src="nexlet-forms.js"></script>
 <script src="nexlet-health.js"></script>
 <script src="nexlet-movein.js"></script>
+  <script src="nexlet-serve.js"></script>
   <script src="nexlet-search.js"></script>
 <script>
 // ─────────────────────────────────────────────────────────────
@@ -2108,7 +2109,7 @@ function lifecycleStepper(p){
 // yet out. Shown only in that window, so it disappears once sent.
 /* Audience derived from the PERSISTED letter type, so it survives a reload.
    TEMPLATES already carry audience per key; the built-in letters are listed here. */
-const LETTER_AUDIENCE={move_in_monies:'tenant',condensation:'tenant',notice:'tenant',household:'tenant',signed_copy:'tenant',
+const LETTER_AUDIENCE={move_in_monies:'tenant',condensation:'tenant',notice:'tenant',household:'tenant',signed_copy:'tenant',serve_tenant:'tenant',serve_landlord:'landlord',
   welcome:'landlord',fee_change:'landlord',rent_statement:'landlord',statement:'landlord',
   invoice:'landlord',valuation:'landlord'};
 function letterAudience(type){
@@ -2387,7 +2388,7 @@ function postSigningPanel(p){
     <div class="panel-bd" style="display:flex;align-items:center;gap:10px;padding:12px 20px">
       <span style="color:var(--green);font-weight:700">✓</span>
       <span style="font-size:12.5px;font-weight:600;color:var(--green)">Signed and fully served — nothing outstanding for the first day</span>
-      <span style="margin-left:auto;display:flex;align-items:center;gap:10px"><button class="btn sm" onclick="NexLetMoveIn.open('${p.id}')">⌘ Print pack</button>${householdBtn(p,rec)}
+      <span style="margin-left:auto;display:flex;align-items:center;gap:10px"><button class="btn sm" onclick="NexLetServe.open('${p.id}','tenant')">✉ Tenant</button><button class="btn sm" onclick="NexLetServe.open('${p.id}','landlord')">✉ Landlord</button><button class="btn sm" onclick="NexLetMoveIn.open('${p.id}')">⌘ Print pack</button>${householdBtn(p,rec)}
         <a href="#" onclick="event.preventDefault();openMoveInMonies('${p.id}')" style="font-size:11.5px;color:var(--navy)">${rec.moniesSentAt?'Monies letter sent '+esc(fmtDate(rec.moniesSentAt)):'Move-in monies…'}</a></span>
     </div></div>`;
   const dep=parseFloat(rec.deposit)||0;
@@ -2408,7 +2409,9 @@ function postSigningPanel(p){
           <button class="btn sm" onclick="${t.go}">Do it</button></div>`).join('')}
       </div>
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
-        <button class="btn sm navy" onclick="NexLetMoveIn.open('${p.id}')">⌘ Print move-in pack</button>
+        <button class="btn sm navy" onclick="NexLetServe.open('${p.id}','tenant')">✉ Serve on tenant…</button>
+        <button class="btn sm" onclick="NexLetServe.open('${p.id}','landlord')">✉ Send to landlord…</button>
+        <button class="btn sm" onclick="NexLetMoveIn.open('${p.id}')">⌘ Print move-in pack</button>
         <button class="btn sm" onclick="openMoveInMonies('${p.id}')">${rec.moniesSentAt
           ?'Move-in monies — sent '+esc(fmtDate(rec.moniesSentAt))+(sentMoniesCopy(p.id)?'':', no copy kept')
           :'Move-in monies letter'}</button>
