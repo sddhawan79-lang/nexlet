@@ -304,7 +304,9 @@
         if (!x || !x.url) return false;
         const s = String(x.label || '') + ' ' + String(x.name || '');
         if (/leaflet|what\s*is/i.test(s)) return false;
-        return /prescribed\s*information|\bPI\b.*template|template.*prescribed/i.test(s);
+        if (/certificate|\bcert\b|invoice|receipt|membership/i.test(s)) return false;
+        return /prescribed/i.test(s) || /\bPI\b/i.test(s)
+          || (/template|\bform\b|blank/i.test(s) && /deposit|tds|dps|scheme/i.test(s));
       })
       .sort((a, b) => String(b.addedAt || '').localeCompare(String(a.addedAt || '')))[0] || null;
   }
