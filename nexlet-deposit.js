@@ -286,14 +286,15 @@
         </details>
         ${lf ? '' : '<p class="hint" style="margin:9px 0 0;color:var(--amber)">The scheme\u2019s tenant leaflet is not filed either. It must accompany the form.</p>'}
       </div>
-      <div class="fg"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><label style="margin:0">NexLet\u2019s version \u2014 use if you cannot fill theirs</label>
-        <button type="button" class="btn sm" onclick="NexLetPrint.fromEl('pi-preview','Prescribed Information','Deposit \u2014 ${esc2(p.address || '')}')">\u2399 Print / save as PDF</button></div>
-        <div id="pi-preview" style="max-height:340px;overflow-y:auto;border:1px solid #E3D9C8;border-radius:8px;padding:16px;font-size:12.5px;line-height:1.7;background:var(--off)">${html}</div></div>
-      <p class="hint"><b>The scheme\u2019s leaflet must accompany this document.</b>${_si && _si.leaflet ? ' For ' + esc2(_si.name) + ' that is \u201c' + esc2(_si.leaflet) + '\u201d \u2014 download it from ' + esc2(_si.web || 'the scheme') + ' and file it under Business documents so it attaches automatically.' : ''} Keep evidence of the date and method \u2014 that is what a court looks at.</p>`;
+      <details style="margin-top:4px">
+        <summary style="font-size:11.5px;color:var(--faint);cursor:pointer">Reference copy \u2014 not the document served</summary>
+        <p class="hint" style="margin:7px 0">Every value laid out as the scheme\u2019s form asks for it, so you can read them off while filling theirs. This is not sent to anyone.</p>
+        <div id="pi-preview" style="max-height:300px;overflow-y:auto;border:1px solid #E3D9C8;border-radius:8px;padding:16px;font-size:12.5px;line-height:1.7;background:var(--off)">${html}</div>
+      </details>`;
 
     window.modal('Prescribed information \u2014 ' + esc2(p.address || ''), body,
       `<button class="btn" onclick="closeModal()">Close</button>
-       <button class="btn navy" onclick="NexLetDeposit.email('${pid}')">Email to tenant${h === 'landlord' ? ' &amp; landlord' : ''}</button>`, true);
+       <button class="btn navy"${filled ? '' : ' disabled title="Upload the completed form first"'} onclick="NexLetDeposit.email('${pid}')">${filled ? 'Email form + leaflet to tenant' : 'Upload the form first'}</button>`, true);
   }
 
   /* The scheme's own blank PI template, filed once under Business documents.
@@ -376,13 +377,15 @@
     const p = window.P(pid), rec = window.tenantRecFor(pid), l = window.L(p.landlordId);
     const lf = leafletDoc();
     if (!lf && !window.confirm('The scheme\u2019s information leaflet is not filed under Business documents.\n\nThe scheme requires it to accompany the prescribed information \u2014 without it the information is incomplete and counts as not served.\n\nSend anyway?')) return;
-    // The scheme's own completed form takes precedence: it is the document the
-    // scheme stands behind, and a generated lookalike alongside it would only
-    // create doubt about which was served.
+    // Only the scheme's own completed form is ever served. Nothing generated
+    // here goes to a tenant as prescribed information.
     const useTheirs = !!rec.piDocUrl;
-    if (!useTheirs && !window.confirm('No completed scheme form is on file, so NexLet\u2019s own version will be sent.\n\nIt follows the scheme\u2019s template but is not their document. Filling and uploading their editable PDF is the safer route.\n\nSend NexLet\u2019s version?')) return;
+    if (!useTheirs) {
+      window.toast('\u26a0 Fill the scheme\u2019s form and upload it first \u2014 that is what gets sent', 1);
+      return;
+    }
     const attach = [useTheirs ? rec.piDocUrl : '', lf ? lf.url : ''].filter(Boolean);
-    const html = (useTheirs
+    const html = (true
       ? '<p style="font-size:12.5px;line-height:1.7">Please find attached your prescribed information, together with the deposit scheme\u2019s information leaflet. Both form part of the information we are required to give you within 30 days of your deposit being received.</p>'
         + '<p style="font-size:12.5px;line-height:1.7">Please keep them with your tenancy agreement. If anything in them does not match what you were told, tell us straight away.</p>'
       : buildPI(p, rec, l))
