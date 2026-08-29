@@ -2373,7 +2373,7 @@ function householdBtn(p,rec){
   if(!(rec.occupants||[]).filter(o=>o.name).length) return '';
   const hh=householdDeclFor(rec.id);
   const left=hh?(hh.signatories||[]).filter(s=>!s.signed_at).length:0;
-  if(hh&&hh.status!=='signed'&&left) return `<button class="btn sm navy" onclick="chaseSignatories('${hh.id}','household declaration')" title="Reminds only those who have not signed, using their existing link">Household — chase ${left}</button><button class="btn sm" onclick="openHouseholdDecl('${p.id}')" title="Review or start again">…</button>`;
+  if(hh&&hh.status!=='signed'&&left) return `<button class="btn sm navy" onclick="chaseSignatories('${hh.id}','household declaration')" title="Reminds only those who have not signed, using their existing link">Household — chase ${left}</button><button class="btn sm" onclick="openHouseholdDecl('${p.id}')" title="Open the declaration to review it or start again">Household…</button>`;
   return `<button class="btn sm" onclick="openHouseholdDecl('${p.id}')">${hh
     ?(hh.status==='signed'?'Household — signed':'Household declaration')
     :'Household declaration'}</button>`;
@@ -2409,16 +2409,22 @@ function postSigningPanel(p){
             ${t.at?`<div class="faint" style="font-size:11px">Emailed ${esc(fmtDate(t.at))} — still to be recorded here</div>`:''}</div>
           <button class="btn sm" onclick="${t.go}">${t.at?'Record it':'Do it'}</button></div>`).join('')}
       </div>
-      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
-        ${serveBtn(p.id,'tenant',{primary:1})}
-        ${serveBtn(p.id,'landlord')}
-        <button class="btn sm" onclick="NexLetMoveIn.open('${p.id}')">⌘ Print move-in pack</button>
-        <button class="btn sm" onclick="openMoveInMonies('${p.id}')">${rec.moniesSentAt
-          ?'Move-in monies — sent '+esc(fmtDate(rec.moniesSentAt))+(sentMoniesCopy(p.id)?'':', no copy kept')
-          :'Move-in monies letter'}</button>
-        ${sentMoniesCopy(p.id)?`<button class="btn sm" onclick="viewSentMonies('${p.id}')">See what was sent</button>`:''}
-        ${householdBtn(p,rec)}
-        <button class="btn sm" onclick="openMoveIn('${p.id}')">Full first-day checklist</button>
+      <div style="margin-top:14px">
+        <div class="faint" style="font-size:10.5px;text-transform:uppercase;letter-spacing:.7px;margin-bottom:6px">In order</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <span class="faint" style="font-size:11px">1</span>${serveBtn(p.id,'tenant',{primary:1})}
+          <span class="faint" style="font-size:11px;margin-left:4px">2</span><button class="btn sm" onclick="NexLetMoveIn.open('${p.id}')">⌘ Print pack to sign</button>
+          <span class="faint" style="font-size:11px;margin-left:4px">3</span>${serveBtn(p.id,'landlord')}
+        </div>
+        <div class="faint" style="font-size:10.5px;text-transform:uppercase;letter-spacing:.7px;margin:12px 0 6px">Also available</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn sm" onclick="openMoveInMonies('${p.id}')">${rec.moniesSentAt
+            ?'Monies letter — sent '+esc(fmtDate(rec.moniesSentAt))+(sentMoniesCopy(p.id)?'':', no copy kept')
+            :'Move-in monies letter'}</button>
+          ${sentMoniesCopy(p.id)?`<button class="btn sm" onclick="viewSentMonies('${p.id}')">See what was sent</button>`:''}
+          ${householdBtn(p,rec)}
+          <button class="btn sm" onclick="openMoveIn('${p.id}')">Full first-day checklist</button>
+        </div>
       </div>
     </div></div>`;
 }
@@ -3758,7 +3764,8 @@ function moveInTasks(pid){
     {k:'gas',t:'Gas safety certificate given to the tenant',done:!!c.gas||!!_srv.gas,at:_srv.gas,go:"go('compliance')"},
     {k:'eicr',t:'EICR given to the tenant',done:!!c.eicr||!!_srv.eicr,at:_srv.eicr,go:"go('compliance')"},
     {k:'epc',t:'EPC given to the tenant',done:!!c.epc||!!_srv.epc,at:_srv.epc,go:"go('compliance')"},
-    {k:'rtr',t:'Right to Rent checked for every adult occupier',done:!!c.rtr,go:"setTenant('"+pid+"')"},
+    {k:'rtr',t:'Right to Rent checked for every adult occupier',
+     done:typeof _rtrAllDone==='function'?_rtrAllDone(rec):!!c.rtr,go:"rtrFromChecklist('"+pid+"')"},
     dep?{k:'dep',t:held==='landlord'?'Deposit protected by the landlord — certificate obtained':'Deposit protected in the scheme',done:!!rec.schemeRef||!!rec.depositCertName,go:"setTenant('"+pid+"')"}:null,
     dep?{k:'pi',t:'Prescribed information served on every tenant',done:!!rec.piServedAt||!!_srv.pi,at:rec.piServedAt||_srv.pi,go:"tnDepositPI('"+pid+"')"}:null,
     {k:'inv',t:'Inventory and schedule of condition, signed at check-in',done:(S.inventories2||[]).some(v=>v.propertyId===pid&&v.tenantAck&&v.tenantAck.confirmed),go:"go('inventory')"},
@@ -3771,7 +3778,9 @@ function moveInTasks(pid){
          done:(()=>{ const hh=householdDeclFor(rec.id); return !!(hh&&hh.status==='signed'); })(),
          at:_srv.household,go:"openHouseholdDecl('"+pid+"')"}
       : null,
-    {k:'keys',t:'Keys logged out to the tenant',done:(S.keys||[]).some(k=>k.propertyId===pid&&k.status==='out'),go:"go('keys')"},
+    {k:'keys',t:'Keys logged out to the tenant',
+     done:(S.keys||[]).some(k=>k.propertyId===pid&&k.status==='out')||!!rec.keysHandedAt,
+     go:"go('keys')"},
     {k:'pack',t:'Move-in pack emailed',done:!!rec.moveInPackSentAt||!!Object.keys(_srv).length,at:rec.moveInPackSentAt,go:"go('properties')"}
   ].filter(Boolean);
 }
