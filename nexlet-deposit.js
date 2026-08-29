@@ -250,6 +250,8 @@
     const l = window.L(p.landlordId);
     const h = holderOf(rec);
     const html = buildPI(p, rec, l);
+    const tpl = piTemplateDoc(), lf = leafletDoc(), filled = rec.piDocUrl ? { url: rec.piDocUrl, name: rec.piDocName } : null;
+    const crib = piCrib(p, rec, l);
     const sch = ST().agency || {};
     const _si = schemeInfo(rec.scheme || (window.agencyBrand ? agencyBrand().depScheme : ''));
     const _sch = ST().agency || {};
@@ -258,8 +260,33 @@
 
     const body = `<div class="note${h === 'landlord' ? ' warn' : ''}" style="margin-bottom:12px">
         <b>Deposit held by: ${esc2((HOLDERS[h] || {}).short || h)}</b><br>${esc2((HOLDERS[h] || {}).note || '')}</div>
-      ${!ready ? `<div class="note warn" style="margin-bottom:12px"><b>Not ready to serve.</b> Complete the scheme name and deposit reference on the tenancy, and the scheme administrator\u2019s contact details in Agency Settings. Those details are prescribed content \u2014 they must match what the scheme publishes.</div>` : ''}
-      <div class="fg"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><label style="margin:0">Prescribed information</label>
+      ${!ready ? `<div class="note warn" style="margin-bottom:12px"><b>Not ready to serve.</b>
+        ${!rec.scheme ? 'Choose the deposit scheme on the Tenancy tab \u2014 it names the scheme on this document and pulls in its published contact details. ' : ''}
+        ${!rec.schemeRef ? 'Add the scheme deposit reference on the Tenancy tab. ' : ''}
+        ${rec.scheme && rec.schemeRef && !_si ? 'We hold no published contact details for \u201c' + esc2(rec.scheme) + '\u201d \u2014 add the scheme administrator\u2019s address, telephone and email in Agency Settings, copied from that scheme\u2019s own prescribed information template.' : ''}</div>` : ''}
+      <div style="border:1px solid var(--border);border-radius:9px;padding:13px 15px;margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+          <b style="font-size:12.5px;color:var(--navy)">Serve the scheme\u2019s own form \u2014 recommended</b>
+          ${filled ? '<span class="pill" style="background:var(--green-bg);color:var(--green)">Completed form on file</span>' : ''}</div>
+        <p class="hint" style="margin:0 0 10px">The scheme\u2019s template is guaranteed to satisfy the 2007 Order and the scheme stands behind it. Fill their editable PDF using the values below, then upload it here and send that.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:11px">
+          ${tpl ? `<a class="btn sm navy" href="${esc2(tpl.url)}" target="_blank" rel="noopener">1 \u00b7 Open the blank form</a>`
+                 : `<span class="pill" style="background:var(--amber-bg);color:var(--amber)">Blank form not filed \u2014 add the scheme\u2019s \u201cPrescribed Information template\u201d under Business documents</span>`}
+          <label class="btn sm" style="cursor:pointer;margin:0">2 \u00b7 ${filled ? 'Replace completed form' : 'Upload completed form'}
+            <input type="file" accept="application/pdf,image/*" style="display:none" onchange="NexLetDeposit.uploadFilled('${pid}',this)"></label>
+          ${filled ? `<a class="btn sm" href="${esc2(filled.url)}" target="_blank" rel="noopener">View ${esc2(filled.name || 'completed form')}</a>` : ''}
+        </div>
+        <details>
+          <summary style="font-size:11.5px;color:var(--navy);cursor:pointer">Values to type into their form (${crib.length})</summary>
+          <table style="width:100%;border-collapse:collapse;font-size:11.5px;margin-top:7px">
+            ${crib.map(r => `<tr><td style="padding:4px 10px 4px 0;color:var(--faint);vertical-align:top;width:46%">${esc2(r[0])}</td>
+              <td style="padding:4px 0;color:var(--navy);font-weight:600">${esc2(r[1])}</td></tr>`).join('')}
+          </table>
+          <p class="hint" style="margin:7px 0 0">A dash means NexLet does not hold it \u2014 find it before you serve, rather than leaving the box empty.</p>
+        </details>
+        ${lf ? '' : '<p class="hint" style="margin:9px 0 0;color:var(--amber)">The scheme\u2019s tenant leaflet is not filed either. It must accompany the form.</p>'}
+      </div>
+      <div class="fg"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><label style="margin:0">NexLet\u2019s version \u2014 use if you cannot fill theirs</label>
         <button type="button" class="btn sm" onclick="NexLetPrint.fromEl('pi-preview','Prescribed Information','Deposit \u2014 ${esc2(p.address || '')}')">\u2399 Print / save as PDF</button></div>
         <div id="pi-preview" style="max-height:340px;overflow-y:auto;border:1px solid #E3D9C8;border-radius:8px;padding:16px;font-size:12.5px;line-height:1.7;background:var(--off)">${html}</div></div>
       <p class="hint"><b>The scheme\u2019s leaflet must accompany this document.</b>${_si && _si.leaflet ? ' For ' + esc2(_si.name) + ' that is \u201c' + esc2(_si.leaflet) + '\u201d \u2014 download it from ' + esc2(_si.web || 'the scheme') + ' and file it under Business documents so it attaches automatically.' : ''} Keep evidence of the date and method \u2014 that is what a court looks at.</p>`;
@@ -267,6 +294,51 @@
     window.modal('Prescribed information \u2014 ' + esc2(p.address || ''), body,
       `<button class="btn" onclick="closeModal()">Close</button>
        <button class="btn navy" onclick="NexLetDeposit.email('${pid}')">Email to tenant${h === 'landlord' ? ' &amp; landlord' : ''}</button>`, true);
+  }
+
+  /* The scheme's own blank PI template, filed once under Business documents.
+     Distinguished from the leaflet, which is the tenant-facing explainer. */
+  function piTemplateDoc() {
+    return ((ST().agency || {}).bizDocs || [])
+      .filter(x => {
+        if (!x || !x.url) return false;
+        const s = String(x.label || '') + ' ' + String(x.name || '');
+        if (/leaflet|what\s*is/i.test(s)) return false;
+        return /prescribed\s*information|\bPI\b.*template|template.*prescribed/i.test(s);
+      })
+      .sort((a, b) => String(b.addedAt || '').localeCompare(String(a.addedAt || '')))[0] || null;
+  }
+
+  /* Everything the scheme's form asks for, ready to copy across. Values only —
+     no invention: anything not held shows as a dash so it is obviously missing. */
+  function piCrib(p, rec, l) {
+    const dash = '\u2014';
+    const isPerm = o => window.isPermittedOccupier ? window.isPermittedOccupier(o) : (o.personType || 'joint') === 'permitted';
+    const b = window.agencyBrand ? agencyBrand() : {};
+    const ten = [{ n: rec.name, e: rec.email, ph: rec.phone }]
+      .concat((rec.occupants || []).filter(o => o.name && !isPerm(o)).map(o => ({ n: o.name, e: o.email, ph: o.phone })));
+    const rows = [
+      ['Property address', [p.address, p.city, p.postcode].filter(Boolean).join(', ') || dash],
+      ['Deposit paid', rec.deposit ? money(rec.deposit) : dash],
+      ['Date deposit received by the landlord', rec.depositReceived ? dt(rec.depositReceived) : dash],
+      ['Date fee paid to the scheme', rec.depositFeePaid ? dt(rec.depositFeePaid) : dash],
+      ['Scheme deposit reference', rec.schemeRef || dash],
+      ['Primary landlord', (window.landlordName ? landlordName(l) : l.name) || dash],
+      ['Landlord email', l.email || dash],
+      ['Landlord phone', l.phone || dash],
+      ['Landlord address', l.address || dash],
+      ['Agent', b.name || dash],
+      ['Agent email', b.email || dash],
+      ['Agent phone', b.phone || dash],
+      ['Agent address', b.address || dash]
+    ];
+    ten.forEach((t, i) => {
+      rows.push(['Tenant ' + (i + 1), t.n || dash]);
+      rows.push(['\u2003email / phone', (t.e || dash) + ' \u00b7 ' + (t.ph || dash)]);
+    });
+    rows.push(['Deduction clause(s)', rec.deductionClause || dash]);
+    rows.push(['Relevant person', rec.depositPaidBy || 'none']);
+    return rows;
   }
 
   /* The scheme's leaflet, filed once under Business documents. */
@@ -282,11 +354,36 @@
       .sort((a, b) => String(b.addedAt || '').localeCompare(String(a.addedAt || '')))[0] || null;
   }
 
+  async function uploadFilled(pid, input) {
+    const f = input && input.files && input.files[0];
+    if (!f) return;
+    const rec = window.tenantRecFor(pid);
+    if (!rec) { window.toast('No tenancy record', 1); return; }
+    const ext = (f.name.split('.').pop() || 'pdf').toLowerCase();
+    const url = await window._storageUpload(f, pid + '/pi-completed-' + Date.now() + '.' + ext, 'property-documents');
+    if (!url) { window.toast('\u26a0 Upload failed \u2014 retry', 1); return; }
+    rec.piDocName = f.name; rec.piDocUrl = url;
+    if (!await window.pushTenantRec(rec)) { window.toast('\u26a0 Uploaded, but the tenancy could not be saved \u2014 retry', 1); return; }
+    if (window.NexLetAudit) window.NexLetAudit.log({ action: 'doc.uploaded', entity: 'tenancy', entityId: rec.id,
+      entityLabel: (rec.name || ''), detail: { document: 'Prescribed information (scheme form, completed)', fileName: f.name } });
+    window.render(); open(pid);
+    window.toast('\u2713 Completed form on file \u2014 this is what will be emailed');
+  }
+
   async function email(pid) {
     const p = window.P(pid), rec = window.tenantRecFor(pid), l = window.L(p.landlordId);
     const lf = leafletDoc();
-    if (!lf && !window.confirm('The scheme\u2019s information leaflet is not filed under Business documents.\n\nTDS require it to accompany the prescribed information \u2014 without it the information is incomplete and counts as not served.\n\nSend anyway?')) return;
-    const html = buildPI(p, rec, l)
+    if (!lf && !window.confirm('The scheme\u2019s information leaflet is not filed under Business documents.\n\nThe scheme requires it to accompany the prescribed information \u2014 without it the information is incomplete and counts as not served.\n\nSend anyway?')) return;
+    // The scheme's own completed form takes precedence: it is the document the
+    // scheme stands behind, and a generated lookalike alongside it would only
+    // create doubt about which was served.
+    const useTheirs = !!rec.piDocUrl;
+    if (!useTheirs && !window.confirm('No completed scheme form is on file, so NexLet\u2019s own version will be sent.\n\nIt follows the scheme\u2019s template but is not their document. Filling and uploading their editable PDF is the safer route.\n\nSend NexLet\u2019s version?')) return;
+    const html = (useTheirs
+      ? '<p style="font-size:12.5px;line-height:1.7">Please find your prescribed information below, together with the deposit scheme\u2019s information leaflet. Both form part of the information we are required to give you within 30 days of your deposit being received.</p>'
+        + '<div style="border:1px solid #E2E5EA;border-radius:7px;padding:12px 14px;margin-top:14px;background:#F8FAFC;font-size:12.5px;line-height:1.7">'
+        + '<b style="color:#1B2F4A">Prescribed information</b><br><a href="' + esc2(rec.piDocUrl) + '">Open the prescribed information</a></div>'
+      : buildPI(p, rec, l))
       + (lf ? '<div style="border:1px solid #E2E5EA;border-radius:7px;padding:12px 14px;margin-top:18px;background:#F8FAFC;font-size:12.5px;line-height:1.7">'
         + '<b style="color:#1B2F4A">' + esc2(lf.label || 'Deposit scheme information leaflet') + '</b><br>'
         + 'This leaflet forms part of the prescribed information and must be read with it. '
@@ -303,10 +400,12 @@
     if (window.NexLetAudit) NexLetAudit.log({ action: 'deposit.pi_served', entity: 'tenancy', entityId: rec.id,
       entityLabel: (rec.name || '') + ' \u2014 ' + (p.address || ''),
       detail: { heldBy: holderOf(rec), scheme: rec.scheme || '', ref: rec.schemeRef || '',
-        sentTo: to.join(', '), leaflet: lf ? (lf.label || 'included') : 'NOT INCLUDED' } });
+        sentTo: to.join(', '), leaflet: lf ? (lf.label || 'included') : 'NOT INCLUDED',
+        form: useTheirs ? 'scheme\u2019s own completed form' : 'NexLet generated version' } });
     window.closeModal(); window.render();
     window.toast(failed.length ? '\u26a0 Sent, but failed for: ' + failed.join(', ') : '\u2713 Prescribed information sent and logged');
   }
 
-  window.NexLetDeposit = { HOLDERS, holderOf, clauseFor, buildPI, open, email };
+  window.NexLetDeposit = {
+    uploadFilled, HOLDERS, holderOf, clauseFor, buildPI, open, email };
 })();
