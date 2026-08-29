@@ -2398,22 +2398,29 @@ function postSigningPanel(p){
     : 'The deposit must be protected and the prescribed information served within <b>30 days of receipt</b>.'):'';
   return `<div class="panel" style="margin-bottom:14px;border-color:var(--amber)">
     <div class="panel-hd" style="background:var(--amber-bg);border-color:var(--amber)">
-      <h2 style="font-size:13px;color:var(--amber)">Signed — now serve, before keys</h2>
+      <h2 style="font-size:13px;color:var(--amber)">Signed — what is left, in order</h2>
       <span class="faint" style="font-size:11.5px">Completed ${signedAt?esc(fmtDate(signedAt)):''}</span></div>
     <div style="padding:13px 20px">
       ${clock?`<p class="hint" style="margin:0 0 11px">${clock}</p>`:''}
-      <div style="display:flex;flex-direction:column;gap:1px">
-        ${left.map(t=>`<div class="doc" style="padding:7px 0">
-          <div class="di" style="background:var(--amber-bg);color:var(--amber)">!</div>
-          <div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:600;color:var(--navy)">${esc(t.t)}</div>
-            ${t.at?`<div class="faint" style="font-size:11px">Emailed ${esc(fmtDate(t.at))} — still to be recorded here</div>`:''}</div>
-          <button class="btn sm" onclick="${t.go}">${t.at?'Record it':'Do it'}</button></div>`).join('')}
-      </div>
+      ${[[1,'Before the keys leave your hand','Service and signatures. Anything here missed cannot be put right by doing it later.'],
+          [2,'At the property, on the day','Only doable standing in the property, with the tenant there.'],
+          [3,'Within 30 days','Has a deadline rather than needing to be done today.']]
+        .map(([ph,title,why])=>{ const rows=left.filter(t=>(t.ph||1)===ph); if(!rows.length) return '';
+          return `<div style="margin-bottom:12px">
+            <div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.7px;color:var(--navy);font-weight:700">${title}</div>
+            <div class="faint" style="font-size:11px;margin:1px 0 5px">${why}</div>
+            <div style="display:flex;flex-direction:column;gap:1px">
+              ${rows.map(t=>`<div class="doc" style="padding:7px 0">
+                <div class="di" style="background:var(--amber-bg);color:var(--amber)">!</div>
+                <div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:600;color:var(--navy)">${esc(t.t)}</div>
+                  ${t.at?`<div class="faint" style="font-size:11px">Emailed ${esc(fmtDate(t.at))} — still to be recorded here</div>`:''}</div>
+                <button class="btn sm" onclick="${t.go}">${t.at?'Record it':'Do it'}</button></div>`).join('')}
+            </div></div>`; }).join('')}
       <div style="margin-top:14px">
         <div class="faint" style="font-size:10.5px;text-transform:uppercase;letter-spacing:.7px;margin-bottom:6px">In order</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <span class="faint" style="font-size:11px">1</span>${serveBtn(p.id,'tenant',{primary:1})}
-          <span class="faint" style="font-size:11px;margin-left:4px">2</span><button class="btn sm" onclick="NexLetMoveIn.open('${p.id}')">⌘ Print pack to sign</button>
+          <span class="faint" style="font-size:11px;margin-left:4px">2</span><button class="btn sm" onclick="NexLetMoveIn.open('${p.id}')">⌘ Print sheets to take with you</button>
           <span class="faint" style="font-size:11px;margin-left:4px">3</span>${serveBtn(p.id,'landlord')}
         </div>
         <div class="faint" style="font-size:10.5px;text-transform:uppercase;letter-spacing:.7px;margin:12px 0 6px">Also available</div>
@@ -3765,32 +3772,35 @@ function moveInTasks(pid){
   const held=window.NexLetDeposit?NexLetDeposit.holderOf(rec):'landlord';
   const ta=tenancyAgreementFor(rec.id);
   return [
-    {k:'agreement',t:'Tenancy agreement signed by every joint tenant',done:!!(ta&&ta.status==='signed'),go:"openTenancyAgreement('"+pid+"')"},
+    {k:'agreement',ph:1,t:'Tenancy agreement signed by every joint tenant',done:!!(ta&&ta.status==='signed'),go:"openTenancyAgreement('"+pid+"')"},
     ...(rec.start&&new Date(rec.start)<new Date('2026-05-01')
-      ? [{k:'htr',t:'How to Rent guide given at the start of the tenancy',done:!!c.htr,go:"go('compliance')"}]
+      ? [{k:'htr',ph:1,t:'How to Rent guide given at the start of the tenancy',done:!!c.htr,go:"go('compliance')"}]
       : []),
-    {k:'infosheet',t:"Renters' Rights Act Information Sheet given",done:!!c.infosheet||!!_srv.infosheet,at:_srv.infosheet,go:"editCert('"+pid+"','infosheet')"},
-    {k:'gas',t:'Gas safety certificate given to the tenant',done:!!c.gas||!!_srv.gas,at:_srv.gas,go:"go('compliance')"},
-    {k:'eicr',t:'EICR given to the tenant',done:!!c.eicr||!!_srv.eicr,at:_srv.eicr,go:"go('compliance')"},
-    {k:'epc',t:'EPC given to the tenant',done:!!c.epc||!!_srv.epc,at:_srv.epc,go:"go('compliance')"},
-    {k:'rtr',t:'Right to Rent checked for every adult occupier',
+    {k:'infosheet',ph:1,t:"Renters' Rights Act Information Sheet given",done:!!c.infosheet||!!_srv.infosheet,at:_srv.infosheet,go:"editCert('"+pid+"','infosheet')"},
+    {k:'gas',ph:1,t:'Gas safety certificate given to the tenant',done:!!c.gas||!!_srv.gas,at:_srv.gas,go:"go('compliance')"},
+    {k:'eicr',ph:1,t:'EICR given to the tenant',done:!!c.eicr||!!_srv.eicr,at:_srv.eicr,go:"go('compliance')"},
+    {k:'epc',ph:1,t:'EPC given to the tenant',done:!!c.epc||!!_srv.epc,at:_srv.epc,go:"go('compliance')"},
+    {k:'rtr',ph:1,t:'Right to Rent checked for every adult occupier',
      done:typeof _rtrAllDone==='function'?_rtrAllDone(rec):!!c.rtr,go:"rtrFromChecklist('"+pid+"')"},
-    dep?{k:'dep',t:held==='landlord'?'Deposit protected by the landlord — certificate obtained':'Deposit protected in the scheme',done:!!rec.schemeRef||!!rec.depositCertName,go:"setTenant('"+pid+"')"}:null,
-    dep?{k:'pi',t:'Prescribed information served on every tenant',done:!!rec.piServedAt||!!_srv.pi,at:rec.piServedAt||_srv.pi,go:"tnDepositPI('"+pid+"')"}:null,
-    {k:'inv',t:'Inventory and schedule of condition, signed at check-in',done:(S.inventories2||[]).some(v=>v.propertyId===pid&&v.tenantAck&&v.tenantAck.confirmed),go:"go('inventory')"},
-    {k:'cond',t:'Condensation and mould annexe issued',
+    dep?{k:'dep',ph:1,t:held==='landlord'?'Deposit protected by the landlord — certificate obtained':'Deposit protected in the scheme',done:!!rec.schemeRef||!!rec.depositCertName,go:"setTenant('"+pid+"')"}:null,
+    dep?{k:'pi',ph:3,t:'Prescribed information served on every tenant',done:!!rec.piServedAt||!!_srv.pi,at:rec.piServedAt||_srv.pi,go:"tnDepositPI('"+pid+"')"}:null,
+    {k:'inv',ph:2,t:'Inventory and schedule of condition, signed at check-in',done:(S.inventories2||[]).some(v=>v.propertyId===pid&&v.tenantAck&&v.tenantAck.confirmed),go:"go('inventory')"},
+    {k:'cond',ph:1,t:'Condensation and mould annexe issued',
      done:!!(ta&&ta.status==='signed')||!!rec.condensationAckAt
           ||!!(()=>{ const cm=condensationDeclFor(rec.id); return cm&&cm.status==='signed'; })(),
      go:"NexLetForms.condensation('"+pid+"')"},
     (rec.occupants||[]).filter(o=>o.name).length
-      ? {k:'household',t:'Household composition declared and signed',
+      ? {k:'household',ph:1,t:'Household composition declared and signed',
          done:(()=>{ const hh=householdDeclFor(rec.id); return !!(hh&&hh.status==='signed'); })(),
          at:_srv.household,go:"openHouseholdDecl('"+pid+"')"}
       : null,
-    {k:'keys',t:'Keys logged out to the tenant',
+    {k:'keys',ph:2,t:'Keys logged out to the tenant',
      done:(S.keys||[]).some(k=>k.propertyId===pid&&k.status==='out')||!!rec.keysHandedAt,
      go:"go('keys')"},
-    {k:'pack',t:'Move-in pack emailed',done:!!rec.moveInPackSentAt||!!Object.keys(_srv).length,at:rec.moveInPackSentAt,go:"go('properties')"}
+    {k:'alarms',ph:2,t:'Smoke and CO alarms tested with the tenant present',
+     done:!!c.smoke&&(!!c.co||!!c.coNA),go:"editCert('"+pid+"','smoke')"},
+    {k:'pack',ph:1,t:'Documents emailed to every tenant',done:!!rec.moveInPackSentAt||!!Object.keys(_srv).length,at:rec.moveInPackSentAt,
+     go:"NexLetServe.open('"+pid+"','tenant')"}
   ].filter(Boolean);
 }
 function _workingDaysBefore(dateStr,days){
@@ -4158,7 +4168,18 @@ async function sendMoveInPack(pid){
       <p style="margin-top:18px">Kind regards,<br>${esc(b.name)}</p>
     </div></div>`;
   if(!LIVE){ toast('Connect to Supabase to send live',1); return; }
-  const r=await agencyEmail(rec.email,'Your move-in document pack — '+p.address, html, included.map(i=>i.url));
+  /* Each joint tenant is served individually: service on one is not service on
+     the others, and a shared inbox is not something we can assume. */
+  const _isPerm=o=>typeof isPermittedOccupier==='function'?isPermittedOccupier(o):(o.personType||'joint')==='permitted';
+  const _to=[rec.email].concat((rec.occupants||[]).filter(o=>o.email&&!_isPerm(o)).map(o=>o.email))
+    .filter((e,i,a)=>e&&a.indexOf(e)===i);
+  const _fail=[];
+  let r={ok:false};
+  for(const _e of _to){
+    const _r=await agencyEmail(_e,'Your move-in document pack — '+p.address, html, included.map(i=>i.url));
+    if(_r&&_r.ok) r={ok:true}; else _fail.push(_e);
+  }
+  if(_fail.length) toast('⚠ Not delivered to: '+_fail.join(', '),1);
   if(r.ok){ rec.moveInPackSentAt=new Date().toISOString(); pushTenantRec(rec);
     const ll=p.landlordId?L(p.landlordId):null; if(ll&&ll.id){ ll.comms=ll.comms||[]; ll.comms.push({id:uid('c'),date:today(),type:'Note',note:'Move-in document pack emailed to '+rec.name+' \u2014 '+items.map(i=>i.label).join(', ')}); pushLandlord(ll); }
     closeModal(); render(); toast('✓ Move-in pack sent to '+rec.name);
