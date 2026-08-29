@@ -136,6 +136,7 @@
       ['Written key terms', 'Required for tenancies from 1 May 2026', true],
       ['Prescribed information', 'Deposit scheme, how to get the deposit back', !!parseFloat(c.rec.deposit)],
       ['Deposit protection certificate', c.rec.schemeRef ? 'Ref ' + esc(c.rec.schemeRef) : '', !!parseFloat(c.rec.deposit)],
+      ['Deposit scheme information leaflet', 'Must accompany the prescribed information', !!parseFloat(c.rec.deposit)],
       ['Gas safety record', cert.gas ? 'Dated ' + esc(dt(cert.gas)) : 'Where there is a gas appliance', true],
       ['Electrical installation report (EICR)', cert.eicr ? 'Dated ' + esc(dt(cert.eicr)) : '', true],
       ['Energy performance certificate (EPC)', cert.epcRating ? 'Rating ' + esc(cert.epcRating) : '', true],
