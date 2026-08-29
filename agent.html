@@ -2405,8 +2405,9 @@ function postSigningPanel(p){
       <div style="display:flex;flex-direction:column;gap:1px">
         ${left.map(t=>`<div class="doc" style="padding:7px 0">
           <div class="di" style="background:var(--amber-bg);color:var(--amber)">!</div>
-          <div style="flex:1;font-size:12.5px;font-weight:600;color:var(--navy)">${esc(t.t)}</div>
-          <button class="btn sm" onclick="${t.go}">Do it</button></div>`).join('')}
+          <div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:600;color:var(--navy)">${esc(t.t)}</div>
+            ${t.at?`<div class="faint" style="font-size:11px">Emailed ${esc(fmtDate(t.at))} — still to be recorded here</div>`:''}</div>
+          <button class="btn sm" onclick="${t.go}">${t.at?'Record it':'Do it'}</button></div>`).join('')}
       </div>
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
         ${serveBtn(p.id,'tenant',{primary:1})}
@@ -2901,6 +2902,9 @@ function editCert(pid,key){ const p=P(pid); const c=p.certs||(p.certs={}); const
     const _tenants=(typeof _tnPeopleView==='function'?_tnPeopleView(_rec):[]).filter(x=>x.name).map(x=>x.name);
     const body=`<div class="note" style="margin-bottom:12px">${desc}
       <div style="margin-top:7px;font-size:12px">There is no certificate for alarms. The evidence is this record: the regulations require the alarm to be <b>tested on the first day of the tenancy</b>, and a penalty of up to £5,000 per breach applies. A photo shows an alarm exists — only a dated, witnessed test shows it worked.</div></div>
+      <div class="fg"><label>Date tested</label>
+        <input id="ct-date" type="date" value="${esc(c[key]||_rec.start||today())}">
+        <span class="hint">${_rec.start?'The tenancy began '+esc(fmtDate(_rec.start))+'. The regulations require the test on that day, so that is the date to record — not the day you are typing this up.':'Must be the first day of the tenancy.'}</span></div>
       <div class="grid2" style="gap:10px">
         <div class="fg"><label>${key==='smoke'?'Alarms fitted — how many':'CO alarms fitted — how many'}</label>
           <input id="ct-count" type="number" min="0" value="${esc(c[key+'Count']||'')}" placeholder="${key==='smoke'?'one per storey':'one per room with an appliance'}"></div>
@@ -3740,6 +3744,8 @@ async function tnDepositPI(pid){
 // file — so it shows what is outstanding, not a generic checklist.
 function moveInTasks(pid){
   const p=P(pid)||{}, rec=tenantRecFor(pid)||{}, c=p.certs||{};
+  /* What the serve pack has actually emailed, keyed by serve-registry key. */
+  const _srv=(window.NexLetServe&&NexLetServe.servedKeys)?NexLetServe.servedKeys(pid):{};
   const dep=parseFloat(rec.deposit)||0;
   const held=window.NexLetDeposit?NexLetDeposit.holderOf(rec):'landlord';
   const ta=tenancyAgreementFor(rec.id);
@@ -3748,13 +3754,13 @@ function moveInTasks(pid){
     ...(rec.start&&new Date(rec.start)<new Date('2026-05-01')
       ? [{k:'htr',t:'How to Rent guide given at the start of the tenancy',done:!!c.htr,go:"go('compliance')"}]
       : []),
-    {k:'infosheet',t:"Renters' Rights Act Information Sheet given",done:!!c.infosheet,go:"editCert('"+pid+"','infosheet')"},
-    {k:'gas',t:'Gas safety certificate given to the tenant',done:!!c.gas,go:"go('compliance')"},
-    {k:'eicr',t:'EICR given to the tenant',done:!!c.eicr,go:"go('compliance')"},
-    {k:'epc',t:'EPC given to the tenant',done:!!c.epc,go:"go('compliance')"},
+    {k:'infosheet',t:"Renters' Rights Act Information Sheet given",done:!!c.infosheet||!!_srv.infosheet,at:_srv.infosheet,go:"editCert('"+pid+"','infosheet')"},
+    {k:'gas',t:'Gas safety certificate given to the tenant',done:!!c.gas||!!_srv.gas,at:_srv.gas,go:"go('compliance')"},
+    {k:'eicr',t:'EICR given to the tenant',done:!!c.eicr||!!_srv.eicr,at:_srv.eicr,go:"go('compliance')"},
+    {k:'epc',t:'EPC given to the tenant',done:!!c.epc||!!_srv.epc,at:_srv.epc,go:"go('compliance')"},
     {k:'rtr',t:'Right to Rent checked for every adult occupier',done:!!c.rtr,go:"setTenant('"+pid+"')"},
     dep?{k:'dep',t:held==='landlord'?'Deposit protected by the landlord — certificate obtained':'Deposit protected in the scheme',done:!!rec.schemeRef||!!rec.depositCertName,go:"setTenant('"+pid+"')"}:null,
-    dep?{k:'pi',t:'Prescribed information served on every tenant',done:!!rec.piServedAt,go:"tnDepositPI('"+pid+"')"}:null,
+    dep?{k:'pi',t:'Prescribed information served on every tenant',done:!!rec.piServedAt||!!_srv.pi,at:rec.piServedAt||_srv.pi,go:"tnDepositPI('"+pid+"')"}:null,
     {k:'inv',t:'Inventory and schedule of condition, signed at check-in',done:(S.inventories2||[]).some(v=>v.propertyId===pid&&v.tenantAck&&v.tenantAck.confirmed),go:"go('inventory')"},
     {k:'cond',t:'Condensation and mould annexe issued',
      done:!!(ta&&ta.status==='signed')||!!rec.condensationAckAt
@@ -3763,10 +3769,10 @@ function moveInTasks(pid){
     (rec.occupants||[]).filter(o=>o.name).length
       ? {k:'household',t:'Household composition declared and signed',
          done:(()=>{ const hh=householdDeclFor(rec.id); return !!(hh&&hh.status==='signed'); })(),
-         go:"openHouseholdDecl('"+pid+"')"}
+         at:_srv.household,go:"openHouseholdDecl('"+pid+"')"}
       : null,
     {k:'keys',t:'Keys logged out to the tenant',done:(S.keys||[]).some(k=>k.propertyId===pid&&k.status==='out'),go:"go('keys')"},
-    {k:'pack',t:'Move-in pack emailed',done:!!rec.moveInPackSentAt,go:"go('properties')"}
+    {k:'pack',t:'Move-in pack emailed',done:!!rec.moveInPackSentAt||!!Object.keys(_srv).length,at:rec.moveInPackSentAt,go:"go('properties')"}
   ].filter(Boolean);
 }
 function _workingDaysBefore(dateStr,days){
