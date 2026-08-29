@@ -270,11 +270,11 @@
           ${filled ? '<span class="pill" style="background:var(--green-bg);color:var(--green)">Completed form on file</span>' : ''}</div>
         <p class="hint" style="margin:0 0 10px">The scheme\u2019s template is guaranteed to satisfy the 2007 Order and the scheme stands behind it. Fill their editable PDF using the values below, then upload it here and send that.</p>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:11px">
-          ${tpl ? `<a class="btn sm navy" href="${esc2(tpl.url)}" target="_blank" rel="noopener">1 \u00b7 Open the blank form</a>`
+          ${tpl ? `<button class="btn sm navy" onclick="viewDoc('${esc2(tpl.url)}','Blank prescribed information form')">1 \u00b7 Open the blank form</button>`
                  : `<span class="pill" style="background:var(--amber-bg);color:var(--amber)">Blank form not filed \u2014 add the scheme\u2019s \u201cPrescribed Information template\u201d under Business documents</span>`}
           <label class="btn sm" style="cursor:pointer;margin:0">2 \u00b7 ${filled ? 'Replace completed form' : 'Upload completed form'}
             <input type="file" accept="application/pdf,image/*" style="display:none" onchange="NexLetDeposit.uploadFilled('${pid}',this)"></label>
-          ${filled ? `<a class="btn sm" href="${esc2(filled.url)}" target="_blank" rel="noopener">View ${esc2(filled.name || 'completed form')}</a>` : ''}
+          ${filled ? `<button class="btn sm" onclick="viewDoc('${esc2(filled.url)}','Completed prescribed information')">View ${esc2(filled.name || 'completed form')}</button>` : ''}
         </div>
         <details>
           <summary style="font-size:11.5px;color:var(--navy);cursor:pointer">Values to type into their form (${crib.length})</summary>
@@ -381,21 +381,20 @@
     // create doubt about which was served.
     const useTheirs = !!rec.piDocUrl;
     if (!useTheirs && !window.confirm('No completed scheme form is on file, so NexLet\u2019s own version will be sent.\n\nIt follows the scheme\u2019s template but is not their document. Filling and uploading their editable PDF is the safer route.\n\nSend NexLet\u2019s version?')) return;
+    const attach = [useTheirs ? rec.piDocUrl : '', lf ? lf.url : ''].filter(Boolean);
     const html = (useTheirs
-      ? '<p style="font-size:12.5px;line-height:1.7">Please find your prescribed information below, together with the deposit scheme\u2019s information leaflet. Both form part of the information we are required to give you within 30 days of your deposit being received.</p>'
-        + '<div style="border:1px solid #E2E5EA;border-radius:7px;padding:12px 14px;margin-top:14px;background:#F8FAFC;font-size:12.5px;line-height:1.7">'
-        + '<b style="color:#1B2F4A">Prescribed information</b><br><a href="' + esc2(rec.piDocUrl) + '">Open the prescribed information</a></div>'
+      ? '<p style="font-size:12.5px;line-height:1.7">Please find attached your prescribed information, together with the deposit scheme\u2019s information leaflet. Both form part of the information we are required to give you within 30 days of your deposit being received.</p>'
+        + '<p style="font-size:12.5px;line-height:1.7">Please keep them with your tenancy agreement. If anything in them does not match what you were told, tell us straight away.</p>'
       : buildPI(p, rec, l))
       + (lf ? '<div style="border:1px solid #E2E5EA;border-radius:7px;padding:12px 14px;margin-top:18px;background:#F8FAFC;font-size:12.5px;line-height:1.7">'
-        + '<b style="color:#1B2F4A">' + esc2(lf.label || 'Deposit scheme information leaflet') + '</b><br>'
-        + 'This leaflet forms part of the prescribed information and must be read with it. '
-        + '<a href="' + esc2(lf.url) + '">Open the leaflet</a></div>' : '');
+        + '<b style="color:#1B2F4A">Attached: ' + esc2(lf.label || 'Deposit scheme information leaflet') + '</b><br>'
+        + 'This leaflet forms part of the prescribed information and must be read with it.</div>' : '');
     const isPerm = o => window.isPermittedOccupier ? window.isPermittedOccupier(o) : (o.personType || 'joint') === 'permitted';
     const to = [rec.email].concat((rec.occupants || []).filter(o => o.email && !isPerm(o)).map(o => o.email)).filter(Boolean);
     if (!to.length) { window.toast('No tenant email on file', 1); return; }
     const subj = 'Prescribed information \u2014 your tenancy deposit \u2014 ' + (p.address || '');
     const failed = [];
-    for (const e of to) { const r = await window.agencyEmail(e, subj, html); if (!r || !r.ok) failed.push(e); }
+    for (const e of to) { const r = await window.agencyEmail(e, subj, html, attach); if (!r || !r.ok) failed.push(e); }
     if (holderOf(rec) === 'landlord' && l.email) await window.agencyEmail(l.email, 'Copy \u2014 ' + subj, html);
     rec.piServedAt = new Date().toISOString().slice(0, 10);
     window.pushTenantRec(rec); window.save();
