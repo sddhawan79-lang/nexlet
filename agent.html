@@ -2109,7 +2109,7 @@ function lifecycleStepper(p){
 // yet out. Shown only in that window, so it disappears once sent.
 /* Audience derived from the PERSISTED letter type, so it survives a reload.
    TEMPLATES already carry audience per key; the built-in letters are listed here. */
-const LETTER_AUDIENCE={move_in_monies:'tenant',condensation:'tenant',notice:'tenant',household:'tenant',signed_copy:'tenant',serve_tenant:'tenant',serve_landlord:'landlord',
+const LETTER_AUDIENCE={move_in_monies:'tenant',condensation:'tenant',notice:'tenant',household:'tenant',signed_copy:'tenant',pi:'tenant',serve_tenant:'tenant',serve_landlord:'landlord',
   welcome:'landlord',fee_change:'landlord',rent_statement:'landlord',statement:'landlord',
   invoice:'landlord',valuation:'landlord'};
 function letterAudience(type){
@@ -2483,6 +2483,9 @@ function serveBtn(pid,audience,opts){
 }
 function serveDocsPanel(p){
   const rec=tenantRecFor(p.id); if(!rec||!rec.id) return '';
+  /* The later of two records of the same service, so a re-send is never masked by
+     an older date held in the other place. */
+  const _later=(a,b)=>{ if(!a) return b||null; if(!b) return a; return new Date(a)>=new Date(b)?a:b; };
   /* What the serve pack has already sent, by registry key. */
   const _srv=(window.NexLetServe&&NexLetServe.servedKeys)?NexLetServe.servedKeys(p.id):{};
   const c=p.certs||{}, dep=parseFloat(rec.deposit)||0;
@@ -2495,7 +2498,7 @@ function serveDocsPanel(p){
      done:!!c.infosheet||!!_srv.infosheet,servedAt:_srv.infosheet,go:"editCert('"+p.id+"','infosheet')",label:'Serve'},
     dep?{t:'Prescribed information',
      why:'Where the deposit is held and how to get it back. Within 30 days of the deposit being received.',
-     done:!!rec.piServedAt||!!_srv.pi,servedAt:_srv.pi,go:"tnDepositPI('"+p.id+"')",label:'Serve'}:null,
+     done:!!rec.piServedAt||!!_srv.pi,servedAt:_later(rec.piServedAt,_srv.pi),go:"tnDepositPI('"+p.id+"')",label:'Serve'}:null,
     (()=>{ const cm=condensationDeclFor(rec.id);
       return {t:'Condensation and mould annexe',
         why:'Covered by signing the tenancy agreement. For a tenancy already running, send it for signature separately.',
@@ -3783,7 +3786,9 @@ function moveInTasks(pid){
     {k:'rtr',ph:1,t:'Right to Rent checked for every adult occupier',
      done:typeof _rtrAllDone==='function'?_rtrAllDone(rec):!!c.rtr,go:"rtrFromChecklist('"+pid+"')"},
     dep?{k:'dep',ph:1,t:held==='landlord'?'Deposit protected by the landlord — certificate obtained':'Deposit protected in the scheme',done:!!rec.schemeRef||!!rec.depositCertName,go:"setTenant('"+pid+"')"}:null,
-    dep?{k:'pi',ph:3,t:'Prescribed information served on every tenant',done:!!rec.piServedAt||!!_srv.pi,at:rec.piServedAt||_srv.pi,go:"tnDepositPI('"+pid+"')"}:null,
+    dep?{k:'pi',ph:3,t:'Prescribed information served on every tenant',done:!!rec.piServedAt||!!_srv.pi,
+     at:(rec.piServedAt&&_srv.pi)?(new Date(rec.piServedAt)>=new Date(_srv.pi)?rec.piServedAt:_srv.pi):(rec.piServedAt||_srv.pi),
+     go:"tnDepositPI('"+pid+"')"}:null,
     {k:'inv',ph:2,t:'Inventory and schedule of condition, signed at check-in',done:(S.inventories2||[]).some(v=>v.propertyId===pid&&v.tenantAck&&v.tenantAck.confirmed),go:"go('inventory')"},
     {k:'cond',ph:1,t:'Condensation and mould annexe issued',
      done:!!(ta&&ta.status==='signed')||!!rec.condensationAckAt

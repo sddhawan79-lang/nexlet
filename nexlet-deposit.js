@@ -400,7 +400,11 @@
     for (const e of to) { const r = await window.agencyEmail(e, subj, html, attach); if (!r || !r.ok) failed.push(e); }
     if (holderOf(rec) === 'landlord' && l.email) await window.agencyEmail(l.email, 'Copy \u2014 ' + subj, html);
     rec.piServedAt = new Date().toISOString().slice(0, 10);
-    window.pushTenantRec(rec); window.save();
+    window.save();
+    if (!await window.pushTenantRec(rec))
+      window.toast('\u26a0 Sent, but the service date could not be saved \u2014 re-open and check', 1);
+    if (window.fileLetter) window.fileLetter({ propertyId: p.id, type: 'pi',
+      subject: 'Prescribed information \u2014 ' + (p.address || ''), html, to });
     if (window.NexLetAudit) NexLetAudit.log({ action: 'deposit.pi_served', entity: 'tenancy', entityId: rec.id,
       entityLabel: (rec.name || '') + ' \u2014 ' + (p.address || ''),
       detail: { heldBy: holderOf(rec), scheme: rec.scheme || '', ref: rec.schemeRef || '',
