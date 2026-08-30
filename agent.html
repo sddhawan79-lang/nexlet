@@ -2547,10 +2547,10 @@ function serveDocsPanel(p){
   const rows=[
     {t:"Renters' Rights Act Information Sheet",
      why:preSwitch?'Due by 31 May 2026 — penalty up to £7,000 if missed.':'Replaced the How to Rent guide on 1 May 2026. Give before the tenancy starts.',
-     done:!!c.infosheet||!!_srv.infosheet,servedAt:_srv.infosheet,go:"editCert('"+p.id+"','infosheet')",label:'Serve'},
+     k:'infosheet',done:!!c.infosheet||!!_srv.infosheet,servedAt:_srv.infosheet,go:"editCert('"+p.id+"','infosheet')",label:'Serve'},
     dep?{t:'Prescribed information',
      why:'Where the deposit is held and how to get it back. Within 30 days of the deposit being received.',
-     done:!!rec.piServedAt||!!_srv.pi,servedAt:_later(rec.piServedAt,_srv.pi),go:"tnDepositPI('"+p.id+"')",label:'Serve'}:null,
+     k:'pi',done:!!rec.piServedAt||!!_srv.pi,servedAt:_later(rec.piServedAt,_srv.pi),go:"tnDepositPI('"+p.id+"')",label:'Serve'}:null,
     (()=>{ const cm=condensationDeclFor(rec.id);
       return {t:'Condensation and mould annexe',
         why:'Covered by signing the tenancy agreement. For a tenancy already running, send it for signature separately.',
@@ -2567,7 +2567,7 @@ function serveDocsPanel(p){
      go:"openHouseholdDecl('"+p.id+"')",label:'Send for signing'}:null,
     (window.NexLetActions&&NexLetActions.stageOf(p.id)==='prekeys')?null:{t:'Property information',
      why:'Stopcock, meters, bin days, where the rent goes, who to call out of hours. Emailed with the document pack and printed for handover — the same sheet.',
-     done:!!(window.NexLetMoveIn&&NexLetMoveIn.hasInfo&&NexLetMoveIn.hasInfo(p.id)),servedAt:_srv.propinfo,
+     k:'propinfo',done:!!(window.NexLetMoveIn&&NexLetMoveIn.hasInfo&&NexLetMoveIn.hasInfo(p.id)),servedAt:_srv.propinfo,
      go:"NexLetMoveIn.editInfo('"+p.id+"')",label:'Fill it in',doneLabel:'Edit'},
     {t:'Move-in document pack',
      why:'One email with the certificates, info sheet and complaints procedure. This is the send-everything-at-once option.',
@@ -2586,7 +2586,13 @@ function serveDocsPanel(p){
         const col=r.state==='done'?'green':'amber';
         const canChase=r.state==='waiting'&&r.chase;
         const btn=r.state==='done'?(r.doneLabel||'Send again'):canChase?'Chase '+r.pending:r.state==='waiting'?'Resend':esc(r.label);
-        const served=r.servedAt?' · emailed '+esc(fmtDate(r.servedAt)):'';
+        /* "emailed" would be a lie for a document served by hand and recorded
+           afterwards, and a flat "served" hides that no copy is held. */
+        const _weak=(window.NexLetServe&&NexLetServe.unevidenced)?NexLetServe.unevidenced(p.id):{};
+        const served=r.servedAt
+          ?(_weak[r.k]?' · <span style="color:var(--amber)">served '+esc(fmtDate(r.servedAt))+', no copy held</span>'
+                      :' · served '+esc(fmtDate(r.servedAt)))
+          :'';
         const note=r.state==='waiting'
           ? `<span style="color:var(--amber);font-weight:600"> — already sent, awaiting ${r.pending} signature${r.pending===1?'':'s'}</span>`
           : r.state==='done' ? '<span style="color:var(--green);font-weight:600"> — done'+served+'</span>' : '';
@@ -2693,6 +2699,7 @@ function vPropertyDetail(){
     ${window.NexLetHistory?NexLetHistory.dueBanner(p.id):''}
     ${depositMismatchBanner(p)}
     ${rentDayMismatchBanner(p)}
+    ${window.NexLetActions?NexLetActions.panel(p.id):''}
     ${preSigningPanel(p)}
     ${postSigningPanel(p)}
     ${serveDocsPanel(p)}
@@ -2788,7 +2795,7 @@ function vPropertyDetail(){
               <span class="faint" style="font-size:12px"> · waiting on ${esc(sg.filter(s=>!s.signed_at).map(s=>s.name).filter(Boolean).join(', ')||'the rest')}</span>
               <a href="#" onclick="chaseSignatories('${ta.id}','tenancy agreement');return false" style="color:var(--blue);font-size:12px;margin-left:6px">chase</a></span></div>`; })()}
           <div class="kv" style="border:none"><span class="k">Rent due day</span><span class="v">${esc(p.rentDueDay||'1st')} <a href="#" onclick="editRentDueDay('${p.id}');return false" style="color:var(--blue);font-size:12px;margin-left:4px">edit</a></span></div>
-          <div style="margin-top:12px">${window.NexLetActions?NexLetActions.panel(p.id):''}</div>`
+`
           :lst?`<div class="faint" style="font-size:13px;margin-bottom:12px">Marketing in progress — ${_pill(LISTING_STATUS,lst.status)} · ${_listingApps(lst.id).length} enquir${_listingApps(lst.id).length===1?'y':'ies'} so far.</div><button class="btn sm navy" onclick="go('listing','${lst.id}')">Manage listing</button>`
           :`<div class="faint" style="font-size:13px;margin-bottom:12px">No tenant yet.</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">

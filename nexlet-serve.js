@@ -207,11 +207,15 @@
       .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0))
       .forEach(x => {
         const body = String(x.body_html);
+        /* A document served by hand carries the date it ACTUALLY went out, which is
+           not the date the record was filed — you can record last week's post
+           today, and the 30-day clocks must read the real date. */
+        const on = (body.match(/<!--nexlet-served-on:([^>]*)-->/) || [])[1] || x.created_at;
         const m = body.match(/<!--nexlet-served:([^>]*)-->/);
-        if (m) { m[1].split(',').filter(Boolean).forEach(k => { out[k] = x.created_at; }); return; }
+        if (m) { m[1].split(',').filter(Boolean).forEach(k => { out[k] = on; }); return; }
         /* Filed before the stamp existed: the copy still names each document it
            carried, so read the labels back out of it. */
-        REG.forEach(r => { if (r.label && body.indexOf(r.label) >= 0) out[r.key] = x.created_at; });
+        REG.forEach(r => { if (r.label && body.indexOf(r.label) >= 0) out[r.key] = on; });
       });
     return out;
   }
@@ -357,8 +361,126 @@
 
   const pickedKeys = () => [...document.querySelectorAll('.srv-item')].filter(x => x.checked).map(x => x.value);
 
+  /* ── recording service you carried out yourself ───────────────────────────
+     The app could only ever know about documents it sent. Everything handed over
+     at the property, posted, or emailed from your own mailbox stayed invisible,
+     so the banner kept demanding documents the tenant already held — and being
+     told you are non-compliant when you are not is how a compliance panel ends up
+     ignored. This files the same kind of record a NexLet send files, so it flows
+     into the service history and the deadline checks by the same route. */
+  function recordManual(pid, audience) {
+    const aud = audience || 'tenant';
+    const c = ctx(pid);
+    const srv = servedKeys(pid);
+    const open = items(pid, aud).filter(x => !srv[x.key]);
+    if (!open.length) { window.toast('Everything on the list is already recorded as served'); return; }
+    const today = new Date().toISOString().slice(0, 10);
+    window.modal('Record documents you served yourself \u2014 ' + esc(c.p.address || ''),
+      '<p class="hint" style="margin:0 0 14px">For anything you handed over, posted, or emailed from your own mailbox. ' +
+      'It is filed exactly like a send from here, so it counts towards the deadlines and appears in the service history.</p>' +
+      '<div class="grid2" style="gap:10px">' +
+        '<div class="fg"><label>Date you served them</label>' +
+          '<input id="rm-date" type="date" max="' + today + '" value="' + today + '"></div>' +
+        '<div class="fg"><label>How</label><select id="rm-route">' +
+          ['Email from my own mailbox', 'Handed over in person', 'Post', 'Recorded delivery']
+            .map(r => '<option>' + r + '</option>').join('') + '</select></div></div>' +
+      '<div class="fg"><label>Which documents?</label>' +
+        open.map(x => '<label style="display:flex;gap:9px;align-items:flex-start;padding:7px 0;' +
+          'border-top:1px solid var(--border)">' +
+          '<input type="checkbox" class="rm-item" value="' + x.key + '" checked style="margin-top:3px">' +
+          '<span><span style="font-size:12.5px;font-weight:600;color:var(--navy)">' + esc(x.label) + '</span>' +
+          (x.required ? '' : ' <span class="faint" style="font-size:11px">(not required)</span>') +
+          '</span></label>').join('') + '</div>' +
+      '<div class="fg"><label>Note <span class="faint">(optional \u2014 what you sent, to whom)</span></label>' +
+        '<input id="rm-note" placeholder="e.g. emailed the key terms PDF to all three tenants"></div>' +
+      '<div class="fg"><label>Attach the copy you sent <span class="faint">(strongly recommended)</span></label>' +
+        '<input id="rm-file" type="file" accept=".pdf,.png,.jpg,.jpeg,.eml,.msg">' +
+        '<span class="hint">A scan, the PDF you attached, or a screenshot of the sent email. Without a copy this is ' +
+        'your word alone \u2014 it will be recorded, but flagged as unevidenced, because in a deposit dispute or a ' +
+        'possession claim a filed copy is what carries weight.</span></div>',
+      '<button class="btn" onclick="closeModal()">Cancel</button>' +
+      '<button class="btn navy" onclick="NexLetServe.saveManual(\'' + pid + '\',\'' + aud + '\')">Record it</button>', true);
+  }
+
+  async function saveManual(pid, audience) {
+    const keys = [...document.querySelectorAll('.rm-item')].filter(x => x.checked).map(x => x.value);
+    if (!keys.length) { window.toast('Pick at least one document', 1); return; }
+    const date = (document.getElementById('rm-date') || {}).value || '';
+    if (!date) { window.toast('Set the date you served them', 1); return; }
+    if (new Date(date) > new Date()) { window.toast('That date is in the future', 1); return; }
+    const route = (document.getElementById('rm-route') || {}).value || '';
+    const note = (document.getElementById('rm-note') || {}).value || '';
+    const fEl = document.getElementById('rm-file');
+    const file = fEl && fEl.files && fEl.files[0] ? fEl.files[0] : null;
+    const c = ctx(pid);
+    const iso = new Date(date + 'T12:00:00').toISOString();
+    const named = items(pid, audience).filter(x => keys.indexOf(x.key) >= 0);
+
+    /* A copy turns this from an assertion into evidence, so the two are recorded
+       differently and shown differently. An upload that fails must not be allowed
+       to pass silently as evidenced. */
+    let url = '';
+    if (file) {
+      if (!window._storageUpload) { window.toast('Cannot upload while offline \u2014 connect and try again', 1); return; }
+      const ext = (file.name.split('.').pop() || 'pdf');
+      url = await window._storageUpload(file, pid + '/served-' + Date.now() + '.' + ext, 'tenant-documents') || '';
+      if (!url) { window.toast('\u26a0 The copy did not upload \u2014 nothing recorded. Check your connection.', 1); return; }
+    }
+
+    const body = '<p>The following were served on the ' +
+      (audience === 'tenant' ? 'tenant' : 'landlord') + ' by <b>' + esc(route.toLowerCase()) + '</b> on <b>' +
+      esc(window.fmtDate ? window.fmtDate(iso) : date) + '</b>, outside NexLet.</p>' +
+      '<ul>' + named.map(x => '<li>' + esc(x.label) + '</li>').join('') + '</ul>' +
+      (note ? '<p><b>Note:</b> ' + esc(note) + '</p>' : '') +
+      (url ? '<p><b>Copy on file:</b> <a href="' + esc(url) + '">' + esc(file.name) + '</a></p>'
+           : '<p style="color:#B4543A"><b>No copy held.</b> This is a record of service without a copy of ' +
+             'what was sent. Attach one if you can still retrieve it.</p>') +
+      '<p style="font-size:12px;color:#6B6055">Recorded ' +
+      (window.fmtDate ? window.fmtDate(new Date().toISOString()) : '') + '.</p>';
+    const subject = (url ? 'Served \u2014 copy on file \u2014 ' : 'Recorded as served, no copy \u2014 ') + (c.p.address || '');
+
+    await window.fileLetter({ propertyId: pid,
+      landlordId: audience === 'landlord' ? c.p.landlordId : null,
+      type: 'serve_' + audience, subject: subject,
+      html: window.letterWrap(subject, body) +
+        '<!--nexlet-served:' + keys.join(',') + '-->' +
+        '<!--nexlet-served-on:' + iso + '-->' +
+        '<!--nexlet-route:' + route + '-->' +
+        '<!--nexlet-evidence:' + (url ? 'copy' : 'none') + '-->',
+      to: [] });
+
+    if (window.NexLetAudit) window.NexLetAudit.log({ action: 'doc.recorded', entity: 'tenancy',
+      entityId: (c.rec || {}).id, entityLabel: (c.p.address || ''),
+      detail: { documents: named.map(x => x.label).join(', '), route: route,
+                servedOn: window.fmtDate ? window.fmtDate(iso) : date,
+                evidence: url ? file.name : 'none held', note: note } });
+
+    window.closeModal(); if (window.render) window.render();
+    window.toast(url ? '\u2713 Recorded with a copy on file'
+                     : '\u2713 Recorded \u2014 no copy held, so it shows as unevidenced');
+  }
+
+  /* Which served documents rest on nothing but a typed date. Anything NexLet sent
+     itself has a copy by definition, so only hand-recorded entries can be weak. */
+  function unevidenced(pid) {
+    const out = {};
+    (ST().letters || [])
+      .filter(x => x.property_id === pid && /^serve_/.test(x.type || '') && x.body_html)
+      .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0))
+      .forEach(x => {
+        const body = String(x.body_html);
+        const m = body.match(/<!--nexlet-served:([^>]*)-->/);
+        if (!m) return;
+        const ev = (body.match(/<!--nexlet-evidence:([^>]*)-->/) || [])[1];
+        m[1].split(',').filter(Boolean).forEach(k => {
+          if (ev === 'none') out[k] = true; else delete out[k];
+        });
+      });
+    return out;
+  }
+
   window.NexLetServe = {
-    open, items, sentAt, servedAt, servedKeys,
+    open, items, sentAt, servedAt, servedKeys, recordManual, saveManual, unevidenced,
 
     preview(pid, audience) {
       const m = compose(pid, audience, pickedKeys(), (document.getElementById('srv-note') || {}).value || '');

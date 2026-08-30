@@ -291,6 +291,24 @@
            'designated client account, separate from the business account. Record the membership in Agency Settings, or ' +
            'transfer the deposit so the landlord or the scheme holds it.' });
 
+    /* A typed date is not a copy. Anything resting on one is compliant on its face
+       but unprovable, and the difference only ever matters at the worst moment \u2014
+       so it is said plainly now rather than discovered in a dispute. */
+    const weak = (window.NexLetServe && window.NexLetServe.unevidenced)
+      ? window.NexLetServe.unevidenced(pid) : {};
+    const weakKeys = Object.keys(weak).filter(k => weak[k]);
+    if (weakKeys.length) {
+      const names = (window.NexLetServe && window.NexLetServe.items)
+        ? window.NexLetServe.items(pid, 'tenant').filter(x => weak[x.key]).map(x => x.label)
+        : weakKeys;
+      out.push({ sev: 'amber',
+        t: (names.length || weakKeys.length) + ' document' + (names.length === 1 ? '' : 's') +
+           ' recorded as served with no copy held',
+        d: (names.length ? names.join(', ') : weakKeys.join(', ')) +
+           '. The dates are on file but the documents are not, so service rests on your word. ' +
+           'Attach the copy you sent \u2014 in a deposit dispute or a possession claim a filed copy is what carries weight.' });
+    }
+
     return out.sort((a, b) => (a.sev === 'red' ? 0 : 1) - (b.sev === 'red' ? 0 : 1));
   }
 
@@ -362,6 +380,7 @@
       '</div>' +
       '<div style="display:flex;gap:7px;flex-wrap:wrap;align-items:flex-start">' +
         '<button class="btn sm' + (quiet ? '' : ' navy') + '" onclick="NexLetServe.open(\'' + escJs(pid) + '\',\'tenant\')">Serve them now</button>' +
+        '<button class="btn sm" title="For anything you handed over, posted, or emailed yourself" onclick="NexLetServe.recordManual(\'' + escJs(pid) + '\',\'tenant\')">Already served \u2014 record it</button>' +
         '<button class="btn sm" onclick="NexLetHistory.open(\'' + escJs(pid) + '\')">Service history</button>' +
       '</div></div></div>';
   }
