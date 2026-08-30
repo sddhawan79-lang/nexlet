@@ -192,6 +192,7 @@
     const rec = (window.tenantRecFor && window.tenantRecFor(pid)) || {};
     const c = p.certs || {};
     const srv = servedOn(pid);
+    const dep = parseFloat(rec.deposit) || 0;
     const out = [];
 
     /* Declared up here because the gaps check below excludes these two keys: the
@@ -274,6 +275,18 @@
             d: 'Due before ' + day(rec.start) + '. Serve it now — late service is better than none — and record the date.' });
       });
     }
+
+    /* Insured deposits held by the agency are client money, and the duty follows
+       receipt of the money rather than the size of the portfolio. Said on the
+       tenancy itself, because the holder is chosen here. */
+    const holder = (window.NexLetDeposit && window.NexLetDeposit.holderOf)
+      ? window.NexLetDeposit.holderOf(rec) : 'landlord';
+    const cmp = (ST().agency || {}).cmp || '';
+    if (holder === 'agency' && dep > 0 && (!cmp || cmp === 'Not holding client money'))
+      out.push({ sev: 'red', t: 'This deposit is held by the agency, and no Client Money Protection membership is recorded',
+        d: 'An insured deposit you hold is client money. CMP membership is a legal requirement and it must sit in a ' +
+           'designated client account, separate from the business account. Record the membership in Agency Settings, or ' +
+           'transfer the deposit so the landlord or the scheme holds it.' });
 
     return out.sort((a, b) => (a.sev === 'red' ? 0 : 1) - (b.sev === 'red' ? 0 : 1));
   }

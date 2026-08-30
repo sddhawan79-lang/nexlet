@@ -85,13 +85,24 @@
       phone: '0300 037 1000/1',
       email: 'info@tenancydepositscheme.com',
       web: 'tenancydepositscheme.com',
-      leaflet: 'What is the Tenancy Deposit Scheme?',
-      version: 'Updated September 2024'
+      /* TDS publishes a DIFFERENT leaflet for each scheme type, and the leaflet's
+         title is prescribed content — naming the wrong one makes the document
+         defective. Insured is the one where the landlord or agent holds the money;
+         custodial is the one where TDS holds it. */
+      leaflet: 'What is the Tenancy Deposit Scheme? (insured scheme leaflet)',
+      leafletCustodial: 'What is the TDS Custodial Scheme?',
+      version: '7th edition, revised March 2026, effective 1 May 2026'
     }
   };
-  function schemeInfo(name) {
+  function schemeInfo(name, holder) {
     const n = String(name || '');
-    for (const k in SCHEMES) if (SCHEMES[k].match.test(n)) return SCHEMES[k];
+    for (const k in SCHEMES) if (SCHEMES[k].match.test(n)) {
+      const s = SCHEMES[k];
+      /* Only the scheme holds it in a custodial arrangement. */
+      return holder === 'scheme' && s.leafletCustodial
+        ? Object.assign({}, s, { leaflet: s.leafletCustodial })
+        : s;
+    }
     return null;
   }
 
@@ -110,7 +121,7 @@
       .concat((rec.occupants || []).filter(o => o.name && !isPerm(o)).map(o => ({ n: o.name, e: o.email || '' })))
       .filter(x => x.n);
     const sch = ST().agency || {};
-    const si = schemeInfo(scheme);
+    const si = schemeInfo(scheme, h);
     // With the scheme's own template to hand these are known, so the old
     // "complete it in Settings" blocker only applies to a scheme we have no
     // published details for.

@@ -1268,8 +1268,12 @@ function moneyWords(){
   };
 }
 function holdsClientMoney(){
-  return !!(S.agency.cmp && S.agency.cmp!=='Not holding client money')
-      || (S.agency.depHolderDefault||'landlord')==='agency';
+  if(S.agency.cmp && S.agency.cmp!=='Not holding client money') return true;
+  if((S.agency.depHolderDefault||'landlord')==='agency') return true;
+  /* The duty follows receipt of money, so ONE insured deposit held by the agency
+     is enough — the agency default being 'landlord' does not make it untrue.
+     Checked per tenancy, because the holder is set per tenancy. */
+  return (S.tenants||[]).some(t=>t&&t.depositHolder==='agency'&&parseFloat(t.deposit)>0);
 }
 function _clientLedger(){
   // Derived: each PAID rent = money-in; fee retained; net = owed to landlord. Payouts reduce owed.
@@ -3099,7 +3103,7 @@ function setTenant(pid){ const p=P(pid); const t=p.tenant||{}; const rec=tenantR
     window._tnDocs['rtrext-'+idx]={existing:per.rtrDocs.slice(),pending:[]};
   });
   window._tnStartBefore=t.start||rec.start||'';
-  window._tnCore={start:t.start||rec.start||'', deposit:rec.deposit!=null?rec.deposit:'', schemeRef:rec.schemeRef||'', depositHolder:rec.depositHolder||'', depositReceived:rec.depositReceived||'', landlordSchemeNo:rec.landlordSchemeNo||'', depositPaidBy:rec.depositPaidBy||'', depositCertExpiry:rec.depositCertExpiry||'', depositCertName:rec.depositCertName||'', depositCertUrl:rec.depositCertUrl||'', refDocName:rec.refDocName||'', refDocUrl:rec.refDocUrl||'', origContractName:rec.origContractName||'', origContractUrl:rec.origContractUrl||''};
+  window._tnCore={start:t.start||rec.start||'', deposit:rec.deposit!=null?rec.deposit:'', scheme:rec.scheme||'', schemeRef:rec.schemeRef||'', depositHolder:rec.depositHolder||'', depositReceived:rec.depositReceived||'', landlordSchemeNo:rec.landlordSchemeNo||'', depositPaidBy:rec.depositPaidBy||'', depositCertExpiry:rec.depositCertExpiry||'', depositCertName:rec.depositCertName||'', depositCertUrl:rec.depositCertUrl||'', refDocName:rec.refDocName||'', refDocUrl:rec.refDocUrl||'', origContractName:rec.origContractName||'', origContractUrl:rec.origContractUrl||''};
   window._tnActiveTab='tenancy'; window._tnPid=pid;
   _tnOpenModal(pid);
 }
@@ -3758,6 +3762,7 @@ function _commitTenant(pid,info,stage){
   if(info.depositCertExpiry!==undefined) rec.depositCertExpiry=info.depositCertExpiry;
   if(info.depositHolder!==undefined)     rec.depositHolder=info.depositHolder;
   if(info.depositReceived!==undefined)   rec.depositReceived=info.depositReceived;
+  if(info.scheme!==undefined)            rec.scheme=info.scheme;
   if(info.schemeRef!==undefined)         rec.schemeRef=info.schemeRef;
   if(info.landlordSchemeNo!==undefined)  rec.landlordSchemeNo=info.landlordSchemeNo;
   if(info.depositPaidBy!==undefined)     rec.depositPaidBy=info.depositPaidBy;
@@ -4057,6 +4062,7 @@ async function saveTenant(pid){
     name:lead.name, email:lead.email, phone:lead.phone, start:core.start||today(),
     deposit:(core.deposit!==''&&core.deposit!=null)?parseFloat(core.deposit):undefined,
     depositCertExpiry:core.depositCertExpiry, depositCertName:core.depositCertName, depositCertUrl:core.depositCertUrl, schemeRef:core.schemeRef,
+    scheme:core.scheme,
     depositHolder:core.depositHolder, depositReceived:core.depositReceived, landlordSchemeNo:core.landlordSchemeNo, depositPaidBy:core.depositPaidBy,
     refDocName:core.refDocName, refDocUrl:core.refDocUrl, origContractName:core.origContractName, origContractUrl:core.origContractUrl,
     id1DocName:lead.id1DocName, id1DocUrl:lead.id1DocUrl, id2DocName:lead.id2DocName, id2DocUrl:lead.id2DocUrl,
@@ -4644,9 +4650,12 @@ function vSettings(){
       <div class="fg"><label>Which product do you use?</label>
         <select id="set-depproduct">
           <option value="custodial" ${(a.depProduct||'custodial')==='custodial'?'selected':''}>Custodial — the scheme holds the money (free)</option>
-          <option value="insured" ${a.depProduct==='insured'?'selected':''}>Insured — we hold the money and pay a fee per deposit</option>
+          <option value="insured" ${a.depProduct==='insured'?'selected':''}>Insured — the landlord or the agent holds the money and pays a fee per deposit</option>
         </select></div>
-      ${a.depProduct==='insured'?'<div class="note warn" style="margin:-6px 0 14px"><b>Insured means you hold client money.</b> Client Money Protection membership is then a legal requirement, and the deposit must sit in a designated client account — not the business account. Custodial avoids both.</div>':'<div class="hint" style="margin:-6px 0 14px;color:var(--faint)">Custodial keeps deposits out of your client-money exposure entirely — the scheme holds the cash, so no CMP obligation arises from deposits and there is nothing to reconcile.</div>'}
+      ${(function(){ const _ins=a.depProduct==='insured', _ah=(a.depHolderDefault||'landlord')==='agency';
+        if(_ins&&_ah) return '<div class="note warn" style="margin:-6px 0 14px"><b>Insured and held by you means client money.</b> Client Money Protection membership is then a legal requirement, and the deposit must sit in a designated client account — not the business account. Custodial avoids both.</div>';
+        if(_ins) return '<div class="hint" style="margin:-6px 0 14px;color:var(--faint)">Insured, with the landlord holding the money: the statutory duty to protect it within 30 days and to serve the prescribed information is <b>the landlord\'s</b>, because it falls on whoever receives the deposit. No client account or CMP obligation arises for you — but you must obtain the scheme certificate and a copy of the prescribed information for the file.</div>';
+        return '<div class="hint" style="margin:-6px 0 14px;color:var(--faint)">Custodial keeps deposits out of your client-money exposure entirely — the scheme holds the cash, so no CMP obligation arises from deposits and there is nothing to reconcile.</div>'; })()}
       <div class="inline2"><div class="fg"><label>Redress scheme (required)</label>
         <select id="set-redress"><option value="">Not yet a member</option><option ${a.redress==='The Property Ombudsman'?'selected':''}>The Property Ombudsman</option><option ${a.redress==='Property Redress Scheme'?'selected':''}>Property Redress Scheme</option></select></div>
       <div class="fg"><label>Redress membership no.</label><input id="set-redressno" value="${esc(a.redressNo)}" placeholder="e.g. T01234"></div></div>
