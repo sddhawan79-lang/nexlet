@@ -170,6 +170,7 @@ h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px
 <script src="nexlet-movein.js"></script>
   <script src="nexlet-serve.js"></script>
   <script src="nexlet-history.js"></script>
+  <script src="nexlet-actions.js"></script>
   <script src="nexlet-search.js"></script>
 <script>
 // ─────────────────────────────────────────────────────────────
@@ -1209,22 +1210,32 @@ function vReports(){
 function vKeys(){
   const keys=S.keys||[];
   const out=keys.filter(k=>k.status==='out').length;
+  /* 'tenant' is a third state, not a long loan: the tenant holds these for the
+     whole tenancy, there is no due-back date, and it can never be overdue. */
   return `<h1 class="pg">Key Register</h1><div class="sub">Track every key set — where it lives, who's holding it, and when it's due back. A standard agency safeguard and audit trail.</div>
     <div class="grid4" style="margin-bottom:18px">
       ${kpiCard(keys.length,'Key sets','var(--navy)')}
       ${kpiCard(keys.filter(k=>k.status==='in').length,'In office','var(--green)')}
-      ${kpiCard(out,'Signed out','var(--amber)')}
-      ${kpiCard(keys.filter(k=>k.status==='out'&&k.dueBack&&daysUntil(k.dueBack)<0).length,'Overdue','var(--red)')}
+      ${kpiCard(keys.filter(k=>k.status==='tenant').length,'With tenants','var(--navy)')}
+      ${kpiCard(out,_overdueKeys()?'On loan · '+_overdueKeys()+' overdue':'Out on loan',_overdueKeys()?'var(--red)':'var(--amber)')}
     </div>
     <div class="panel">${keys.length?keys.map(keyRow).join(''):`<div class="empty" style="padding:30px;text-align:center"><div style="font-size:14px;font-weight:600;margin-bottom:4px">No key sets registered</div><div class="faint" style="font-size:12.5px;margin-bottom:14px">Add a key set for a property to start the register.</div><button class="btn navy" onclick="openKey()">＋ Add key set</button></div>`}</div>`;
 }
+function _overdueKeys(){ return (S.keys||[]).filter(k=>k.status==='out'&&k.dueBack&&daysUntil(k.dueBack)<0).length; }
 function keyRow(k){
   const p=P(k.propertyId); const overdue=k.status==='out'&&k.dueBack&&daysUntil(k.dueBack)<0;
+  const rec=k.propertyId?tenantRecFor(k.propertyId):null;
   return `<div class="row"><div class="av" style="background:var(--off)">🔑</div>
     <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px;color:var(--navy)">${esc(k.label||'Key set')} <span class="faint" style="font-weight:400">· ${esc(p.address||k.address||'')}</span></div>
-      <div class="faint" style="font-size:11.5px">${k.status==='out'?'Held by '+esc(k.holder||'—')+(k.dueBack?' · due '+fmtDate(k.dueBack):''):'In office'}${k.copies?' · '+k.copies+' copies':''}</div></div>
-    ${overdue?'<span class="pill" style="background:var(--red-bg);color:var(--red)">Overdue</span>':k.status==='out'?'<span class="pill" style="background:var(--amber-bg);color:var(--amber)">Out</span>':'<span class="pill" style="background:var(--green-bg);color:var(--green)">In</span>'}
-    <div style="display:flex;gap:6px;flex-shrink:0">${k.status==='out'?`<button class="btn sm" onclick="keyCheckIn('${k.id}')">Check in</button>`:`<button class="btn sm" onclick="keyCheckOut('${k.id}')">Sign out</button>`}<button class="btn sm" onclick="openKey('${k.id}')">·</button></div>
+      <div class="faint" style="font-size:11.5px">${k.status==='tenant'?(k.withTenant&&k.copies&&k.withTenant<k.copies?k.withTenant+' of '+k.copies+' with the tenant':'With the tenant')+(k.holder?' — '+esc(k.holder):'')+(k.handedAt?' since '+fmtDate(k.handedAt):'')
+        :k.status==='out'?'Held by '+esc(k.holder||'—')+(k.dueBack?' · due '+fmtDate(k.dueBack):''):'In office'}${k.copies?' · '+k.copies+' copies':''}</div></div>
+    ${overdue?'<span class="pill" style="background:var(--red-bg);color:var(--red)">Overdue</span>'
+      :k.status==='tenant'?'<span class="pill" style="background:var(--navy);color:#fff">Tenant</span>'
+      :k.status==='out'?'<span class="pill" style="background:var(--amber-bg);color:var(--amber)">Out</span>'
+      :'<span class="pill" style="background:var(--green-bg);color:var(--green)">In</span>'}
+    <div style="display:flex;gap:6px;flex-shrink:0">${k.status==='tenant'?`<button class="btn sm" onclick="keyCheckIn('${k.id}')">Returned</button>`
+      :k.status==='out'?`<button class="btn sm" onclick="keyCheckIn('${k.id}')">Check in</button>`
+      :`${rec&&rec.id?`<button class="btn sm navy" onclick="keyToTenant('${k.id}')">Hand to tenant</button>`:''}<button class="btn sm" onclick="keyCheckOut('${k.id}')">Sign out</button>`}<button class="btn sm" onclick="openKey('${k.id}')">·</button></div>
   </div>`;
 }
 function openKey(id){
@@ -1243,7 +1254,37 @@ function keyCheckOut(id){ const k=(S.keys||[]).find(x=>x.id===id); if(!k)return;
   modal('Sign out key',body,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="doKeyOut('${id}')">Sign out</button>`, true);
 }
 function doKeyOut(id){ const k=(S.keys||[]).find(x=>x.id===id); if(!k)return; k.status='out'; k.holder=val('ko-holder'); k.dueBack=val('ko-due')||null; k.log=k.log||[]; k.log.push({t:new Date().toISOString(),ev:'out',holder:k.holder,reason:val('ko-reason')}); save(); pushKey&&pushKey(k); closeModal(); render(); toast('✓ Key signed out'); }
-function keyCheckIn(id){ const k=(S.keys||[]).find(x=>x.id===id); if(!k)return; k.status='in'; k.log=k.log||[]; k.log.push({t:new Date().toISOString(),ev:'in',holder:k.holder}); k.holder=''; k.dueBack=null; save(); pushKey&&pushKey(k); render(); toast('✓ Key checked in'); }
+function keyCheckIn(id){ const k=(S.keys||[]).find(x=>x.id===id); if(!k)return;
+  const wasTenant=k.status==='tenant';
+  k.status='in'; k.log=k.log||[]; k.log.push({t:new Date().toISOString(),ev:wasTenant?'returned':'in',holder:k.holder});
+  k.holder=''; k.dueBack=null; k.handedAt=null; save(); pushKey&&pushKey(k); render();
+  toast(wasTenant?'✓ Keys returned by the tenant':'✓ Key checked in'); }
+/* Handing keys to the tenant is a permanent transfer for the tenancy, not a loan.
+   It also stamps the tenancy, because that stamp is what tells the rest of the app
+   the tenant is in occupation. */
+function keyToTenant(id){ const k=(S.keys||[]).find(x=>x.id===id); if(!k)return;
+  const rec=k.propertyId?tenantRecFor(k.propertyId):null;
+  if(!rec||!rec.id){ toast('No tenancy on that property',1); return; }
+  const body=`<p class="hint" style="margin:0 0 12px">Records the keys as being with the tenant for the whole tenancy. No due-back date, and they will not show as overdue. Check them back in at the end of the tenancy.</p>
+    <div class="grid2" style="gap:10px"><div class="fg"><label>Handed to</label><input id="kt-who" value="${esc(rec.name||'')}"></div>
+    <div class="fg"><label>Date handed over</label><input id="kt-date" type="date" value="${esc((rec.keysHandedAt||new Date().toISOString()).slice(0,10))}"></div></div>
+    <div class="fg"><label>Sets handed over <span class="faint">(of ${k.copies||1} on file)</span></label><input id="kt-copies" type="number" value="${k.copies||1}"></div>`;
+  modal('Hand keys to the tenant',body,
+    `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="doKeyToTenant('${id}')">Record the handover</button>`,true);
+}
+async function doKeyToTenant(id){ const k=(S.keys||[]).find(x=>x.id===id); if(!k)return;
+  const rec=tenantRecFor(k.propertyId); if(!rec) return;
+  const when=val('kt-date')||today();
+  const iso=new Date(when+'T12:00:00').toISOString();
+  k.status='tenant'; k.holder=val('kt-who')||rec.name||''; k.handedAt=iso; k.dueBack=null;
+  k.withTenant=parseInt(val('kt-copies'))||k.copies||1;
+  k.log=k.log||[]; k.log.push({t:new Date().toISOString(),ev:'tenant',holder:k.holder,reason:'Handed to the tenant for the tenancy'});
+  rec.keysHandedAt=iso;
+  save(); pushKey&&pushKey(k); pushTenantRec(rec);
+  if(window.NexLetAudit) NexLetAudit.log({action:'keys.handed',entity:'tenancy',entityId:rec.id,
+    entityLabel:(rec.name||'')+' — '+((P(k.propertyId)||{}).address||''),
+    detail:{sets:val('kt-copies')||k.copies||1,handedTo:k.holder,date:fmtDate(iso)}});
+  closeModal(); render(); toast('✓ Keys recorded as with the tenant'); }
 
 // ── CLIENT-MONEY ACCOUNTING (gated) — client account balance + rent-in → fee →
 //    landlord-payout ledger. Activates only when the agency actually holds
@@ -2353,7 +2394,8 @@ function preSigningPanel(p){
   const names=(typeof _tnPeopleView==='function'?_tnPeopleView(rec):[]).filter(x=>x.name).map(x=>x.name);
   const who=names.length?names.join(', '):(rec.name||'the tenant');
   const copy=sentMoniesCopy(p.id);
-  const moniesBtns=`<button class="btn sm" onclick="openMoveInMonies('${p.id}')">${rec.moniesSentAt
+  const _stg=window.NexLetActions?NexLetActions.stageOf(p.id):null;
+  const moniesBtns=_stg==='prekeys'?'':`<button class="btn sm" onclick="openMoveInMonies('${p.id}')">${rec.moniesSentAt
       ?'Monies letter — sent '+esc(fmtDate(rec.moniesSentAt))+(copy?'':', no copy kept')
       :'Move-in monies letter'}</button>
     ${copy?`<button class="btn sm" onclick="viewSentMonies('${p.id}')">See what was sent</button>`:''}
@@ -2523,7 +2565,7 @@ function serveDocsPanel(p){
      pending:taOut(hh)?(hh.signatories||[]).filter(s=>!s.signed_at).length:0,
      chase:taOut(hh)?"chaseSignatories('"+(hh?hh.id:'')+"','household declaration')":'',
      go:"openHouseholdDecl('"+p.id+"')",label:'Send for signing'}:null,
-    {t:'Property information',
+    (window.NexLetActions&&NexLetActions.stageOf(p.id)==='prekeys')?null:{t:'Property information',
      why:'Stopcock, meters, bin days, where the rent goes, who to call out of hours. Emailed with the document pack and printed for handover — the same sheet.',
      done:!!(window.NexLetMoveIn&&NexLetMoveIn.hasInfo&&NexLetMoveIn.hasInfo(p.id)),servedAt:_srv.propinfo,
      go:"NexLetMoveIn.editInfo('"+p.id+"')",label:'Fill it in',doneLabel:'Edit'},
@@ -2746,11 +2788,7 @@ function vPropertyDetail(){
               <span class="faint" style="font-size:12px"> · waiting on ${esc(sg.filter(s=>!s.signed_at).map(s=>s.name).filter(Boolean).join(', ')||'the rest')}</span>
               <a href="#" onclick="chaseSignatories('${ta.id}','tenancy agreement');return false" style="color:var(--blue);font-size:12px;margin-left:6px">chase</a></span></div>`; })()}
           <div class="kv" style="border:none"><span class="k">Rent due day</span><span class="v">${esc(p.rentDueDay||'1st')} <a href="#" onclick="editRentDueDay('${p.id}');return false" style="color:var(--blue);font-size:12px;margin-left:4px">edit</a></span></div>
-          <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">${(()=>{ const rec=tenantRecFor(p.id);
-            return (rec&&rec.invited)?`<span class="faint" style="font-size:12.5px">✓ Portal invited ${fmtDate(rec.invitedAt)}</span><button class="btn sm" onclick="inviteTenantToPortal('${p.id}')">Resend</button>`
-              :`<button class="btn sm navy" onclick="inviteTenantToPortal('${p.id}')">📧 Invite to tenant portal — next step</button>`; })()}${(()=>{ const rec=tenantRecFor(p.id);
-            return rec&&rec.welcomeSentAt?`<span class="faint" style="font-size:12.5px">✓ Welcome letter sent ${fmtDate(rec.welcomeSentAt)}</span><button class="btn sm" onclick="sendTenantWelcomeLetter('${p.id}')">Resend</button>`
-              :`<button class="btn sm" onclick="sendTenantWelcomeLetter('${p.id}')">👋 Send welcome letter</button>`; })()}${serveBtn(p.id,'tenant',{primary:1})}${serveBtn(p.id,'landlord')}<button class="btn sm" onclick="NexLetMoveIn.open('${p.id}')">⌘ Print move-in pack</button><button class="btn sm navy" onclick="openMoveIn('${p.id}')">✓ Move-in checklist</button><button class="btn sm" onclick="openLeasehold('${p.id}')">🔑 Head lease</button><button class="btn sm" onclick="setTenant('${p.id}')">Edit tenant</button><button class="btn sm" onclick="openNotice('${p.id}')">⚖ Prepare notice</button><button class="btn sm" onclick="sendCheckoutPack('${p.id}')">📦 Send checkout pack</button><button class="btn sm" style="color:var(--red)" onclick="endTenancy('${p.id}')">End tenancy</button></div>`
+          <div style="margin-top:12px">${window.NexLetActions?NexLetActions.panel(p.id):''}</div>`
           :lst?`<div class="faint" style="font-size:13px;margin-bottom:12px">Marketing in progress — ${_pill(LISTING_STATUS,lst.status)} · ${_listingApps(lst.id).length} enquir${_listingApps(lst.id).length===1?'y':'ies'} so far.</div><button class="btn sm navy" onclick="go('listing','${lst.id}')">Manage listing</button>`
           :`<div class="faint" style="font-size:13px;margin-bottom:12px">No tenant yet.</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -3017,7 +3055,7 @@ function advisoryDocRow(p,key,label,hint){ const c=p.certs||{}; const name=c[key
 async function advDocAttach(pid,key,input){ const f=input.files[0]; if(!f) return; const p=P(pid); p.certs=p.certs||{};
   const ext=(f.name.split('.').pop()||'pdf'); const url=await _storageUpload(f,pid+'/'+key+'-'+Date.now()+'.'+ext,'property-documents');
   if(!url){ toast('⚠ Upload failed — check your connection and try again',1); return; }
-  p.certs[key+'DocName']=f.name; p.certs[key+'DocUrl']=url; save(); pushProperty(p); render(); toast('✓ Document added'); }
+  p.certs[key+'DocName']=f.name; p.certs[key+'DocUrl']=url; p.certs[key+'DocAddedAt']=new Date().toISOString(); save(); pushProperty(p); render(); toast('✓ Document added'); }
 // Phase B — AI compliance cert scan. Reuses the shared ai-proxy (agent JWT).
 function _fileB64(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(',')[1]); r.onerror=rej; r.readAsDataURL(file); }); }
 async function aiScanCert(pid,key,input){
@@ -3058,7 +3096,7 @@ async function saveCert(pid,key){ const p=P(pid); p.certs=p.certs||{};
     window._certFile=null; }
   else if(window._certFile){ const ext=(window._certFile.name.split('.').pop()||'pdf'); const url=await _storageUpload(window._certFile,pid+'/'+key+'-'+Date.now()+'.'+ext,'property-documents');
     if(!url){ toast('⚠ File upload failed — check your connection and try again (not saved)',1); return; }
-    p.certs[key+'Doc']=window._certFile.name; p.certs[key+'DocUrl']=url; window._certFile=null; }
+    p.certs[key+'Doc']=window._certFile.name; p.certs[key+'DocUrl']=url; p.certs[key+'DocAddedAt']=new Date().toISOString(); window._certFile=null; }
   if(key==='smoke'||key==='co'){
     p.certs[key+'Count']=val('ct-count')||'';
     p.certs[key+'By']=val('ct-by')||'';
@@ -3816,9 +3854,11 @@ function moveInTasks(pid){
          done:(()=>{ const hh=householdDeclFor(rec.id); return !!(hh&&hh.status==='signed'); })(),
          at:_srv.household,go:"openHouseholdDecl('"+pid+"')"}
       : null,
-    {k:'keys',ph:2,t:'Keys logged out to the tenant',
-     done:(S.keys||[]).some(k=>k.propertyId===pid&&k.status==='out')||!!rec.keysHandedAt,
-     go:"go('keys')"},
+    {k:'keys',ph:2,t:'Keys handed to the tenant',
+     done:(S.keys||[]).some(k=>k.propertyId===pid&&k.status==='tenant')||!!rec.keysHandedAt,
+     at:rec.keysHandedAt,
+     go:(()=>{ const ks=(S.keys||[]).filter(k=>k.propertyId===pid);
+       return ks.length?"keyToTenant('"+ks[0].id+"')":"go('keys')"; })()},
     {k:'alarms',ph:2,t:'Smoke and CO alarms tested with the tenant present',
      done:!!c.smoke&&(!!c.co||!!c.coNA),go:"editCert('"+pid+"','smoke')"},
     {k:'pack',ph:1,t:'Documents emailed to every tenant',done:!!rec.moveInPackSentAt||!!Object.keys(_srv).length,at:rec.moveInPackSentAt,
