@@ -26,11 +26,16 @@
   /* The Information Sheet is the same document for every tenancy, so it lives
      once against the agency rather than per property. Matched on label so the
      agent files it in Settings → Business documents like anything else. */
-  function infoSheetDoc() {
+  function bizDoc(re) {
     return ((ST().agency || {}).bizDocs || [])
-      .filter(d => d && d.url && /information sheet/i.test(d.label || ''))
+      .filter(d => d && d.url && re.test(d.label || ''))
       .sort((a, b) => String(b.addedAt || '').localeCompare(String(a.addedAt || '')))[0] || null;
   }
+  function infoSheetDoc() { return bizDoc(/information sheet/i); }
+  /* The scheme's own leaflet — also one document for every tenancy. Matches the
+     label offered in the Business-documents dropdown, and the titles the schemes
+     actually ship the PDF under, so filing it under its own name still works. */
+  function leafletDoc() { return bizDoc(/leaflet|scheme information|custodial scheme|what is the tenancy deposit/i); }
 
   function ctx(pid) {
     const p = (window.P && window.P(pid)) || {};
@@ -67,6 +72,13 @@
       has: () => !!window.NexLetMoveIn,
       html: c => window.NexLetMoveIn ? window.NexLetMoveIn.keyTermsHtml(c.p.id) : '' },
 
+    { key: 'propinfo', to: 'tenant', required: false, kind: 'inline',
+      label: 'Property information',
+      why: 'Not a statutory document, but it is what a tenant actually needs on day one \u2014 stopcock, meters, bin days, where the rent goes, who to call out of hours. The same sheet prints for handover.',
+      has: c => !!(window.NexLetMoveIn && window.NexLetMoveIn.hasInfo && window.NexLetMoveIn.hasInfo(c.p.id)),
+      html: c => window.NexLetMoveIn ? window.NexLetMoveIn.propInfoHtml(c.p.id) : '',
+      note: 'Mostly blank \u2014 fill it in from the property page so the tenant gets something useful' },
+
     { key: 'gas', to: 'both', required: true, kind: 'file',
       label: 'Gas safety record',
       why: 'Before the tenant occupies. A new record within 28 days of each check.',
@@ -91,6 +103,14 @@
       applies: c => !!parseFloat(c.rec.deposit),
       has: c => !!c.rec.schemeRef,
       html: c => piHtml(c) },
+
+    { key: 'leaflet', to: 'tenant', required: true, kind: 'file',
+      label: 'Deposit scheme information leaflet',
+      why: 'Must be given WITH the prescribed information, within the same 30 days. The scheme’s own leaflet — the prescribed information alone is not enough.',
+      applies: c => !!parseFloat(c.rec.deposit),
+      has: () => !!leafletDoc(),
+      file: () => { const d = leafletDoc(); return d ? { name: d.name, url: d.url, on: d.addedAt } : null; },
+      note: 'Not filed yet — download your scheme’s leaflet and add it under Settings → Business documents. Held once, then served with every deposit.' },
 
     { key: 'depcert', to: 'tenant', required: false, kind: 'file',
       label: 'Deposit protection certificate',
