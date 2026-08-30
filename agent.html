@@ -130,6 +130,8 @@ h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px
 .feebox{display:flex;align-items:center;gap:8px;background:var(--off);border:1px solid var(--border);border-radius:9px;padding:6px 10px}
 .feebox input{width:64px;border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-family:inherit;font-size:14px;font-weight:700;text-align:center;color:var(--navy)}
 @keyframes spin{to{transform:rotate(360deg)}}
+@keyframes nlPulse{0%,100%{box-shadow:0 0 0 0 rgba(192,57,43,0)}50%{box-shadow:0 0 0 5px rgba(192,57,43,.16)}}
+@media(prefers-reduced-motion:reduce){[style*="nlPulse"]{animation:none!important}}
 </style>
 </head>
 <body>
@@ -167,6 +169,7 @@ h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px
 <script src="nexlet-health.js"></script>
 <script src="nexlet-movein.js"></script>
   <script src="nexlet-serve.js"></script>
+  <script src="nexlet-history.js"></script>
   <script src="nexlet-search.js"></script>
 <script>
 // ─────────────────────────────────────────────────────────────
@@ -203,8 +206,8 @@ const landlordToRow=l=>({id:l.id,agency_id:window._agencyId,name:l.name,joint:l.
 // show "A & B". `joint` holds the second owner (or is blank). `entity` = individual|joint|company.
 function landlordName(l){ if(!l) return ''; if(l.entity==='company') return l.name; return (l.joint&&l.joint.trim())?(l.name+' & '+l.joint):l.name; }
 function landlordLegalLine(l){ if(!l) return ''; if(l.entity==='company') return esc(l.name)+' <span style="font-weight:400">(company landlord)</span>'; return esc(landlordName(l)); }
-const rowToProp=r=>({id:String(r.id),landlordId:r.landlord_id,address:r.address||'',city:r.city||'',postcode:r.postcode||'',ptype:r.ptype||'',rent:r.rent||0,beds:r.beds||1,baths:r.baths||1,furnished:r.furnished||'',epc:r.epc||'',councilTaxBand:r.council_tax_band||'',rentDueDay:r.rent_due_day||'1st',available:r.available||null,description:r.description||'',features:r.features||[],feePct:r.fee_pct,certs:r.certs||{},leasehold:(r.certs&&r.certs._leasehold)||null,tenant:r.tenant||undefined});
-const propToRow=p=>({id:p.id,agency_id:window._agencyId,landlord_id:p.landlordId,address:p.address,city:p.city,postcode:p.postcode||null,ptype:p.ptype||null,rent:p.rent||0,beds:p.beds||1,baths:p.baths||1,furnished:p.furnished||null,epc:p.epc||null,council_tax_band:p.councilTaxBand||null,rent_due_day:p.rentDueDay||'1st',available:p.available||null,description:p.description||null,features:p.features||[],fee_pct:p.feePct,certs:Object.assign({},p.certs||{},{_leasehold:p.leasehold||null}),tenant:p.tenant||null});
+const rowToProp=r=>({id:String(r.id),landlordId:r.landlord_id,address:r.address||'',city:r.city||'',postcode:r.postcode||'',ptype:r.ptype||'',rent:r.rent||0,beds:r.beds||1,baths:r.baths||1,furnished:r.furnished||'',epc:r.epc||'',councilTaxBand:r.council_tax_band||'',rentDueDay:r.rent_due_day||'1st',available:r.available||null,description:r.description||'',features:r.features||[],feePct:r.fee_pct,certs:r.certs||{},leasehold:(r.certs&&r.certs._leasehold)||null,info:(r.certs&&r.certs._info)||{},tenant:r.tenant||undefined});
+const propToRow=p=>({id:p.id,agency_id:window._agencyId,landlord_id:p.landlordId,address:p.address,city:p.city,postcode:p.postcode||null,ptype:p.ptype||null,rent:p.rent||0,beds:p.beds||1,baths:p.baths||1,furnished:p.furnished||null,epc:p.epc||null,council_tax_band:p.councilTaxBand||null,rent_due_day:p.rentDueDay||'1st',available:p.available||null,description:p.description||null,features:p.features||[],fee_pct:p.feePct,certs:Object.assign({},p.certs||{},{_leasehold:p.leasehold||null,_info:p.info||{}}),tenant:p.tenant||null});
 // properties.id is a DB-assigned bigint (NOT a client-generated text id like our other
 // tables) — a new property must be INSERTed without an id and get the real id back,
 // or the save fails outright (non-numeric text can't go into a bigint column).
@@ -387,6 +390,9 @@ Object.defineProperty(window,'S',   {get:()=>S,    configurable:true});
 Object.defineProperty(window,'sb',  {get:()=>sb,   configurable:true});
 Object.defineProperty(window,'LIVE',{get:()=>LIVE, configurable:true});
 window.pushTenantRec=t=>pushTenantRec(t);
+/* Modules cannot reach the push* consts — they are script-scope lexical
+   bindings, not window properties. Bridged, like pushTenantRec above. */
+window.pushProperty=p=>pushProperty(p);
 function load(){ try{const j=JSON.parse(localStorage.getItem(LS));if(j&&j.landlords)return j;}catch(e){} return JSON.parse(JSON.stringify(SEED)); }
 function save(){ if(LIVE)return; try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){} }  // LIVE persists via targeted push* writes
 function uid(p){ return p+Math.random().toString(36).slice(2,8); }
@@ -2513,6 +2519,10 @@ function serveDocsPanel(p){
      pending:taOut(hh)?(hh.signatories||[]).filter(s=>!s.signed_at).length:0,
      chase:taOut(hh)?"chaseSignatories('"+(hh?hh.id:'')+"','household declaration')":'',
      go:"openHouseholdDecl('"+p.id+"')",label:'Send for signing'}:null,
+    {t:'Property information',
+     why:'Stopcock, meters, bin days, where the rent goes, who to call out of hours. Emailed with the document pack and printed for handover — the same sheet.',
+     done:!!(window.NexLetMoveIn&&NexLetMoveIn.hasInfo&&NexLetMoveIn.hasInfo(p.id)),servedAt:_srv.propinfo,
+     go:"NexLetMoveIn.editInfo('"+p.id+"')",label:'Fill it in',doneLabel:'Edit'},
     {t:'Move-in document pack',
      why:'One email with the certificates, info sheet and complaints procedure. This is the send-everything-at-once option.',
      done:!!rec.moveInPackSentAt,go:"openMoveInPack('"+p.id+"')",label:'Send pack'}
@@ -2529,7 +2539,7 @@ function serveDocsPanel(p){
         const ic=r.state==='done'?'✓':r.state==='waiting'?'⏳':'!';
         const col=r.state==='done'?'green':'amber';
         const canChase=r.state==='waiting'&&r.chase;
-        const btn=r.state==='done'?'Send again':canChase?'Chase '+r.pending:r.state==='waiting'?'Resend':esc(r.label);
+        const btn=r.state==='done'?(r.doneLabel||'Send again'):canChase?'Chase '+r.pending:r.state==='waiting'?'Resend':esc(r.label);
         const served=r.servedAt?' · emailed '+esc(fmtDate(r.servedAt)):'';
         const note=r.state==='waiting'
           ? `<span style="color:var(--amber);font-weight:600"> — already sent, awaiting ${r.pending} signature${r.pending===1?'':'s'}</span>`
@@ -2634,11 +2644,13 @@ function vPropertyDetail(){
     </div>`:''}
     ${lifecycleStepper(p)}
     ${tenancyProgressBar(p)}
+    ${window.NexLetHistory?NexLetHistory.dueBanner(p.id):''}
     ${depositMismatchBanner(p)}
     ${rentDayMismatchBanner(p)}
     ${preSigningPanel(p)}
     ${postSigningPanel(p)}
     ${serveDocsPanel(p)}
+    ${window.NexLetHistory?NexLetHistory.panel(p.id):''}
     ${tenancyChecklistPanel(p)}
     <div class="grid2">
       <div class="panel"><div class="panel-hd"><h2>Compliance &amp; documents</h2></div><div class="panel-bd">${_grpHead('Safety certificates',_grpIssue1)}
@@ -4535,7 +4547,7 @@ function vInvoiceDetail(){
 // ── BUSINESS — the agency's own documents (licensing, insurance, incorporation, domain) and
 // bills/invoices it pays (as opposed to landlord/tenant invoices tracked elsewhere). One place
 // so redress, CMP, PII insurance and domain paperwork don't scatter across laptops/email.
-const BIZ_DOC_SUGGESTIONS=['Renters\u2019 Rights Act Information Sheet 2026','Professional indemnity insurance','Complaints handling procedure','Redress scheme certificate','CMP certificate','Certificate of incorporation','ICO registration certificate','Domain registration receipt','AML supervision certificate'];
+const BIZ_DOC_SUGGESTIONS=['Renters\u2019 Rights Act Information Sheet 2026','Deposit scheme information leaflet','Professional indemnity insurance','Complaints handling procedure','Redress scheme certificate','CMP certificate','Certificate of incorporation','ICO registration certificate','Domain registration receipt','AML supervision certificate'];
 function vBusiness(){
   const a=S.agency; const docs=a.bizDocs||[]; const exps=(a.bizExpenses||[]).slice().sort((x,y)=>(y.date||'').localeCompare(x.date||''));
   const totalYtd=exps.filter(e=>(e.date||'').slice(0,4)===String(new Date().getFullYear())).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
