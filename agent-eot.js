@@ -37,6 +37,10 @@ function _doEndTenancy(pid){
   rec.finalMeters={elec:val('et-elec')||'',gas:val('et-gas')||'',water:val('et-water')||''};
   rec.endNotes=val('et-notes')||'';
   p.tenant=null;
+  /* Per-tenant service evidence that happens to live on the property record. It
+     belonged to the tenancy just ended, so leaving it behind would vouch for a
+     document the next tenant never received. */
+  if(p.certs&&p.certs.infosheet) p.certs.infosheet='';
   save(); pushProperty(p); pushTenantRec(rec); closeModal(); render();
   toast('\u2713 Tenancy ended \u2014 '+rec.name+' archived, property marked vacant');
 }
