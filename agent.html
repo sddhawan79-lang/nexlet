@@ -2662,6 +2662,28 @@ function addCustomInsurance(pid){ const body=`<div class="fg"><label>Cover type<
   modal('Add insurance line', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="confirmAddCustomInsurance('${pid}')">Add</button>`, true); }
 function confirmAddCustomInsurance(pid){ const label=val('ins-new-label'); if(!label){toast('Enter a name',1);return;} const p=P(pid); p.certs=p.certs||{}; p.certs.insCustom=p.certs.insCustom||[]; const key=uid('ins'); p.certs.insCustom.push({key,label,hint:''}); save(); pushProperty(p); closeModal(); editInsurance(pid,key); }
 function removeCustomInsurance(pid,key){ const p=P(pid); p.certs=p.certs||{}; p.certs.insCustom=(p.certs.insCustom||[]).filter(x=>x.key!==key); if(p.certs.insurances) delete p.certs.insurances[key]; save(); pushProperty(p); render(); toast('Removed'); }
+/* The property page was twelve panels deep in one scroll. Tabs, not accordions:
+   an accordion still makes you scroll past every closed header to reach the last
+   one, and this page's problem was distance, not height. Kept out of the URL and
+   reset per property, so opening a property never lands you on the tab you happened
+   to leave open on a different one. */
+function _pTab(){ return window._pTabK||'docs'; }
+function setPTab(k){ window._pTabK=k; render(); }
+function _pTabBar(p){
+  const rec=tenantRecFor(p.id);
+  const srvLeft=(window.NexLetHistory&&NexLetHistory.dueBeforeStart)?(NexLetHistory.dueBeforeStart(p.id)||{items:[]}).items.length:0;
+  const tabs=[['docs','Documents & service',srvLeft||''],['detail','Tenancy & compliance',''],['records','Messages & records','']];
+  const cur=_pTab();
+  return '<div style="display:flex;gap:2px;margin-bottom:14px;border-bottom:1px solid var(--border)">'+
+    tabs.map(([k,label,badge])=>{
+      const on=k===cur;
+      return '<button class="btn sm" style="border:none;background:none;border-radius:0;padding:9px 14px;font-weight:'+(on?'700':'500')+
+        ';color:'+(on?'var(--navy)':'var(--faint)')+';border-bottom:2px solid '+(on?'var(--navy)':'transparent')+
+        '" onclick="setPTab(\''+k+'\')">'+esc(label)+
+        (badge?' <span style="display:inline-block;min-width:16px;padding:0 4px;border-radius:8px;background:var(--red);color:#fff;font-size:10px;font-weight:700;line-height:16px;text-align:center">'+badge+'</span>':'')+
+        '</button>';
+    }).join('')+'</div>';
+}
 function vPropertyDetail(){
   const p=P(sel); if(!p.id) return vProperties();
   const l=L(p.landlordId); const comp=propCompliance(p); const c=p.certs||{};
@@ -2700,11 +2722,15 @@ function vPropertyDetail(){
     ${depositMismatchBanner(p)}
     ${rentDayMismatchBanner(p)}
     ${window.NexLetActions?NexLetActions.panel(p.id):''}
+    ${_pTabBar(p)}
+    <div style="display:${_pTab()==='docs'?'block':'none'}">
     ${preSigningPanel(p)}
     ${postSigningPanel(p)}
     ${serveDocsPanel(p)}
     ${window.NexLetHistory?NexLetHistory.panel(p.id):''}
     ${tenancyChecklistPanel(p)}
+    </div>
+    <div style="display:${_pTab()==='detail'?'block':'none'}">
     <div class="grid2">
       <div class="panel"><div class="panel-hd"><h2>Compliance &amp; documents</h2></div><div class="panel-bd">${_grpHead('Safety certificates',_grpIssue1)}
         ${certRow('gas','Gas Safety (annual)',c.gas,c.gasDocUrl)}
@@ -2803,11 +2829,14 @@ function vPropertyDetail(){
               <button class="btn" onclick="recordExistingTenant('${p.id}')">Already has a tenant — record it</button>
             </div>`}
       </div></div>
+    </div></div>
+    <div style="display:${_pTab()==='records'?'block':'none'}">
+    <div class="grid2">
       ${(()=>{ const rec=tenantRecFor(p.id); return rec?msgPanel('tenant',rec.id):''; })()}
       ${insurancePanel(p)}
       ${propDocTrailPanel(p)}
       ${pastTenanciesPanel(p)}
-    </div>`;
+    </div></div>`;
 }
 // Tenant-facing document trail for one property — notices served, all archived (never deleted).
 function propDocTrailPanel(p){

@@ -154,7 +154,7 @@
       '</div>';
     }).join('');
 
-    return '<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;background:var(--off)">' +
+    return '<div style="border:1px solid var(--navy);border-radius:10px;padding:14px 16px;background:#fff">' +
       '<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:8px">' +
         '<span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--orange)">Before keys</span>' +
         '<span class="faint" style="font-size:11.5px">' +
@@ -222,16 +222,21 @@
   function panel(pid) {
     const st = stageOf(pid);
     if (!st) return '';
-    if (st === 'prekeys') return runPanel(pid);
+    if (st === 'prekeys') return '<div style="margin-bottom:14px">' + runPanel(pid) + '</div>';
     const s = (STAGE[st] || STAGE.running)(pid);
-    return '<div style="display:flex;gap:9px;flex-wrap:wrap;align-items:center">' +
+    /* Sits at the top of the property page now, so it carries its own card rather
+       than reading as a loose row of buttons under the banners. */
+    return '<div style="margin-bottom:14px;border:1px solid var(--border);border-radius:10px;' +
+      'padding:13px 16px;background:#fff;display:flex;gap:10px;flex-wrap:wrap;align-items:center">' +
       '<span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--orange)">' +
         esc(s.tag) + '</span>' +
-      (s.primary ? '<button class="btn sm navy" onclick="' + s.primary.go + '">' + esc(s.primary.t) + '</button>' +
-        (s.why ? '<span class="faint" style="font-size:11.5px;max-width:340px">' + esc(s.why) + '</span>' : '') : '') +
+      (s.primary ? '<button class="btn sm navy" onclick="' + s.primary.go + '">' + esc(s.primary.t) + '</button>' : '') +
       (s.calm ? '<span style="font-size:12.5px;font-weight:600;color:var(--green)">\u2713 ' + esc(s.calm) + '</span>' : '') +
-      s.rest.map(r => '<button class="btn sm" onclick="' + r[1] + '">' + esc(r[0]) + '</button>').join('') +
-      actionsBtn(pid) +
+      (s.why ? '<span class="faint" style="font-size:11.5px;flex:1;min-width:200px">' + esc(s.why) + '</span>' : '') +
+      '<span style="display:flex;gap:7px;flex-wrap:wrap;margin-left:auto">' +
+        s.rest.map(r => '<button class="btn sm" onclick="' + r[1] + '">' + esc(r[0]) + '</button>').join('') +
+        actionsBtn(pid) +
+      '</span>' +
     '</div>';
   }
 
