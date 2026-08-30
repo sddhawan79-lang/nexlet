@@ -108,10 +108,16 @@
 
   function servedOn(pid) {
     const rec = (window.tenantRecFor && window.tenantRecFor(pid)) || {};
+    const p = (window.P && window.P(pid)) || {};
+    const c = p.certs || {};
     const out = Object.assign({}, (window.NexLetServe && window.NexLetServe.servedKeys)
       ? window.NexLetServe.servedKeys(pid) : {});
     const put = (k, v) => { if (k && v) out[k] = later(out[k], v); };
     HAND.forEach(([f, , , key]) => put(key, rec[f]));
+    /* The Information Sheet has its own field on the property, set when it is
+       recorded as given, and serveDocsPanel has always counted that as done. Left
+       out here it made the banner contradict the list directly beneath it. */
+    put('infosheet', c.infosheet);
     /* A signed agreement or declaration IS service of that document — the tenant
        has it, by definition, because they signed it. */
     agreementsFor(rec.id).forEach(a => {
