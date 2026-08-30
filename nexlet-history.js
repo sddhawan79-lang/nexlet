@@ -202,11 +202,17 @@
     const dayMs = iso => { const d = new Date(iso); return isNaN(d) ? NaN
       : new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
 
-    [['gas', 'Gas safety record', c.gas], ['eicr', 'Electrical installation report', c.eicr],
-     ['epc', 'Energy performance certificate', c.epc]].forEach(([k, lab, on]) => {
-      if (srv[k] && after(on, srv[k])) out.push({ sev: 'amber',
-        t: lab + ' has been renewed since it was served',
-        d: 'Served ' + day(srv[k]) + '. The record on file is now dated ' + day(on) +
+    /* Compared against the date the DOCUMENT was uploaded, never against the
+       certificate's expiry date. c.gas / c.eicr / c.epc are expiry dates (kind
+       'exp' in _fullCertItems), so comparing those made every valid certificate
+       look freshly renewed — three false alarms on every served tenancy. Where no
+       upload date was recorded, nothing is claimed. */
+    [['gas', 'Gas safety record'], ['eicr', 'Electrical installation report'],
+     ['epc', 'Energy performance certificate']].forEach(([k, lab]) => {
+      const on = c[k + 'DocAddedAt'];
+      if (srv[k] && on && after(on, srv[k])) out.push({ sev: 'amber',
+        t: lab + ' has been replaced since it was served',
+        d: 'Served ' + day(srv[k]) + '. A newer document was put on file ' + day(on) +
            ', so the tenant holds the superseded one. Serve the current version.' });
     });
 
@@ -266,10 +272,7 @@
           out.push({ sev: 'red', t: START_DUE[k] + ' was served after the tenancy had started',
             d: 'Tenancy started ' + day(rec.start) + ', served ' + day(srv[k]) +
                '. It was due before the start date, not before handover. Penalty up to £7,000 and it blocks possession.' });
-        else if (srv[k] && dayMs(srv[k]) === dayMs(rec.start))
-          out.push({ sev: 'amber', t: START_DUE[k] + ' was served on the start date itself',
-            d: 'Served ' + day(srv[k]) + ', the day the tenancy began. Compliant only if it reached them before they ' +
-               'occupied, and there is no margin if that is ever questioned. Serve it before the start date next time.' });
+
         else if (started)
           out.push({ sev: 'red', t: START_DUE[k] + ' not served, and the tenancy has started',
             d: 'Due before ' + day(rec.start) + '. Serve it now — late service is better than none — and record the date.' });
