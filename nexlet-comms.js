@@ -316,6 +316,9 @@
 
   window.NexLetComms = {
     view, strip, log, noteEmail, whois, show, openSent, toReadable,
+    /* Read-only, for the service history: failed deliveries belong on the
+       tenancy's record, not only in the communications list. */
+    rows: () => rows.slice(),
     add: openLog,
     _f(k, v) { filters[k] = v; if (window.render) window.render(); },
     _s(k, v) { D[k] = v; },
