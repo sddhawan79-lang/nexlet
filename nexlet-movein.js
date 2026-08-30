@@ -126,6 +126,122 @@
       (c.people.length ? '' : sigLine('Tenant', '')));
   }
 
+  /* ── 1b. Property information — how the place works ─────────────────────
+     The welcome letter in NexLet is a takeover-of-management letter: right for a
+     tenancy inherited, wrong for a new let, where what a tenant actually needs on
+     day one is where the stopcock is and which day the bins go.
+
+     One function, two routes, deliberately: this exact document is emailed with
+     the serve pack before keys AND printed for handover, because a tenant who
+     lost the email still has the sheet on the fridge. Facts the record does not
+     hold print as a blank rule — the landlord fills what they know at onboarding
+     and the rest gets completed on the visit, so a half-filled sheet is still
+     worth handing over.
+
+     Stored on the property under certs._info, following the pattern _leasehold
+     already established, so no migration is needed. */
+  const INFO_FIELDS = [
+    ['boiler',   'Boiler',                'Where it is, and how to operate it'],
+    ['stopcock', 'Stopcock',              'The tenant needs this before they need it'],
+    ['fusebox',  'Fuse box / consumer unit', 'Where to reset a tripped breaker'],
+    ['gasMeter', 'Gas meter',             'Location, and where the key or card is if prepay'],
+    ['elecMeter','Electricity meter',     'Location'],
+    ['waterMeter','Water meter',          'Location, or note that the supply is unmetered'],
+    ['bins',     'Bins and collection days', 'Which day, and where the bins are kept'],
+    ['parking',  'Parking',               'Bay, permit, or none'],
+    ['ooh',      'Out of hours',          'What to do about an emergency outside office hours'],
+    ['other',    'Anything else',         'Alarm codes, quirks, the window that sticks']
+  ];
+  const infoOf = pid => { const p = (window.P && window.P(pid)) || {};
+    return (p.info || (p.certs && p.certs._info) || {}); };
+
+  function propInfoHtml(pid) {
+    const c = ctx(pid);
+    const inf = infoOf(pid);
+    const rent = parseFloat(c.rec.rent || c.p.rent) || 0;
+    const pay = (() => { try { return JSON.parse(c.rec.payDetails || '{}'); } catch (e) { return {}; } })();
+    const v = k => inf[k] ? esc(inf[k]) : rule(200);
+
+    const living = INFO_FIELDS.map(f => [esc(f[1]), v(f[0])]);
+
+    const rentRows = [
+      ['Rent', rent ? money(rent) + ' per month' : rule(120)],
+      ['Due on', esc(ord(String(c.p.rentDueDay || '1st').replace(/\D/g, '') || 1)) + ' of each month'],
+      ['Paid to', c.agentMoney ? esc(c.brand.name) : (esc(c.llName) || rule(160))],
+      pay.acc ? ['Account name', esc(pay.acc)] : null,
+      pay.sort ? ['Sort code', esc(pay.sort)] : null,
+      pay.no ? ['Account number', esc(pay.no)] : null,
+      pay.ref ? ['Reference', esc(pay.ref)] : null
+    ].filter(Boolean);
+
+    const contactRows = [
+      ['Managed by', esc(c.brand.name)],
+      c.brand.agent ? ['Your contact', esc(c.brand.agent)] : null,
+      c.brand.email ? ['Email', esc(c.brand.email)] : null,
+      c.brand.phone ? ['Phone', esc(c.brand.phone)] : null,
+      ['Repairs', 'Report through your tenant portal, or email us. We will acknowledge it and keep you updated.'],
+      ['Out of hours', inf.ooh ? esc(inf.ooh) : rule(220)]
+    ].filter(Boolean);
+
+    return sect('Your property information',
+      'How this home works, and who to contact. Keep it somewhere handy \u2014 it is not part of the tenancy agreement, ' +
+      'and nothing in it changes your tenancy terms.',
+      '<div style="font-size:13px;color:#1B2F4A;font-weight:600;margin:0 0 6px">' + esc(c.p.address || '') + '</div>' +
+      '<div style="font-size:11.5px;color:#6B6055;margin:0 0 16px">' +
+      (c.rec.start ? 'Tenancy from ' + esc(dt(c.rec.start)) : '') + '</div>' +
+      '<div style="font-size:12px;font-weight:700;color:#1B2F4A;margin:0 0 6px;letter-spacing:.03em">FINDING THINGS</div>' +
+      tbl(living) +
+      '<div style="font-size:12px;font-weight:700;color:#1B2F4A;margin:20px 0 6px;letter-spacing:.03em">RENT</div>' +
+      tbl(rentRows) +
+      '<div style="font-size:12px;font-weight:700;color:#1B2F4A;margin:20px 0 6px;letter-spacing:.03em">GETTING HOLD OF US</div>' +
+      tbl(contactRows) +
+      '<p style="font-size:11.5px;color:#6B6055;margin:18px 0 0;line-height:1.65">' +
+      'Council tax and the utility accounts are yours from the start of the tenancy. Please contact the council and ' +
+      'each supplier to put the accounts in your name, using the opening meter readings recorded at check-in.</p>');
+  }
+
+  /* Enough filled in to be worth sending. */
+  function hasInfo(pid) { const inf = infoOf(pid);
+    return INFO_FIELDS.filter(f => (inf[f[0]] || '').trim()).length >= 3; }
+
+  function editInfo(pid) {
+    const inf = infoOf(pid), p = (window.P && window.P(pid)) || {};
+    const filled = INFO_FIELDS.filter(f => (inf[f[0]] || '').trim()).length;
+    window.modal('Property information \u2014 ' + esc(p.address || ''),
+      '<p class="hint" style="margin:0 0 14px">What a tenant needs on day one. The landlord fills what they know; ' +
+      'complete the rest on the check-in visit. Anything left blank prints as a line to write on, so a ' +
+      'half-filled sheet is still worth handing over. ' + filled + ' of ' + INFO_FIELDS.length + ' filled in.</p>' +
+      INFO_FIELDS.map(f =>
+        '<div class="fg"><label>' + esc(f[1]) + ' <span class="faint" style="font-weight:400">\u2014 ' + esc(f[2]) + '</span></label>' +
+        '<input id="pi-' + f[0] + '" value="' + esc(inf[f[0]] || '') + '"></div>').join(''),
+      '<button class="btn" onclick="closeModal()">Cancel</button>' +
+      '<button class="btn" onclick="NexLetMoveIn.previewInfo(\'' + pid + '\')">Preview the sheet</button>' +
+      '<button class="btn navy" onclick="NexLetMoveIn.saveInfo(\'' + pid + '\')">Save</button>', true);
+  }
+
+  async function saveInfo(pid) {
+    const p = (window.P && window.P(pid)); if (!p) return;
+    const out = {};
+    INFO_FIELDS.forEach(f => { const el = document.getElementById('pi-' + f[0]);
+      if (el && el.value.trim()) out[f[0]] = el.value.trim(); });
+    p.info = out;
+    p.certs = Object.assign({}, p.certs || {}, { _info: out });
+    if (window.save) window.save();
+    /* Reported, not guarded silently: in LIVE mode save() is a no-op, so this
+       write is the only thing standing between a filled-in sheet and a blank one
+       after reload. Claiming success before knowing it landed is how fields go
+       missing. */
+    if (window.LIVE && !(window.pushProperty && await window.pushProperty(p))) {
+      window.toast('\u26a0 Could not save the property information \u2014 nothing has been stored. Retry.', 1);
+      return;
+    }
+    if (window.NexLetAudit) window.NexLetAudit.log({ action: 'property.updated', entity: 'property',
+      entityId: pid, entityLabel: p.address || '',
+      detail: { document: 'Property information', filled: Object.keys(out).length + ' of ' + INFO_FIELDS.length } });
+    window.closeModal(); if (window.render) window.render();
+    window.toast('\u2713 Property information saved');
+  }
+
   /* ── 2. Receipt of documents ────────────────────────────────────────────── */
   function receiptHtml(pid) {
     const c = ctx(pid);
@@ -141,6 +257,7 @@
       ['Electrical installation report (EICR)', cert.eicr ? 'Dated ' + esc(dt(cert.eicr)) : '', true],
       ['Energy performance certificate (EPC)', cert.epcRating ? 'Rating ' + esc(cert.epcRating) : '', true],
       ['Condensation and mould guidance', 'Acknowledgement signed separately', true],
+      ['Property information', 'Meters, stopcock, bins, rent and contacts', true],
       ['Household composition declaration', 'Signed by each adult occupier', c.people.length > 1],
       ['Inventory and schedule of condition', 'Signed at check-in', true],
       ['Keys and fobs', 'Counted and signed for', true]
@@ -240,8 +357,9 @@
       '<div style="font-size:11px;color:#8A7D6E;margin-top:6px">Move-in pack &nbsp;·&nbsp; ' + esc(ref) +
       ' &nbsp;·&nbsp; printed ' + stamp.toLocaleString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }) +
       '</div></div>';
-    const order = { keyterms: keyTermsHtml, receipt: receiptHtml, alarms: alarmHtml, meters: metersKeysHtml };
-    const body = (parts && parts.length ? parts : ['receipt', 'keyterms', 'alarms', 'meters'])
+    const order = { keyterms: keyTermsHtml, propinfo: propInfoHtml, receipt: receiptHtml,
+                    alarms: alarmHtml, meters: metersKeysHtml };
+    const body = (parts && parts.length ? parts : ['receipt', 'keyterms', 'propinfo', 'alarms', 'meters'])
       .map(k => order[k] ? order[k](pid) : '').join('');
     return head + body;
   }
@@ -273,6 +391,7 @@
       '<div class="note" style="margin-bottom:12px">Prints as one job, one sheet per page, ready to sign by hand. Scan the signed sheets back in afterwards.</div>' +
       row('receipt', 'Receipt of documents', 'What the tenant signs to confirm everything was handed over') +
       row('keyterms', 'Written key terms', 'Required for tenancies from 1 May 2026, alongside the Information Sheet') +
+      row('propinfo', 'Property information', 'Stopcock, bins, meters, rent, who to call — the same sheet that goes out with the document pack') +
       row('alarms', 'Alarm test record', 'Smoke and CO alarms, tested on the first day, tenant present') +
       row('meters', 'Meter readings and keys', 'Readings and key count, signed') +
       '<div class="hint" style="margin-top:10px">The Information Sheet itself is a GOV.UK PDF — download and print it separately, then tick it on the receipt.</div>',
@@ -281,7 +400,12 @@
   }
 
   window.NexLetMoveIn = {
-    open, pack, packHtml, keyTermsHtml,
+    open, pack, packHtml, keyTermsHtml, propInfoHtml, editInfo, saveInfo, hasInfo,
+    previewInfo(pid) {
+      const w = window.open('', '_blank');
+      if (!w) { window.toast('Allow pop-ups to preview', 1); return; }
+      w.document.write(packHtml(pid, ['propinfo'])); w.document.close();
+    },
     printSelected(pid) {
       const parts = [...document.querySelectorAll('.mip-part')].filter(x => x.checked).map(x => x.value);
       if (!parts.length) { if (window.toast) window.toast('Pick at least one sheet', 1); return; }
