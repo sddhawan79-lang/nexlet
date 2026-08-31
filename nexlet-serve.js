@@ -32,6 +32,12 @@
       .sort((a, b) => String(b.addedAt || '').localeCompare(String(a.addedAt || '')))[0] || null;
   }
   function infoSheetDoc() { return bizDoc(/information sheet/i); }
+  /* The official PDF, so the sheet is never missing merely because nobody has
+     uploaded it. The retired move-in email enclosed this URL directly, and losing
+     that would let a filing gap block the one item carrying a £7,000 penalty. A
+     copy filed under Business documents takes precedence. */
+  const RRA_SHEET_URL = 'https://assets.publishing.service.gov.uk/media/69bc04b8f7b1c24d8e23ce60/' +
+    'The_Renters__Rights_Act_Information_Sheet_2026.pdf';
   /* The scheme's own leaflet — also one document for every tenancy. Matches the
      label offered in the Business-documents dropdown, and the titles the schemes
      actually ship the PDF under, so filing it under its own name still works. */
@@ -62,9 +68,11 @@
     { key: 'infosheet', to: 'tenant', required: true, kind: 'file',
       label: 'Renters\u2019 Rights Act Information Sheet 2026',
       why: 'Before the tenancy starts. Replaced the How to Rent guide on 1 May 2026. Penalty up to \u00a37,000 and it blocks possession.',
-      has: () => !!infoSheetDoc(),
-      file: () => { const d = infoSheetDoc(); return d ? { name: d.name, url: d.url, on: d.addedAt } : null; },
-      note: 'Not filed yet — download it from GOV.UK and add it under Settings → Business documents. Held once, then served automatically for every tenancy.' },
+      has: () => true,
+      file: () => { const d = infoSheetDoc();
+        return d ? { name: d.name, url: d.url, on: d.addedAt }
+                 : { name: 'Renters’ Rights Act Information Sheet 2026 (GOV.UK)', url: RRA_SHEET_URL, on: '' }; },
+      note: 'Serving the official GOV.UK copy. File your own under Settings → Business documents to send that instead.' },
 
     { key: 'keyterms', to: 'both', required: true, kind: 'inline',
       label: 'Written key terms',
@@ -261,6 +269,8 @@
       : (c.l.email ? [c.l.email] : []);
     const missing = unmet(list, []);
     const prev = sentAt(pid, audience);
+    const bf = audience === 'tenant' ? needsBackfill(pid) : null;
+    const rcp = audience === 'tenant' && c.rec.moveInPackSentAt && !c.rec.moveInPackConfirmedAt;
 
     const row = x => {
       const was = servedAt(c.p.id, x.key);
@@ -288,6 +298,11 @@
       (audience === 'tenant' ? 'Serve on the tenant' : 'Send to the landlord') + ' \u2014 ' + esc(c.p.address || ''),
       (prev ? '<div class="note ok" style="margin-bottom:12px"><b>Already sent ' + esc(dt(prev)) +
         '.</b> Sending again is fine \u2014 it files a fresh copy and the tenant keeps the earlier one.</div>' : '') +
+      (bf ? '<div class="note warn" style="margin-bottom:12px"><b>A move-in pack was emailed ' + esc(dt(bf)) +
+        ', with no copy filed.</b> That was the old move-in sender, which recorded a date and nothing else, so the ' +
+        'service history cannot show what went out. Backfilling files a record dated to that send, marked ' +
+        'unevidenced.<div style="margin-top:9px"><button class="btn sm" onclick="NexLetServe.backfillMoveIn(\'' +
+        pid + '\')">Backfill the record</button></div></div>' : '') +
       (missing.length ? '<div class="note warn" style="margin-bottom:12px"><b>' + missing.length +
         ' required document' + (missing.length === 1 ? '' : 's') + ' not accounted for:</b> ' +
         esc(missing.map(x => x.label).join(', ')) +
@@ -300,6 +315,8 @@
       '<div class="fg" style="margin-top:12px"><label>Anything to add to the covering note</label>' +
       '<textarea id="srv-note" rows="2" placeholder="Optional \u2014 appears above the documents"></textarea></div>',
       '<button class="btn" onclick="closeModal()">Cancel</button>' +
+      (rcp ? '<button class="btn" title="The tenant replied to confirm they received the pack" ' +
+        'onclick="confirmMoveInPackReceipt(\'' + pid + '\')">Mark receipt confirmed</button>' : '') +
       '<button class="btn" onclick="NexLetServe.preview(\'' + pid + '\',\'' + audience + '\')">Preview</button>' +
       '<button class="btn navy"' + (to.length ? '' : ' disabled') +
       ' onclick="NexLetServe.send(\'' + pid + '\',\'' + audience + '\')">Send from NexLet</button>', true);
@@ -347,9 +364,28 @@
         esc(chosen.filter(x => x.kind === 'manual' || x.kind === 'note').map(x => x.label).join(', ')) + '.</p>'
       : '';
 
+    /* Carried over from the retired move-in email, which was the only place these
+       two lived. The complaints route is a redress-scheme condition and has to
+       reach the tenant in writing; the receipt ask is the one piece of evidence a
+       filed copy cannot supply on its own — confirmation it was actually read. */
+    const tenantFooter = audience === 'tenant'
+      ? '<div style="border:1px solid #E3D9C8;background:#FDFAF6;border-radius:8px;padding:14px 16px;margin-top:20px">' +
+        '<div style="font-weight:700;color:#1B2F4A;font-size:14px;margin-bottom:6px">If something goes wrong</div>' +
+        '<p style="margin:0 0 8px;font-size:13px;line-height:1.6">Tell us early and we\'ll usually sort it with a ' +
+        'phone call. If you\'d rather complain formally, put it in writing to us — we\'ll acknowledge within ' +
+        '<b>3 working days</b> and reply in full within <b>15 working days</b>.</p>' +
+        '<p style="margin:0;font-size:13px;line-height:1.6">Still not happy? Ask us to review it, and we\'ll send a ' +
+        'final viewpoint letter. After that you can refer the matter free of charge to our independent redress ' +
+        'scheme' + (c.brand.redress ? ' (' + esc(c.brand.redress) + ')' : '') + ' — either on receiving that letter, ' +
+        'or once <b>8 weeks</b> have passed since you first complained. Our full complaints procedure is available ' +
+        'on request.</p></div>' +
+        '<p style="font-size:13.5px;margin-top:16px">Please reply to this email with the word <b>received</b>, so we ' +
+        'have a confirmed record that these reached you.</p>'
+      : '';
+
     const body = intro + dutyNote +
       (extra ? '<p>' + esc(extra).replace(/\n/g, '<br>') + '</p>' : '') +
-      linkBlock + manualNote +
+      linkBlock + manualNote + tenantFooter +
       inlines.map(x => '<div style="margin-top:26px;padding-top:20px;border-top:2px solid #1B2F4A">' +
         x.html(c) + '</div>').join('') +
       '<p style="font-size:12.5px;color:#8A7D6E;margin-top:24px">If anything here is missing or looks wrong, ' +
@@ -484,8 +520,79 @@
     return out;
   }
 
+  /* ── Move-in sends made before copies were filed ──────────────────────────
+     The retired move-in email set a flag and filed nothing, so tenancies served
+     that way have a date but no record of what went out. This reconstructs one
+     from the pack's fixed contents, dated to the original send and stamped
+     unevidenced — the flag becomes a filed record rather than a claim floating
+     free of the history. Never claims the key terms or the prescribed
+     information: that email carried neither. */
+  const BACKFILL_KEYS = ['gas', 'eicr', 'epc', 'infosheet', 'depcert'];
+
+  function needsBackfill(pid) {
+    const rec = (window.tenantRecFor && window.tenantRecFor(pid)) || {};
+    if (!rec.moveInPackSentAt) return null;
+    const filed = (ST().letters || []).some(x => x.property_id === pid && /^serve_/.test(x.type || ''));
+    return filed ? null : rec.moveInPackSentAt;
+  }
+
+  async function backfillMoveIn(pid, quiet) {
+    const on = needsBackfill(pid);
+    if (!on) { if (!quiet) window.toast('Nothing to backfill \u2014 this tenancy already has filed copies'); return false; }
+    const c = ctx(pid);
+    const named = items(pid, 'tenant').filter(x => BACKFILL_KEYS.indexOf(x.key) >= 0 &&
+      (x.key === 'infosheet' || (x.file && x.file.url)));
+    if (!named.length) { if (!quiet) window.toast('None of the pack documents are on file, so there is nothing to record', 1); return false; }
+    const iso = new Date(on).toISOString();
+    const body = '<p>The move-in document pack was emailed to the tenant on <b>' +
+      esc(dt(iso)) + '</b> by the earlier move-in sender, which recorded a date but did not file a copy of ' +
+      'the email.</p><p>Reconstructed from that pack\'s fixed contents:</p><ul>' +
+      named.map(x => '<li>' + esc(x.label) + '</li>').join('') + '</ul>' +
+      '<p style="color:#B4543A"><b>No copy held.</b> The list above is what the pack always enclosed, not a copy of ' +
+      'what was sent. It carried neither the written key terms nor the prescribed information.</p>' +
+      '<p style="font-size:12px;color:#6B6055">Backfilled ' + esc(dt(new Date().toISOString())) + '.</p>';
+    const subject = 'Recorded as served, no copy \u2014 move-in pack \u2014 ' + (c.p.address || '');
+    await window.fileLetter({ propertyId: pid, landlordId: null, type: 'serve_tenant', subject: subject,
+      html: window.letterWrap(subject, body) +
+        '<!--nexlet-served:' + named.map(x => x.key).join(',') + '-->' +
+        '<!--nexlet-served-on:' + iso + '-->' +
+        '<!--nexlet-route:Email from NexLet (move-in sender, no copy filed)-->' +
+        '<!--nexlet-evidence:none-->',
+      to: [] });
+    if (window.NexLetAudit) window.NexLetAudit.log({ action: 'doc.recorded', entity: 'tenancy',
+      entityId: (c.rec || {}).id, entityLabel: (c.p.address || ''),
+      detail: { documents: named.map(x => x.label).join(', '), route: 'Move-in pack (backfilled)',
+                servedOn: dt(iso), evidence: 'none held' } });
+    if (!quiet) {
+      if (window.render) window.render();
+      window.toast('\u2713 Backfilled \u2014 dated ' + dt(iso) + ', shown as unevidenced');
+    }
+    return true;
+  }
+
+  /* Runs once per session at boot, across every tenancy. Idempotent by
+     construction: needsBackfill goes null the moment a filed copy exists, so a
+     second pass finds nothing. Silent when there is nothing to do. */
+  async function backfillAll() {
+    if (window._nxBackfilled) return 0;
+    window._nxBackfilled = true;
+    const todo = (ST().properties || []).filter(p => p && p.id && needsBackfill(p.id));
+    if (!todo.length) return 0;
+    let done = 0;
+    for (const p of todo) {
+      try { if (await backfillMoveIn(p.id, true)) done++; } catch (e) { console.error('backfill', p.id, e); }
+    }
+    if (done) {
+      if (window.render) window.render();
+      window.toast('\u2713 Filed a service record for ' + done + ' earlier move-in pack' +
+        (done === 1 ? '' : 's') + ' \u2014 each shown as unevidenced');
+    }
+    return done;
+  }
+
   window.NexLetServe = {
     open, items, sentAt, servedAt, servedKeys, recordManual, saveManual, unevidenced,
+    needsBackfill, backfillMoveIn, backfillAll,
     firstServedKeys: pid => servedKeys(pid, 'first'),
 
     preview(pid, audience) {
@@ -521,6 +628,31 @@
       // proves what was served and when.
       await window.fileLetter({ propertyId: pid, landlordId: audience === 'landlord' ? p.landlordId : null,
         type: 'serve_' + audience, subject: m.subject, html: m.html, to: sent });
+
+      /* One sender means one place that writes the bookkeeping the retired move-in
+         email used to write. moveInPackSentAt is kept because older panels read
+         it, but it is now set only here — so it can no longer disagree with the
+         filed copy it is supposed to describe. */
+      if (audience === 'tenant') {
+        if (m.chosen.some(x => x.key === 'infosheet') && !((p.certs || {}).infosheet)) {
+          p.certs = p.certs || {};
+          p.certs.infosheet = new Date().toISOString().slice(0, 10);
+          if (window.pushProperty) window.pushProperty(p);
+        }
+        if (rec) {
+          rec.moveInPackSentAt = new Date().toISOString();
+          if (window.pushTenantRec) window.pushTenantRec(rec);
+        }
+        const ll = (p.landlordId && window.L) ? window.L(p.landlordId) : null;
+        if (ll && ll.id && window.pushLandlord) {
+          ll.comms = ll.comms || [];
+          ll.comms.push({ id: window.uid ? window.uid('c') : 'c' + Date.now(),
+            date: new Date().toISOString().slice(0, 10), type: 'Note',
+            note: 'Tenant document pack emailed to ' + ((rec && rec.name) || '') + ' \u2014 ' +
+                  m.chosen.map(x => x.label).join(', ') });
+          window.pushLandlord(ll);
+        }
+      }
       if (window.NexLetAudit) window.NexLetAudit.log({
         action: 'email.sent', entity: 'tenancy', entityId: rec ? rec.id : null,
         entityLabel: (rec ? rec.name : '') + ' \u2014 ' + (p.address || ''),
