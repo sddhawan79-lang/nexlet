@@ -354,6 +354,10 @@ async function boot(){
   setInterval(pollInboundEnquiries, 20000); // pick up forwarded enquiry emails live
   restoreView();
   render();
+  /* Earlier move-in packs recorded a date and filed nothing. One pass files the
+     missing service record for each, dated to the original send and marked
+     unevidenced, so the history stops being silent about them. */
+  if(window.NexLetServe&&NexLetServe.backfillAll) NexLetServe.backfillAll().catch(e=>console.error(e));
 }
 
 
@@ -394,6 +398,18 @@ window.pushTenantRec=t=>pushTenantRec(t);
 /* Modules cannot reach the push* consts — they are script-scope lexical
    bindings, not window properties. Bridged, like pushTenantRec above. */
 window.pushProperty=p=>pushProperty(p);
+window.pushLandlord=l=>pushLandlord(l);
+/* When the tenant document pack went out, from whichever of the two records
+   holds it: the flag the one sender now writes, or a filed serve copy from
+   before it did. Read everywhere the pack's status is shown, so no panel can
+   disagree with another. */
+function packServedAt(pid){
+  const rec=tenantRecFor(pid)||{};
+  const filed=(window.NexLetServe&&NexLetServe.sentAt)?NexLetServe.sentAt(pid,'tenant'):null;
+  if(!rec.moveInPackSentAt) return filed||null;
+  if(!filed) return rec.moveInPackSentAt;
+  return new Date(filed)>new Date(rec.moveInPackSentAt)?filed:rec.moveInPackSentAt;
+}
 function load(){ try{const j=JSON.parse(localStorage.getItem(LS));if(j&&j.landlords)return j;}catch(e){} return JSON.parse(JSON.stringify(SEED)); }
 function save(){ if(LIVE)return; try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){} }  // LIVE persists via targeted push* writes
 function uid(p){ return p+Math.random().toString(36).slice(2,8); }
@@ -2077,7 +2093,7 @@ function _tenancyChecklist(p){
     const rec=tenantRecFor(p.id);
     const ta=rec&&tenancyAgreementFor(rec.id);
     items.push({k:'tenancyagreement',label:'Tenancy terms & conditions signed',done:!!(ta&&ta.status==='signed')||!!(rec&&rec.origContractName),warn:taOut(ta),go:`openTenancyAgreement('${p.id}')`});
-    items.push({k:'moveinpack',already:'moveinpack',label:'Move-in document pack sent',done:!!(rec&&rec.moveInPackSentAt),go:`openMoveInPack('${p.id}')`});
+    items.push({k:'moveinpack',already:'moveinpack',label:'Tenant document pack served',done:!!packServedAt(p.id),go:`openMoveInPack('${p.id}')`});
     if(rec&&rec.deposit) items.push({k:'pi',already:'pi',label:'Prescribed information served',done:!!rec.piServedAt,go:`tnDepositPI('${p.id}')`});
     items.push({k:'portal',already:'portal',label:'Tenant invited to portal',done:!!(rec&&rec.invited),go:`inviteTenantToPortal('${p.id}')`});
   }
@@ -2569,9 +2585,9 @@ function serveDocsPanel(p){
      why:'Stopcock, meters, bin days, where the rent goes, who to call out of hours. Emailed with the document pack and printed for handover — the same sheet.',
      k:'propinfo',done:!!(window.NexLetMoveIn&&NexLetMoveIn.hasInfo&&NexLetMoveIn.hasInfo(p.id)),servedAt:_srv.propinfo,
      go:"NexLetMoveIn.editInfo('"+p.id+"')",label:'Fill it in',doneLabel:'Edit'},
-    {t:'Move-in document pack',
-     why:'One email with the certificates, info sheet and complaints procedure. This is the send-everything-at-once option.',
-     done:!!rec.moveInPackSentAt,go:"openMoveInPack('"+p.id+"')",label:'Send pack'}
+    {t:'Tenant document pack',
+     why:'One email with the certificates, the Information Sheet, the key terms, the prescribed information and the complaints procedure. It files a copy of exactly what went out.',
+     done:!!packServedAt(p.id),servedAt:packServedAt(p.id),go:"openMoveInPack('"+p.id+"')",label:'Send pack'}
   ].filter(Boolean);
   /* sent-but-unsigned is its own state — the action there is chasing, not sending. */
   rows.forEach(r=>{ r.state=r.done?'done':(r.pending?'waiting':'todo'); });
@@ -2690,7 +2706,7 @@ function vPropertyDetail(){
   const tstatus=propTenancyStatus(p); const lst=_listingForProp(p.id);
   const _rec0=tenantRecFor(p.id);
   const _grpIssue1=certRAG(c.gas).k!=='ok'||certRAG(c.eicr).k!=='ok'||certRAG(c.epc).k!=='ok'||c.epcRating==='F'||c.epcRating==='G'||declStatus(c.smoke).k!=='ok'||(!c.coNA&&declStatus(c.co).k!=='ok');
-  const _grpIssue2=!!p.tenant&&((_rec0&&_rtrRAG(_rec0).k!=='ok')||(_rec0&&_rec0.deposit&&!_rec0.depositCertName)||(_rec0&&!_rec0.moveInPackSentAt));
+  const _grpIssue2=!!p.tenant&&((_rec0&&_rtrRAG(_rec0).k!=='ok')||(_rec0&&_rec0.deposit&&!_rec0.depositCertName)||(_rec0&&!packServedAt(p.id)));
   const _grpIssue3=(c.hmoApplicable&&certRAG(c.hmo).k!=='ok')||certRAG(c.legionella).k!=='ok';
   const _grpHead=(label,isOpen)=>`<details ${isOpen?'open':''} class="tree-node" style="margin:0 0 8px;border-color:#C7CEDA"><summary style="background:#F8FAFC"><span class="tree-caret">▸</span><span style="flex:1;font-weight:700;font-size:11px;color:var(--navy);text-transform:uppercase;letter-spacing:.4px">${label}</span></summary><div class="tree-children" style="padding:10px 14px">`;
   const certRow=(key,label,date,docUrl)=>{const r=certRAG(date);return `<div class="doc"><div class="di" style="background:${r.bg};color:${r.color}">⛨</div>
@@ -2756,9 +2772,9 @@ function vPropertyDetail(){
           <span class="pill" style="background:${r.bg};color:${r.color}">${r.label}</span>
           ${rec.depositCertUrl?`<button class="btn sm" onclick="viewDoc('${rec.depositCertUrl}','Deposit certificate')">View</button>`:''}
           <button class="btn sm" onclick="setTenant('${p.id}')">Manage</button></div>`; })():''}
-        ${p.tenant?(()=>{ const rec=tenantRecFor(p.id); if(!rec) return ''; const sent=!!rec.moveInPackSentAt;
+        ${p.tenant?(()=>{ const rec=tenantRecFor(p.id); if(!rec) return ''; const at=packServedAt(p.id); const sent=!!at;
           return `<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:${sent?'var(--green-bg)':'var(--amber-bg)'};color:${sent?'var(--green)':'var(--amber)'}">📦</div>
-          <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Move-in document pack</div><div class="faint" style="font-size:11.5px">${sent?'Sent '+fmtDate(rec.moveInPackSentAt)+(rec.moveInPackConfirmedAt?' · tenant confirmed receipt '+fmtDate(rec.moveInPackConfirmedAt):' · awaiting confirmation of receipt'):'Gas Safety, EICR, EPC, deposit protection info (+ RTR/Information Sheet where applicable) — bundle and send'}</div></div>
+          <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">Tenant document pack</div><div class="faint" style="font-size:11.5px">${sent?'Sent '+fmtDate(at)+(rec.moveInPackConfirmedAt?' · tenant confirmed receipt '+fmtDate(rec.moveInPackConfirmedAt):' · awaiting confirmation of receipt'):'Gas Safety, EICR, EPC, deposit protection info (+ RTR/Information Sheet where applicable) — bundle and send'}</div></div>
           <span class="pill" style="background:${sent?'var(--green-bg)':'var(--amber-bg)'};color:${sent?'var(--green)':'var(--amber)'}">${sent?'Sent':'Not sent'}</span>
           <button class="btn sm" onclick="openMoveInPack('${p.id}')">${sent?'Resend / manage':'Send pack'}</button></div>`; })():''}
         </div></details>
@@ -3897,7 +3913,7 @@ function moveInTasks(pid){
        return ks.length?"keyToTenant('"+ks[0].id+"')":"go('keys')"; })()},
     {k:'alarms',ph:2,t:'Smoke and CO alarms tested with the tenant present',
      done:!!c.smoke&&(!!c.co||!!c.coNA),go:"editCert('"+pid+"','smoke')"},
-    {k:'pack',ph:1,t:'Documents emailed to every tenant',done:!!rec.moveInPackSentAt||!!Object.keys(_srv).length,at:rec.moveInPackSentAt,
+    {k:'pack',ph:1,t:'Documents emailed to every tenant',done:!!packServedAt(pid),at:packServedAt(pid),
      go:"NexLetServe.open('"+pid+"','tenant')"}
   ].filter(Boolean);
 }
@@ -4175,27 +4191,6 @@ function _allTenantNames(rec){
 // for a sitting tenancy that started before 1 May 2026 — the official gov.uk Renters' Rights Act Information
 // Sheet (must be the exact government PDF, so it's a manual upload, never generated text). The old "How to
 // Rent" guide was withdrawn June 2026 and is gated off for anything starting after that.
-/* The official sheet, so the pack can enclose it without anything being uploaded. */
-const RRA_SHEET_URL='https://assets.publishing.service.gov.uk/media/69bc04b8f7b1c24d8e23ce60/The_Renters__Rights_Act_Information_Sheet_2026.pdf';
-function moveInPackItems(p){
-  const c=p.certs||{}; const rec=tenantRecFor(p.id)||{};
-  const preReform=rec.start&&new Date(rec.start)<new Date('2026-05-01');
-  const items=[
-    {key:'gas',label:'Gas Safety Certificate (CP12)',ok:certRAG(c.gas).k==='ok'||certRAG(c.gas).k==='soon',url:c.gasDocUrl,required:true},
-    {key:'eicr',label:'EICR (electrical)',ok:certRAG(c.eicr).k==='ok'||certRAG(c.eicr).k==='soon',url:c.eicrDocUrl,required:true},
-    {key:'epc',label:'EPC',ok:certRAG(c.epc).k==='ok'||certRAG(c.epc).k==='soon',url:c.epcDocUrl,required:false},
-    {key:'deposit',label:'Deposit protection & prescribed information'+((window.NexLetDeposit&&NexLetDeposit.holderOf(rec)==='landlord')?' (held by landlord)':''),ok:!rec.deposit||!!rec.depositCertName,url:rec.depositCertUrl,required:!!rec.deposit},
-    {key:'rtr',label:'Right to Rent check completed (everyone named)',ok:_rtrAllDone(rec),url:null,required:true},
-  ];
-  /* Always enclosed. It replaced the How to Rent guide on 1 May 2026 and applies
-     to every tenancy — a sitting tenancy needed it by 31 May 2026, a new one
-     before it starts. Attached from the official gov.uk URL unless a local copy
-     has been uploaded, so it is never missing and never out of date. */
-  items.push({key:'infosheet',
-    label:"Renters' Rights Act Information Sheet"+(preReform?' (sitting tenancy — was due by 31 May 2026)':''),
-    ok:true,url:c.infosheetDocUrl||RRA_SHEET_URL,required:true,auto:!c.infosheetDocUrl});
-  return items;
-}
 // Record a step as already completed, without sending anything. Needed because
 // the "sent" flags were previously lost on reload, so genuinely-completed work
 // reappears as outstanding — and re-sending documents to a tenant who already
@@ -4228,65 +4223,14 @@ function _saveAlreadyDone(pid,what){
     detail:{step:what,recordedAs:when,backdated:'yes',note:note||''}});
   save(); closeModal(); render(); toast('✓ Recorded — nothing was sent');
 }
+/* One sender. This emailed attachments and set moveInPackSentAt while filing
+   nothing, so the flag and the service history could disagree — and it could not
+   carry the written key terms, which are generated rather than uploaded. Serve
+   documents does both, files a stamped copy, and now carries the complaints
+   procedure and the receipt request this pack used to be the only home for. */
 function openMoveInPack(pid){
-  const p=P(pid); const rec=tenantRecFor(pid);
-  if(!rec){ toast('Set up the tenant first',1); return; }
-  const items=moveInPackItems(p);
-  const blocking=items.filter(i=>i.required&&!i.ok);
-  const body=`<div class="note" style="margin-bottom:12px"><b>${esc(rec.name)}</b>${p.address?' · '+esc(p.address):''}</div>
-    ${items.map(i=>`<div class="row" style="padding:8px 4px"><div class="av" style="background:${i.ok?'var(--green-bg)':'var(--red-bg)'};color:${i.ok?'var(--green)':'var(--red)'}">${i.ok?'✓':'!'}</div>
-      <div style="flex:1;font-size:13px">${esc(i.label)}${i.auto?' <span class="faint">(attached automatically from gov.uk)</span>':''}${!i.ok&&i.required?' <span class="faint">(required \u2014 missing or expired)</span>':!i.ok?' <span class="faint">(not on file \u2014 optional)</span>':''}</div>
-      ${i.url?`<button class="btn sm" onclick="viewDoc('${i.url}','${esc(i.label)}')">View</button>`:''}</div>`).join('')}
-    ${blocking.length?`<div class="note warn" style="margin-top:10px">Can't send yet \u2014 missing: ${blocking.map(i=>esc(i.label)).join(', ')}. Fix these from Compliance &amp; documents first.</div>`:''}
-    <div class="note warn" style="margin-top:10px"><b>This pack does not include the written key terms.</b>
-      It attaches files, and the key terms are generated rather than uploaded. They are statutory for tenancies from
-      1 May 2026, so serve them through <b>Serve documents on the tenant</b>, or hand over the printed pack \u2014 which does
-      contain them \u2014 and record it.</div>
-    ${rec.moveInPackSentAt?`<div class="hint" style="margin-top:10px">Last sent ${fmtDate(rec.moveInPackSentAt)}.${rec.moveInPackConfirmedAt?' Tenant confirmed receipt '+fmtDate(rec.moveInPackConfirmedAt)+'.':''}</div>`:''}`;
-  const footer=`<button class="btn" onclick="closeModal()">Cancel</button>${!rec.moveInPackSentAt?`<button class="btn" onclick="closeModal();markAlreadyDone('${pid}','moveinpack')">Already sent — just record it</button>`:''}${rec.moveInPackSentAt&&!rec.moveInPackConfirmedAt?`<button class="btn" onclick="confirmMoveInPackReceipt('${pid}')">Mark receipt confirmed</button>`:''}<button class="btn navy" ${blocking.length?'disabled title="Fix the missing items above first"':''} onclick="sendMoveInPack('${pid}')">${rec.moveInPackSentAt?'Resend pack':'Send move-in pack'}</button>`;
-  modal('Move-in document pack', body, footer, true);
-}
-async function sendMoveInPack(pid){
-  const p=P(pid); const rec=tenantRecFor(pid); if(!rec||!rec.email){ toast('Tenant needs an email on file first',1); return; }
-  const items=moveInPackItems(p);
-  const blocking=items.filter(i=>i.required&&!i.ok);
-  if(blocking.length){ toast('Missing required items: '+blocking.map(i=>i.label).join(', '),1); return; }
-  const included=items.filter(i=>i.url);
-  /* The sheet is enclosed in every pack, so sending it IS the service of it —
-     record that rather than leaving the compliance row outstanding. */
-  p.certs=p.certs||{}; if(!p.certs.infosheet){ p.certs.infosheet=today(); pushProperty(p); }
-  const b=agencyBrand();
-  const html=`<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#4A4038">
-    <div style="background:#1B2F4A;padding:20px 24px;border-radius:10px 10px 0 0"><span style="color:#fff;font-size:20px;font-weight:700">${esc(b.name)}</span></div>
-    <div style="border:1px solid #E3D9C8;border-top:none;border-radius:0 0 10px 10px;padding:26px 24px">
-      <p>Hi ${esc(_allTenantNames(rec))},</p>
-      <p>Please find your move-in document pack for <b>${esc(p.address)}</b> attached. This includes:</p>
-      <ul style="padding-left:18px;line-height:1.8">${items.map(i=>`<li>${esc(i.label)}${!i.url?' (on file with us \u2014 ask if you\'d like a copy)':''}</li>`).join('')}</ul>
-      <p>Please reply to this email with the word <b>"received"</b> so we have a confirmed record that you've got these documents.</p>
-      <div style="border:1px solid #E3D9C8;background:#FDFAF6;border-radius:8px;padding:14px 16px;margin-top:18px">
-        <div style="font-weight:700;color:#1B2F4A;font-size:14px;margin-bottom:6px">If something goes wrong</div>
-        <p style="margin:0 0 8px;font-size:13px">Tell us early and we'll usually sort it with a phone call. If you'd rather complain formally, put it in writing to us — we'll acknowledge within <b>3 working days</b> and reply in full within <b>15 working days</b>.</p>
-        <p style="margin:0;font-size:13px">Still not happy? Ask us to review it, and we'll send a final viewpoint letter. After that you can refer the matter free of charge to our independent redress scheme${b.redress?' ('+esc(b.redress)+')':''} — either on receiving that letter, or once <b>8 weeks</b> have passed since you first complained. Our full complaints procedure is available on request.</p>
-      </div>
-      <p style="margin-top:18px">Kind regards,<br>${esc(b.name)}</p>
-    </div></div>`;
-  if(!LIVE){ toast('Connect to Supabase to send live',1); return; }
-  /* Each joint tenant is served individually: service on one is not service on
-     the others, and a shared inbox is not something we can assume. */
-  const _isPerm=o=>typeof isPermittedOccupier==='function'?isPermittedOccupier(o):(o.personType||'joint')==='permitted';
-  const _to=[rec.email].concat((rec.occupants||[]).filter(o=>o.email&&!_isPerm(o)).map(o=>o.email))
-    .filter((e,i,a)=>e&&a.indexOf(e)===i);
-  const _fail=[];
-  let r={ok:false};
-  for(const _e of _to){
-    const _r=await agencyEmail(_e,'Your move-in document pack — '+p.address, html, included.map(i=>i.url));
-    if(_r&&_r.ok) r={ok:true}; else _fail.push(_e);
-  }
-  if(_fail.length) toast('⚠ Not delivered to: '+_fail.join(', '),1);
-  if(r.ok){ rec.moveInPackSentAt=new Date().toISOString(); pushTenantRec(rec);
-    const ll=p.landlordId?L(p.landlordId):null; if(ll&&ll.id){ ll.comms=ll.comms||[]; ll.comms.push({id:uid('c'),date:today(),type:'Note',note:'Move-in document pack emailed to '+rec.name+' \u2014 '+items.map(i=>i.label).join(', ')}); pushLandlord(ll); }
-    closeModal(); render(); toast('✓ Move-in pack sent to '+rec.name);
-  } else { toast('⚠ Send failed: '+(r.error||'try again'),1); }
+  if(!tenantRecFor(pid)){ toast('Set up the tenant first',1); return; }
+  NexLetServe.open(pid,'tenant');
 }
 function confirmMoveInPackReceipt(pid){ const rec=tenantRecFor(pid); if(!rec) return; rec.moveInPackConfirmedAt=new Date().toISOString(); pushTenantRec(rec); closeModal(); render(); toast('✓ Receipt confirmed'); }
 function tenantWelcomeLetterHtml(rec,p){ const b=agencyBrand();
