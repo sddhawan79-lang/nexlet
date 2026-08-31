@@ -85,6 +85,10 @@
      _tenancyChecklist — the LATER of the two records wins, so a re-send is never
      masked by an older date held elsewhere. Deliberately not a third rule. */
   const later = (a, b) => !a ? (b || null) : !b ? a : (new Date(a) >= new Date(b) ? a : b);
+  /* The mirror of later, for deadline questions only: a document is served late or
+     on time by the FIRST copy that reached the tenant. Re-sending it afterwards
+     cannot retrospectively make the original send late. */
+  const earlier = (a, b) => !a ? (b || null) : !b ? a : (new Date(a) <= new Date(b) ? a : b);
   const sameDay = (a, b) => {
     if (!a || !b) return false;
     const x = new Date(a), y = new Date(b);
@@ -106,18 +110,26 @@
     ['landlordDepositConfirmedAt', 'Landlord confirmed the deposit is protected', '__dep', null]
   ];
 
-  function servedOn(pid) {
+  function servedOn(pid, mode) {
+    const first = mode === 'first';
     const rec = (window.tenantRecFor && window.tenantRecFor(pid)) || {};
     const p = (window.P && window.P(pid)) || {};
     const c = p.certs || {};
     const out = Object.assign({}, (window.NexLetServe && window.NexLetServe.servedKeys)
-      ? window.NexLetServe.servedKeys(pid) : {});
-    const put = (k, v) => { if (k && v) out[k] = later(out[k], v); };
+      ? window.NexLetServe.servedKeys(pid, mode) : {});
+    const put = (k, v) => { if (k && v) out[k] = first ? earlier(out[k], v) : later(out[k], v); };
     HAND.forEach(([f, , , key]) => put(key, rec[f]));
     /* The Information Sheet has its own field on the property, set when it is
        recorded as given, and serveDocsPanel has always counted that as done. Left
-       out here it made the banner contradict the list directly beneath it. */
-    put('infosheet', c.infosheet);
+       out here it made the banner contradict the list directly beneath it.
+
+       But it is a PROPERTY-level date holding per-tenant evidence, and nothing
+       clears it, so on a re-let it would vouch for a document the new tenant never
+       received — silencing the one alarm worth £7,000. Only a date that plausibly
+       belongs to THIS tenancy is trusted. */
+    if (c.infosheet && (!rec.start ||
+        new Date(c.infosheet).getTime() >= new Date(rec.start).getTime() - 90 * 86400000))
+      put('infosheet', c.infosheet);
     /* A signed agreement or declaration IS service of that document — the tenant
        has it, by definition, because they signed it. */
     agreementsFor(rec.id).forEach(a => {
@@ -198,6 +210,8 @@
     const rec = (window.tenantRecFor && window.tenantRecFor(pid)) || {};
     const c = p.certs || {};
     const srv = servedOn(pid);
+    /* Deadlines read the first service, staleness reads the latest. */
+    const fst = servedOn(pid, 'first');
     const dep = parseFloat(rec.deposit) || 0;
     const out = [];
 
@@ -226,7 +240,7 @@
       out.push({ sev: 'amber', t: 'The deposit protection certificate has not gone out with the prescribed information',
         d: 'The certificate is on file but no filed copy shows it reaching the tenant. It should be given with the prescribed information.' });
 
-    const piAt = srv.pi;
+    const piAt = fst.pi;
     if (rec.depositReceived && piAt && after(rec.depositReceived, piAt))
       out.push({ sev: 'red', t: 'Prescribed information was served before the deposit was received',
         d: 'Served ' + day(piAt) + ', deposit received ' + day(rec.depositReceived) +
@@ -274,12 +288,14 @@
     if (rec.start) {
       const started = dayMs(rec.start) <= dayMs(new Date().toISOString());
       Object.keys(START_DUE).forEach(k => {
-        if (srv[k] && dayMs(srv[k]) > dayMs(rec.start))
+        if (fst[k] && dayMs(fst[k]) > dayMs(rec.start))
           out.push({ sev: 'red', t: START_DUE[k] + ' was served after the tenancy had started',
-            d: 'Tenancy started ' + day(rec.start) + ', served ' + day(srv[k]) +
+            d: 'Tenancy started ' + day(rec.start) + ', first served ' + day(fst[k]) +
                '. It was due before the start date, not before handover. Penalty up to £7,000 and it blocks possession.' });
-
-        else if (started)
+        else if (fst[k] && dayMs(fst[k]) === dayMs(rec.start))
+          out.push({ sev: 'amber', t: START_DUE[k] + ' was served on the start date itself',
+            d: 'Served ' + day(fst[k]) + ', the day the tenancy began. Legal only if it reached the tenant before they took occupation, and there is no margin in it.' });
+        else if (!fst[k] && started)
           out.push({ sev: 'red', t: START_DUE[k] + ' not served, and the tenancy has started',
             d: 'Due before ' + day(rec.start) + '. Serve it now — late service is better than none — and record the date.' });
       });
@@ -504,5 +520,6 @@
     setTimeout(() => { try { w.print(); } catch (e) {} }, 350);
   }
 
-  window.NexLetHistory = { panel, open, copy, print, events, warnings, servedOn, dueBanner, dueBeforeStart };
+  window.NexLetHistory = { panel, open, copy, print, events, warnings, servedOn,
+    firstServedOn: pid => servedOn(pid, 'first'), dueBanner, dueBeforeStart };
 })();

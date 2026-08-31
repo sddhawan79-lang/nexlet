@@ -208,8 +208,24 @@
         'color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc2(it.title) + '</span>' +
         (it.sub ? '<span style="display:block;font-size:11.5px;color:var(--muted);white-space:nowrap;' +
           'overflow:hidden;text-overflow:ellipsis">' + esc2(it.sub) + '</span>' : '') + '</span>' +
-        (i === cursor ? '<span style="font-size:11px;color:var(--faint)">\u21b5</span>' : '') + '</div>';
+        '<span class="nx-pal-cue" style="font-size:11px;color:var(--faint);visibility:' +
+        (i === cursor ? 'visible' : 'hidden') + '">\u21b5</span></div>';
     }).join('');
+  }
+
+  /* Moving the cursor must NOT repaint the list. Replacing innerHTML puts a fresh
+     node under a stationary pointer, the browser fires mouseenter on it, that
+     repainted again — an infinite loop that froze the page on the first mouse
+     move across the results. Only the two affected rows are touched now. */
+  function highlight() {
+    const box = document.getElementById('nx-pal-r');
+    if (!box) return;
+    box.querySelectorAll('.nx-pal-row').forEach(el => {
+      const on = Number(el.getAttribute('data-i')) === cursor;
+      el.style.background = on ? 'var(--off)' : '#fff';
+      const cue = el.querySelector('.nx-pal-cue');
+      if (cue) cue.style.visibility = on ? 'visible' : 'hidden';
+    });
   }
 
   function key(e) {
@@ -218,7 +234,7 @@
       e.preventDefault();
       if (!results.length) return;
       cursor = (cursor + (e.key === 'ArrowDown' ? 1 : -1) + results.length) % results.length;
-      paint(document.getElementById('nx-pal-q').value);
+      highlight();
       const row = document.querySelector('.nx-pal-row[data-i="' + cursor + '"]');
       if (row) { const b = row.parentElement, r = row.offsetTop; if (r < b.scrollTop || r > b.scrollTop + b.clientHeight - 60) b.scrollTop = r - 60; }
       return;
@@ -309,7 +325,8 @@
 
   window.NexLetSearch = {
     open: show, close, bar, filter, empty,
-    _set: set, _pick: pick, _hover(i) { cursor = i; paint(document.getElementById('nx-pal-q').value); },
+    _set: set, _pick: pick,
+    _hover(i) { if (i === cursor) return; cursor = i; highlight(); },
     active: key => !!F()[key]
   };
 })();

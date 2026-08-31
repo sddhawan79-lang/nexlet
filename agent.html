@@ -4238,6 +4238,10 @@ function openMoveInPack(pid){
       <div style="flex:1;font-size:13px">${esc(i.label)}${i.auto?' <span class="faint">(attached automatically from gov.uk)</span>':''}${!i.ok&&i.required?' <span class="faint">(required \u2014 missing or expired)</span>':!i.ok?' <span class="faint">(not on file \u2014 optional)</span>':''}</div>
       ${i.url?`<button class="btn sm" onclick="viewDoc('${i.url}','${esc(i.label)}')">View</button>`:''}</div>`).join('')}
     ${blocking.length?`<div class="note warn" style="margin-top:10px">Can't send yet \u2014 missing: ${blocking.map(i=>esc(i.label)).join(', ')}. Fix these from Compliance &amp; documents first.</div>`:''}
+    <div class="note warn" style="margin-top:10px"><b>This pack does not include the written key terms.</b>
+      It attaches files, and the key terms are generated rather than uploaded. They are statutory for tenancies from
+      1 May 2026, so serve them through <b>Serve documents on the tenant</b>, or hand over the printed pack \u2014 which does
+      contain them \u2014 and record it.</div>
     ${rec.moveInPackSentAt?`<div class="hint" style="margin-top:10px">Last sent ${fmtDate(rec.moveInPackSentAt)}.${rec.moveInPackConfirmedAt?' Tenant confirmed receipt '+fmtDate(rec.moveInPackConfirmedAt)+'.':''}</div>`:''}`;
   const footer=`<button class="btn" onclick="closeModal()">Cancel</button>${!rec.moveInPackSentAt?`<button class="btn" onclick="closeModal();markAlreadyDone('${pid}','moveinpack')">Already sent — just record it</button>`:''}${rec.moveInPackSentAt&&!rec.moveInPackConfirmedAt?`<button class="btn" onclick="confirmMoveInPackReceipt('${pid}')">Mark receipt confirmed</button>`:''}<button class="btn navy" ${blocking.length?'disabled title="Fix the missing items above first"':''} onclick="sendMoveInPack('${pid}')">${rec.moveInPackSentAt?'Resend pack':'Send move-in pack'}</button>`;
   modal('Move-in document pack', body, footer, true);

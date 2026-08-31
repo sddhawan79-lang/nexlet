@@ -200,8 +200,13 @@
   /* Which documents have actually gone out, and when — read back from the stamp
      on the filed copy, so it reflects what was sent rather than a separate flag
      that can drift out of step with it. */
-  function servedKeys(pid) {
+  /* mode 'first' keeps the EARLIEST copy that carried each document instead of the
+     latest. Deadlines are met by the first service, not the most recent one: a pack
+     re-sent after the start date must not make the original send look late. */
+  function servedKeys(pid, mode) {
     const out = {};
+    const keep = mode === 'first';
+    const set = (k, on) => { if (!(keep && out[k])) out[k] = on; };
     (ST().letters || [])
       .filter(x => x.property_id === pid && /^serve_/.test(x.type || '') && x.body_html)
       .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0))
@@ -212,10 +217,10 @@
            today, and the 30-day clocks must read the real date. */
         const on = (body.match(/<!--nexlet-served-on:([^>]*)-->/) || [])[1] || x.created_at;
         const m = body.match(/<!--nexlet-served:([^>]*)-->/);
-        if (m) { m[1].split(',').filter(Boolean).forEach(k => { out[k] = on; }); return; }
+        if (m) { m[1].split(',').filter(Boolean).forEach(k => { set(k, on); }); return; }
         /* Filed before the stamp existed: the copy still names each document it
            carried, so read the labels back out of it. */
-        REG.forEach(r => { if (r.label && body.indexOf(r.label) >= 0) out[r.key] = on; });
+        REG.forEach(r => { if (r.label && body.indexOf(r.label) >= 0) set(r.key, on); });
       });
     return out;
   }
@@ -481,6 +486,7 @@
 
   window.NexLetServe = {
     open, items, sentAt, servedAt, servedKeys, recordManual, saveManual, unevidenced,
+    firstServedKeys: pid => servedKeys(pid, 'first'),
 
     preview(pid, audience) {
       const m = compose(pid, audience, pickedKeys(), (document.getElementById('srv-note') || {}).value || '');
