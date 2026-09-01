@@ -175,6 +175,7 @@ h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px
   <script src="nexlet-fees.js"></script>
   <script src="nexlet-capture.js"></script>
   <script src="nexlet-material.js"></script>
+  <script src="nexlet-complaints.js"></script>
   <script src="nexlet-inventory.js"></script>
 <script>
 // ─────────────────────────────────────────────────────────────
@@ -203,8 +204,8 @@ let LIVE=false;                 // set true only after the auth gateway passes
 window._agencyId=null;          // every LIVE query is scoped to this agency
 
 // ── row ⇄ in-memory-object mappers (snake_case DB ⇄ camelCase S) ──
-const rowToAgency=r=>({name:r.name||'',address:r.address||'',companyNo:r.company_no||'',tagline:r.tagline||'Your neighbourhood property people.',replyTo:r.reply_to||'',archiveEmail:r.archive_email||'',depScheme:r.dep_scheme||'',depMembership:r.dep_membership||'',depProduct:r.dep_product||'custodial',depHolderDefault:r.dep_holder_default||'landlord',schemeAdminAddress:r.scheme_admin_address||'',schemeAdminPhone:r.scheme_admin_phone||'',schemeAdminEmail:r.scheme_admin_email||'',bankName:r.bank_name||'',bankAccName:r.bank_acc_name||'',bankSortCode:r.bank_sort_code||'',bankAccNo:r.bank_acc_no||'',rentGuide:r.rent_guide||[],marketComps:r.market_comps||[],standardClauses:r.standard_clauses||[],bizDocs:r.biz_docs||[],bizExpenses:r.biz_expenses||[],redress:r.redress_scheme||'',redressNo:r.redress_no||'',cmp:r.cmp_scheme||'Not holding client money',cmpNo:r.cmp_no||'',refPartner:r.ref_partner||'',icoNo:r.ico_no||'',vatRegistered:!!r.vat_registered,vatNumber:r.vat_number||'',invoiceSeq:r.invoice_seq||0,paymentTerms:r.payment_terms||14,abortiveFee:r.abortive_fee??250,noticeFee:r.notice_fee??75,renewalFee:r.renewal_fee??60,arrearsFee:r.arrears_fee??30,keyFee:r.key_fee??60,insuranceFee:r.insurance_fee??50,disputeFee:r.dispute_fee??75,invMoveinFee:r.inv_movein_fee??75,invMoveoutFee:r.inv_moveout_fee??65,invStyle:r.inv_style||[]});
-const agencyToRow=a=>({name:a.name,address:a.address,company_no:a.companyNo||null,tagline:a.tagline||null,reply_to:a.replyTo||null,archive_email:a.archiveEmail||null,dep_scheme:a.depScheme||null,dep_membership:a.depMembership||null,dep_product:a.depProduct||'custodial',dep_holder_default:a.depHolderDefault||'landlord',scheme_admin_address:a.schemeAdminAddress||null,scheme_admin_phone:a.schemeAdminPhone||null,scheme_admin_email:a.schemeAdminEmail||null,bank_name:a.bankName||null,bank_acc_name:a.bankAccName||null,bank_sort_code:a.bankSortCode||null,bank_acc_no:a.bankAccNo||null,rent_guide:a.rentGuide||[],market_comps:a.marketComps||[],standard_clauses:a.standardClauses||[],biz_docs:a.bizDocs||[],biz_expenses:a.bizExpenses||[],redress_scheme:a.redress,redress_no:a.redressNo,cmp_scheme:a.cmp,cmp_no:a.cmpNo,ref_partner:a.refPartner,ico_no:a.icoNo,vat_registered:!!a.vatRegistered,vat_number:a.vatNumber,invoice_seq:a.invoiceSeq||0,payment_terms:a.paymentTerms||14,abortive_fee:a.abortiveFee||0,notice_fee:a.noticeFee||0,renewal_fee:a.renewalFee||0,arrears_fee:a.arrearsFee||0,key_fee:a.keyFee||0,insurance_fee:a.insuranceFee||0,dispute_fee:a.disputeFee||0,inv_movein_fee:a.invMoveinFee||0,inv_moveout_fee:a.invMoveoutFee||0,inv_style:a.invStyle||[],updated_at:new Date().toISOString()});
+const rowToAgency=r=>({name:r.name||'',address:r.address||'',companyNo:r.company_no||'',tagline:r.tagline||'Your neighbourhood property people.',replyTo:r.reply_to||'',archiveEmail:r.archive_email||'',depScheme:r.dep_scheme||'',depMembership:r.dep_membership||'',depProduct:r.dep_product||'custodial',depHolderDefault:r.dep_holder_default||'landlord',schemeAdminAddress:r.scheme_admin_address||'',schemeAdminPhone:r.scheme_admin_phone||'',schemeAdminEmail:r.scheme_admin_email||'',bankName:r.bank_name||'',bankAccName:r.bank_acc_name||'',bankSortCode:r.bank_sort_code||'',bankAccNo:r.bank_acc_no||'',rentGuide:r.rent_guide||[],marketComps:r.market_comps||[],standardClauses:r.standard_clauses||[],bizDocs:r.biz_docs||[],bizExpenses:r.biz_expenses||[],redress:r.redress_scheme||'',redressNo:r.redress_no||'',cmp:r.cmp_scheme||'Not holding client money',cmpNo:r.cmp_no||'',refPartner:r.ref_partner||'',icoNo:r.ico_no||'',vatRegistered:!!r.vat_registered,vatNumber:r.vat_number||'',invoiceSeq:r.invoice_seq||0,paymentTerms:r.payment_terms||14,abortiveFee:r.abortive_fee??250,noticeFee:r.notice_fee??75,renewalFee:r.renewal_fee??60,arrearsFee:r.arrears_fee??30,keyFee:r.key_fee??60,insuranceFee:r.insurance_fee??50,disputeFee:r.dispute_fee??75,invMoveinFee:r.inv_movein_fee??75,invMoveoutFee:r.inv_moveout_fee??65,invStyle:r.inv_style||[],complaints:r.complaints||[],complaintsPublishedAt:r.complaints_published_at||''});
+const agencyToRow=a=>({name:a.name,address:a.address,company_no:a.companyNo||null,tagline:a.tagline||null,reply_to:a.replyTo||null,archive_email:a.archiveEmail||null,dep_scheme:a.depScheme||null,dep_membership:a.depMembership||null,dep_product:a.depProduct||'custodial',dep_holder_default:a.depHolderDefault||'landlord',scheme_admin_address:a.schemeAdminAddress||null,scheme_admin_phone:a.schemeAdminPhone||null,scheme_admin_email:a.schemeAdminEmail||null,bank_name:a.bankName||null,bank_acc_name:a.bankAccName||null,bank_sort_code:a.bankSortCode||null,bank_acc_no:a.bankAccNo||null,rent_guide:a.rentGuide||[],market_comps:a.marketComps||[],standard_clauses:a.standardClauses||[],biz_docs:a.bizDocs||[],biz_expenses:a.bizExpenses||[],redress_scheme:a.redress,redress_no:a.redressNo,cmp_scheme:a.cmp,cmp_no:a.cmpNo,ref_partner:a.refPartner,ico_no:a.icoNo,vat_registered:!!a.vatRegistered,vat_number:a.vatNumber,invoice_seq:a.invoiceSeq||0,payment_terms:a.paymentTerms||14,abortive_fee:a.abortiveFee||0,notice_fee:a.noticeFee||0,renewal_fee:a.renewalFee||0,arrears_fee:a.arrearsFee||0,key_fee:a.keyFee||0,insurance_fee:a.insuranceFee||0,dispute_fee:a.disputeFee||0,inv_movein_fee:a.invMoveinFee||0,inv_moveout_fee:a.invMoveoutFee||0,inv_style:a.invStyle||[],complaints:a.complaints||[],complaints_published_at:a.complaintsPublishedAt||null,updated_at:new Date().toISOString()});
 const rowToLandlord=r=>({id:r.id,name:r.name||'',joint:r.joint||'',jointEmail:r.joint_email||'',entity:r.entity||'individual',agencyType:(r.docs&&r.docs.agencyType)||'sole',boardOptOut:!!(r.docs&&r.docs.boardOptOut),email:r.email||'',phone:r.phone||'',address:r.address||'',nrl:!!r.nrl,prsReg:r.prs_reg||'',payout:r.payout||'',contactPref:r.contact_pref||'Email',aml:!!r.aml_verified,ownership:!!r.ownership_verified,service:r.service||'full',feePct:r.fee_pct,letWeeks:r.let_weeks,agreement:!!r.agreement_signed,status:r.status||'pending',docs:r.docs||{},comms:r.comms||[],inviteToken:r.invite_token||'',invitedAt:r.invited_at||''});
 const landlordToRow=l=>({id:l.id,agency_id:window._agencyId,name:l.name,joint:l.joint||null,joint_email:l.jointEmail||null,entity:l.entity||'individual',email:l.email,phone:l.phone,address:l.address,nrl:!!l.nrl,prs_reg:l.prsReg,payout:l.payout,contact_pref:l.contactPref,aml_verified:!!l.aml,ownership_verified:!!l.ownership,service:l.service,fee_pct:l.feePct,let_weeks:l.letWeeks,agreement_signed:!!l.agreement,status:l.status,docs:Object.assign({},l.docs||{},{agencyType:l.agencyType||'sole',boardOptOut:!!l.boardOptOut}),comms:l.comms||[],invite_token:l.inviteToken||null,invited_at:l.invitedAt||null,updated_at:new Date().toISOString()});
 // Bill-to / statement name — a company landlord shows the company name; joint owners
@@ -307,7 +308,8 @@ const noticeToRow=n=>({id:n.id,agency_id:window._agencyId,landlord_id:n.landlord
    until the migration is run. */
 async function pushAgency(){
   const row=agencyToRow(S.agency);
-  if(window._noInvStyle) delete row.inv_style;
+  const LATE=['inv_style','complaints','complaints_published_at'];
+  if(window._noLateCols) LATE.forEach(k=>delete row[k]);
   /* Deliberately unaudited, as before this refactor. Agency settings are written
      by sixteen callers — every invoice bumps the sequence number, every business
      document, expense and clause edit saves the whole row — and the trail is
@@ -315,11 +317,11 @@ async function pushAgency(){
   if(!LIVE) return _w(Promise.resolve({}));
   const {error}=await sb.from('agencies').update(row).eq('id',window._agencyId);
   if(!error) return true;
-  const missing=/inv_style/.test(error.message||'')||error.code==='PGRST204'||error.code==='42703';
-  if(missing&&!window._noInvStyle){
-    window._noInvStyle=true;
-    console.warn('agencies.inv_style not present — saving without it. Run nexlet-photo-provenance.sql.');
-    delete row.inv_style;
+  const missing=new RegExp(LATE.join('|')).test(error.message||'')||error.code==='PGRST204'||error.code==='42703';
+  if(missing&&!window._noLateCols){
+    window._noLateCols=true;
+    console.warn('agencies is missing one of '+LATE.join(', ')+' — saving without them. Run nexlet-complaints.sql.');
+    LATE.forEach(k=>delete row[k]);
     const retry=await sb.from('agencies').update(row).eq('id',window._agencyId);
     if(!retry.error) return true;
     console.error(retry.error); toast('⚠ Save failed: '+(retry.error.message||'unknown error')+' — retry',1); return false;
@@ -4746,6 +4748,7 @@ function vBusiness(){
   const a=S.agency; const docs=a.bizDocs||[]; const exps=(a.bizExpenses||[]).slice().sort((x,y)=>(y.date||'').localeCompare(x.date||''));
   const totalYtd=exps.filter(e=>(e.date||'').slice(0,4)===String(new Date().getFullYear())).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
   return `<h1 class="pg">Business</h1><div class="sub">Your agency's own documents and bills — licensing, insurance, domain, redress/CMP paperwork — separate from landlord and tenant invoices.</div>
+    <div style="max-width:700px">${window.NexLetComplaints?NexLetComplaints.panel():''}</div>
     <div class="panel" style="max-width:700px"><div class="panel-hd"><h2>Business documents</h2><span class="faint" style="font-size:12px">${docs.length} on file</span></div>
       <div class="panel-bd">
         ${docs.length?docs.map(d=>`<div class="doc" style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px"><div class="di" style="background:var(--green-bg);color:var(--green)">📄</div>
