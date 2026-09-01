@@ -7894,7 +7894,8 @@ async function generateInvReport(vid,type){
     try{
       let content,promptTxt;
       if(type==='movein'){
-        promptTxt=`UK letting agent move-in condition report, written as evidence for a future deposit dispute. Describe the condition of "${r.room} — ${r.item}" from these ${r.checkin.photos.length} check-in photo(s). Note: "${r.checkin.note||'none'}". Be specific and factual — name the material/colour/finish where visible, and explicitly record any existing marks, wear, damage or cleanliness issues visible in the photos (so the tenant is not later charged for them). Avoid vague filler like "good condition" or "as expected" with no detail — an adjudicator needs a description precise enough to compare against the check-out. Rate overall condition using ONLY one of these standard terms: "New", "Good", "Fair wear and tear", "Worn", "Damaged". Return ONLY JSON: {"condition":"one of the terms above","summary":"one or two sentences, specific and evidential"}`;
+        promptTxt=(window.NexLetCapture?NexLetCapture.HOUSE_STYLE:'')
+          +`Write the entry for "${r.room} — ${r.item}" from these ${r.checkin.photos.length} check-in photograph(s). Clerk's note: "${r.checkin.note||'none'}". Return ONLY JSON: {"condition":"one of the terms","summary":"the entry, in house style"}`;
         content=[...(await Promise.all(r.checkin.photos.map(_imgPart))),{type:'text',text:promptTxt}];
       } else {
         const costAsk=(type==='moveout'||type==='precheckout')?', "estimatedCost":number (like-for-like repair/replacement cost in GBP, only if damage/cleaning), "ageAtCheckinYears":number (how old the item looked AT CHECK-IN, 0=new)':'';
@@ -7965,6 +7966,7 @@ function _invReportHtml(r,p,t,v){
     if(!parts.length&&!ack.confirmed) return '';
     return `<div style="padding:12px 24px;border-bottom:1px solid #EEF1F5;font-size:11.5px;color:#8A7D6E;line-height:1.6">${parts.map(x=>'<div>'+x+'</div>').join('')}${ack.confirmed?`<div style="margin-top:4px;color:#1B7A4B;font-weight:700">✓ Tenant confirmed accurate — ${esc(ack.name)}, via ${esc(ack.method)}, ${fmtDate(ack.date)}</div>`:`<div style="margin-top:4px;color:#B86E20">Awaiting tenant acknowledgement of this report</div>`}</div>`; })():'';
   const cleanBlock=(v&&window.NexLetCapture)?NexLetCapture.cleanReportBlock(v):'';
+  const preamble=(r.type==='movein'&&window.NexLetCapture)?NexLetCapture.preamble(agencyBrand().name):'';
   const money=(r.type==='moveout'||r.type==='precheckout')?`<div style="display:grid;grid-template-columns:repeat(3,1fr);background:#F4F6F9;border-bottom:1px solid #E2E5EA">
       <div style="padding:16px 20px;border-right:1px solid #E2E5EA"><div style="font-size:10px;font-weight:700;letter-spacing:.5px;color:#94A3B8;text-transform:uppercase">Deposit held</div><div style="font-size:20px;font-weight:700;color:#1B2F4A;margin-top:4px">${money2(r.depositHeld)}</div></div>
       <div style="padding:16px 20px;border-right:1px solid #E2E5EA"><div style="font-size:10px;font-weight:700;letter-spacing:.5px;color:#94A3B8;text-transform:uppercase">${r.type==='precheckout'?'Indicative deduction':'Proposed deduction'}</div><div style="font-size:20px;font-weight:700;color:#C0392B;margin-top:4px">${money2(r.totalDeduction)}</div><div style="font-size:10px;color:#94A3B8;margin-top:1px">${r.results.length} item${r.results.length===1?'':'s'} assessed</div></div>
@@ -8019,7 +8021,7 @@ function _invReportHtml(r,p,t,v){
         <div style="text-align:right;font-size:11px;color:rgba(255,255,255,.75);line-height:1.6">${dateBlock}</div>
       </div>
     </div>
-    ${money}${remedyBanner}${metaBanner}${cleanBlock}${legend}
+    ${money}${remedyBanner}${metaBanner}${cleanBlock}${preamble}${legend}
     <div style="padding:4px 24px 8px;background:#fff">${rows}</div>
     ${footer}
   </div>`;
