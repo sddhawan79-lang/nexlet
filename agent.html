@@ -172,6 +172,7 @@ h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px
   <script src="nexlet-history.js"></script>
   <script src="nexlet-actions.js"></script>
   <script src="nexlet-search.js"></script>
+  <script src="nexlet-fees.js"></script>
 <script>
 // ─────────────────────────────────────────────────────────────
 // NexLet Agency Portal — functional front-end (local state demo).
@@ -399,6 +400,7 @@ window.pushTenantRec=t=>pushTenantRec(t);
    bindings, not window properties. Bridged, like pushTenantRec above. */
 window.pushProperty=p=>pushProperty(p);
 window.pushLandlord=l=>pushLandlord(l);
+window.pushAgency=()=>pushAgency();
 /* When the tenant document pack went out, from whichever of the two records
    holds it: the flag the one sender now writes, or a filed serve copy from
    before it did. Read everywhere the pack's status is shown, so no panel can
@@ -2024,6 +2026,7 @@ function vProperties(){
   const all=S.properties||[];
   const list=NexLetSearch.filter('props',all,[p=>p.address,p=>p.city,p=>p.postcode,p=>(p.postcode||'').replace(/\s/g,''),p=>(L(p.landlordId)||{}).name,p=>p.tenant?'occupied let':'vacant empty']);
   return `<h1 class="pg">All Properties</h1><div class="sub">Every property across all your landlords. Click one to manage compliance &amp; tenancy.</div>
+    ${(window.NexLetFees&&!NexLetFees.published())?`<div class="note warn" style="margin-bottom:14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><span style="flex:1;min-width:260px"><b>No fee display published.</b> The Consumer Rights Act requires your fees — landlord and tenant — to be on display and on the website before a property is advertised. £5,000 penalty.</span><button class="btn sm navy" onclick="NexLetFees.open()">Publish it</button></div>`:''}
     ${all.length>5?NexLetSearch.bar('props','Address, postcode, landlord, vacant…',list.length,all.length):''}
     <div class="panel">${!all.length?`<div class="empty">No properties yet — add one from a landlord's record.</div>`:list.length?list.map(p=>{const comp=propCompliance(p);return `<div class="row" style="cursor:pointer" onclick="go('property','${p.id}')">
       <div class="av">⌂</div><div style="flex:1"><div style="font-size:14px;font-weight:600;color:var(--navy)">${esc(p.address)}</div>
@@ -4702,6 +4705,18 @@ function vSettings(){
       </div>
       <div class="hint" style="margin:-6px 0 14px;color:var(--faint)">Independent AIIC clerks charge £110–120 for a move-in inventory/check-in and £95–100 for a move-out check-out — these defaults price the agency's report at that same professional market rate, reflecting the full photographic and written schedule of condition it now produces.</div>
       <div class="hint" style="margin:-6px 0 14px;color:var(--faint)">These ancillary fees are itemised in Clause 5b of the management agreement so they're contractually agreed upfront. Leave any at £0 to omit it from the contract. The notice-serving fee is charged automatically to the landlord each time you generate a Section 8 or Section 13 notice.</div>
+      ${(()=>{ const pub=window.NexLetFees?NexLetFees.published():null;
+        return `<div style="border:1px solid var(--${pub?'border':'amber'});border-left-width:5px;border-radius:10px;padding:14px 16px;margin:0 0 16px;background:var(--${pub?'off':'amber-bg'})">
+        <div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
+          <div style="flex:1;min-width:240px">
+            <div style="font-size:13.5px;font-weight:700;color:var(--${pub?'navy':'amber'})">${pub?'Fee display published '+fmtDate(pub.addedAt):'⚠ Fee display not published'}</div>
+            <div class="faint" style="font-size:11.5px;margin-top:3px;line-height:1.55">Section 83 of the Consumer Rights Act 2015 requires the fees above — and what tenants pay — to be displayed where you meet people and on your website, from your first advert. £5,000 penalty. Built from these settings, so it cannot contradict the management agreement. Republish whenever a fee changes.</div>
+          </div>
+          <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:flex-start">
+            ${pub&&pub.url?`<button class="btn sm" onclick="viewDoc('${pub.url}','Fee display')">View filed copy</button>`:''}
+            <button class="btn sm${pub?'':' navy'}" onclick="NexLetFees.open()">${pub?'Republish':'Publish it'}</button>
+          </div>
+        </div></div>`; })()}
       <div class="fg"><label>Tenant referencing partner</label><select id="set-ref">${partnerOpts}</select>
         <div class="hint">Powers the credit/Open-Banking checks. ~£15–25 per tenant, usually passed to the landlord. No FCA licence needed on your side — the partner is the regulated party.</div></div>
       <div class="inline2"><div class="fg"><label>VAT registered?</label><select id="set-vat"><option value="no" ${!a.vatRegistered?'selected':''}>No — under £90k threshold</option><option value="yes" ${a.vatRegistered?'selected':''}>Yes — charge 20% VAT</option></select></div>
@@ -5802,7 +5817,7 @@ function openHouseholdDecl(pid){
      <p class="hint" style="margin-top:12px">"Not related" is a legitimate answer and often the correct one. It means the property needs the right licence, not that anything is wrong.</p>`,
     `<span class="hint" id="hh-gate" style="flex:1;text-align:left">Read the draft before it can be sent.</span>
      <button class="btn" onclick="closeModal()">Cancel</button>
-     ${existing&&existing.document_html?`<button class="btn" onclick="_openLetter({body_html:householdDeclFor(tenantRecFor('${pid}').id).document_html})">See what was sent</button>`:''}
+     ${existing&&existing.document_html?`<button class="btn" onclick="viewTenancyDoc('${existing.id}')">See what was sent${sent&&!done?' and who has signed':''}</button>`:''}
      <button class="btn" onclick="_hhDraft('${pid}')">Open draft</button>
      <button class="btn navy" id="hh-send" disabled style="opacity:.45;cursor:not-allowed" onclick="_hhSend('${pid}')">${sent||done?'Send a new declaration':'Send for signing'}</button>`, true);
 }
@@ -6633,6 +6648,23 @@ function tenancySigBlock(a){
     </div>
     <div style="font-size:11px;color:#8A7D6E;margin-top:9px;line-height:1.6">Each person signed using a personal link on their own device. The time, IP address and device of every signature were recorded by the server and cannot be altered.</div>
   </div>`;
+}
+/* Viewing an e-signed tenancy-style document. document_html is the document as it
+   was WRITTEN — it has no signature slots in it, because the signatures live on
+   the row, not in the text. Rendering document_html on its own therefore shows a
+   declaration nobody appears to have signed, which is exactly the wrong thing to
+   show when the question being asked is who signed it. */
+function viewTenancyDoc(docId){
+  const a=(S.tenancyAgreements||[]).find(x=>x.id===docId);
+  if(!a||!a.document_html){ toast('No copy held for this document',1); return; }
+  const signed=(a.signatories||[]).filter(s=>s.signed_at).length;
+  const total=(a.signatories||[]).length;
+  _openLetter({subject:taDocLabel(a),body_html:
+    (total?`<div style="border:1px solid ${signed===total?'#BFD8C4':'#EADFC8'};background:${signed===total?'#F3F8F4':'#FAF6EE'};border-radius:8px;padding:11px 14px;margin-bottom:16px;font-size:12.5px;color:#4A4038">
+      <b>${signed===total?'Signed by everyone':signed+' of '+total+' have signed'}.</b> ${a.created_at?'Sent '+esc(fmtDate(a.created_at))+'.':''}</div>`:'')+
+    tenancySigBlock(a)+
+    '<hr style="border:none;border-top:1px solid #E4EAF1;margin:22px 0">'+
+    a.document_html});
 }
 function signedCertHtml(a){
   const fmt=d=>d?new Date(d).toLocaleString('en-GB',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
