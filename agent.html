@@ -825,11 +825,48 @@ function _miBlock(l){
     '<button class="btn" onclick="closeModal()">Cancel</button>'
     +'<button class="btn navy" onclick="closeModal();NexLetMaterial.open(\''+String(l.propertyId).replace(/'/g,'')+'\')">Complete it now</button>');
 }
-function togglePortal(lid,portal){ const l=LST(lid); if(!(l.portals&&l.portals[portal])&&_miBlock(l)) return; l.portals=l.portals||{}; l.portals[portal]=!l.portals[portal]; if(Object.values(l.portals).some(Boolean)&&l.status==='draft')l.status='live'; save(); pushListing&&pushListing(l); render(); }
+function togglePortal(lid,portal){ const l=LST(lid); if(!(l.portals&&l.portals[portal])&&_miBlock(l)) return; l.portals=l.portals||{}; l.portals[portal]=!l.portals[portal];
+  /* When the advert went up, not when the row was drawn. Without it "advertised"
+     is a fact with no date, and the whole point of the record is being able to
+     say how long a property has been on the market. */
+  l.portalDates=l.portalDates||{}; if(l.portals[portal]) l.portalDates[portal]=today(); else delete l.portalDates[portal]; if(Object.values(l.portals).some(Boolean)&&l.status==='draft')l.status='live'; save(); pushListing&&pushListing(l); render(); }
 function publishListing(lid){ const l=LST(lid); if(_miBlock(l)) return; l.portals={rightmove:true,zoopla:true,website:true}; l.status='live'; l.publishedAt=today(); if(l.propertyId) _advanceStage(l.propertyId,'marketing'); save(); pushListing&&pushListing(l); render(); toast('✓ Published to Rightmove, Zoopla & your site'); }
 /* Never gated: taking an advert down can only improve the position, so nothing
    should stand between the agent and doing it. */
 function _miTakeDown(lid){ const l=LST(lid); l.portals={}; if(l.status==='live') l.status='draft'; save(); pushListing&&pushListing(l); render(); toast('Advert taken down — complete the material information before it goes back up'); }
+/* Every field a portal form asks for, in the order it asks. Nothing here talks
+   to Rightmove — it just means the agent types the address once, in NexLet,
+   rather than again into each site. */
+function _copyListing(lid){
+  const l=LST(lid); const p=l.propertyId?P(l.propertyId):null;
+  const mi=(p&&p.certs&&p.certs._mi)||{};
+  const f=(k)=>{ const a=mi[k]; if(!a||!a.src) return ''; return a.src==='unknown'?'Not known':(a.applies===false?'No':(a.v||'')); };
+  const out=[];
+  const add=(k,v)=>{ if(v!==''&&v!=null) out.push(k+': '+v); };
+  add('Address',[l.address,l.postcode].filter(Boolean).join(', '));
+  add('Rent',gbp(l.rent)+' per calendar month');
+  add('Property type',l.ptype); add('Bedrooms',l.beds); add('Bathrooms',l.baths);
+  add('Furnished',l.furnished); add('Available from',l.available?fmtDate(l.available):'');
+  add('EPC',l.epc); add('Council tax band',p?p.councilTaxBand:'');
+  add('Deposit',f('deposit')); add('Minimum term',f('tenancyLength')); add('Bills included',f('billsIncluded'));
+  out.push('');
+  add('Construction',f('construction')); add('Rooms',f('rooms'));
+  add('Electricity',f('electricity')); add('Water',f('water')); add('Drainage',f('drainage'));
+  add('Heating',f('heating')); add('Broadband',f('broadband')); add('Mobile signal',f('mobile'));
+  add('Parking',f('parking'));
+  /* Part C only where it applies. A flood risk or a shared access is precisely
+     what has to be on the advert, and leaving it to the separate sheet means it
+     is disclosed everywhere except the place people actually read. */
+  const cYes=((window.NexLetMaterial&&window.NexLetMaterial.C_FIELDS)||[]).filter(f=>{ const a=mi[f[0]]; return a&&a.applies&&a.v; });
+  if(cYes.length){ out.push(''); out.push('Also disclose:'); cYes.forEach(f=>out.push('\u2022 '+String(f[1]).split(' \u2014 ')[0]+': '+mi[f[0]].v)); }
+  if(l.features&&l.features.length){ out.push(''); add('Features',l.features.join(', ')); }
+  if(l.description){ out.push(''); out.push('Description:'); out.push(l.description); }
+  const txt=out.join('\n');
+  if(navigator.clipboard) navigator.clipboard.writeText(txt);
+  modal('Listing details','<p class="hint" style="margin:0 0 10px">Copied. Paste into the portal\u2019s own form \u2014 the order matches how they ask.</p>'
+    +'<textarea rows="18" style="width:100%;font-family:ui-monospace,monospace;font-size:12px">'+esc(txt)+'</textarea>',
+    '<button class="btn navy" onclick="closeModal()">Done</button>');
+}
 function markLet(lid){ const l=LST(lid); l.status='let'; save(); pushListing&&pushListing(l); render(); toast('✓ Marked let agreed'); }
 
 function vListingDetail(){
@@ -869,10 +906,14 @@ function vListingDetail(){
     ${miBanner}
     <div class="grid2" style="gap:14px;align-items:start">
       <div>
-        <div class="panel"><div class="panel-hd"><h2>Portals</h2><span class="faint" style="font-size:12px">Where it's advertised</span></div><div class="panel-bd">
-          ${[['rightmove','Rightmove'],['zoopla','Zoopla'],['website','Your website']].map(([k,n])=>`<div class="kv"><span class="k">${n}</span><span class="v"><label style="display:inline-flex;align-items:center;gap:7px;cursor:pointer;font-size:13px"><input type="checkbox" ${l.portals&&l.portals[k]?'checked':''} onchange="togglePortal('${l.id}','${k}')" style="width:auto"> ${l.portals&&l.portals[k]?(_miOk?'Live':'<span style="color:var(--amber);font-weight:600">Live — unchecked</span>'):'Off'}</label></span></div>`).join('')}
+        <div class="panel"><div class="panel-hd"><h2>Where it's advertised</h2><span class="faint" style="font-size:12px">Your record — tick after you list</span></div><div class="panel-bd">
+          ${[['rightmove','Rightmove'],['zoopla','Zoopla'],['website','Your website']].map(([k,n])=>`<div class="kv"><span class="k">${n}</span><span class="v"><label style="display:inline-flex;align-items:center;gap:7px;cursor:pointer;font-size:13px"><input type="checkbox" ${l.portals&&l.portals[k]?'checked':''} onchange="togglePortal('${l.id}','${k}')" style="width:auto"> ${l.portals&&l.portals[k]
+      ?(_miOk?'Listed'+((l.portalDates||{})[k]?' since '+esc(fmtDate(l.portalDates[k])):'')
+             :'<span style="color:var(--amber);font-weight:600">Listed — material info incomplete</span>')
+      :'Not listed'}</label></span></div>`).join('')}
           <div class="kv" style="border:none"><span class="k">Shareable link</span><span class="v" style="font-size:12px">${shareCell}</span></div>
-          <div class="hint" style="margin-top:10px">Rightmove &amp; Zoopla require agency membership + a data-feed agreement — that's the one integration your developer wires (see brief). Toggles here drive the feed NexLet generates.</div>
+          <div class="hint" style="margin-top:10px">NexLet does not push to Rightmove or Zoopla — that needs agency membership and a data-feed agreement with each of them. List the property on their site yourself, then tick it here so the record shows where it is advertised and since when. <b>Copy the details</b> below gives you every field in one go, so listing by hand is paste rather than retype.</div>
+          <button class="btn sm" style="margin-top:9px" onclick="_copyListing('${l.id}')">Copy the details for a portal form</button>
         </div></div>
         <div class="panel"><div class="panel-hd"><h2>Listing details</h2></div><div class="panel-bd">
           <div class="kv"><span class="k">Postcode</span><span class="v">${esc(l.postcode||'—')}</span></div>
@@ -2113,7 +2154,7 @@ function advance(id){ const t=S.tenancies.find(x=>x.id===id); const i=STAGES.fin
 function vReferencing(){
   const partner=S.agency.refPartner;
   const note=partner
-    ? `<b>How this works:</b> Referencing is handled by your partner, <b>${esc(partner)}</b> — once you've captured an applicant's name, email and phone (done automatically when an offer is accepted), hand these off to them and they run ID, Right to Rent, credit, employer and landlord checks directly with the applicant. Record the outcome here (pass/fail/conditional) so it's visible against the tenancy — no need to collect documents yourself.`
+    ? `<b>How this works:</b> Referencing is handled by your partner, <b>${esc(partner)}</b> — once you've captured an applicant's name, email and phone (done automatically when an offer is accepted), raise the check in their portal and they run credit, employer and landlord checks directly with the applicant. Record here what you sent, when, and their reference, so a slow hand-off can be chased — then log the outcome against the tenancy. NexLet does not submit to them; they have no API.`
     : `<b>How this works (no FCA licence needed):</b> NexLet runs the full in-house workflow — employer & previous-landlord references, proof of income, ID, Right-to-Rent — plus an affordability test (income ≥ 30× monthly rent). The regulated <b>credit search</b> (CCJs, score) and Open-Banking income come from a referencing partner (set one in Agency Settings to switch to the hand-off model above).`;
   return `<h1 class="pg">Tenant Referencing</h1><div class="sub">Track referencing status per applicant and record the outcome.</div>
     <div class="note" style="margin-bottom:16px">${note}</div>
@@ -5377,23 +5418,41 @@ function renderReference(){
           <div class="faint" style="font-size:11.5px">Regulated CCJ/score + Open Banking via partner</div></div>
         <span class="pill" style="background:${cr.bg};color:${cr.color}">${cr.label}</span></div>
       <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
-        ${RF.creditState==='not_requested'?`<button class="btn sm" onclick="_credit('requested')">Request credit check (API)</button>`:''}
-        ${RF.creditState==='requested'?`<button class="btn sm" onclick="_credit('in_progress')">Mark in progress</button>`:''}
-        ${(RF.creditState==='in_progress'||RF.creditState==='requested')?`<button class="btn sm navy" onclick="_credit('complete')">Attach result</button>`:''}
+        ${RF.creditState==='not_requested'?`<button class="btn sm navy" onclick="_credit('requested')">I've sent it to ${esc(S.agency.refPartner||'the partner')}</button>`:''}
+        ${RF.creditState==='requested'?`<button class="btn sm" onclick="_credit('in_progress')">They've started it</button>`:''}
+        ${(RF.creditState==='in_progress'||RF.creditState==='requested')?`<button class="btn sm navy" onclick="_credit('complete')">Result received</button>`:''}
         ${RF.creditState==='complete'?`<span class="faint" style="font-size:12px;align-self:center">✓ ${esc(RF.credit||'Report attached')}</span>`:''}
       </div>
-      <div class="hint" style="margin-top:8px">"Request credit check" is the API hook your developer wires to ${S.agency.refPartner||'your partner'}. Until then, run it in their portal and click "Attach result".</div>
+      ${RF.creditState!=='not_requested'?`<div class="grid2" style="gap:10px;margin-top:10px">
+        <div class="fg" style="margin:0"><label style="font-size:11.5px">Sent on</label><input id="rf-sent" type="date" value="${esc(RF.sentAt||'')}"></div>
+        <div class="fg" style="margin:0"><label style="font-size:11.5px">Their reference</label><input id="rf-ref" value="${esc(RF.partnerRef||'')}" placeholder="e.g. LA-448210"></div>
+      </div>`:''}
+      ${_refChase(RF)}
+      <div class="hint" style="margin-top:8px">NexLet does not submit to ${esc(S.agency.refPartner||'your partner')} — they have no API. Run it in their portal, then record here what you sent and when, so the hand-off can be chased and evidenced.</div>
     </div>
     <div class="fg" style="margin-top:14px"><label>Overall outcome</label><select id="rf-status"><option value="none" ${RF.status==='none'?'selected':''}>Not decided</option><option value="green" ${RF.status==='green'?'selected':''}>● Pass — proceed</option><option value="amber" ${RF.status==='amber'?'selected':''}>● Caution — guarantor / conditions</option><option value="red" ${RF.status==='red'?'selected':''}>● Fail — decline</option></select></div>
     <div class="fg"><label>Notes</label><textarea id="rf-note" rows="2">${esc(RF.note)}</textarea></div>`;
   modal('Tenant reference', body, `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="saveReference()">Save reference</button>`, true);
 }
+/* A hand-off with no date cannot be chased, and "still waiting on referencing"
+   is the commonest reason a move-in slips. Three working days is the point at
+   which it is worth a phone call rather than more waiting. */
+function _refChase(r){
+  if(!r||!r.sentAt||r.creditState==='complete') return '';
+  const days=Math.floor((Date.now()-new Date(r.sentAt))/86400000);
+  if(days<3) return '';
+  return '<div class="note warn" style="margin-top:10px;padding:8px 11px;font-size:12px">Sent '+days
+    +' days ago with no result back'+(r.partnerRef?' (their ref '+esc(r.partnerRef)+')':'')+'. Worth a chase.</div>';
+}
 function _affLive(){ const rent=P(RF.propertyId).rent||0; const need=rent*30; const inc=parseInt(val('rf-income'))||0; const el=document.getElementById('rf-aff'); if(el&&rent) el.innerHTML=`Affordability: income must be ≥ ${gbp(need)}/yr (30× rent). `+(inc?(inc>=need?'<b style="color:var(--green)">✓ Passes</b>':'<b style="color:var(--amber)">Below threshold</b>'):''); }
 function _credit(stateTo){ RF.applicant=val('rf-app'); RF.income=parseInt(val('rf-income'))||0; RF.note=val('rf-note'); RF.status=val('rf-status');
-  if(stateTo==='complete'){ RF.credit='credit_report_'+RF.id+'.pdf'; }
+  RF.sentAt=val('rf-sent')||RF.sentAt||''; RF.partnerRef=val('rf-ref')||RF.partnerRef||'';
+  if(stateTo==='requested'&&!RF.sentAt) RF.sentAt=today();
+  if(stateTo==='complete'){ RF.credit='credit_report_'+RF.id+'.pdf'; RF.resultAt=today(); }
   RF.creditState=stateTo; renderReference(); toast(stateTo==='requested'?'Credit check requested via partner':stateTo==='complete'?'✓ Credit report attached':'Marked in progress'); }
 function saveReference(){
   RF.applicant=val('rf-app'); RF.income=parseInt(val('rf-income'))||0; RF.note=val('rf-note'); RF.status=val('rf-status');
+  RF.sentAt=val('rf-sent')||RF.sentAt||''; RF.partnerRef=val('rf-ref')||RF.partnerRef||'';
   if(!RF.applicant){toast('Enter applicant name',1);return;}
   const i=S.references.findIndex(r=>r.id===RF.id);
   if(i>=0) S.references[i]=RF; else S.references.push(RF);
