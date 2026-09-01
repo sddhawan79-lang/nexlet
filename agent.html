@@ -255,7 +255,27 @@ const pushNotice  =n  =>_w(sb.from('agency_notices').upsert(noticeToRow(n)),'age
 const pushTenantRec =t =>_w(sb.from('agency_tenants').upsert(tenantToRow(t)),'agency_tenants','upsert',t);
 const pushRent    =r  =>_w(sb.from('agency_rent_ledger').upsert(rentToRow(r)),'agency_rent_ledger','upsert',r);
 const pushJob     =j  =>_w(sb.from('agency_maintenance').upsert(jobToRow(j)),'agency_maintenance','upsert',j);
-const pushInv2    =v  =>_w(sb.from('agency_inventories').upsert(inv2ToRow(v)),'agency_inventories','upsert',v);
+/* Same degradation as pushAgency, for the same reason: photo_meta and
+   cleanliness arrived after this app shipped, and without them an un-migrated
+   database would refuse every inventory save — rooms, photos and reports
+   included. Better to lose the capture times than the inventory. */
+async function pushInv2(v){
+  const row=inv2ToRow(v);
+  if(window._noInvCols){ delete row.photo_meta; delete row.cleanliness; }
+  if(!LIVE) return _w(Promise.resolve({}),'agency_inventories','upsert',v);
+  const {error}=await sb.from('agency_inventories').upsert(row);
+  if(!error){ if(window.NexLetAudit) NexLetAudit.noteWrite('agency_inventories','upsert',v); return true; }
+  const missing=/photo_meta|cleanliness/.test(error.message||'')||error.code==='PGRST204'||error.code==='42703';
+  if(missing&&!window._noInvCols){
+    window._noInvCols=true;
+    console.warn('agency_inventories.photo_meta/cleanliness not present — saving without them. Run nexlet-photo-provenance.sql.');
+    delete row.photo_meta; delete row.cleanliness;
+    const retry=await sb.from('agency_inventories').upsert(row);
+    if(!retry.error){ if(window.NexLetAudit) NexLetAudit.noteWrite('agency_inventories','upsert',v); return true; }
+    console.error(retry.error); toast('⚠ Save failed: '+(retry.error.message||'unknown error')+' — retry',1); return false;
+  }
+  console.error(error); toast('⚠ Save failed: '+(error.message||'unknown error')+' — retry',1); return false;
+}
 const pushValuation=v =>_w(sb.from('agency_valuations').upsert(valToRow(v)),'agency_valuations','upsert',v);
 const rowToTenant=r=>({id:r.id,propertyId:r.property_id,landlordId:r.landlord_id,userId:r.user_id,name:r.name||'',email:r.email||'',phone:r.phone||'',start:r.start_date||'',end:r.end_date||'',rent:r.rent||0,deposit:r.deposit,scheme:r.scheme||'',schemeRef:r.scheme_ref||'',depositHolder:r.deposit_holder||'landlord',depositReceived:r.deposit_received||'',landlordSchemeNo:r.landlord_scheme_no||'',depositPaidBy:r.deposit_paid_by||'',piServedAt:r.pi_served_at||'',holdingDeposit:r.holding_deposit||0,firstRentReceived:r.first_rent_received||'',payDetails:r.pay_details||'',moniesDueBy:r.monies_due_by||'',moniesSentAt:r.monies_sent_at||'',condensationSentAt:r.condensation_sent_at||'',condensationAckAt:r.condensation_ack_at||'',landlordDepositConfirmedAt:r.landlord_deposit_confirmed_at||'',welcomeSentAt:r.welcome_sent_at||'',status:r.status||'active',inviteToken:r.invite_token||'',invitedAt:r.invited_at||'',invited:!!r.invited_at,occupants:r.occupants||[],guarantor:r.guarantor||null,depositCertName:r.deposit_cert_name||'',piDocName:r.pi_doc_name||'',piDocUrl:r.pi_doc_url||'',depositCertUrl:r.deposit_cert_url||'',depositCertExpiry:r.deposit_cert_expiry||'',refDocName:r.ref_doc_name||'',refDocUrl:r.ref_doc_url||'',shareCode:r.share_code||'',dob:r.dob||'',rtrResult:r.rtr_result||'',rtrExpiry:r.rtr_expiry||'',rtrCheckDate:r.rtr_check_date||'',rtrDocName:r.rtr_doc_name||'',rtrDocUrl:r.rtr_doc_url||'',rtrDocs:r.rtr_docs||[],rtrCheckMethod:r.rtr_check_method||'',origContractName:r.orig_contract_name||'',origContractUrl:r.orig_contract_url||'',id1DocName:r.id1_doc_name||'',id1DocUrl:r.id1_doc_url||'',id2DocName:r.id2_doc_name||'',id2DocUrl:r.id2_doc_url||'',addressProofName:r.address_proof_name||'',addressProofUrl:r.address_proof_url||'',addressProofDocs:r.address_proof_docs||[],forwardingAddress:r.forwarding_address||'',finalMeters:r.final_meters||null,endNotes:r.end_notes||'',checkoutPackSentAt:r.checkout_pack_sent_at||'',moveInPackSentAt:r.move_in_pack_sent_at||'',moveInPackConfirmedAt:r.move_in_pack_confirmed_at||''});
 const tenantToRow=t=>({id:t.id,agency_id:window._agencyId,property_id:t.propertyId,landlord_id:t.landlordId,name:t.name,email:t.email||'',phone:t.phone||'',start_date:t.start||null,end_date:t.end||null,rent:t.rent||0,deposit:t.deposit,scheme:t.scheme||'',scheme_ref:t.schemeRef||'',deposit_holder:t.depositHolder||'landlord',deposit_received:t.depositReceived||null,landlord_scheme_no:t.landlordSchemeNo||'',deposit_paid_by:t.depositPaidBy||'',pi_served_at:t.piServedAt||null,holding_deposit:t.holdingDeposit||null,first_rent_received:t.firstRentReceived||null,pay_details:t.payDetails||'',monies_due_by:t.moniesDueBy||null,monies_sent_at:t.moniesSentAt||null,condensation_sent_at:t.condensationSentAt||null,condensation_ack_at:t.condensationAckAt||null,landlord_deposit_confirmed_at:t.landlordDepositConfirmedAt||null,welcome_sent_at:t.welcomeSentAt||null,status:t.status||'active',invite_token:t.inviteToken||null,invited_at:t.invitedAt||null,occupants:t.occupants||[],guarantor:t.guarantor||null,deposit_cert_name:t.depositCertName||'',pi_doc_name:t.piDocName||'',pi_doc_url:t.piDocUrl||'',deposit_cert_url:t.depositCertUrl||'',deposit_cert_expiry:t.depositCertExpiry||null,ref_doc_name:t.refDocName||'',ref_doc_url:t.refDocUrl||'',share_code:t.shareCode||'',dob:t.dob||null,rtr_result:t.rtrResult||'',rtr_expiry:t.rtrExpiry||null,rtr_check_date:t.rtrCheckDate||null,rtr_doc_name:t.rtrDocName||'',rtr_doc_url:t.rtrDocUrl||'',rtr_docs:t.rtrDocs||[],rtr_check_method:t.rtrCheckMethod||'',orig_contract_name:t.origContractName||'',orig_contract_url:t.origContractUrl||'',id1_doc_name:t.id1DocName||'',id1_doc_url:t.id1DocUrl||'',id2_doc_name:t.id2DocName||'',id2_doc_url:t.id2DocUrl||'',address_proof_name:t.addressProofName||'',address_proof_url:t.addressProofUrl||'',address_proof_docs:t.addressProofDocs||[],forwarding_address:t.forwardingAddress||'',final_meters:t.finalMeters||null,end_notes:t.endNotes||'',checkout_pack_sent_at:t.checkoutPackSentAt||null,move_in_pack_sent_at:t.moveInPackSentAt||null,move_in_pack_confirmed_at:t.moveInPackConfirmedAt||null,updated_at:new Date().toISOString()});
@@ -277,7 +297,34 @@ const rowToInv2=r=>({id:r.id,propertyId:r.property_id==null?'':String(r.property
 const inv2ToRow=v=>({id:v.id,agency_id:window._agencyId,property_id:v.propertyId||null,tenant_id:v.tenantId||null,rooms:v.rooms||[],reports:v.reports||[],deposit_held:v.depositHeld,total_deduction:v.totalDeduction||0,status:v.status||'draft',tenant_ack:v.tenantAck||null,meters:v.meters||null,key_handover:v.keyHandover||null,photo_meta:v.photoMeta||null,cleanliness:v.cleanliness||null,updated_at:new Date().toISOString()});
 const rowToNotice=r=>({id:r.id,landlordId:r.landlord_id,propertyId:r.property_id,kind:r.kind||'section8',grounds:r.grounds||[],tenantName:r.tenant_name||'',served:r.served_date||'',expiry:r.expiry_date||'',rentCurrent:r.rent_current,rentNew:r.rent_new,compliance:r.compliance||{},docHtml:r.doc_html||'',notes:r.notes||'',status:r.status||'draft',createdAt:r.created_at,serviceProof:r.service_proof||null,officialDoc:r.official_doc||null,emailedTo:r.emailed_to||[],emailedAt:r.emailed_at||''});
 const noticeToRow=n=>({id:n.id,agency_id:window._agencyId,landlord_id:n.landlordId,property_id:n.propertyId,kind:n.kind,grounds:n.grounds||[],tenant_name:n.tenantName||'',served_date:n.served||null,expiry_date:n.expiry||null,rent_current:n.rentCurrent,rent_new:n.rentNew,compliance:n.compliance||{},doc_html:n.docHtml||'',notes:n.notes||'',status:n.status||'draft',service_proof:n.serviceProof||null,official_doc:n.officialDoc||null,emailed_to:n.emailedTo||[],emailed_at:n.emailedAt||null});
-const pushAgency   =() =>_w(sb.from('agencies').update(agencyToRow(S.agency)).eq('id',window._agencyId));
+/* inv_style arrived after this app shipped, and a client that hard-fails because
+   one optional column is missing is a client that takes the whole agency record
+   down with it — settings, invoices, business documents, the fee display. So the
+   write degrades: if the database has not been migrated yet, the column is
+   dropped and the save goes through without it, once, quietly. Everything else
+   on the row still persists; only the learned wording examples are held back
+   until the migration is run. */
+async function pushAgency(){
+  const row=agencyToRow(S.agency);
+  if(window._noInvStyle) delete row.inv_style;
+  /* Deliberately unaudited, as before this refactor. Agency settings are written
+     by sixteen callers — every invoice bumps the sequence number, every business
+     document, expense and clause edit saves the whole row — and the trail is
+     append-only, so noise put into it cannot be taken out. */
+  if(!LIVE) return _w(Promise.resolve({}));
+  const {error}=await sb.from('agencies').update(row).eq('id',window._agencyId);
+  if(!error) return true;
+  const missing=/inv_style/.test(error.message||'')||error.code==='PGRST204'||error.code==='42703';
+  if(missing&&!window._noInvStyle){
+    window._noInvStyle=true;
+    console.warn('agencies.inv_style not present — saving without it. Run nexlet-photo-provenance.sql.');
+    delete row.inv_style;
+    const retry=await sb.from('agencies').update(row).eq('id',window._agencyId);
+    if(!retry.error) return true;
+    console.error(retry.error); toast('⚠ Save failed: '+(retry.error.message||'unknown error')+' — retry',1); return false;
+  }
+  console.error(error); toast('⚠ Save failed: '+(error.message||'unknown error')+' — retry',1); return false;
+}
 
 // ── hydrate S from Supabase (LIVE) — one parallel batch, not sequential round-trips ──
 async function loadData(agency){
