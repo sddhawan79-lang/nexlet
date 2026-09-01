@@ -413,8 +413,13 @@
     const aud = audience || 'tenant';
     const c = ctx(pid);
     const srv = servedKeys(pid);
-    const open = items(pid, aud).filter(x => !srv[x.key]);
-    if (!open.length) { window.toast('Everything on the list is already recorded as served'); return; }
+    /* Everything is listed, including what is already recorded. The reason is the
+       28-August case: the pack went out from the agent's own mailbox on the
+       morning of the move, NexLet sent its own copy days later, and the deadline
+       then read the later date. Excluding served items made the earlier, correct
+       date impossible to enter — the one thing that clears the warning. */
+    const open = items(pid, aud);
+    if (!open.length) { window.toast('Nothing on the list for this audience'); return; }
     const today = new Date().toISOString().slice(0, 10);
     window.modal('Record documents you served yourself \u2014 ' + esc(c.p.address || ''),
       '<p class="hint" style="margin:0 0 14px">For anything you handed over, posted, or emailed from your own mailbox. ' +
@@ -428,9 +433,13 @@
       '<div class="fg"><label>Which documents?</label>' +
         open.map(x => '<label style="display:flex;gap:9px;align-items:flex-start;padding:7px 0;' +
           'border-top:1px solid var(--border)">' +
-          '<input type="checkbox" class="rm-item" value="' + x.key + '" checked style="margin-top:3px">' +
+          '<input type="checkbox" class="rm-item" value="' + x.key + '"' +
+          (srv[x.key] ? '' : ' checked') + ' style="margin-top:3px">' +
           '<span><span style="font-size:12.5px;font-weight:600;color:var(--navy)">' + esc(x.label) + '</span>' +
           (x.required ? '' : ' <span class="faint" style="font-size:11px">(not required)</span>') +
+          (srv[x.key] ? '<span class="faint" style="display:block;font-size:11px">Already recorded ' +
+            esc(dt(srv[x.key])) + ' — tick it only to add an EARLIER date, which is what a deadline is ' +
+            'measured from</span>' : '') +
           '</span></label>').join('') + '</div>' +
       '<div class="fg"><label>Note <span class="faint">(optional \u2014 what you sent, to whom)</span></label>' +
         '<input id="rm-note" placeholder="e.g. emailed the key terms PDF to all three tenants"></div>' +

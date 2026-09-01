@@ -287,17 +287,26 @@
        amber instead — legal if it precedes occupation, but with no margin. */
     if (rec.start) {
       const started = dayMs(rec.start) <= dayMs(new Date().toISOString());
+      /* Service the app did not carry is invisible to it, and this is the warning
+         most likely to be wrong for that reason — the documents often go out from
+         the agent's own mailbox on the morning of the move. So the correction is
+         offered on the warning itself rather than left to be found. */
+      const rmAct = '<button class="btn sm" onclick="NexLetServe.recordManual(\'' + esc(pid) +
+        '\',\'tenant\')">Served it yourself? Record the real date</button>';
       Object.keys(START_DUE).forEach(k => {
         if (fst[k] && dayMs(fst[k]) > dayMs(rec.start))
           out.push({ sev: 'red', t: START_DUE[k] + ' was served after the tenancy had started',
             d: 'Tenancy started ' + day(rec.start) + ', first served ' + day(fst[k]) +
-               '. It was due before the start date, not before handover. Penalty up to £7,000 and it blocks possession.' });
+               '. It was due before the start date, not before handover. Penalty up to £7,000 and it blocks possession. ' +
+               'If it actually went out earlier — by hand at the viewing, or from your own mailbox — record that date and this clears.',
+            act: rmAct });
         else if (fst[k] && dayMs(fst[k]) === dayMs(rec.start))
           out.push({ sev: 'amber', t: START_DUE[k] + ' was served on the start date itself',
             d: 'Served ' + day(fst[k]) + ', the day the tenancy began. Legal only if it reached the tenant before they took occupation, and there is no margin in it.' });
         else if (!fst[k] && started)
           out.push({ sev: 'red', t: START_DUE[k] + ' not served, and the tenancy has started',
-            d: 'Due before ' + day(rec.start) + '. Serve it now — late service is better than none — and record the date.' });
+            d: 'Due before ' + day(rec.start) + '. Serve it now — late service is better than none — and record the date.',
+            act: rmAct });
       });
     }
 
@@ -439,7 +448,8 @@
       'background:var(--' + (red ? 'red' : 'amber') + '-bg)">' +
       '<b style="font-size:12.5px;color:var(--' + (red ? 'red' : 'amber') + ')">' +
       (red ? '\u26a0 ' : '') + esc(w.t) + '</b>' +
-      '<div style="font-size:12px;line-height:1.6;color:var(--navy);margin-top:3px">' + esc(w.d) + '</div></div>';
+      '<div style="font-size:12px;line-height:1.6;color:var(--navy);margin-top:3px">' + esc(w.d) + '</div>' +
+      (w.act ? '<div style="margin-top:9px">' + w.act + '</div>' : '') + '</div>';
   }
 
   /* Compact strip for the property page. */
