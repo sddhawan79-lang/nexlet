@@ -174,6 +174,7 @@ h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px
   <script src="nexlet-search.js"></script>
   <script src="nexlet-fees.js"></script>
   <script src="nexlet-capture.js"></script>
+  <script src="nexlet-material.js"></script>
   <script src="nexlet-inventory.js"></script>
 <script>
 // ─────────────────────────────────────────────────────────────
@@ -736,7 +737,10 @@ function listingCard(l){
 function kpiCard(n,label,col){ return `<div class="panel" style="margin:0"><div class="panel-bd" style="text-align:center"><div style="font-family:var(--disp);font-size:30px;color:${col}">${n}</div><div class="faint" style="font-size:12px">${label}</div></div></div>`; }
 
 function openListing(id,pid){
-  const l=id?LST(id):{id:uid('lst'),status:'draft',portals:{website:true},features:[],propertyId:pid||null};
+  /* No portal is on at birth. A listing that arrives already advertised on the
+     website is advertised before any check can run, which made the publish gate
+     cosmetic: the route every listing takes never passed through it. */
+  const l=id?LST(id):{id:uid('lst'),status:'draft',portals:{},features:[],propertyId:pid||null};
   if(!id&&pid){ const p=P(pid); if(p.id){ Object.assign(l,{address:p.address,postcode:p.postcode||p.city,rent:p.rent,beds:p.beds,baths:p.baths,ptype:p.ptype,furnished:p.furnished,epc:p.epc,description:p.description,features:p.features||[]}); } }
   const props=S.properties.filter(p=>!( S.listings||[]).some(x=>x.propertyId===p.id&&x.id!==l.id));
   const propOpts=`<option value="">— New / standalone —</option>`+props.map(p=>`<option value="${p.id}" ${l.propertyId===p.id?'selected':''}>${esc(p.address)}</option>`).join('');
@@ -792,14 +796,67 @@ async function generateListingDescription(){
   }catch(e){ console.error(e); toast('AI draft failed',1); }
   if(btn){ btn.disabled=false; btn.textContent='✦ AI draft'; }
 }
-function togglePortal(lid,portal){ const l=LST(lid); l.portals=l.portals||{}; l.portals[portal]=!l.portals[portal]; if(Object.values(l.portals).some(Boolean)&&l.status==='draft')l.status='live'; save(); pushListing&&pushListing(l); render(); }
-function publishListing(lid){ const l=LST(lid); l.portals={rightmove:true,zoopla:true,website:true}; l.status='live'; l.publishedAt=today(); if(l.propertyId) _advanceStage(l.propertyId,'marketing'); save(); pushListing&&pushListing(l); render(); toast('✓ Published to Rightmove, Zoopla & your site'); }
+/* Part A material information has to be ON the advert, so the check belongs at
+   the moment the advert goes live — not on a panel someone may never open.
+   Both routes to live are gated: the Publish button and ticking a single portal.
+   Gating only the button would leave the tick as a way round it. */
+function _miBlock(l){
+  if(!l||!window.NexLetMaterial) return false;
+  const say=(title,body,ft)=>{ modal(title,body,ft||'<button class="btn navy" onclick="closeModal()">Close</button>'); return true; };
+  /* No linked property is the case where NOBODY has collected the information,
+     so it must block rather than pass. Treating a missing record as compliant
+     would leave the whole standalone-listing route ungated. */
+  if(!l.propertyId) return say('Link a property first',
+    '<p class="hint" style="margin:0">Material information is held on the property record, and Part A of it has to '
+    +'appear on the first page of the advert. This listing is not linked to a property, so there is nothing to '
+    +'publish from. Open the listing, choose the property it is for, then publish.</p>');
+  const p=P(l.propertyId);
+  if(!p||!p.id) return say('Property record missing',
+    '<p class="hint" style="margin:0">This listing points at a property that is no longer in the system, so its '
+    +'material information cannot be checked. Re-link the listing to an existing property before publishing.</p>');
+  const r=NexLetMaterial.ready(p);
+  if(r.canAdvertise) return false;
+  return say('Material information incomplete',
+    '<p class="hint" style="margin:0 0 10px">Part A material information has to appear on the first page of the '
+    +'advert. These answers are missing:</p><ul style="margin:0 0 12px;padding-left:18px">'
+    +r.aMiss.map(x=>'<li style="margin-bottom:4px">'+esc(x)+'</li>').join('')
+    +'</ul><p class="hint" style="margin:0">If you cannot establish one of them, record it as <b>not known</b> — '
+    +'that is a publishable answer. A blank field is not.</p>',
+    '<button class="btn" onclick="closeModal()">Cancel</button>'
+    +'<button class="btn navy" onclick="closeModal();NexLetMaterial.open(\''+String(l.propertyId).replace(/'/g,'')+'\')">Complete it now</button>');
+}
+function togglePortal(lid,portal){ const l=LST(lid); if(!(l.portals&&l.portals[portal])&&_miBlock(l)) return; l.portals=l.portals||{}; l.portals[portal]=!l.portals[portal]; if(Object.values(l.portals).some(Boolean)&&l.status==='draft')l.status='live'; save(); pushListing&&pushListing(l); render(); }
+function publishListing(lid){ const l=LST(lid); if(_miBlock(l)) return; l.portals={rightmove:true,zoopla:true,website:true}; l.status='live'; l.publishedAt=today(); if(l.propertyId) _advanceStage(l.propertyId,'marketing'); save(); pushListing&&pushListing(l); render(); toast('✓ Published to Rightmove, Zoopla & your site'); }
+/* Never gated: taking an advert down can only improve the position, so nothing
+   should stand between the agent and doing it. */
+function _miTakeDown(lid){ const l=LST(lid); l.portals={}; if(l.status==='live') l.status='draft'; save(); pushListing&&pushListing(l); render(); toast('Advert taken down — complete the material information before it goes back up'); }
 function markLet(lid){ const l=LST(lid); l.status='let'; save(); pushListing&&pushListing(l); render(); toast('✓ Marked let agreed'); }
 
 function vListingDetail(){
   const l=LST(sel); if(!l.id) return vMarketing();
   const apps=_listingApps(l.id); const offers=(S.offers||[]).filter(o=>o.listingId===l.id);
   const shareUrl=`nexlet.co.uk/l/${l.shareToken||''}`;
+  /* The shareable link is an advert in itself — handing it to an applicant
+     publishes the property as surely as a portal tick does. It is therefore
+     withheld on the same condition, rather than sitting there as a way round. */
+  const _miR=(l.propertyId&&window.NexLetMaterial)?NexLetMaterial.ready(P(l.propertyId)||{}):null;
+  const _miOk=!!(_miR&&_miR.canAdvertise);
+  const _liveOn=Object.keys(l.portals||{}).filter(k=>l.portals[k]);
+  /* A gate that only fires on transitions cannot see a listing that is already
+     live, which on the day this shipped was every listing in the system. The
+     position is therefore rendered as a state, not only checked at the door. */
+  const miBanner=(_liveOn.length&&!_miOk)?`<div class="note warn" style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+    <div><b>⚠ Advertised without complete material information.</b> ${l.propertyId
+      ? 'Live on '+_liveOn.length+' channel'+(_liveOn.length===1?'':'s')+', but Part A is incomplete — '+esc((_miR&&_miR.aMiss||[]).join(', '))+'.'
+      : 'Live, but not linked to a property, so there is no material information to publish.'}</div>
+    <div style="display:flex;gap:8px">${l.propertyId
+      ? '<button class="btn sm navy" onclick="NexLetMaterial.open(\''+String(l.propertyId).replace(/'/g,'')+'\')">Complete it</button>'
+      : '<button class="btn sm navy" onclick="openListing(\''+l.id+'\')">Link a property</button>'}
+      <button class="btn sm" onclick="_miTakeDown('${l.id}')">Take it down</button></div>
+  </div>`:'';
+  const shareCell=_miOk
+    ? `<a href="#" onclick="navigator.clipboard&&navigator.clipboard.writeText('${shareUrl}');toast('Link copied');return false">${shareUrl} 📋</a>`
+    : `<span style="color:var(--amber)">Held back — ${l.propertyId?'Part A material information incomplete':'not linked to a property'}</span>`;
   return `<div class="back no-print" onclick="go('marketing')">← Marketing</div>
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:6px">
       <div><h1 class="pg" style="margin:0">${esc(l.address)}</h1><div class="sub">${gbp(l.rent)}/mo · ${l.beds} bed · ${esc(l.ptype||'')} · ${esc(l.furnished||'')} ${_pill(LISTING_STATUS,l.status)}</div></div>
@@ -809,11 +866,12 @@ function vListingDetail(){
         <button class="btn" onclick="openApplicant(null,'${l.id}')">＋ Add enquiry</button>
       </div>
     </div>
+    ${miBanner}
     <div class="grid2" style="gap:14px;align-items:start">
       <div>
         <div class="panel"><div class="panel-hd"><h2>Portals</h2><span class="faint" style="font-size:12px">Where it's advertised</span></div><div class="panel-bd">
-          ${[['rightmove','Rightmove'],['zoopla','Zoopla'],['website','Your website']].map(([k,n])=>`<div class="kv"><span class="k">${n}</span><span class="v"><label style="display:inline-flex;align-items:center;gap:7px;cursor:pointer;font-size:13px"><input type="checkbox" ${l.portals&&l.portals[k]?'checked':''} onchange="togglePortal('${l.id}','${k}')" style="width:auto"> ${l.portals&&l.portals[k]?'Live':'Off'}</label></span></div>`).join('')}
-          <div class="kv" style="border:none"><span class="k">Shareable link</span><span class="v" style="font-size:12px"><a href="#" onclick="navigator.clipboard&&navigator.clipboard.writeText('${shareUrl}');toast('Link copied');return false">${shareUrl} 📋</a></span></div>
+          ${[['rightmove','Rightmove'],['zoopla','Zoopla'],['website','Your website']].map(([k,n])=>`<div class="kv"><span class="k">${n}</span><span class="v"><label style="display:inline-flex;align-items:center;gap:7px;cursor:pointer;font-size:13px"><input type="checkbox" ${l.portals&&l.portals[k]?'checked':''} onchange="togglePortal('${l.id}','${k}')" style="width:auto"> ${l.portals&&l.portals[k]?(_miOk?'Live':'<span style="color:var(--amber);font-weight:600">Live — unchecked</span>'):'Off'}</label></span></div>`).join('')}
+          <div class="kv" style="border:none"><span class="k">Shareable link</span><span class="v" style="font-size:12px">${shareCell}</span></div>
           <div class="hint" style="margin-top:10px">Rightmove &amp; Zoopla require agency membership + a data-feed agreement — that's the one integration your developer wires (see brief). Toggles here drive the feed NexLet generates.</div>
         </div></div>
         <div class="panel"><div class="panel-hd"><h2>Listing details</h2></div><div class="panel-bd">
@@ -1227,8 +1285,8 @@ function offerAcceptedLetterHtml(d){ const b=agencyBrand(); const totalDue=(d.re
 // ── demo sample data (demo mode only) ──
 function _seedLettings(){
   const p=S.properties[0]||{};
-  const l1={id:uid('lst'),propertyId:p.id||null,address:p.address||'42 Elm Street',postcode:p.postcode||'LS6 2AB',rent:p.rent||1200,beds:2,baths:1,ptype:'Flat',furnished:'Unfurnished',available:today(),epc:'C',status:'live',portals:{rightmove:true,zoopla:true,website:true},features:['Garden','Double glazing','Close to station'],description:'Bright two-bedroom flat with a private garden, moments from transport links.',shareToken:uid('sh')};
-  const l2={id:uid('lst'),address:'8 Maple Court',postcode:'LS2 9JT',rent:975,beds:1,baths:1,ptype:'Flat',furnished:'Furnished',available:today(),epc:'B',status:'draft',portals:{website:true},features:['Concierge','Gym'],description:'Modern one-bed in a managed block with concierge and gym.',shareToken:uid('sh')};
+  const l1={id:uid('lst'),propertyId:p.id||null,address:p.address||'42 Elm Street',postcode:p.postcode||'LS6 2AB',rent:p.rent||1200,beds:2,baths:1,ptype:'Flat',furnished:'Unfurnished',available:today(),epc:'C',status:'draft',portals:{},features:['Garden','Double glazing','Close to station'],description:'Bright two-bedroom flat with a private garden, moments from transport links.',shareToken:uid('sh')};
+  const l2={id:uid('lst'),address:'8 Maple Court',postcode:'LS2 9JT',rent:975,beds:1,baths:1,ptype:'Flat',furnished:'Furnished',available:today(),epc:'B',status:'draft',portals:{},features:['Concierge','Gym'],description:'Modern one-bed in a managed block with concierge and gym.',shareToken:uid('sh')};
   S.listings=[l1,l2];
   const a1={id:uid('app'),name:'Priya Sharma',phone:'07700 900123',email:'priya@example.com',budget:1250,source:'Rightmove',listingId:l1.id,status:'viewing',note:'Professional couple, no pets',createdAt:new Date().toISOString()};
   const a2={id:uid('app'),name:'James Reid',phone:'07700 900456',email:'james@example.com',budget:1000,source:'Zoopla',listingId:l1.id,status:'offer',note:'Relocating for work',createdAt:new Date().toISOString()};
@@ -2794,6 +2852,7 @@ function vPropertyDetail(){
     ${window.NexLetHistory?NexLetHistory.dueBanner(p.id):''}
     ${depositMismatchBanner(p)}
     ${rentDayMismatchBanner(p)}
+    ${(window.NexLetMaterial&&!(window.NexLetActions&&NexLetActions.stageOf(p.id)))?NexLetMaterial.panel(p):''}
     ${window.NexLetActions?NexLetActions.panel(p.id):''}
     ${_pTabBar(p)}
     <div style="display:${_pTab()==='docs'?'block':'none'}">
