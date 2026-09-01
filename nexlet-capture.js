@@ -40,6 +40,30 @@
   const MODEL_CHEAP = 'claude-haiku-4-5';
   function modelFor(type) { return (type === 'movein' || type === 'scan') ? MODEL_CHEAP : MODEL_FULL; }
 
+  /* ── House style ───────────────────────────────────────────────────────── */
+  /* What separates a professional schedule of condition from a list of photo
+     captions is the shape of each entry: what the thing IS, then its condition,
+     then the specific defects and where they are. A clerk writes "Brown carpet,
+     chrome threshold bar. Fair condition: slightly worn at doorway, heavy
+     stained patch under window." Not a sentence about the carpet.
+
+     Shared by the room scan and the move-in report so both read as one document
+     written by one hand, which is the other half of looking professional. */
+  const HOUSE_STYLE =
+    'You are a UK inventory clerk compiling a schedule of condition for a letting agent.\n\n' +
+    'HOUSE STYLE, which you must follow exactly. Write the description first — material, colour, finish, ' +
+    'fittings — then a full stop, then the condition, then a colon and the specific defects with their ' +
+    'locations. For example:\n' +
+    '  "Brown carpet, chrome threshold bar. Fair condition: slightly worn at doorway, heavy stained patch under window."\n' +
+    '  "White painted plaster walls, white coved ceiling. Good condition: two small scuffs to wall behind door."\n' +
+    '  "Stainless steel electric oven, four-ring ceramic hob. Good working order: light scorching to hob surround."\n' +
+    'Never write a narrative sentence. Never write "appears to be", "looks like" or "seems". Never write "good ' +
+    'condition" with no detail — an adjudicator cannot compare against that. Where there is genuinely no defect, ' +
+    'stop at the condition term.\n\n' +
+    'Record every existing mark, chip, stain, scuff or damage explicitly, with its location, so the tenant cannot ' +
+    'later be charged for it. Ignore hairline settlement cracking to walls and ceilings unless significant. Rate ' +
+    'condition using ONLY one of: New, Good, Fair wear and tear, Worn, Damaged.\n\n';
+
   /* ── EXIF ──────────────────────────────────────────────────────────────── */
   /* Only DateTimeOriginal, read straight out of the APP1 block. A full EXIF
      parser is a dependency and a liability; this needs one tag. */
@@ -213,13 +237,12 @@
     if (window.pushInv2) window.pushInv2(v);
 
     window.toast('\u2726 Reading the room\u2026');
-    const prompt = 'UK letting agent inventory. These are photographs of the ' + room + ' of a rental property at ' +
-      'check-in. List every item, surface and fitting a professional inventory clerk would record separately \u2014 ' +
-      'flooring, walls and ceiling, window and dressings, door, light fittings, radiator, and each appliance or piece ' +
-      'of furniture. Do not merge unrelated things into one line, and do not invent anything you cannot see. For each, ' +
-      'rate condition using ONLY one of: New, Good, Fair wear and tear, Worn, Damaged. Note any existing mark, chip, ' +
-      'stain or damage explicitly in the description, so the tenant cannot later be charged for it. Return ONLY JSON: ' +
-      '{"items":[{"item":"short name","condition":"one of the terms","summary":"one specific factual sentence"}]}';
+    const prompt = HOUSE_STYLE +
+      'These are photographs of the ' + room + ' at check-in. List every item, surface and fitting a clerk records ' +
+      'separately: floor, walls and ceiling, woodwork, door, window and dressings, switches and sockets, light ' +
+      'fittings, radiator, and each appliance or piece of furniture. Do not merge unrelated things onto one line, ' +
+      'and do not invent anything you cannot see.\\n\\nReturn ONLY JSON: {"items":[{"item":"short name, e.g. ' +
+      'Flooring","condition":"one of the terms","summary":"the entry, in house style"}]}';
 
     let parsed = null;
     try {
@@ -348,7 +371,31 @@
       'the property to the standard recorded above, allowing for fair wear and tear.</div></div>';
   }
 
+  /* The conventions page every professional report opens with. Its job is to say
+     what the document does and does not claim, before anyone reads a single
+     item — which is most of what makes a report read as an instrument rather
+     than a list of photographs. The wording follows standard trade practice. */
+  function preamble(agencyName) {
+    const li = t => '<li style="margin-bottom:5px">' + t + '</li>';
+    return '<div style="padding:16px 24px;border-bottom:1px solid #EEF1F5;background:#FBFCFD">' +
+      '<div style="font-size:10px;font-weight:700;letter-spacing:.5px;color:#94A3B8;text-transform:uppercase;' +
+      'margin-bottom:8px">How to read this report</div>' +
+      '<ul style="margin:0;padding-left:17px;font-size:11px;color:#5B6473;line-height:1.6">' +
+      li('Every item is listed with its description first, then its condition, then any defect and where it is.') +
+      li('<b>All items are in good clean condition unless otherwise stated.</b> Where a mark, chip, stain or ' +
+         'damage is recorded, it was present at check-in and is not chargeable to the tenant.') +
+      li('Hairline settlement cracking to walls and ceilings is accepted and is not recorded unless significant.') +
+      li('Condition is rated on a fixed scale: New, Good, Fair wear and tear, Worn, Damaged.') +
+      li('This report covers the landlord\u2019s fixtures, fittings, furnishings and contents. It is not a survey, ' +
+         'and it is not prepared by an expert in buildings, decoration or the valuation of contents.') +
+      li('Photographs are dated where the file carried a capture time. Where it did not, the report says so ' +
+         'rather than implying otherwise.') +
+      li('The tenant should record anything they disagree with during the review period. Anything not raised in ' +
+         'that period is taken as agreed.') +
+      '</ul></div>';
+  }
+
   window.NexLetCapture = { exifTaken, sha256, record, meta, provenance, provenanceBlock, thumbStamp,
     scan, commitScan, setClean, cleanFor, cleanLabel, cleanPanel, CLEAN, callModel, modelFor,
-    MODEL_FULL, MODEL_CHEAP, fmt, keyFor, cleanReportBlock };
+    MODEL_FULL, MODEL_CHEAP, fmt, keyFor, cleanReportBlock, HOUSE_STYLE, preamble };
 })();
