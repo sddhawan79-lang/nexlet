@@ -38,7 +38,13 @@
      describe a photograph, which is most of the calls a move-in makes. */
   const MODEL_FULL  = 'claude-sonnet-4-5';
   const MODEL_CHEAP = 'claude-haiku-4-5';
-  function modelFor(type) { return (type === 'movein' || type === 'scan') ? MODEL_CHEAP : MODEL_FULL; }
+  /* Everything that writes a description runs on the full model. The cheap tier
+     was worth about 25p a report and cost format discipline: smaller models drift
+     back into narrative prose under a strict entry format, and the wording IS the
+     product here — it is what the landlord is charged for and what an adjudicator
+     reads. The tier and its fallback stay in place for any future call where the
+     output is not the deliverable. */
+  function modelFor(type) { return MODEL_FULL; }
 
   /* ── House style ───────────────────────────────────────────────────────── */
   /* What separates a professional schedule of condition from a list of photo
@@ -49,7 +55,7 @@
 
      Shared by the room scan and the move-in report so both read as one document
      written by one hand, which is the other half of looking professional. */
-  const HOUSE_STYLE =
+  const BASE_STYLE =
     'You are a UK inventory clerk compiling a schedule of condition for a letting agent.\n\n' +
     'HOUSE STYLE, which you must follow exactly. Write the description first — material, colour, finish, ' +
     'fittings — then a full stop, then the condition, then a colon and the specific defects with their ' +
@@ -63,6 +69,50 @@
     'Record every existing mark, chip, stain, scuff or damage explicitly, with its location, so the tenant cannot ' +
     'later be charged for it. Ignore hairline settlement cracking to walls and ceilings unless significant. Rate ' +
     'condition using ONLY one of: New, Good, Fair wear and tear, Worn, Damaged.\n\n';
+
+  /* There is no training and no fine-tuning here, and there should not be. What
+     there is instead is cheaper and works from the first correction: every time
+     an agent rewrites a line before saving it, the pair is kept, and the most
+     recent few are put in front of the model as worked examples. The model is
+     not learning in any technical sense — it is being shown how this agency
+     writes, which is the thing that actually needs to carry across reports.
+
+     Only genuine rewrites are kept. A typo fix teaches nothing and would crowd
+     out an example that does. */
+  function learned() {
+    return (((ST().agency || {}).invStyle) || []).slice(-6);
+  }
+  function houseStyle() {
+    const ex = learned();
+    if (!ex.length) return BASE_STYLE;
+    return BASE_STYLE +
+      'HOW THIS AGENCY WRITES. These are entries this agency has rewritten. Match this voice — the level of ' +
+      'detail, the vocabulary, the length:\n' +
+      ex.map(x => '  Instead of: "' + x.was + '"\n  They write: "' + x.now + '"').join('\n') + '\n\n';
+  }
+
+  /* Called when a scanned room is committed, with what the model wrote and what
+     the agent saved. */
+  function learn(pairs) {
+    const a = ST().agency; if (!a) return;
+    const keep = (pairs || []).filter(p => {
+      if (!p.was || !p.now || p.was === p.now) return false;
+      if (p.now.length < 25) return false;
+      /* Below roughly a third changed it is a correction, not a rewrite, and a
+         correction is not a house style. */
+      return diff(p.was, p.now) > 0.33;
+    });
+    if (!keep.length) return;
+    a.invStyle = (a.invStyle || []).concat(keep.map(p => ({ was: p.was, now: p.now, at: new Date().toISOString() }))).slice(-12);
+    if (window.pushAgency) window.pushAgency();
+    if (window.save) window.save();
+  }
+  function diff(a, b) {
+    const wa = String(a).toLowerCase().split(/\W+/).filter(Boolean);
+    const wb = new Set(String(b).toLowerCase().split(/\W+/).filter(Boolean));
+    if (!wa.length) return 1;
+    return wa.filter(w => !wb.has(w)).length / wa.length;
+  }
 
   /* ── EXIF ──────────────────────────────────────────────────────────────── */
   /* Only DateTimeOriginal, read straight out of the APP1 block. A full EXIF
@@ -237,7 +287,7 @@
     if (window.pushInv2) window.pushInv2(v);
 
     window.toast('\u2726 Reading the room\u2026');
-    const prompt = HOUSE_STYLE +
+    const prompt = houseStyle() +
       'These are photographs of the ' + room + ' at check-in. List every item, surface and fitting a clerk records ' +
       'separately: floor, walls and ceiling, woodwork, door, window and dressings, switches and sockets, light ' +
       'fittings, radiator, and each appliance or piece of furniture. Do not merge unrelated things onto one line, ' +
@@ -293,6 +343,7 @@
         lifeYears: window._usefulLife ? window._usefulLife(get('sc-item', i) || src.item) : 6
       });
     });
+    learn(on.map(i => ({ was: (d.items[i] || {}).summary || '', now: get('sc-sum', i) })));
     window._invTabs = window._invTabs || {};
     window._invTabs[d.vid] = v.rooms.length - 1;
     window._scanDraft = null;
@@ -397,5 +448,5 @@
 
   window.NexLetCapture = { exifTaken, sha256, record, meta, provenance, provenanceBlock, thumbStamp,
     scan, commitScan, setClean, cleanFor, cleanLabel, cleanPanel, CLEAN, callModel, modelFor,
-    MODEL_FULL, MODEL_CHEAP, fmt, keyFor, cleanReportBlock, HOUSE_STYLE, preamble };
+    MODEL_FULL, MODEL_CHEAP, fmt, keyFor, cleanReportBlock, houseStyle, learn, learned, preamble };
 })();
