@@ -2328,11 +2328,6 @@ function _openDraft(){
   const w=window.open('','_blank'); if(!w){ toast('Allow pop-ups to open the draft',1); return; }
   w.document.write(_pendingSend.html||''); w.document.close();
   const b=document.getElementById('cs-send'), g=document.getElementById('cs-gate');
-  const missing=_hhUnanswered(pid);
-  if(missing.length){
-    if(g) g.innerHTML='<span style="color:var(--amber);font-weight:600">Set the relationship for '+esc(missing.join(', '))+' first.</span>';
-    return;
-  }
   if(b){ b.disabled=false; b.style.opacity=''; b.style.cursor=''; }
   if(g) g.innerHTML='<span style="color:var(--green);font-weight:600">✓ Draft read — sending is now enabled.</span>';
 }
@@ -5782,7 +5777,6 @@ function _docStamp(prefix){
    it turns out to be wrong. A vague form signed by everyone proves very little. */
 function buildHouseholdDeclHtml(p,rec,stamp){
   const b=agencyBrand(), mem=hhMembers(rec), l=L(p.landlordId)||{};
-  const others=mem.slice(1);
   /* No stamp means this is a preview. It must NOT carry a reference: the only
      reference that means anything is the one on the copy actually served, and a
      draft bearing a different one is exactly what a challenger would seize on. */
@@ -5794,9 +5788,8 @@ function buildHouseholdDeclHtml(p,rec,stamp){
     <td style="padding:9px 10px;border-bottom:1px solid #E8DFCF;font-size:12.5px;vertical-align:top">${i+1}</td>
     <td style="padding:9px 10px;border-bottom:1px solid #E8DFCF;font-size:12.5px;vertical-align:top"><b>${esc(m.name)}</b>${m.lead?'<br><span style="color:#8A7D6E;font-size:11.5px">Lead tenant — named on the tenancy agreement</span>':m.permitted?'<br><span style="color:#8A7D6E;font-size:11.5px">Permitted occupier</span>':'<br><span style="color:#8A7D6E;font-size:11.5px">Joint tenant</span>'}</td>
     <td style="padding:9px 10px;border-bottom:1px solid #E8DFCF;font-size:12.5px;vertical-align:top">${age(m)}</td>
-    <td style="padding:9px 10px;border-bottom:1px solid #E8DFCF;font-size:12.5px;vertical-align:top">${m.lead?'— (relationships are stated by reference to this person)':esc(m.relationship||'<span style="color:#B3261E">not stated</span>')}</td>
+    <td style="padding:9px 10px;border-bottom:1px solid #E8DFCF;font-size:12.5px;vertical-align:top">${m.lead?'—':(m.relationship?esc(m.relationship):'<span style="color:#B3261E">not stated</span>')}</td>
     <td style="padding:9px 10px;border-bottom:1px solid #E8DFCF;font-size:12.5px;vertical-align:top">${m.lead||m.signs?'Signs this declaration':'Under 18 — listed, does not sign'}</td></tr>`;
-  const unrelated=others.filter(m=>(m.relationship||'')==='Not related').length;
   const adults=mem.filter(m=>m.lead||m.signs).length;
   return `<div data-doc-label="Household composition declaration" style="font-family:Georgia,'Times New Roman',serif;max-width:780px;margin:0 auto;color:#2C2418;line-height:1.62">
     <div style="border-bottom:2px solid #1B2F4A;padding-bottom:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-end;gap:16px">
@@ -5806,9 +5799,10 @@ function buildHouseholdDeclHtml(p,rec,stamp){
         ${draft?'<b>DRAFT — FOR REVIEW</b><br>Reference and timestamp are applied when sent':esc(st.ref)+'<br>v1.0 · Generated '+esc(st.stamp)}</div>
     </div>
     <h1 style="font-size:19px;color:#1B2F4A;margin:18px 0 3px">Household composition declaration</h1>
-    <p style="color:#8A7D6E;font-size:12.5px;margin:0 0 18px">Made for the purposes of sections 254 to 259 of the Housing Act 2004</p>
+    <p style="color:#8A7D6E;font-size:12.5px;margin:0 0 14px">Who lives at the property, and how they are related</p>
+    <p style="margin:0 0 4px">We need this because how the people living here are related decides which housing rules apply to the property, and only you can tell us. It takes a minute and it does not affect your tenancy.</p>
 
-    ${H('Particulars')}
+    ${H('The property')}
     <table style="width:100%;border-collapse:collapse;font-size:12.5px">
       <tr><td style="padding:5px 0;width:180px;color:#8A7D6E">Property</td><td style="padding:5px 0"><b>${esc(p.address||'')}</b>${p.pc?', '+esc(p.pc):''}</td></tr>
       <tr><td style="padding:5px 0;color:#8A7D6E">Landlord</td><td style="padding:5px 0">${esc(landlordName(l)||'')}</td></tr>
@@ -5816,11 +5810,6 @@ function buildHouseholdDeclHtml(p,rec,stamp){
       <tr><td style="padding:5px 0;color:#8A7D6E">Tenancy begins</td><td style="padding:5px 0">${rec.start?esc(fmtDate(rec.start)):'not yet set'}</td></tr>
       <tr><td style="padding:5px 0;color:#8A7D6E">People listed below</td><td style="padding:5px 0">${mem.length} (${adults} aged 18 or over)</td></tr>
     </table>
-
-    ${H('Why this declaration is being taken')}
-    <p style="margin:0 0 9px">A property is a house in multiple occupation where it is occupied by three or more persons forming two or more separate households. Under section 258 of the Housing Act 2004, people are treated as forming a <b>single household</b> where they are relatives of one another, or are a couple living together as though married or in a civil partnership. Relatives include parents, grandparents, children, grandchildren, brothers, sisters, uncles, aunts, nephews, nieces and cousins; a relationship of the half blood is treated as one of the whole blood, a stepchild is treated as a child, and a foster child is treated as a child of the foster parent.</p>
-    <p style="margin:0 0 9px">Whether the property is a house in multiple occupation therefore depends entirely on how the occupants are related to one another. That determines whether the property must be licensed, and the standards of management and amenity that apply to it. Neither the landlord nor the agent can know the answer; only the occupants can state it.</p>
-    <p style="margin:0 0 9px"><b>Stating that occupants are not related to one another is not a problem and has no effect on the tenancy.</b> It means the correct licence is applied for and the correct standards observed. The difficulty arises only where the position recorded at the outset differs from the true position.</p>
 
     ${H('The household')}
     <table style="width:100%;border-collapse:collapse;border-top:2px solid #1B2F4A">
@@ -5832,26 +5821,21 @@ function buildHouseholdDeclHtml(p,rec,stamp){
         <th style="padding:8px 10px;text-align:left;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:#8A7D6E">Signature required</th></tr>
       ${mem.map(row).join('')}
     </table>
-    <p style="font-size:11.5px;color:#8A7D6E;margin:9px 0 0">On the relationships stated above, the occupants form <b>${unrelated?'more than one household':'a single household'}</b> for the purposes of section 258.${unrelated?' The property may therefore require a licence, and the agent will confirm the position with the local housing authority.':''}</p>
+    <p style="font-size:11.5px;color:#8A7D6E;margin:9px 0 0">Please check this table is right before you sign. If anything is wrong or missing, tell us and we will correct it.</p>
 
-    ${H('What each signatory declares')}
+    ${H('What you are confirming')}
     <ol style="padding-left:20px;margin:0">
-      <li style="margin-bottom:8px">That the persons listed in the table above are <b>all</b> of the persons who will occupy the property as their only or main residence, and that no other person will occupy it.</li>
-      <li style="margin-bottom:8px">That the relationships stated in the table are <b>accurate</b>. Where the exact description does not fit, the nearest one has been chosen honestly — what matters is whether the occupants are related at all, not the precise degree.</li>
-      <li style="margin-bottom:8px">That the age given for each person is accurate.</li>
-      <li style="margin-bottom:8px">That no additional person will take up residence at the property — as a lodger, subtenant, partner or additional occupant — without first telling the landlord or the agent. Guests and visitors are of course welcome and need no permission; what matters is somebody making the property their home, because that can change whether a licence is required. If a visitor is going to stay for <b>more than about a month</b>, a quick word with us is enough — we would rather know than not.</li>
-      <li style="margin-bottom:8px">That the landlord or the agent will be told <b>within 14 days</b> of any change to the household — someone moving out, someone moving in, someone reaching 18, or a stated relationship changing.</li>
-      <li style="margin-bottom:0">That the signatory understands that this declaration may be relied on by the landlord and the agent in deciding whether a licence is required, and may be produced to the local housing authority.</li>
+      <li style="margin-bottom:7px">The people in the table above are everyone who will live at the property.</li>
+      <li style="margin-bottom:7px">The relationships and ages shown are right. If none of the options fits exactly, the closest one is fine — what matters is whether people are related at all, not the exact degree.</li>
+      <li style="margin-bottom:7px">You will let us know before anyone else moves in. Guests and visitors are welcome and need no permission; we only need to know if someone is making the property their home, or staying more than about a month.</li>
+      <li style="margin-bottom:0">You will tell us within 14 days if the household changes — someone moves out, someone moves in, or someone turns 18.</li>
     </ol>
+    <p style="margin:14px 0 0">If you are not sure how to describe a relationship, or you think the table is wrong, tell us before you sign. It takes a moment to fix.</p>
 
-    ${H('If the position stated here is not correct')}
-    <p style="margin:0 0 9px">Operating an unlicensed house in multiple occupation is a criminal offence, and exposes a landlord to a financial penalty of up to £30,000, a rent repayment order of up to twelve months' rent, and the loss of the ability to recover possession. Where that arises because occupiers gave an inaccurate account of their relationships, the landlord may seek to recover its losses from those who gave it.</p>
-    <p style="margin:0 0 9px">This is set out so the significance of the declaration is plain, not to alarm anyone. Nothing here is aimed at ordinary life at home — having visitors, family staying, or circumstances changing. It is aimed only at the position recorded here being right. If any signatory is uncertain how to describe a relationship, or thinks the table is wrong in any respect, they should say so <b>before</b> signing. A correction costs nothing and takes a moment.</p>
+    ${H('Signing')}
+    <p style="margin:0 0 9px">Everyone aged 18 or over signs separately, using their own link, on their own device. Children are listed because they are part of the household but do not sign. Once everyone has signed, you each get a copy.</p>
 
-    ${H('Signature and record')}
-    <p style="margin:0 0 9px">Each person aged 18 or over signs separately, using a link personal to them, on their own device and in their own time. The server records the date and time of each signature, together with the signatory's IP address and device, and neither the agent nor the signatory can alter those records. A copy of the completed declaration, showing every signature and the time it was given, is issued to every signatory and retained by the agent.</p>
-    <p style="margin:0 0 9px">Children occupying the property are listed above because they form part of the household, but do not sign: a minor cannot give a binding declaration.</p>
-    <p style="font-size:11.5px;color:#8A7D6E;margin:16px 0 0;padding-top:10px;border-top:1px solid #E8DFCF">This declaration is a statement of fact about occupation. It does not vary, add to or replace any term of the tenancy agreement, and nothing in it affects the signatories' rights as tenants.${draft?' <b style="color:#B3261E">This is a draft for review and has not been issued.</b>':' Document '+esc(st.ref)+', generated '+esc(st.stamp)+'.'}</p>
+    <p style="font-size:11.5px;color:#8A7D6E;margin:16px 0 0;padding-top:10px;border-top:1px solid #E8DFCF">This is a record of who lives at the property. It does not change anything in your tenancy agreement or affect your rights as a tenant.${draft?' <b style="color:#B3261E">This is a draft for review and has not been issued.</b>':' Document '+esc(st.ref)+', generated '+esc(st.stamp)+'.'}</p>
   </div>`;
 }
 function openHouseholdDecl(pid){
@@ -6003,10 +5987,13 @@ function _hhSave(pid){
   });
   return rec;
 }
-/* Names of signing occupants with no relationship set. */
+/* Names of occupants with no relationship set. Every listed occupant, not only
+   the signers: children appear in the table and their relationship is what
+   decides the household test, so an unanswered child ships a table with a gap
+   in it. They do not sign, but the lead tenant is stating their relationship. */
 function _hhUnanswered(pid){
   const rec=tenantRecFor(pid); if(!rec) return [];
-  return (rec.occupants||[]).filter(o=>o.name&&hhSignsDeclaration(o)&&!o.relationship).map(o=>o.name);
+  return (rec.occupants||[]).filter(o=>o.name&&!o.relationship).map(o=>o.name);
 }
 function _hhDraft(pid){
   const rec=_hhSave(pid); if(!rec) return;
