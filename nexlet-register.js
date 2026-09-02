@@ -63,7 +63,9 @@
         keys.forEach(k => {
           /* Earliest wins: a pack re-sent later must not make the first send look
              late, and the deadline is measured from the first. */
-          if (!out[k] || new Date(on) < new Date(out[k].at)) out[k] = { at: on, ref: x.id, hasCopy: true };
+          /* Must match the ref NexLetHistory.events() mints, or copy() looks up a
+             bare id against a prefixed one and always misses. */
+          if (!out[k] || new Date(on) < new Date(out[k].at)) out[k] = { at: on, ref: 'lt:' + x.id, hasCopy: true };
         });
       });
     return out;
@@ -148,6 +150,33 @@
       '<div>' + backCell(pid, r) + '</div></div>';
   }
 
+  /* Signed paper with no matching row \u2014 a pet agreement, a standing order
+     mandate. Without this the ad-hoc upload files into somewhere nobody can see,
+     which is worse than not offering it. */
+  function extraSigned(pid) {
+    const rec = (window.tenantRecFor && window.tenantRecFor(pid)) || {};
+    const known = Object.keys(SIGNED_KEY).map(k => SIGNED_KEY[k]);
+    const bag = Object.assign({}, rec.signedDocs || {});
+    delete bag._printed;
+    const extra = Object.keys(bag).filter(k => known.indexOf(k) < 0);
+    if (!extra.length) return '';
+    return extra.map(k => {
+      const h = bag[k];
+      return '<div style="display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr);' +
+        'gap:12px;padding:10px 0;border-bottom:1px solid var(--border);align-items:start">' +
+        '<div style="min-width:0"><div style="font-size:13px;font-weight:600;color:var(--navy)">' +
+        '<span style="color:var(--green);margin-right:6px">\u2713</span>' +
+        esc(h.label || (k === 'standing' ? 'Standing order mandate' : 'Other signed paperwork')) + '</div>' +
+        '<div class="faint" style="font-size:11px;margin-top:2px">Not a document we serve \u2014 held as evidence only.</div></div>' +
+        '<div><span class="faint" style="font-size:11.5px">\u2014</span></div>' +
+        '<div style="font-size:11.5px"><span style="color:var(--green)">\u2713 Signed ' + esc(dOnly(h.signedAt)) + '</span>' +
+        (h.pages ? ' <span class="faint">p' + esc(h.pages) + '</span>' : '') +
+        '<br><a href="#" onclick="event.preventDefault();viewDoc(\'' + escJs(h.url) + '\',\'signed\')" ' +
+        'style="font-size:11px">view</a> \u00b7 <a href="#" onclick="event.preventDefault();NexLetSigned.add(\'' +
+        escJs(pid) + '\',\'' + escJs(k) + '\')" style="font-size:11px">replace</a></div></div>';
+    }).join('');
+  }
+
   /* ── Panel ─────────────────────────────────────────────────────────────── */
   function panel(pid) {
     const rec = (window.tenantRecFor && window.tenantRecFor(pid)) || {};
@@ -160,6 +189,11 @@
       (s.outstanding ? s.outstanding + ' required and not sent' : 'All required documents sent') +
       (s.signable ? ' \u00b7 ' + s.signed + ' of ' + s.signable + ' signed back' : '') + '</span></div>' +
       '<div class="panel-bd">' +
+      /* The retrospective breach triage the old service-history panel showed. A
+         faint "1 required and not sent" in the header does not convey a £7,000
+         penalty, and burying it behind a button is how it gets missed. */
+      ((window.NexLetHistory && window.NexLetHistory.warnings && window.NexLetHistory.warnBlock)
+        ? window.NexLetHistory.warnings(pid).map(w => window.NexLetHistory.warnBlock(w)).join('') : '') +
       '<div class="hint" style="margin:0 0 10px">One row per document. <b>Sent</b> is what went out and when. ' +
       '<b>Signed back</b> is the paper the tenant returned \u2014 sending proves it went, a signature proves it ' +
       'arrived, and in a dispute those are two different arguments.</div>' +
@@ -167,10 +201,12 @@
       'padding-bottom:6px;border-bottom:1.5px solid var(--navy)">' +
       H('Document') + H('Sent') + H('Signed back') + '</div>' +
       rs.map(r => row(pid, r)).join('') +
+      extraSigned(pid) +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">' +
       '<button class="btn sm navy" onclick="NexLetServe.open(\'' + escJs(pid) + '\',\'tenant\')">Send to the tenant</button>' +
       '<button class="btn sm" onclick="NexLetRegister.landlordPack(\'' + escJs(pid) + '\')">Send the landlord pack</button>' +
       '<button class="btn sm" onclick="NexLetSigned.addBundle(\'' + escJs(pid) + '\')">\u2191 Upload a signed stack</button>' +
+      '<button class="btn sm" onclick="NexLetSigned.add(\'' + escJs(pid) + '\',\'other\')">\u2191 Other signed paperwork</button>' +
       '<button class="btn sm" onclick="NexLetServe.recordManual(\'' + escJs(pid) + '\',\'tenant\')">Record a batch you sent yourself</button>' +
       '<button class="btn sm" onclick="NexLetHistory.open(\'' + escJs(pid) + '\')">Service history</button>' +
       '</div></div></div>';
@@ -234,14 +270,17 @@
     const attach = rs.filter(r => r.signed);
     const missing = rs.filter(r => r.signedKey && !r.signed);
     const sendable = rs.filter(r => r.ready);
+    const going = sendable.concat(attach.filter(r => sendable.indexOf(r) < 0));
     window.modal('Landlord pack \u2014 ' + esc(((window.P && window.P(pid)) || {}).address || ''),
       '<p class="hint" style="margin:0 0 12px">Everything on file for the landlord, in one email. Nothing to tick ' +
       '\u2014 what is held is attached.</p>' +
       '<div style="border:1px solid var(--border);border-radius:9px;padding:11px 13px;margin-bottom:10px">' +
       '<div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700;' +
       'margin-bottom:6px">Going in this email</div>' +
-      (sendable.length + attach.length
-        ? sendable.concat(attach).map(r => '<div style="font-size:12.5px;padding:2px 0">\u2713 ' + esc(r.label) +
+      /* A signed landlord document is "ready" precisely because it is signed, so
+         it appears in both lists. One line each. */
+      (going.length
+        ? going.map(r => '<div style="font-size:12.5px;padding:2px 0">\u2713 ' + esc(r.label) +
             (r.signed ? ' <span class="faint">\u2014 signed copy</span>' : '') + '</div>').join('')
         : '<div class="faint" style="font-size:12px">Nothing on file yet.</div>') + '</div>' +
       (missing.length ? '<div class="note" style="margin-bottom:10px"><b>Not yet on file:</b> ' +

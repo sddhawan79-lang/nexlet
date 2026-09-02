@@ -530,6 +530,6 @@
     setTimeout(() => { try { w.print(); } catch (e) {} }, 350);
   }
 
-  window.NexLetHistory = { panel, open, copy, print, events, warnings, servedOn,
+  window.NexLetHistory = { panel, open, copy, print, events, warnings, warnBlock, servedOn,
     firstServedOn: pid => servedOn(pid, 'first'), dueBanner, dueBeforeStart };
 })();
