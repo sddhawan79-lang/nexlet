@@ -177,6 +177,7 @@ h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px
   <script src="nexlet-material.js"></script>
   <script src="nexlet-complaints.js"></script>
   <script src="nexlet-signed.js"></script>
+  <script src="nexlet-register.js"></script>
   <script src="nexlet-inventory.js"></script>
 <script>
 // ─────────────────────────────────────────────────────────────
@@ -2922,9 +2923,11 @@ function vPropertyDetail(){
     <div style="display:${_pTab()==='docs'?'block':'none'}">
     ${preSigningPanel(p)}
     ${postSigningPanel(p)}
-    ${serveDocsPanel(p)}
-    ${window.NexLetHistory?NexLetHistory.panel(p.id):''}
-    ${window.NexLetSigned?NexLetSigned.panel(p.id):''}
+    ${(()=>{ const reg=window.NexLetRegister?NexLetRegister.panel(p.id):'';
+       /* One register replaces the serve checklist, the service-history strip
+          and the signed shelf. Without a tenancy it has nothing to list, so the
+          old pre-tenancy checklist still shows. */
+       return reg||serveDocsPanel(p); })()}
     ${tenancyChecklistPanel(p)}
     </div>
     <div style="display:${_pTab()==='detail'?'block':'none'}">
@@ -7777,9 +7780,27 @@ function vMaintenance(){
 // ═══════════════════════════════════════════════════════════════════════════
 // INVENTORY & CHECK-OUT (AI deposit-deduction comparison)
 // ═══════════════════════════════════════════════════════════════════════════
-function _resizeImg(file,maxW){ return new Promise((res)=>{ const img=new Image(); const fr=new FileReader();
-  fr.onload=()=>{ img.onload=()=>{ const scale=Math.min(1,maxW/img.width); const c=document.createElement('canvas'); c.width=img.width*scale; c.height=img.height*scale;
-    c.getContext('2d').drawImage(img,0,0,c.width,c.height); c.toBlob(b=>res(b),'image/jpeg',0.72); }; img.src=fr.result; }; fr.readAsDataURL(file); }); }
+/* Resolves null rather than hanging when the image cannot be decoded. The
+   original had no onerror on either the reader or the <img>, so res() was
+   reachable only from img.onload — and a file the browser cannot decode never
+   fires it. HEIC is the iPhone camera default and no desktop browser decodes it,
+   so the commonest phone upload of all sat on an unsettleable promise: the caller
+   awaited forever, its progress indicator counting up, with no way out but
+   Cancel. The timeout is the backstop for a decode that neither loads nor errors.
+   Every caller must treat null as "use the original file". */
+function _resizeImg(file,maxW){ return new Promise((res)=>{
+  let done=false; const finish=b=>{ if(done) return; done=true; clearTimeout(t); res(b); };
+  const t=setTimeout(()=>finish(null),15000);
+  const img=new Image(); const fr=new FileReader();
+  fr.onerror=()=>finish(null);
+  img.onerror=()=>finish(null);
+  fr.onload=()=>{ img.onload=()=>{ try{
+      const scale=Math.min(1,maxW/img.width); const c=document.createElement('canvas');
+      c.width=img.width*scale; c.height=img.height*scale;
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      c.toBlob(b=>finish(b),'image/jpeg',0.72);
+    }catch(e){ console.error('_resizeImg',e); finish(null); } }; img.src=fr.result; };
+  fr.readAsDataURL(file); }); }
 // Fetches a photo (storage URL, or a legacy inline data: URL from before storage upload) as base64 for the AI proxy.
 async function _urlToB64(url){
   if(url.startsWith('data:')){ return {b64:url.split(',')[1], mime:url.split(';')[0].split(':')[1]}; }
@@ -7903,8 +7924,11 @@ async function addRoomPhotos(vid,i,stage,visitIdx,input){
   const target=stage==='visit'?r.visits[visitIdx]:r[stage];
   let failed=0;
   for(const f of files){
-    const blob=await _resizeImg(f,700);
-    const url=await _storageUpload(blob,vid+'/'+Date.now()+'-'+Math.random().toString(36).slice(2,7)+'.jpg','property-documents');
+    /* null means the browser could not decode it — HEIC, or a truncated file.
+       Upload the original rather than losing the photograph. */
+    const resized=await _resizeImg(f,700), blob=resized||f;
+    const ext=resized?'jpg':((f.name||'').split('.').pop()||'jpg');
+    const url=await _storageUpload(blob,vid+'/'+Date.now()+'-'+Math.random().toString(36).slice(2,7)+'.'+ext,'property-documents');
     /* The capture time has to be read from f, not from blob: drawing a photo
        onto a canvas to resize it throws the EXIF away. */
     if(url){ target.photos.push(url);
