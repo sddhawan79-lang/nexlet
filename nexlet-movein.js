@@ -378,29 +378,85 @@
   }
 
   /* Chooser, so a single sheet can be reprinted without the whole pack. */
+  /* The printable sheets, declared once. nexlet-signed.js reads this to build
+     its shelf, so the list of what can be signed and the list of what can be
+     scanned back cannot drift apart — they were already drifting: the shelf had
+     separate rows for meters and keys, which are one sheet here.
+
+     signed:1 marks a sheet that comes back with a signature on it. The property
+     information sheet is the tenant's to keep and is not signed. */
+  const SHEETS = [
+    ['receipt',  'Receipt of documents',      'What the tenant signs to confirm everything was handed over', 1],
+    ['keyterms', 'Written key terms',         'Required for tenancies from 1 May 2026, alongside the Information Sheet', 1],
+    ['propinfo', 'Property information',      'Stopcock, bins, meters, rent, who to call — the same sheet that goes out with the document pack', 0],
+    ['alarms',   'Alarm test record',         'Smoke and CO alarms, tested on the first day, tenant present', 1],
+    ['meters',   'Meter readings and keys',   'Readings and key count, signed', 1]
+  ];
+
+  /* When each sheet was last printed, so the shelf can tell "never printed" from
+     "printed and not yet scanned back" — the second is a job half done and the
+     one worth chasing. Stored in the signed-docs bag under a reserved key rather
+     than in a column of its own. */
+  function printedMap(pid) {
+    const rec = (window.tenantRecFor && window.tenantRecFor(pid)) || {};
+    return ((rec.signedDocs || {})._printed) || {};
+  }
+  function notePrinted(pid, parts) {
+    const rec = (window.tenantRecFor && window.tenantRecFor(pid)); if (!rec) return;
+    const now = new Date().toISOString();
+    rec.signedDocs = Object.assign({}, rec.signedDocs || {});
+    const pr = Object.assign({}, rec.signedDocs._printed || {});
+    parts.forEach(k => { pr[k] = now; });
+    rec.signedDocs._printed = pr;
+    if (window.save) window.save();
+    if (window.pushTenantRec) window.pushTenantRec(rec);
+  }
+
   function open(pid) {
     const rec = window.tenantRecFor && window.tenantRecFor(pid);
     if (!rec || !rec.id) { if (window.toast) window.toast('Set up the tenancy first', 1); return; }
     const p = (window.P && window.P(pid)) || {};
-    const row = (k, label, why) =>
-      '<label style="display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--border);cursor:pointer">' +
-      '<input type="checkbox" class="mip-part" value="' + k + '" checked style="width:auto;margin:2px 0 0">' +
-      '<span><span style="font-size:12.5px;font-weight:600;color:var(--navy)">' + label + '</span>' +
-      '<span class="faint" style="display:block;font-size:11px">' + why + '</span></span></label>';
+    const pr = printedMap(pid);
+    const S = window.NexLetSigned;
+    /* Each sheet carries its own state and its own upload, so the loop — print,
+       sign, scan back — closes in one place instead of sending the agent off to
+       find a different panel afterwards. */
+    const row = (k, label, why, signable) => {
+      const h = (S && signable) ? S.held(pid, k) : null;
+      const printedAt = pr[k];
+      const state = h ? '<span style="color:var(--green)">\u2713 Signed copy on file \u00b7 ' +
+            esc(window.fmtDate ? window.fmtDate(h.signedAt) : h.signedAt) + '</span>'
+        : (signable && printedAt) ? '<span style="color:var(--amber)">Printed ' +
+            esc(window.fmtDate ? window.fmtDate(printedAt) : printedAt) + ' \u00b7 not scanned back</span>'
+        : signable ? '<span class="faint">Signed on paper, scanned back here</span>'
+        : '<span class="faint">For the tenant to keep \u2014 not signed</span>';
+      return '<div style="display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--border)">' +
+        '<input type="checkbox" class="mip-part" value="' + k + '" checked style="width:auto;margin:3px 0 0">' +
+        '<div style="flex:1;min-width:0">' +
+        '<div style="font-size:12.5px;font-weight:600;color:var(--navy)">' + label + '</div>' +
+        '<div class="faint" style="font-size:11px">' + why + '</div>' +
+        '<div style="font-size:11px;margin-top:2px">' + state + '</div></div>' +
+        (signable ? '<div style="display:flex;gap:5px;flex-shrink:0">' +
+          (h ? '<button class="btn sm" onclick="viewDoc(\'' + esc(h.url) + '\',\'' + esc(label) + '\')">View</button>' : '') +
+          '<button class="btn sm" onclick="NexLetSigned.add(\'' + pid + '\',\'' + k + '\')">' +
+          (h ? 'Replace' : '\u2191 Upload signed') + '</button></div>' : '') +
+        '</div>';
+    };
     window.modal('Move-in pack — ' + esc(p.address || ''),
-      '<div class="note" style="margin-bottom:12px">Prints as one job, one sheet per page, ready to sign by hand. Scan the signed sheets back in afterwards.</div>' +
-      row('receipt', 'Receipt of documents', 'What the tenant signs to confirm everything was handed over') +
-      row('keyterms', 'Written key terms', 'Required for tenancies from 1 May 2026, alongside the Information Sheet') +
-      row('propinfo', 'Property information', 'Stopcock, bins, meters, rent, who to call — the same sheet that goes out with the document pack') +
-      row('alarms', 'Alarm test record', 'Smoke and CO alarms, tested on the first day, tenant present') +
-      row('meters', 'Meter readings and keys', 'Readings and key count, signed') +
-      '<div class="hint" style="margin-top:10px">The Information Sheet itself is a GOV.UK PDF — download and print it separately, then tick it on the receipt.</div>',
+      '<div class="note" style="margin-bottom:12px">Prints as one job, one sheet per page, ready to sign by hand. ' +
+      'Upload each signed sheet against its own line when it comes back — or use ' +
+      '<b>one scan of the whole stack</b> at the bottom.</div>' +
+      SHEETS.map(s => row(s[0], s[1], s[2], s[3])).join('') +
+      '<div class="hint" style="margin-top:10px">The Information Sheet itself is a GOV.UK PDF — download and print ' +
+      'it separately, then tick it on the receipt.</div>',
       '<button class="btn" onclick="closeModal()">Cancel</button>' +
+      (window.NexLetSigned ? '<button class="btn" onclick="NexLetSigned.addBundle(\'' + pid + '\')">\u2191 One scan of the stack</button>' : '') +
       '<button class="btn navy" onclick="NexLetMoveIn.printSelected(\'' + pid + '\')">\u2318 Print pack</button>', true);
   }
 
   window.NexLetMoveIn = {
     open, pack, packHtml, keyTermsHtml, propInfoHtml, editInfo, saveInfo, hasInfo,
+    SHEETS, printedMap, notePrinted,
     previewInfo(pid) {
       const w = window.open('', '_blank');
       if (!w) { window.toast('Allow pop-ups to preview', 1); return; }
@@ -410,6 +466,7 @@
       const parts = [...document.querySelectorAll('.mip-part')].filter(x => x.checked).map(x => x.value);
       if (!parts.length) { if (window.toast) window.toast('Pick at least one sheet', 1); return; }
       window.closeModal();
+      notePrinted(pid, parts);
       pack(pid, parts);
     }
   };
