@@ -86,7 +86,6 @@
       coreHeld: core.filter(d => b[d[0]]).length,
       printedUnscanned: core.filter(d => pr[d[0]] && !b[d[0]]).length };
   }
-  const pagesNote = h => (h && h.pages) ? ' \u00b7 p' + h.pages : '';
   const mb = n => (n / 1048576).toFixed(1) + ' MB';
 
   /* A phone photograph of one sheet is often larger than a fourteen-page scan,
@@ -296,5 +295,21 @@
      Callers: NexLetRegister (rows, backCell, extraSigned), NexLetMoveIn (pack
      chooser + printed state), NexLetServe (landlord attachments), and the
      move-in checklist in agent.html. */
+
+  /* Called from the file inputs' onchange in add() and addBundle(). Lost once to
+     a careless slice between two anchors when panel() was removed — the export
+     below still named it, so the whole module failed to register and every
+     signed document silently vanished from the register. */
+  function noteSize(input, targetId) {
+    const t = document.getElementById(targetId); if (!t) return;
+    const f = input && input.files && input.files[0];
+    if (!f) return;
+    const big = f.size > 4 * 1048576;
+    t.innerHTML = esc(f.name) + ' \u00b7 <b>' + mb(f.size) + '</b>' +
+      (big ? ' \u2014 a file this size takes up to a minute to upload. The button will count the seconds; leave it running.'
+           : /^image\//.test(f.type || '') ? ' \u2014 will be resized before uploading.' : '');
+    t.style.color = big ? 'var(--amber)' : '';
+  }
+
   window.NexLetSigned = { add, save, remove, addBundle, saveBundle, count, held, docs, noteSize };
 })();
