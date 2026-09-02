@@ -43,6 +43,12 @@
      actually ship the PDF under, so filing it under its own name still works. */
   function leafletDoc() { return bizDoc(/leaflet|scheme information|custodial scheme|what is the tenancy deposit/i); }
 
+  /* The signed shelf, in the shape the registry's file items expect. */
+  function signedDoc(c, key) {
+    const h = window.NexLetSigned && c && c.p ? window.NexLetSigned.held(c.p.id, key) : null;
+    return h && h.url ? { name: h.name, url: h.url, on: h.signedAt } : null;
+  }
+
   function ctx(pid) {
     const p = (window.P && window.P(pid)) || {};
     const rec = (window.tenantRecFor && window.tenantRecFor(pid)) || {};
@@ -135,26 +141,34 @@
                  '<hr style="border:none;border-top:1px solid #E4EAF1;margin:22px 0">' +
                  (c.ta.document_html || '') },
 
-    { key: 'receipt', to: 'landlord', required: false, kind: 'note',
+    /* has() reads the signed shelf: once the scan is on file there is nothing for
+       the agent to attach, and asking again is the double work that made six lists
+       feel like six jobs. */
+    { key: 'receipt', to: 'landlord', required: false, kind: 'file',
       label: 'Receipt of documents, signed by the tenants',
-      why: 'The landlord\u2019s evidence that the compliance documents were served on time. Scan the signed sheet in and attach it.',
-      has: () => false, note: 'Scan the signed sheet, then attach it to this email' },
+      why: 'The landlord\u2019s evidence that the compliance documents were served on time.',
+      has: c => !!signedDoc(c, 'receipt'), file: c => signedDoc(c, 'receipt'),
+      note: 'Upload the signed sheet on the property page and it attaches itself' },
 
-    { key: 'inventory', to: 'landlord', required: false, kind: 'note',
+    { key: 'inventory', to: 'landlord', required: false, kind: 'file',
       label: 'Inventory and schedule of condition',
       why: 'Signed at check-in. This is what any deposit claim is measured against.',
-      has: () => false, note: 'Send once signed at check-in' },
+      has: c => !!signedDoc(c, 'inventory'), file: c => signedDoc(c, 'inventory'),
+      note: 'Send once signed at check-in' },
 
-    { key: 'alarms', to: 'landlord', required: false, kind: 'note',
+    { key: 'alarms', to: 'landlord', required: false, kind: 'file',
       label: 'Alarm test record',
       why: 'Smoke and CO alarms tested on the first day, tenant present. Penalty up to \u00a35,000 per breach.',
-      has: c => !!(c.certs.smokeSounded),
-      note: 'From the move-in pack, once signed' },
+      file: c => signedDoc(c, 'alarms'),
+      has: c => !!signedDoc(c, 'alarms'),
+      note: 'Upload the signed record on the property page and it attaches itself' },
 
-    { key: 'meters', to: 'landlord', required: false, kind: 'note',
+    { key: 'meters', to: 'landlord', required: false, kind: 'file',
       label: 'Meter readings at check-in',
       why: 'Opening readings, so a later billing dispute can be settled.',
-      has: () => false, note: 'From the move-in pack, once recorded' }
+      file: c => signedDoc(c, 'meters'),
+      has: c => !!signedDoc(c, 'meters'),
+      note: 'Upload the signed sheet on the property page and it attaches itself' }
   ];
 
   /* Prescribed information, generated. Wording follows who actually holds the
@@ -510,6 +524,51 @@
                      : '\u2713 Recorded \u2014 no copy held, so it shows as unevidenced');
   }
 
+  /* One document, recorded as served on a date the app did not send it. Files by
+     the same route as saveManual so the deadline checks and the service history
+     cannot tell the two apart — the alternative is a second kind of record that
+     means almost the same thing, which is how the six lists happened. */
+  async function recordOne(pid, key, opts) {
+    const o = opts || {};
+    const c2 = ctx(pid);
+    const aud = (REG.find(r => r.key === key) || {}).to === 'landlord' ? 'landlord' : 'tenant';
+    const named = items(pid, aud).filter(x => x.key === key);
+    if (!named.length) { window.toast('Unknown document', 1); return false; }
+    const iso = new Date(o.date + 'T12:00:00').toISOString();
+    let url = '';
+    if (o.file) {
+      if (!window._storageUpload) { window.toast('Cannot upload while offline \u2014 connect and try again', 1); return false; }
+      const ext = (o.file.name.split('.').pop() || 'pdf');
+      url = await window._storageUpload(o.file, pid + '/served-' + Date.now() + '.' + ext, 'tenant-documents') || '';
+      if (!url) { window.toast('\u26a0 The copy did not upload \u2014 nothing recorded. Check your connection.', 1); return false; }
+    }
+    const body = '<p><b>' + esc(named[0].label) + '</b> was served on the ' + aud + ' by <b>' +
+      esc(String(o.route || '').toLowerCase()) + '</b> on <b>' +
+      esc(window.fmtDate ? window.fmtDate(iso) : o.date) + '</b>, outside NexLet.</p>' +
+      (o.note ? '<p><b>Note:</b> ' + esc(o.note) + '</p>' : '') +
+      (url ? '<p><b>Copy on file:</b> <a href="' + esc(url) + '">' + esc(o.file.name) + '</a></p>'
+           : '<p style="color:#B4543A"><b>No copy held.</b> This is a record of service without a copy of what ' +
+             'was sent.</p>') +
+      '<p style="font-size:12px;color:#6B6055">Recorded ' +
+      (window.fmtDate ? window.fmtDate(new Date().toISOString()) : '') + '.</p>';
+    const subject = (url ? 'Served \u2014 copy on file \u2014 ' : 'Recorded as served, no copy \u2014 ') + (c2.p.address || '');
+    await window.fileLetter({ propertyId: pid,
+      landlordId: aud === 'landlord' ? c2.p.landlordId : null,
+      type: 'serve_' + aud, subject: subject,
+      html: window.letterWrap(subject, body) +
+        '<!--nexlet-served:' + key + '-->' +
+        '<!--nexlet-served-on:' + iso + '-->' +
+        '<!--nexlet-route:' + (o.route || '') + '-->' +
+        '<!--nexlet-evidence:' + (url ? 'copy' : 'none') + '-->',
+      to: [] });
+    if (window.NexLetAudit) window.NexLetAudit.log({ action: 'doc.recorded', entity: 'tenancy',
+      entityId: (c2.rec || {}).id, entityLabel: (c2.p.address || ''),
+      detail: { documents: named[0].label, route: o.route || '',
+                servedOn: window.fmtDate ? window.fmtDate(iso) : o.date,
+                evidence: url ? o.file.name : 'none held', note: o.note || '' } });
+    return true;
+  }
+
   /* Which served documents rest on nothing but a typed date. Anything NexLet sent
      itself has a copy by definition, so only hand-recorded entries can be weak. */
   function unevidenced(pid) {
@@ -599,7 +658,7 @@
     return done;
   }
 
-  window.NexLetServe = {
+  window.NexLetServe = { recordOne,
     open, items, sentAt, servedAt, servedKeys, recordManual, saveManual, unevidenced,
     needsBackfill, backfillMoveIn, backfillAll,
     firstServedKeys: pid => servedKeys(pid, 'first'),
