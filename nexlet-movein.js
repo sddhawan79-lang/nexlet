@@ -366,15 +366,18 @@
 
   function pack(pid, parts) {
     const rec = window.tenantRecFor && window.tenantRecFor(pid);
-    if (!rec || !rec.id) { if (window.toast) window.toast('Set up the tenancy first', 1); return; }
-    if (!window.NexLetPrint) { if (window.toast) window.toast('Print module not loaded', 1); return; }
+    if (!rec || !rec.id) { if (window.toast) window.toast('Set up the tenancy first', 1); return false; }
+    if (!window.NexLetPrint) { if (window.toast) window.toast('Print module not loaded', 1); return false; }
     const p = (window.P && window.P(pid)) || {};
-    window.NexLetPrint.doc(packHtml(pid, parts), 'Move-in pack', p.address || '');
+    /* Only true if the window actually opened — pop-up blocking is common and is
+       the case where a "printed" record would be a lie. */
+    if (!window.NexLetPrint.doc(packHtml(pid, parts), 'Move-in pack', p.address || '')) return false;
     if (window.NexLetAudit) window.NexLetAudit.log({
       action: 'doc.printed', entity: 'tenancy', entityId: rec.id,
       entityLabel: (rec.name || '') + ' — ' + (p.address || ''),
       detail: { document: 'Move-in pack', sections: (parts || ['receipt','keyterms','alarms','meters']).join(', ') }
     });
+    return true;
   }
 
   /* Chooser, so a single sheet can be reprinted without the whole pack. */
@@ -404,12 +407,16 @@
   function notePrinted(pid, parts) {
     const rec = (window.tenantRecFor && window.tenantRecFor(pid)); if (!rec) return;
     const now = new Date().toISOString();
+    const before = rec.signedDocs;
     rec.signedDocs = Object.assign({}, rec.signedDocs || {});
     const pr = Object.assign({}, rec.signedDocs._printed || {});
     parts.forEach(k => { pr[k] = now; });
     rec.signedDocs._printed = pr;
     if (window.save) window.save();
-    if (window.pushTenantRec) window.pushTenantRec(rec);
+    /* Rolled back if the write fails, so the shelf cannot show "printed, not
+       scanned back" for a note the database never took. */
+    if (window.pushTenantRec) Promise.resolve(window.pushTenantRec(rec))
+      .then(ok => { if (ok === false) { rec.signedDocs = before; if (window.render) window.render(); } });
   }
 
   function open(pid) {
@@ -466,8 +473,8 @@
       const parts = [...document.querySelectorAll('.mip-part')].filter(x => x.checked).map(x => x.value);
       if (!parts.length) { if (window.toast) window.toast('Pick at least one sheet', 1); return; }
       window.closeModal();
-      notePrinted(pid, parts);
-      pack(pid, parts);
+      /* Recorded only if the paper actually went to a printer. */
+      if (pack(pid, parts)) notePrinted(pid, parts);
     }
   };
 })();

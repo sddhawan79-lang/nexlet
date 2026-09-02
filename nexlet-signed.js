@@ -87,6 +87,29 @@
       printedUnscanned: core.filter(d => pr[d[0]] && !b[d[0]]).length };
   }
   const pagesNote = h => (h && h.pages) ? ' \u00b7 p' + h.pages : '';
+  const mb = n => (n / 1048576).toFixed(1) + ' MB';
+
+  /* A phone photograph of one sheet is often larger than a fourteen-page scan,
+     and none of that resolution survives being read on screen. Images are
+     resized; a PDF cannot be, and goes up as it is. */
+  async function prepare(file) {
+    if (!/^image\//.test(file.type || '') || !window._resizeImg) return file;
+    try { const b = await window._resizeImg(file, 1600); return b && b.size < file.size ? b : file; }
+    catch (e) { return file; }
+  }
+
+  /* A 6 MB scan on a slow upstream takes a minute, and a button that has said
+     "Filing…" for forty seconds is indistinguishable from a dead one. */
+  function ticker(btn, verb, bytes) {
+    if (!btn) return () => {};
+    const t0 = Date.now();
+    const size = bytes ? ' \u00b7 ' + mb(bytes) : '';
+    const id = setInterval(() => {
+      btn.textContent = verb + '\u2026 ' + Math.round((Date.now() - t0) / 1000) + 's' + size;
+    }, 1000);
+    btn.textContent = verb + '\u2026' + size;
+    return () => clearInterval(id);
+  }
 
   /* ── One document at a time ────────────────────────────────────────────── */
   function add(pid, key) {
@@ -107,8 +130,8 @@
       '<div class="fg"><label>Who signed it <span class="faint">(optional)</span></label>' +
       '<input id="sd-by" value="' + esc(cur ? cur.by || '' : (rec.name || '')) + '"></div>' +
       '<div class="fg"><label>The scan or photograph</label>' +
-      '<input id="sd-file" type="file" accept=".pdf,.png,.jpg,.jpeg,.heic">' +
-      '<span class="hint">A phone photograph is fine provided the signature and the date are legible.</span></div>',
+      '<input id="sd-file" type="file" accept=".pdf,.png,.jpg,.jpeg,.heic" onchange="NexLetSigned.noteSize(this,\'sd-size\')">' +
+      '<span class="hint" id="sd-size">A phone photograph is fine provided the signature and the date are legible.</span></div>',
       '<button class="btn" onclick="closeModal()">Cancel</button>' +
       (cur ? '<button class="btn" onclick="NexLetSigned.remove(\'' + escJs(pid) + '\',\'' + escJs(key) + '\')">Remove</button>' : '') +
       '<button class="btn navy" id="sd-save" onclick="NexLetSigned.save(\'' + escJs(pid) + '\',\'' + escJs(key) + '\')">Save</button>', true);
@@ -123,26 +146,41 @@
     const signedAt = (el('sd-date') || {}).value || '';
     if (!signedAt) { window.toast('Set the date it was signed', 1); return; }
     if (new Date(signedAt) > new Date()) { window.toast('That date is in the future', 1); return; }
-    const btn = el('sd-save'); if (btn) { btn.disabled = true; btn.textContent = 'Saving\u2026'; }
+    const btn = el('sd-save'); if (btn) btn.disabled = true;
+    let stop = ticker(btn, 'Saving');
 
     let url = cur ? cur.url : '', name = cur ? cur.name : '';
     if (file) {
-      if (!window._storageUpload) { window.toast('Cannot upload while offline \u2014 connect and try again', 1); return; }
+      if (!window._storageUpload) { stop(); window.toast('Cannot upload while offline \u2014 connect and try again', 1);
+        if (btn) { btn.disabled = false; btn.textContent = 'Save'; } return; }
+      const up = await prepare(file);
+      stop(); stop = ticker(btn, 'Uploading', up.size);
       const ext = (file.name.split('.').pop() || 'pdf');
-      url = await window._storageUpload(file, pid + '/signed-' + key + '-' + Date.now() + '.' + ext, 'tenant-documents') || '';
+      url = await window._storageUpload(up, pid + '/signed-' + key + '-' + Date.now() + '.' + ext, 'tenant-documents') || '';
+      stop(); stop = ticker(btn, 'Saving');
       /* An upload that failed must not leave a row claiming a copy is on file. A
          missing document you know about is recoverable; one you believe you have
          is not. */
-      if (!url) { window.toast('\u26a0 It did not upload \u2014 nothing saved. Check your connection.', 1);
+      if (!url) { stop(); window.toast('\u26a0 It did not upload \u2014 nothing saved. Check your connection.', 1);
         if (btn) { btn.disabled = false; btn.textContent = 'Save'; } return; }
       name = file.name;
     }
+    /* Kept so the mutation can be undone if the write fails. The audit trail is
+       append-only and hash-chained: an entry saying a signed document was filed
+       cannot be withdrawn later, so it must not be written until the row it
+       describes actually exists. Same rule the storage path already follows. */
+    const before = rec.signedDocs;
     rec.signedDocs = Object.assign({}, rec.signedDocs || {});
     rec.signedDocs[key] = { url: url, name: name, signedAt: signedAt,
       by: (el('sd-by') || {}).value || '', label: (el('sd-label') || {}).value || '',
       addedAt: new Date().toISOString() };
     if (window.save) window.save();
-    if (window.pushTenantRec) await window.pushTenantRec(rec);
+    if (window.pushTenantRec && !(await window.pushTenantRec(rec))) {
+      rec.signedDocs = before; stop();
+      if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+      return;   /* pushTenantRec has already toasted why */
+    }
+    stop();
     if (window.NexLetAudit) window.NexLetAudit.log({ action: 'signed.filed', entity: 'tenancy',
       entityId: rec.id, entityLabel: ((window.P && window.P(pid)) || {}).address || '',
       detail: { document: (docs().find(x => x[0] === key) || [])[1] || key, signedAt: signedAt } });
@@ -150,12 +188,13 @@
     window.toast('\u2713 Filed \u2014 signed ' + dt(signedAt));
   }
 
-  function remove(pid, key) {
+  async function remove(pid, key) {
     const rec = REC(pid); if (!rec || !rec.signedDocs) return;
+    const before = rec.signedDocs;
     const b = Object.assign({}, rec.signedDocs); delete b[key];
     rec.signedDocs = b;
     if (window.save) window.save();
-    if (window.pushTenantRec) window.pushTenantRec(rec);
+    if (window.pushTenantRec && !(await window.pushTenantRec(rec))) { rec.signedDocs = before; return; }
     window.closeModal(); if (window.render) window.render();
     window.toast('Removed from the shelf');
   }
@@ -190,8 +229,8 @@
         '</div>').join('') + '</div>' +
       '<div class="hint" style="margin:-6px 0 12px">Pages are optional and free text \u2014 "1\u20132", "5", "7\u201310".</div>' +
       '<div class="fg"><label>The scan</label>' +
-      '<input id="sb-file" type="file" accept=".pdf,.png,.jpg,.jpeg,.heic">' +
-      '<span class="hint">One PDF of the whole stack, or a photograph if it is a single sheet.</span></div>',
+      '<input id="sb-file" type="file" accept=".pdf,.png,.jpg,.jpeg,.heic" onchange="NexLetSigned.noteSize(this,\'sb-size\')">' +
+      '<span class="hint" id="sb-size">One PDF of the whole stack, or a photograph if it is a single sheet.</span></div>',
       '<button class="btn" onclick="closeModal()">Cancel</button>' +
       '<button class="btn navy" id="sb-save" onclick="NexLetSigned.saveBundle(\'' + escJs(pid) + '\')">File it</button>', true);
   }
@@ -206,26 +245,37 @@
     const signedAt = (el('sb-date') || {}).value || '';
     if (!signedAt) { window.toast('Set the date they were signed', 1); return; }
     if (new Date(signedAt) > new Date()) { window.toast('That date is in the future', 1); return; }
-    const btn = el('sb-save'); if (btn) { btn.disabled = true; btn.textContent = 'Filing\u2026'; }
+    const btn = el('sb-save'); if (btn) btn.disabled = true;
+    let stop = ticker(btn, 'Filing');
 
-    if (!window._storageUpload) { window.toast('Cannot upload while offline \u2014 connect and try again', 1); return; }
+    if (!window._storageUpload) { stop(); window.toast('Cannot upload while offline \u2014 connect and try again', 1);
+      if (btn) { btn.disabled = false; btn.textContent = 'File it'; } return; }
     const pg = {};
     [...document.querySelectorAll('.sb-pg')].forEach(i => {
       const v = (i.value || '').trim(); if (v) pg[i.getAttribute('data-k')] = v;
     });
     const ext = (file.name.split('.').pop() || 'pdf');
+    const up = await prepare(file);
+    stop(); stop = ticker(btn, 'Uploading', up.size);
     /* Uploaded once. Every ticked document points at the same object rather than
        at its own copy — five copies of one bundle is five things to keep in step. */
-    const url = await window._storageUpload(file, pid + '/signed-bundle-' + Date.now() + '.' + ext, 'tenant-documents') || '';
-    if (!url) { window.toast('\u26a0 It did not upload \u2014 nothing saved. Check your connection.', 1);
+    const url = await window._storageUpload(up, pid + '/signed-bundle-' + Date.now() + '.' + ext, 'tenant-documents') || '';
+    stop(); stop = ticker(btn, 'Filing');
+    if (!url) { stop(); window.toast('\u26a0 It did not upload \u2014 nothing saved. Check your connection.', 1);
       if (btn) { btn.disabled = false; btn.textContent = 'File it'; } return; }
 
     const by = (el('sb-by') || {}).value || '';
+    const before = rec.signedDocs;
     rec.signedDocs = Object.assign({}, rec.signedDocs || {});
     keys.forEach(k => { rec.signedDocs[k] = { url: url, name: file.name, signedAt: signedAt, by: by,
       bundle: true, pages: pg[k] || '', addedAt: new Date().toISOString() }; });
     if (window.save) window.save();
-    if (window.pushTenantRec) await window.pushTenantRec(rec);
+    if (window.pushTenantRec && !(await window.pushTenantRec(rec))) {
+      rec.signedDocs = before; stop();
+      if (btn) { btn.disabled = false; btn.textContent = 'File it'; }
+      return;
+    }
+    stop();
     if (window.NexLetAudit) window.NexLetAudit.log({ action: 'signed.filed', entity: 'tenancy',
       entityId: rec.id, entityLabel: ((window.P && window.P(pid)) || {}).address || '',
       detail: { bundle: true, documents: keys.length, signedAt: signedAt } });
@@ -274,5 +324,16 @@
       '</div></div>';
   }
 
-  window.NexLetSigned = { panel, add, save, remove, addBundle, saveBundle, count, held, docs };
+  function noteSize(input, targetId) {
+    const t = document.getElementById(targetId); if (!t) return;
+    const f = input && input.files && input.files[0];
+    if (!f) return;
+    const big = f.size > 4 * 1048576;
+    t.innerHTML = esc(f.name) + ' \u00b7 <b>' + mb(f.size) + '</b>' +
+      (big ? ' \u2014 a file this size takes up to a minute to upload. The button will count the seconds; leave it running.'
+           : /^image\//.test(f.type || '') ? ' \u2014 will be resized before uploading.' : '');
+    t.style.color = big ? 'var(--amber)' : '';
+  }
+
+  window.NexLetSigned = { panel, add, save, remove, addBundle, saveBundle, count, held, docs, noteSize };
 })();
