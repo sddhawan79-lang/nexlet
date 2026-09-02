@@ -287,8 +287,24 @@
         esc(missing.map(r => r.label).join(', ')) + '. The pack will go without them \u2014 upload the signed ' +
         'sheets and send again when they arrive.</div>' : ''),
       '<button class="btn" onclick="closeModal()">Cancel</button>' +
-      '<button class="btn navy" onclick="closeModal();NexLetServe.open(\'' + escJs(pid) + '\',\'landlord\')">Confirm and send</button>', true);
+      (going.length ? '<button class="btn navy" id="lp-send" onclick="NexLetRegister.sendLandlord(\'' + escJs(pid) +
+        '\')">Confirm and send</button>' : ''), true);
   }
 
-  window.NexLetRegister = { panel, rows, summary, fixDate, saveDate, landlordPack, servedFor, SIGNED_KEY };
+  /* Sends directly. The preview used to hand off to the serve modal, which meant
+     "one click" was three and landed the agent back in the ticking list the
+     register exists to replace. */
+  async function sendLandlord(pid) {
+    const rs = rows(pid).filter(r => r.audiences.indexOf('landlord') >= 0);
+    const attach = rs.filter(r => r.signed);
+    const sendable = rs.filter(r => r.ready);
+    const keys = sendable.concat(attach.filter(r => sendable.indexOf(r) < 0)).map(r => r.key);
+    if (!keys.length) { window.toast('Nothing on file to send', 1); return; }
+    const btn = document.getElementById('lp-send');
+    if (btn) { btn.disabled = true; btn.textContent = 'Sending\u2026'; }
+    await window.NexLetServe.send(pid, 'landlord', keys, '');
+    window.closeModal(); if (window.render) window.render();
+  }
+
+  window.NexLetRegister = { panel, rows, summary, fixDate, saveDate, landlordPack, sendLandlord, servedFor, SIGNED_KEY };
 })();

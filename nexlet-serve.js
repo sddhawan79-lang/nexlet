@@ -670,10 +670,16 @@
       w.document.write(m.html); w.document.close();
     },
 
-    async send(pid, audience) {
-      const picked = pickedKeys();
+    /* keys and note are optional. Without them the picks come from the serve
+       modal's own checkboxes, which is how this was always called — but it meant
+       the sender could only be driven by that modal's DOM, so anything else
+       wanting to send had to open it and hand the job over. The register's
+       one-click landlord pack passes its list directly instead. */
+    async send(pid, audience, keys, note) {
+      const picked = (keys && keys.length) ? keys : pickedKeys();
       if (!picked.length) { window.toast('Pick at least one document', 1); return; }
-      const m = compose(pid, audience, picked, (document.getElementById('srv-note') || {}).value || '');
+      const m = compose(pid, audience, picked,
+        note != null ? note : ((document.getElementById('srv-note') || {}).value || ''));
       if (!m.to.length) { window.toast('No email address on file', 1); return; }
 
       const miss = unmet(items(pid, audience), picked);

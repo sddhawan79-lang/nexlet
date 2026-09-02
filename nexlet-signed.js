@@ -92,10 +92,16 @@
   /* A phone photograph of one sheet is often larger than a fourteen-page scan,
      and none of that resolution survives being read on screen. Images are
      resized; a PDF cannot be, and goes up as it is. */
+  /* Returns {blob, ext}. A resize always produces JPEG, so the stored name has to
+     say .jpg — keeping a .heic or .png extension on JPEG bytes is the kind of
+     mismatch that works until something downstream trusts the extension. */
   async function prepare(file) {
-    if (!/^image\//.test(file.type || '') || !window._resizeImg) return file;
-    try { const b = await window._resizeImg(file, 1600); return b && b.size < file.size ? b : file; }
-    catch (e) { return file; }
+    const own = (file.name || '').split('.').pop() || 'pdf';
+    if (!/^image\//.test(file.type || '') || !window._resizeImg) return { blob: file, ext: own };
+    try {
+      const b = await window._resizeImg(file, 1600);
+      return (b && b.size < file.size) ? { blob: b, ext: 'jpg' } : { blob: file, ext: own };
+    } catch (e) { return { blob: file, ext: own }; }
   }
 
   /* A 6 MB scan on a slow upstream takes a minute, and a button that has said
@@ -154,9 +160,8 @@
       if (!window._storageUpload) { stop(); window.toast('Cannot upload while offline \u2014 connect and try again', 1);
         if (btn) { btn.disabled = false; btn.textContent = 'Save'; } return; }
       const up = await prepare(file);
-      stop(); stop = ticker(btn, 'Uploading', up.size);
-      const ext = (file.name.split('.').pop() || 'pdf');
-      url = await window._storageUpload(up, pid + '/signed-' + key + '-' + Date.now() + '.' + ext, 'tenant-documents') || '';
+      stop(); stop = ticker(btn, 'Uploading', up.blob.size);
+      url = await window._storageUpload(up.blob, pid + '/signed-' + key + '-' + Date.now() + '.' + up.ext, 'tenant-documents') || '';
       stop(); stop = ticker(btn, 'Saving');
       /* An upload that failed must not leave a row claiming a copy is on file. A
          missing document you know about is recoverable; one you believe you have
@@ -254,12 +259,11 @@
     [...document.querySelectorAll('.sb-pg')].forEach(i => {
       const v = (i.value || '').trim(); if (v) pg[i.getAttribute('data-k')] = v;
     });
-    const ext = (file.name.split('.').pop() || 'pdf');
     const up = await prepare(file);
-    stop(); stop = ticker(btn, 'Uploading', up.size);
+    stop(); stop = ticker(btn, 'Uploading', up.blob.size);
     /* Uploaded once. Every ticked document points at the same object rather than
        at its own copy — five copies of one bundle is five things to keep in step. */
-    const url = await window._storageUpload(up, pid + '/signed-bundle-' + Date.now() + '.' + ext, 'tenant-documents') || '';
+    const url = await window._storageUpload(up.blob, pid + '/signed-bundle-' + Date.now() + '.' + up.ext, 'tenant-documents') || '';
     stop(); stop = ticker(btn, 'Filing');
     if (!url) { stop(); window.toast('\u26a0 It did not upload \u2014 nothing saved. Check your connection.', 1);
       if (btn) { btn.disabled = false; btn.textContent = 'File it'; } return; }
@@ -283,57 +287,14 @@
     window.toast('\u2713 Filed against ' + keys.length + ' document' + (keys.length === 1 ? '' : 's') + ' \u2014 signed ' + dt(signedAt));
   }
 
-  /* ── Panel ─────────────────────────────────────────────────────────────── */
-  function panel(pid) {
-    const rec = REC(pid); if (!rec || !rec.id) return '';
-    const c = count(pid);
-    const pr = (window.NexLetMoveIn && window.NexLetMoveIn.printedMap) ? window.NexLetMoveIn.printedMap(pid) : {};
-    const row = d => {
-      const h = held(rec, d[0]);
-      const label = (d[0] === 'other' && h && h.label) ? h.label : d[1];
-      const state = h
-        ? 'Signed ' + esc(dt(h.signedAt)) + (h.by ? ' by ' + esc(h.by) : '') + pagesNote(h) +
-          (h.bundle ? ' <span style="color:var(--muted)">\u00b7 in the combined scan</span>' : ' \u00b7 ' + esc(h.name))
-        : (d[2] && pr[d[0]]) ? '<span style="color:var(--amber)">Printed ' + esc(dt(pr[d[0]])) + ' \u00b7 not scanned back</span>'
-        : (d[2] ? 'Not on file' : 'Not on file \u2014 only if it applies');
-      return '<div class="row" style="align-items:flex-start">' +
-        '<span style="width:19px;flex-shrink:0;color:' + (h ? 'var(--green)' : (d[2] ? 'var(--amber)' : 'var(--faint)')) +
-        ';font-weight:700">' + (h ? '\u2713' : '\u25cb') + '</span>' +
-        '<div style="flex:1;min-width:0">' +
-        '<div style="font-size:13px;font-weight:600;color:' + (h ? 'var(--navy)' : 'var(--muted)') + '">' + esc(label) + '</div>' +
-        '<div class="faint" style="font-size:11.5px;margin-top:2px">' + state + '</div></div>' +
-        '<div style="display:flex;gap:6px;flex-shrink:0">' +
-        (h ? '<button class="btn sm" onclick="viewDoc(\'' + escJs(h.url) + '\',\'' + escJs(label) + '\')">View</button>' : '') +
-        '<button class="btn sm' + (h ? '' : ' navy') + '" onclick="NexLetSigned.add(\'' + escJs(pid) + '\',\'' + escJs(d[0]) + '\')">' +
-        (h ? 'Replace' : 'Attach') + '</button></div></div>';
-    };
-    const missing = c.core - c.coreHeld;
-    return '<div class="panel" style="margin-bottom:14px"><div class="panel-hd"><h2>Signed paperwork on file</h2>' +
-      '<span class="faint" style="font-size:12px">' + c.coreHeld + ' of ' + c.core + ' key documents</span></div>' +
-      '<div class="panel-bd">' +
-      '<div class="hint" style="margin:0 0 10px">What the tenant signed and handed back. The rest of this page ' +
-      'records what you <i>sent</i>; a signature proves it was <i>received</i>, which is the harder thing to show.</div>' +
-      (c.printedUnscanned
-        ? '<div class="note warn" style="margin-bottom:10px"><b>' + c.printedUnscanned + ' printed and not scanned back.</b> ' +
-          'Paper on a desk is not evidence until it is on the file.</div>'
-        : missing ? '<div class="note warn" style="margin-bottom:10px"><b>' + missing + ' still to scan.</b></div>' : '') +
-      docs().map(row).join('') +
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">' +
-      '<button class="btn sm navy" onclick="NexLetSigned.addBundle(\'' + escJs(pid) + '\')">' +
-      '\u2191 Upload one scan of the whole stack</button></div>' +
-      '</div></div>';
-  }
+  /* The shelf's own panel is gone. Its three facts now live as columns on the
+     document register, which is the whole point of the consolidation — leaving a
+     second, unrendered document list here is exactly how six lists happened. The
+     module remains as the store: the register, the move-in chooser and the
+     landlord pack all read it.
 
-  function noteSize(input, targetId) {
-    const t = document.getElementById(targetId); if (!t) return;
-    const f = input && input.files && input.files[0];
-    if (!f) return;
-    const big = f.size > 4 * 1048576;
-    t.innerHTML = esc(f.name) + ' \u00b7 <b>' + mb(f.size) + '</b>' +
-      (big ? ' \u2014 a file this size takes up to a minute to upload. The button will count the seconds; leave it running.'
-           : /^image\//.test(f.type || '') ? ' \u2014 will be resized before uploading.' : '');
-    t.style.color = big ? 'var(--amber)' : '';
-  }
-
-  window.NexLetSigned = { panel, add, save, remove, addBundle, saveBundle, count, held, docs, noteSize };
+     Callers: NexLetRegister (rows, backCell, extraSigned), NexLetMoveIn (pack
+     chooser + printed state), NexLetServe (landlord attachments), and the
+     move-in checklist in agent.html. */
+  window.NexLetSigned = { add, save, remove, addBundle, saveBundle, count, held, docs, noteSize };
 })();
