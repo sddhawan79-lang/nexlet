@@ -176,6 +176,7 @@ h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px
   <script src="nexlet-capture.js"></script>
   <script src="nexlet-material.js"></script>
   <script src="nexlet-complaints.js"></script>
+  <script src="nexlet-signed.js"></script>
   <script src="nexlet-inventory.js"></script>
 <script>
 // ─────────────────────────────────────────────────────────────
@@ -238,6 +239,11 @@ async function _w(promise,_tbl,_op,_rec){ const _audit=()=>{ if(_tbl&&window.Nex
   if(!LIVE){ _audit(); return true; }
   try{ const {error}=await promise; if(error){console.error(error);toast('⚠ Save failed: '+(error.message||'unknown error')+' — retry',1);return false;} _audit(); return true; }
   catch(e){ console.error(e); toast('⚠ Save failed: '+(e.message||'unknown error')+' — retry',1); return false; } }
+/* Resolves to the error rather than throwing, so the degrade helpers below can
+   inspect it and still honour the contract every caller relies on: return false,
+   never throw. */
+async function _err(q){ try{ const {error}=await q; return error||null; }catch(e){ return e; } }
+function _fail(e){ console.error(e); toast('⚠ Save failed: '+((e&&e.message)||'unknown error')+' — retry',1); return false; }
 const pushLandlord =l  =>_w(sb.from('agency_landlords').upsert(landlordToRow(l)),'agency_landlords','upsert',l);
 const pushProperty =p  =>_w(sb.from('properties').upsert(propToRow(p)),'properties','upsert',p);
 const pushListing  =l  =>_w(sb.from('agency_listings').upsert({id:l.id,agency_id:window._agencyId,data:l,updated_at:new Date().toISOString()}),'agency_listings','upsert',l);
@@ -254,7 +260,23 @@ const pushTenancy  =t  =>_w(sb.from('tenancies').upsert(tenToRow(t)),'tenancies'
 const pushReference=r  =>_w(sb.from('agency_references').upsert(refToRow(r)),'agency_references','upsert',r);
 const pushInvoice  =i  =>_w(sb.from('invoices').upsert(invToRow(i)),'invoices','upsert',i);
 const pushNotice  =n  =>_w(sb.from('agency_notices').upsert(noticeToRow(n)),'agency_notices','upsert',n);
-const pushTenantRec =t =>_w(sb.from('agency_tenants').upsert(tenantToRow(t)),'agency_tenants','upsert',t);
+async function pushTenantRec(t){
+  const row=tenantToRow(t);
+  if(window._noSignedDocs) delete row.signed_docs;
+  if(!LIVE) return _w(Promise.resolve({}),'agency_tenants','upsert',t);
+  const ok=()=>{ if(window.NexLetAudit) NexLetAudit.noteWrite('agency_tenants','upsert',t); return true; };
+  let error=await _err(sb.from('agency_tenants').upsert(row));
+  if(!error) return ok();
+  const missing=/signed_docs/.test(error.message||'')||error.code==='PGRST204'||error.code==='42703';
+  if(missing&&!window._noSignedDocs){
+    window._noSignedDocs=true;
+    console.warn('agency_tenants.signed_docs not present — saving without it. Run nexlet-signed.sql.');
+    delete row.signed_docs;
+    error=await _err(sb.from('agency_tenants').upsert(row));
+    if(!error) return ok();
+  }
+  return _fail(error);
+}
 const pushRent    =r  =>_w(sb.from('agency_rent_ledger').upsert(rentToRow(r)),'agency_rent_ledger','upsert',r);
 const pushJob     =j  =>_w(sb.from('agency_maintenance').upsert(jobToRow(j)),'agency_maintenance','upsert',j);
 /* Same degradation as pushAgency, for the same reason: photo_meta and
@@ -265,22 +287,22 @@ async function pushInv2(v){
   const row=inv2ToRow(v);
   if(window._noInvCols){ delete row.photo_meta; delete row.cleanliness; }
   if(!LIVE) return _w(Promise.resolve({}),'agency_inventories','upsert',v);
-  const {error}=await sb.from('agency_inventories').upsert(row);
-  if(!error){ if(window.NexLetAudit) NexLetAudit.noteWrite('agency_inventories','upsert',v); return true; }
+  const ok=()=>{ if(window.NexLetAudit) NexLetAudit.noteWrite('agency_inventories','upsert',v); return true; };
+  let error=await _err(sb.from('agency_inventories').upsert(row));
+  if(!error) return ok();
   const missing=/photo_meta|cleanliness/.test(error.message||'')||error.code==='PGRST204'||error.code==='42703';
   if(missing&&!window._noInvCols){
     window._noInvCols=true;
     console.warn('agency_inventories.photo_meta/cleanliness not present — saving without them. Run nexlet-photo-provenance.sql.');
     delete row.photo_meta; delete row.cleanliness;
-    const retry=await sb.from('agency_inventories').upsert(row);
-    if(!retry.error){ if(window.NexLetAudit) NexLetAudit.noteWrite('agency_inventories','upsert',v); return true; }
-    console.error(retry.error); toast('⚠ Save failed: '+(retry.error.message||'unknown error')+' — retry',1); return false;
+    error=await _err(sb.from('agency_inventories').upsert(row));
+    if(!error) return ok();
   }
-  console.error(error); toast('⚠ Save failed: '+(error.message||'unknown error')+' — retry',1); return false;
+  return _fail(error);
 }
 const pushValuation=v =>_w(sb.from('agency_valuations').upsert(valToRow(v)),'agency_valuations','upsert',v);
-const rowToTenant=r=>({id:r.id,propertyId:r.property_id,landlordId:r.landlord_id,userId:r.user_id,name:r.name||'',email:r.email||'',phone:r.phone||'',start:r.start_date||'',end:r.end_date||'',rent:r.rent||0,deposit:r.deposit,scheme:r.scheme||'',schemeRef:r.scheme_ref||'',depositHolder:r.deposit_holder||'landlord',depositReceived:r.deposit_received||'',landlordSchemeNo:r.landlord_scheme_no||'',depositPaidBy:r.deposit_paid_by||'',piServedAt:r.pi_served_at||'',holdingDeposit:r.holding_deposit||0,firstRentReceived:r.first_rent_received||'',payDetails:r.pay_details||'',moniesDueBy:r.monies_due_by||'',moniesSentAt:r.monies_sent_at||'',condensationSentAt:r.condensation_sent_at||'',condensationAckAt:r.condensation_ack_at||'',landlordDepositConfirmedAt:r.landlord_deposit_confirmed_at||'',welcomeSentAt:r.welcome_sent_at||'',status:r.status||'active',inviteToken:r.invite_token||'',invitedAt:r.invited_at||'',invited:!!r.invited_at,occupants:r.occupants||[],guarantor:r.guarantor||null,depositCertName:r.deposit_cert_name||'',piDocName:r.pi_doc_name||'',piDocUrl:r.pi_doc_url||'',depositCertUrl:r.deposit_cert_url||'',depositCertExpiry:r.deposit_cert_expiry||'',refDocName:r.ref_doc_name||'',refDocUrl:r.ref_doc_url||'',shareCode:r.share_code||'',dob:r.dob||'',rtrResult:r.rtr_result||'',rtrExpiry:r.rtr_expiry||'',rtrCheckDate:r.rtr_check_date||'',rtrDocName:r.rtr_doc_name||'',rtrDocUrl:r.rtr_doc_url||'',rtrDocs:r.rtr_docs||[],rtrCheckMethod:r.rtr_check_method||'',origContractName:r.orig_contract_name||'',origContractUrl:r.orig_contract_url||'',id1DocName:r.id1_doc_name||'',id1DocUrl:r.id1_doc_url||'',id2DocName:r.id2_doc_name||'',id2DocUrl:r.id2_doc_url||'',addressProofName:r.address_proof_name||'',addressProofUrl:r.address_proof_url||'',addressProofDocs:r.address_proof_docs||[],forwardingAddress:r.forwarding_address||'',finalMeters:r.final_meters||null,endNotes:r.end_notes||'',checkoutPackSentAt:r.checkout_pack_sent_at||'',moveInPackSentAt:r.move_in_pack_sent_at||'',moveInPackConfirmedAt:r.move_in_pack_confirmed_at||''});
-const tenantToRow=t=>({id:t.id,agency_id:window._agencyId,property_id:t.propertyId,landlord_id:t.landlordId,name:t.name,email:t.email||'',phone:t.phone||'',start_date:t.start||null,end_date:t.end||null,rent:t.rent||0,deposit:t.deposit,scheme:t.scheme||'',scheme_ref:t.schemeRef||'',deposit_holder:t.depositHolder||'landlord',deposit_received:t.depositReceived||null,landlord_scheme_no:t.landlordSchemeNo||'',deposit_paid_by:t.depositPaidBy||'',pi_served_at:t.piServedAt||null,holding_deposit:t.holdingDeposit||null,first_rent_received:t.firstRentReceived||null,pay_details:t.payDetails||'',monies_due_by:t.moniesDueBy||null,monies_sent_at:t.moniesSentAt||null,condensation_sent_at:t.condensationSentAt||null,condensation_ack_at:t.condensationAckAt||null,landlord_deposit_confirmed_at:t.landlordDepositConfirmedAt||null,welcome_sent_at:t.welcomeSentAt||null,status:t.status||'active',invite_token:t.inviteToken||null,invited_at:t.invitedAt||null,occupants:t.occupants||[],guarantor:t.guarantor||null,deposit_cert_name:t.depositCertName||'',pi_doc_name:t.piDocName||'',pi_doc_url:t.piDocUrl||'',deposit_cert_url:t.depositCertUrl||'',deposit_cert_expiry:t.depositCertExpiry||null,ref_doc_name:t.refDocName||'',ref_doc_url:t.refDocUrl||'',share_code:t.shareCode||'',dob:t.dob||null,rtr_result:t.rtrResult||'',rtr_expiry:t.rtrExpiry||null,rtr_check_date:t.rtrCheckDate||null,rtr_doc_name:t.rtrDocName||'',rtr_doc_url:t.rtrDocUrl||'',rtr_docs:t.rtrDocs||[],rtr_check_method:t.rtrCheckMethod||'',orig_contract_name:t.origContractName||'',orig_contract_url:t.origContractUrl||'',id1_doc_name:t.id1DocName||'',id1_doc_url:t.id1DocUrl||'',id2_doc_name:t.id2DocName||'',id2_doc_url:t.id2DocUrl||'',address_proof_name:t.addressProofName||'',address_proof_url:t.addressProofUrl||'',address_proof_docs:t.addressProofDocs||[],forwarding_address:t.forwardingAddress||'',final_meters:t.finalMeters||null,end_notes:t.endNotes||'',checkout_pack_sent_at:t.checkoutPackSentAt||null,move_in_pack_sent_at:t.moveInPackSentAt||null,move_in_pack_confirmed_at:t.moveInPackConfirmedAt||null,updated_at:new Date().toISOString()});
+const rowToTenant=r=>({id:r.id,propertyId:r.property_id,landlordId:r.landlord_id,userId:r.user_id,name:r.name||'',email:r.email||'',phone:r.phone||'',start:r.start_date||'',end:r.end_date||'',rent:r.rent||0,deposit:r.deposit,scheme:r.scheme||'',schemeRef:r.scheme_ref||'',depositHolder:r.deposit_holder||'landlord',depositReceived:r.deposit_received||'',landlordSchemeNo:r.landlord_scheme_no||'',depositPaidBy:r.deposit_paid_by||'',piServedAt:r.pi_served_at||'',holdingDeposit:r.holding_deposit||0,firstRentReceived:r.first_rent_received||'',payDetails:r.pay_details||'',moniesDueBy:r.monies_due_by||'',moniesSentAt:r.monies_sent_at||'',condensationSentAt:r.condensation_sent_at||'',condensationAckAt:r.condensation_ack_at||'',landlordDepositConfirmedAt:r.landlord_deposit_confirmed_at||'',welcomeSentAt:r.welcome_sent_at||'',status:r.status||'active',inviteToken:r.invite_token||'',invitedAt:r.invited_at||'',invited:!!r.invited_at,occupants:r.occupants||[],guarantor:r.guarantor||null,signedDocs:r.signed_docs||{},depositCertName:r.deposit_cert_name||'',piDocName:r.pi_doc_name||'',piDocUrl:r.pi_doc_url||'',depositCertUrl:r.deposit_cert_url||'',depositCertExpiry:r.deposit_cert_expiry||'',refDocName:r.ref_doc_name||'',refDocUrl:r.ref_doc_url||'',shareCode:r.share_code||'',dob:r.dob||'',rtrResult:r.rtr_result||'',rtrExpiry:r.rtr_expiry||'',rtrCheckDate:r.rtr_check_date||'',rtrDocName:r.rtr_doc_name||'',rtrDocUrl:r.rtr_doc_url||'',rtrDocs:r.rtr_docs||[],rtrCheckMethod:r.rtr_check_method||'',origContractName:r.orig_contract_name||'',origContractUrl:r.orig_contract_url||'',id1DocName:r.id1_doc_name||'',id1DocUrl:r.id1_doc_url||'',id2DocName:r.id2_doc_name||'',id2DocUrl:r.id2_doc_url||'',addressProofName:r.address_proof_name||'',addressProofUrl:r.address_proof_url||'',addressProofDocs:r.address_proof_docs||[],forwardingAddress:r.forwarding_address||'',finalMeters:r.final_meters||null,endNotes:r.end_notes||'',checkoutPackSentAt:r.checkout_pack_sent_at||'',moveInPackSentAt:r.move_in_pack_sent_at||'',moveInPackConfirmedAt:r.move_in_pack_confirmed_at||''});
+const tenantToRow=t=>({id:t.id,agency_id:window._agencyId,property_id:t.propertyId,landlord_id:t.landlordId,name:t.name,email:t.email||'',phone:t.phone||'',start_date:t.start||null,end_date:t.end||null,rent:t.rent||0,deposit:t.deposit,scheme:t.scheme||'',scheme_ref:t.schemeRef||'',deposit_holder:t.depositHolder||'landlord',deposit_received:t.depositReceived||null,landlord_scheme_no:t.landlordSchemeNo||'',deposit_paid_by:t.depositPaidBy||'',pi_served_at:t.piServedAt||null,holding_deposit:t.holdingDeposit||null,first_rent_received:t.firstRentReceived||null,pay_details:t.payDetails||'',monies_due_by:t.moniesDueBy||null,monies_sent_at:t.moniesSentAt||null,condensation_sent_at:t.condensationSentAt||null,condensation_ack_at:t.condensationAckAt||null,landlord_deposit_confirmed_at:t.landlordDepositConfirmedAt||null,welcome_sent_at:t.welcomeSentAt||null,status:t.status||'active',invite_token:t.inviteToken||null,invited_at:t.invitedAt||null,occupants:t.occupants||[],guarantor:t.guarantor||null,signed_docs:t.signedDocs||{},deposit_cert_name:t.depositCertName||'',pi_doc_name:t.piDocName||'',pi_doc_url:t.piDocUrl||'',deposit_cert_url:t.depositCertUrl||'',deposit_cert_expiry:t.depositCertExpiry||null,ref_doc_name:t.refDocName||'',ref_doc_url:t.refDocUrl||'',share_code:t.shareCode||'',dob:t.dob||null,rtr_result:t.rtrResult||'',rtr_expiry:t.rtrExpiry||null,rtr_check_date:t.rtrCheckDate||null,rtr_doc_name:t.rtrDocName||'',rtr_doc_url:t.rtrDocUrl||'',rtr_docs:t.rtrDocs||[],rtr_check_method:t.rtrCheckMethod||'',orig_contract_name:t.origContractName||'',orig_contract_url:t.origContractUrl||'',id1_doc_name:t.id1DocName||'',id1_doc_url:t.id1DocUrl||'',id2_doc_name:t.id2DocName||'',id2_doc_url:t.id2DocUrl||'',address_proof_name:t.addressProofName||'',address_proof_url:t.addressProofUrl||'',address_proof_docs:t.addressProofDocs||[],forwarding_address:t.forwardingAddress||'',final_meters:t.finalMeters||null,end_notes:t.endNotes||'',checkout_pack_sent_at:t.checkoutPackSentAt||null,move_in_pack_sent_at:t.moveInPackSentAt||null,move_in_pack_confirmed_at:t.moveInPackConfirmedAt||null,updated_at:new Date().toISOString()});
 const rowToMsg=r=>({id:r.id,landlordId:r.landlord_id,tenantId:r.tenant_id,propertyId:r.property_id,sender:r.sender||'agent',body:r.body||'',createdAt:r.created_at});
 const msgToRow=m=>({id:m.id,agency_id:window._agencyId,landlord_id:m.landlordId||null,tenant_id:m.tenantId||null,property_id:m.propertyId||null,sender:m.sender||'agent',body:m.body||''});
 const pushMessage=m=>_w(sb.from('agency_messages').insert(msgToRow(m)),'agency_messages','upsert',m);
@@ -315,18 +337,17 @@ async function pushAgency(){
      document, expense and clause edit saves the whole row — and the trail is
      append-only, so noise put into it cannot be taken out. */
   if(!LIVE) return _w(Promise.resolve({}));
-  const {error}=await sb.from('agencies').update(row).eq('id',window._agencyId);
+  let error=await _err(sb.from('agencies').update(row).eq('id',window._agencyId));
   if(!error) return true;
   const missing=new RegExp(LATE.join('|')).test(error.message||'')||error.code==='PGRST204'||error.code==='42703';
   if(missing&&!window._noLateCols){
     window._noLateCols=true;
     console.warn('agencies is missing one of '+LATE.join(', ')+' — saving without them. Run nexlet-complaints.sql.');
     LATE.forEach(k=>delete row[k]);
-    const retry=await sb.from('agencies').update(row).eq('id',window._agencyId);
-    if(!retry.error) return true;
-    console.error(retry.error); toast('⚠ Save failed: '+(retry.error.message||'unknown error')+' — retry',1); return false;
+    error=await _err(sb.from('agencies').update(row).eq('id',window._agencyId));
+    if(!error) return true;
   }
-  console.error(error); toast('⚠ Save failed: '+(error.message||'unknown error')+' — retry',1); return false;
+  return _fail(error);
 }
 
 // ── hydrate S from Supabase (LIVE) — one parallel batch, not sequential round-trips ──
@@ -2903,6 +2924,7 @@ function vPropertyDetail(){
     ${postSigningPanel(p)}
     ${serveDocsPanel(p)}
     ${window.NexLetHistory?NexLetHistory.panel(p.id):''}
+    ${window.NexLetSigned?NexLetSigned.panel(p.id):''}
     ${tenancyChecklistPanel(p)}
     </div>
     <div style="display:${_pTab()==='detail'?'block':'none'}">
@@ -4080,7 +4102,12 @@ function moveInTasks(pid){
     {k:'alarms',ph:2,t:'Smoke and CO alarms tested with the tenant present',
      done:!!c.smoke&&(!!c.co||!!c.coNA),go:"editCert('"+pid+"','smoke')"},
     {k:'pack',ph:1,t:'Documents emailed to every tenant',done:!!packServedAt(pid),at:packServedAt(pid),
-     go:"NexLetServe.open('"+pid+"','tenant')"}
+     go:"NexLetServe.open('"+pid+"','tenant')"},
+    /* The paper the tenant signed and handed back. Sending is recorded elsewhere;
+       this is the only check that the signed copies reached the file. */
+    (window.NexLetSigned?(()=>{ const c=NexLetSigned.count(pid);
+      return {k:'signed',ph:2,t:'Signed paperwork scanned onto the file'+(c.coreHeld<c.core?' ('+c.coreHeld+' of '+c.core+')':''),
+        done:c.coreHeld>=c.core,go:"NexLetSigned.addBundle('"+pid+"')"}; })():null)
   ].filter(Boolean);
 }
 function _workingDaysBefore(dateStr,days){
