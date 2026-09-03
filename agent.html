@@ -516,13 +516,18 @@ let S=load();
 Object.defineProperty(window,'S',   {get:()=>S,    configurable:true});
 Object.defineProperty(window,'sb',  {get:()=>sb,   configurable:true});
 Object.defineProperty(window,'LIVE',{get:()=>LIVE, configurable:true});
-window.pushTenantRec=t=>pushTenantRec(t);
-/* Modules cannot reach the push* consts — they are script-scope lexical
-   bindings, not window properties. Bridged, like pushTenantRec above. */
+/* pushTenantRec, pushAgency and pushInv2 are `async function` declarations —
+   already on window automatically from the moment the script loads. The three
+   bridge lines that used to sit here (window.pushTenantRec=t=>pushTenantRec(t)
+   etc.) reassigned that same slot to a wrapper that calls itself: pushInv2
+   inside the wrapper resolved to the wrapper, not the original, so every call
+   recursed until the stack overflowed. That's why inventory creation crashed
+   and, more seriously, why signed documents looked "attached" and then
+   vanished on refresh — pushTenantRec never reached Supabase at all.
+   pushProperty and pushLandlord ARE const-declared (script-scope, not on
+   window), so they still need bridging below. */
 window.pushProperty=p=>pushProperty(p);
 window.pushLandlord=l=>pushLandlord(l);
-window.pushAgency=()=>pushAgency();
-window.pushInv2=v=>pushInv2(v);
 Object.defineProperty(window,'AG_EDGE',{get:()=>AG_EDGE,configurable:true});
 /* When the tenant document pack went out, from whichever of the two records
    holds it: the flag the one sender now writes, or a filed serve copy from
