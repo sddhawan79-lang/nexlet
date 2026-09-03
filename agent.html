@@ -7916,6 +7916,17 @@ async function createInventory2(){
     if(btn){ btn.disabled=false; btn.textContent='Create'; }
   }
 }
+// The duplicates the old unguarded Create button produced (see createInventory2)
+// have no other way off the list — this removes both the local record and, if
+// it made it to the database despite the pushInv2 recursion bug, the row itself.
+async function deleteInventory2(vid){
+  const v=(S.inventories2||[]).find(x=>x.id===vid); if(!v) return;
+  const label=(P(v.propertyId)||{}).address||'this inventory';
+  if(!confirm('Delete the '+(v.status==='draft'?'draft':v.status)+' inventory for '+label+'? This cannot be undone.')) return;
+  S.inventories2=(S.inventories2||[]).filter(x=>x.id!==vid);
+  if(LIVE&&sb) await _w(sb.from('agency_inventories').delete().eq('id',vid),'agency_inventories','delete',{id:vid});
+  render(); toast('✓ Inventory deleted');
+}
 function vInventoryList(){
   const all=S.inventories2||[];
   const list=NexLetSearch.filter('invt',all,[v=>(P(v.propertyId)||{}).address,v=>(P(v.propertyId)||{}).postcode,v=>((S.tenants||[]).find(x=>x.id===v.tenantId)||{}).name,v=>v.status]);
@@ -7924,7 +7935,8 @@ function vInventoryList(){
     <div class="panel">${!all.length?'<div class="empty">No inventories yet. Create one for a tenancy to start recording move-in condition.</div>':list.length?list.map(v=>{ const p=P(v.propertyId)||{}; const t=(S.tenants||[]).find(x=>x.id===v.tenantId)||{};
       return `<div class="row" style="cursor:pointer" onclick="go('inventorydetail','${v.id}')"><div class="av">📋</div>
         <div style="flex:1"><div style="font-size:14px;font-weight:600;color:var(--navy)">${esc(p.address||'—')}</div><div class="faint" style="font-size:12px">${esc(t.name||'—')} · ${v.rooms.length} item${v.rooms.length===1?'':'s'}</div></div>
-        <span class="pill" style="background:${v.status==='complete'?'var(--green-bg)':v.status==='in-progress'?'var(--blue-bg)':'var(--off)'};color:${v.status==='complete'?'var(--green)':v.status==='in-progress'?'var(--blue)':'#8A7D6E'}">${v.status==='complete'?'Complete':v.status==='in-progress'?'In progress':'Draft'}</span></div>`; }).join(''):NexLetSearch.empty('invt','inventories')}</div>`;
+        <span class="pill" style="background:${v.status==='complete'?'var(--green-bg)':v.status==='in-progress'?'var(--blue-bg)':'var(--off)'};color:${v.status==='complete'?'var(--green)':v.status==='in-progress'?'var(--blue)':'#8A7D6E'}">${v.status==='complete'?'Complete':v.status==='in-progress'?'In progress':'Draft'}</span>
+        <button class="btn sm" onclick="event.stopPropagation();deleteInventory2('${v.id}')" style="flex-shrink:0">Delete</button></div>`; }).join(''):NexLetSearch.empty('invt','inventories')}</div>`;
 }
 function _ensureRoomShape(r){
   if(!r.checkin) r.checkin={photos:r.checkinPhoto?[r.checkinPhoto]:[],note:r.checkinNote||''};
