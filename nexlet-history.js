@@ -301,7 +301,7 @@
                'If it actually went out earlier — by hand at the viewing, or from your own mailbox — record that date and this clears.',
             act: rmAct });
         else if (fst[k] && dayMs(fst[k]) === dayMs(rec.start))
-          out.push({ sev: 'amber', t: START_DUE[k] + ' was served on the start date itself',
+          out.push({ sev: 'blue', t: START_DUE[k] + ' was served on the start date itself',
             d: 'Served ' + day(fst[k]) + ', the day the tenancy began. Legal only if it reached the tenant before they took occupation, and there is no margin in it.' });
         else if (!fst[k] && started)
           out.push({ sev: 'red', t: START_DUE[k] + ' not served, and the tenancy has started',
@@ -440,14 +440,16 @@
   }
 
   /* Red is a statutory breach with a penalty attached; amber is a document that
-     needs reissuing. They must not read alike — triage is the point of the list. */
+     needs reissuing \u2014 both are actionable. Blue is neither: legal as it stands,
+     nothing to fix, just no margin for error. Sharing amber with an actionable
+     item made a "nothing to do" note read as urgent as one that was. */
   function warnBlock(w) {
-    const red = w.sev === 'red';
-    return '<div style="border:1px solid var(--' + (red ? 'red' : 'amber') + ');' +
+    const tone = w.sev === 'red' ? 'red' : w.sev === 'blue' ? 'blue' : 'amber';
+    return '<div style="border:1px solid var(--' + tone + ');' +
       'border-left-width:4px;border-radius:7px;padding:11px 14px;margin-bottom:9px;' +
-      'background:var(--' + (red ? 'red' : 'amber') + '-bg)">' +
-      '<b style="font-size:12.5px;color:var(--' + (red ? 'red' : 'amber') + ')">' +
-      (red ? '\u26a0 ' : '') + esc(w.t) + '</b>' +
+      'background:var(--' + tone + '-bg)">' +
+      '<b style="font-size:12.5px;color:var(--' + tone + ')">' +
+      (tone === 'red' ? '\u26a0 ' : '') + esc(w.t) + '</b>' +
       '<div style="font-size:12px;line-height:1.6;color:var(--navy);margin-top:3px">' + esc(w.d) + '</div>' +
       (w.act ? '<div style="margin-top:9px">' + w.act + '</div>' : '') + '</div>';
   }

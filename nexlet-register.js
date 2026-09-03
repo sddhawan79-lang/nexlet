@@ -140,12 +140,18 @@
   }
 
   function row(pid, r) {
-    const tone = r.outstanding ? 'var(--red)' : r.firstAt ? 'var(--green)' : 'var(--faint)';
+    /* For a document that is evidence-you-collect rather than something you must
+       send (receipt, inventory, alarms, meters — all not required, all signable),
+       being signed and on file IS done. Forwarding it to the landlord afterwards
+       is a convenience, not the completion condition, so it must not be the only
+       thing that turns the tick on. */
+    const done = r.firstAt || (r.signedKey && r.signed);
+    const tone = r.outstanding ? 'var(--red)' : done ? 'var(--green)' : 'var(--faint)';
     return '<div style="display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr);' +
       'gap:12px;padding:10px 0;border-bottom:1px solid var(--border);align-items:start">' +
       '<div style="min-width:0">' +
       '<div style="font-size:13px;font-weight:600;color:var(--navy)">' +
-      '<span style="color:' + tone + ';margin-right:6px">' + (r.firstAt ? '\u2713' : '\u25cb') + '</span>' +
+      '<span style="color:' + tone + ';margin-right:6px">' + (done ? '\u2713' : '\u25cb') + '</span>' +
       esc(r.label) + (r.required ? ' <span style="font-size:10px;color:var(--red);font-weight:700">REQUIRED</span>' : '') +
       '</div>' +
       '<div class="faint" style="font-size:11px;margin-top:2px;line-height:1.45">' + esc(r.why || '') + '</div>' +
