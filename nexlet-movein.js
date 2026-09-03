@@ -457,7 +457,6 @@
       '<div class="hint" style="margin-top:10px">The Information Sheet itself is a GOV.UK PDF — download and print ' +
       'it separately, then tick it on the receipt.</div>',
       '<button class="btn" onclick="closeModal()">Cancel</button>' +
-      (window.NexLetSigned ? '<button class="btn" onclick="NexLetSigned.addBundle(\'' + pid + '\')">\u2191 One scan of the stack</button>' : '') +
       '<button class="btn navy" onclick="NexLetMoveIn.printSelected(\'' + pid + '\')">\u2318 Print pack</button>', true);
   }
 

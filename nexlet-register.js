@@ -47,6 +47,12 @@
   const SIGNED_KEY = { pi: 'deposit', keyterms: 'keyterms', receipt: 'receipt',
     alarms: 'alarms', meters: 'meters', inventory: 'inventory' };
 
+  /* Names for signed documents that reach the strip with no row to borrow from. */
+  const LABEL = { deposit: 'Prescribed information — signed', standing: 'Standing order mandate',
+    inventory: 'Inventory — signed schedule of condition', receipt: 'Receipt of documents, signed',
+    keyterms: 'Written key terms, signed', alarms: 'Alarm test record, signed',
+    meters: 'Meter readings and keys, signed' };
+
   /* Service dates per audience, read from the filed copies. NexLetServe.servedKeys
      merges both audiences, which is right for a deadline and wrong for a row that
      has to say who has had it. */
@@ -153,9 +159,15 @@
   /* Signed paper with no matching row \u2014 a pet agreement, a standing order
      mandate. Without this the ad-hoc upload files into somewhere nobody can see,
      which is worse than not offering it. */
-  function extraSigned(pid) {
+  /* The exclusion list comes from the rows actually rendered, not from SIGNED_KEY.
+     Rows are built from NexLetServe.items(), which drops a document when its
+     applies() gate fails — prescribed information disappears on a let with no
+     deposit. Excluding by the static map assumed a row that was not there, and a
+     signed scan filed against it became unreachable: stored, persisted, and
+     impossible to produce. Complement what is on screen, not what might be. */
+  function extraSigned(pid, rendered) {
     const rec = (window.tenantRecFor && window.tenantRecFor(pid)) || {};
-    const known = Object.keys(SIGNED_KEY).map(k => SIGNED_KEY[k]);
+    const known = (rendered || []).filter(x => x.signedKey).map(x => x.signedKey);
     const bag = Object.assign({}, rec.signedDocs || {});
     delete bag._printed;
     const extra = Object.keys(bag).filter(k => known.indexOf(k) < 0);
@@ -166,7 +178,7 @@
         'gap:12px;padding:10px 0;border-bottom:1px solid var(--border);align-items:start">' +
         '<div style="min-width:0"><div style="font-size:13px;font-weight:600;color:var(--navy)">' +
         '<span style="color:var(--green);margin-right:6px">\u2713</span>' +
-        esc(h.label || (k === 'standing' ? 'Standing order mandate' : 'Other signed paperwork')) + '</div>' +
+        esc(h.label || LABEL[k] || 'Other signed paperwork') + '</div>' +
         '<div class="faint" style="font-size:11px;margin-top:2px">Not a document we serve \u2014 held as evidence only.</div></div>' +
         '<div><span class="faint" style="font-size:11.5px">\u2014</span></div>' +
         '<div style="font-size:11.5px"><span style="color:var(--green)">\u2713 Signed ' + esc(dOnly(h.signedAt)) + '</span>' +
@@ -201,11 +213,10 @@
       'padding-bottom:6px;border-bottom:1.5px solid var(--navy)">' +
       H('Document') + H('Sent') + H('Signed back') + '</div>' +
       rs.map(r => row(pid, r)).join('') +
-      extraSigned(pid) +
+      extraSigned(pid, rs) +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">' +
       '<button class="btn sm navy" onclick="NexLetServe.open(\'' + escJs(pid) + '\',\'tenant\')">Send to the tenant</button>' +
       '<button class="btn sm" onclick="NexLetRegister.landlordPack(\'' + escJs(pid) + '\')">Send the landlord pack</button>' +
-      '<button class="btn sm" onclick="NexLetSigned.addBundle(\'' + escJs(pid) + '\')">\u2191 Upload a signed stack</button>' +
       '<button class="btn sm" onclick="NexLetSigned.add(\'' + escJs(pid) + '\',\'other\')">\u2191 Other signed paperwork</button>' +
       '<button class="btn sm" onclick="NexLetServe.recordManual(\'' + escJs(pid) + '\',\'tenant\')">Record a batch you sent yourself</button>' +
       '<button class="btn sm" onclick="NexLetHistory.open(\'' + escJs(pid) + '\')">Service history</button>' +

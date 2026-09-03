@@ -4172,8 +4172,9 @@ function moveInTasks(pid){
     /* The paper the tenant signed and handed back. Sending is recorded elsewhere;
        this is the only check that the signed copies reached the file. */
     (window.NexLetSigned?(()=>{ const c=NexLetSigned.count(pid);
+      const missing=NexLetSigned.firstMissingCore(pid);
       return {k:'signed',ph:2,t:'Signed paperwork scanned onto the file'+(c.coreHeld<c.core?' ('+c.coreHeld+' of '+c.core+')':''),
-        done:c.coreHeld>=c.core,go:"NexLetSigned.addBundle('"+pid+"')"}; })():null)
+        done:c.coreHeld>=c.core,go:"NexLetSigned.add('"+pid+"','"+(missing||'other')+"')"}; })():null)
   ].filter(Boolean);
 }
 function _workingDaysBefore(dateStr,days){

@@ -207,87 +207,21 @@
     window.toast('Removed from the shelf');
   }
 
-  /* ── One scan covering several documents ───────────────────────────────── */
-  /* A move-in produces a stack signed in one sitting, and most agents scan the
-     stack in one pass. Making them split it into separate files to satisfy the
-     app would be the app's problem imposed on the user. So a single upload can
-     cover several documents: stored once, with a page range per document, which
-     is what makes a fourteen-page bundle usable as evidence rather than a pile
-     someone has to read through. */
-  function addBundle(pid) {
-    const rec = REC(pid); if (!rec) { window.toast('No tenancy on this property', 1); return; }
-    const today = new Date().toISOString().slice(0, 10);
-    window.modal('One scan covering several documents',
-      '<p class="hint" style="margin:0 0 12px">For the usual case: the whole signed stack scanned in one pass. It ' +
-      'is stored once and listed against everything it contains. Give each document its page numbers if you can \u2014 ' +
-      'a fourteen-page bundle is only useful if someone can find the alarm record in it.</p>' +
-      '<div class="grid2" style="gap:10px">' +
-      '<div class="fg"><label>Date they were signed</label>' +
-      '<input id="sb-date" type="date" max="' + today + '" value="' + today + '"></div>' +
-      '<div class="fg"><label>Who signed <span class="faint">(optional)</span></label>' +
-      '<input id="sb-by" value="' + esc(rec.name || '') + '"></div></div>' +
-      '<div class="fg"><label>What it contains</label>' +
-      docs().filter(d => d[0] !== 'other').map(d =>
-        '<div style="display:flex;gap:9px;align-items:center;padding:7px 0;border-top:1px solid var(--border)">' +
-        '<input type="checkbox" class="sb-item" value="' + d[0] + '"' + (d[2] ? ' checked' : '') + ' style="width:auto;margin:0">' +
-        '<span style="flex:1;min-width:0"><span style="font-size:12.5px;font-weight:600;color:var(--navy)">' + esc(d[1]) + '</span>' +
-        (held(rec, d[0]) ? '<span class="faint" style="display:block;font-size:11px">Already on file \u2014 ticking replaces it</span>' : '') +
-        '</span>' +
-        '<input class="sb-pg" data-k="' + d[0] + '" placeholder="pages" style="width:82px;flex-shrink:0;font-size:12px">' +
-        '</div>').join('') + '</div>' +
-      '<div class="hint" style="margin:-6px 0 12px">Pages are optional and free text \u2014 "1\u20132", "5", "7\u201310".</div>' +
-      '<div class="fg"><label>The scan</label>' +
-      '<input id="sb-file" type="file" accept=".pdf,.png,.jpg,.jpeg,.heic" onchange="NexLetSigned.noteSize(this,\'sb-size\')">' +
-      '<span class="hint" id="sb-size">One PDF of the whole stack, or a photograph if it is a single sheet.</span></div>',
-      '<button class="btn" onclick="closeModal()">Cancel</button>' +
-      '<button class="btn navy" id="sb-save" onclick="NexLetSigned.saveBundle(\'' + escJs(pid) + '\')">File it</button>', true);
-  }
+  /* Removed the "one scan, several documents" bundle uploader. It shared the
+     same upload+save machinery as add()/save() below, so it was never the
+     actual cause of documents going missing after a refresh (that was the
+     unverified upsert, fixed separately) — but it was a second, more complex
+     path to the same result, and complexity here is exactly what makes a
+     silent failure hard to pin down. One document, one attach button, same
+     shape as every certificate upload elsewhere in the app (see saveCert in
+     agent.html): simpler to trust, simpler to debug next time.
 
-  async function saveBundle(pid) {
-    const rec = REC(pid); if (!rec) return;
-    const el = id => document.getElementById(id);
-    const keys = [...document.querySelectorAll('.sb-item')].filter(x => x.checked).map(x => x.value);
-    if (!keys.length) { window.toast('Tick what the scan contains', 1); return; }
-    const fEl = el('sb-file'), file = fEl && fEl.files && fEl.files[0] ? fEl.files[0] : null;
-    if (!file) { window.toast('Attach the scan', 1); return; }
-    const signedAt = (el('sb-date') || {}).value || '';
-    if (!signedAt) { window.toast('Set the date they were signed', 1); return; }
-    if (new Date(signedAt) > new Date()) { window.toast('That date is in the future', 1); return; }
-    const btn = el('sb-save'); if (btn) btn.disabled = true;
-    let stop = ticker(btn, 'Filing');
-
-    if (!window._storageUpload) { stop(); window.toast('Cannot upload while offline \u2014 connect and try again', 1);
-      if (btn) { btn.disabled = false; btn.textContent = 'File it'; } return; }
-    const pg = {};
-    [...document.querySelectorAll('.sb-pg')].forEach(i => {
-      const v = (i.value || '').trim(); if (v) pg[i.getAttribute('data-k')] = v;
-    });
-    const up = await prepare(file);
-    stop(); stop = ticker(btn, 'Uploading', up.blob.size);
-    /* Uploaded once. Every ticked document points at the same object rather than
-       at its own copy — five copies of one bundle is five things to keep in step. */
-    const url = await window._storageUpload(up.blob, pid + '/signed-bundle-' + Date.now() + '.' + up.ext, 'tenant-documents') || '';
-    stop(); stop = ticker(btn, 'Filing');
-    if (!url) { stop(); window.toast('\u26a0 It did not upload \u2014 nothing saved. Check your connection.', 1);
-      if (btn) { btn.disabled = false; btn.textContent = 'File it'; } return; }
-
-    const by = (el('sb-by') || {}).value || '';
-    const before = rec.signedDocs;
-    rec.signedDocs = Object.assign({}, rec.signedDocs || {});
-    keys.forEach(k => { rec.signedDocs[k] = { url: url, name: file.name, signedAt: signedAt, by: by,
-      bundle: true, pages: pg[k] || '', addedAt: new Date().toISOString() }; });
-    if (window.save) window.save();
-    if (window.pushTenantRec && !(await window.pushTenantRec(rec))) {
-      rec.signedDocs = before; stop();
-      if (btn) { btn.disabled = false; btn.textContent = 'File it'; }
-      return;
-    }
-    stop();
-    if (window.NexLetAudit) window.NexLetAudit.log({ action: 'signed.filed', entity: 'tenancy',
-      entityId: rec.id, entityLabel: ((window.P && window.P(pid)) || {}).address || '',
-      detail: { bundle: true, documents: keys.length, signedAt: signedAt } });
-    window.closeModal(); if (window.render) window.render();
-    window.toast('\u2713 Filed against ' + keys.length + ' document' + (keys.length === 1 ? '' : 's') + ' \u2014 signed ' + dt(signedAt));
+     Which core document is missing, for a checklist link to jump straight to
+     attaching it — instead of a bundle picker covering all of them at once. */
+  function firstMissingCore(pid) {
+    const rec = REC(pid); if (!rec) return null;
+    const d = docs().find(x => x[2] && !held(rec, x[0]));
+    return d ? d[0] : null;
   }
 
   /* The shelf's own panel is gone. Its three facts now live as columns on the
@@ -300,7 +234,7 @@
      chooser + printed state), NexLetServe (landlord attachments), and the
      move-in checklist in agent.html. */
 
-  /* Called from the file inputs' onchange in add() and addBundle(). Lost once to
+  /* Called from the file input's onchange in add(). Lost once to
      a careless slice between two anchors when panel() was removed — the export
      below still named it, so the whole module failed to register and every
      signed document silently vanished from the register. */
@@ -315,5 +249,5 @@
     t.style.color = big ? 'var(--amber)' : '';
   }
 
-  window.NexLetSigned = { add, save, remove, addBundle, saveBundle, count, held, docs, noteSize };
+  window.NexLetSigned = { add, save, remove, count, held, docs, noteSize, firstMissingCore };
 })();
