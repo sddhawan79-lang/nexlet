@@ -3655,7 +3655,13 @@ async function _storageUpload(file,path,bucket,attempt){
   });
   let res;
   try{
-    res=await withTimeout(sb.storage.from(bucket||'property-documents').upload(path,file,{contentType:file.type,upsert:true}),TIMEOUT_MS);
+    /* supabase-js 2.39.3 streaming a File object straight into upload() is what
+       triggers net::ERR_HTTP2_PROTOCOL_ERROR in Chrome on larger bodies \u2014
+       seen consistently (not flakily) on signed-document PDFs. Reading it into
+       an ArrayBuffer first avoids that code path; upgrading the SDK is the
+       real long-term fix. */
+    const bytes=await file.arrayBuffer();
+    res=await withTimeout(sb.storage.from(bucket||'property-documents').upload(path,bytes,{contentType:file.type,upsert:true}),TIMEOUT_MS);
   }catch(e){ res={__error:e}; }
   const failed = !res || res.__timedOut || res.__error || res.error;
   if(failed){
