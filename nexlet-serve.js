@@ -228,7 +228,15 @@
   function servedKeys(pid, mode) {
     const out = {};
     const keep = mode === 'first';
-    const set = (k, on) => { if (!(keep && out[k])) out[k] = on; };
+    /* Compare by the served-ON date, not by filing order. A correction filed
+       today for a document actually served earlier must win against an
+       auto-sent record filed first but dated later \u2014 sorting by created_at
+       and keeping "whichever came first in that order" silently ignored the
+       correction this function exists to let through. */
+    const set = (k, on) => {
+      const cur = out[k];
+      if (!cur || (keep ? new Date(on) < new Date(cur) : new Date(on) > new Date(cur))) out[k] = on;
+    };
     (ST().letters || [])
       .filter(x => x.property_id === pid && /^serve_/.test(x.type || '') && x.body_html)
       .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0))

@@ -96,6 +96,7 @@
       ['Rent payable to', '<b>' + esc(payee) + '</b>' +
         (c.agentMoney ? '' : ' — paid direct to the landlord. Rent is not paid to the agent.')],
       ['Rent increases', 'Not more than once in any 12-month period, by at least two months\u2019 written notice on the prescribed form. You may challenge an increase at the First-tier Tribunal.'],
+      ['In advance', 'No more than one month\u2019s rent may be required in advance.'],
       '-',
       ['Deposit', dep ? '<b>' + money(dep) + '</b>' +
         (cap ? ' (' + cap.weeks + ' weeks\u2019 rent — the statutory maximum is ' + money(cap.cap) + ')' : '') : rule(120)],
@@ -104,13 +105,22 @@
       ['Protection scheme' + (c.held === 'landlord' ? ' (the landlord\u2019s)' : ''),
         scheme ? esc(scheme) : rule(180)],
       ['Scheme reference', c.rec.schemeRef ? esc(c.rec.schemeRef) : rule(180)],
+      ['Protected within', '30 days of the landlord receiving it. You will be given the prescribed information separately, confirming where the deposit is held and how to get it back.'],
       ['Deposit deductions', 'Only for unpaid rent, damage beyond fair wear and tear, cleaning to the standard at check-in, or unreturned keys. Evidenced against the signed inventory. Disputes are decided free of charge by the scheme\u2019s adjudicator.'],
       '-',
       ['Ending the tenancy — you', 'Two months\u2019 written notice, at any time.'],
       ['Ending the tenancy — landlord', 'Only on a ground set out in the Act, with the notice period that ground requires. There is no no-fault route.'],
       '-',
-      ['Repairs', 'The landlord is responsible for the structure, exterior, installations for water, gas, electricity, sanitation, heating and hot water. Report faults promptly. Damp and mould hazards must be investigated and put right within the timescales set by Awaab\u2019s Law.'],
+      ['Repairs', 'The landlord is responsible for the structure, exterior, installations for water, gas, electricity, sanitation, heating and hot water. Damp and mould hazards must be investigated and put right within the timescales set by Awaab\u2019s Law.'],
+      ['Your responsibility', 'Use the property with reasonable care, ventilate and heat it sensibly, and report faults promptly. You are responsible for damage you or your visitors cause.'],
+      ['Reporting', 'Contact ' + esc(c.brand.name) + '. In an emergency — fire, gas leak, flood — call the emergency services first, then tell us.'],
+      ['Access', 'At least 24 hours\u2019 written notice, at a reasonable time, except in an emergency.'],
       ['Pets', 'You may request to keep a pet. Consent cannot be unreasonably refused, and a decision must be given within 28 days.'],
+      ['Smoking', 'Not permitted anywhere inside the property.'],
+      ['Subletting', 'Not permitted without written consent.'],
+      ['Insurance', 'The landlord insures the building. Your own belongings are not covered — contents insurance is strongly recommended.'],
+      ['Council tax and utilities', 'Your responsibility from the start date, unless the agreement says otherwise.'],
+      ['Alarms', 'Smoke and carbon monoxide alarms were tested with you on the first day of the tenancy. Please test them regularly and tell us at once if one stops working.'],
       ['Permitted occupiers', c.people.length > 1
         ? esc(c.people.map(x => x.name).join(', ')) + ' only'
         : 'As named above only'],
@@ -121,9 +131,12 @@
     return sect('Key terms of your tenancy',
       'Given in writing under the Renters\u2019 Rights Act 2026, alongside the Renters\u2019 Rights Act Information Sheet 2026. This is a plain-English summary — the tenancy agreement is the full contract and prevails if the two differ.',
       tbl(rows) +
+      '<div style="border:1px solid #D8CFC0;border-radius:8px;padding:12px 14px;margin:14px 0 0;font-size:11.5px;color:#1B2F4A;line-height:1.6">' +
+      '<b>Discrimination.</b> It is unlawful for a landlord or agent to refuse a tenancy because you receive benefits or have children. If you believe that has happened, our complaints procedure and the redress scheme are open to you.</div>' +
       '<p style="font-size:11.5px;color:#6B6055;margin:16px 0 0;line-height:1.65">I have been given these key terms in writing, together with the Renters\u2019 Rights Act Information Sheet 2026, on or before the day my tenancy began.</p>' +
       c.people.map(x => sigLine('Tenant', x.name)).join('') +
-      (c.people.length ? '' : sigLine('Tenant', '')));
+      (c.people.length ? '' : sigLine('Tenant', '')) +
+      sigLine('For ' + c.brand.name, ''));
   }
 
   /* ── 1b. Property information — how the place works ─────────────────────
