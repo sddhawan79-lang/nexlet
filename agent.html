@@ -7885,21 +7885,31 @@ function _chargeInvFee(kind,p,l){ const fee=kind==='movein'?(S.agency||{}).invMo
   l.comms=l.comms||[]; l.comms.push({id:uid('c'),date:today(),type:'Note',note:(kind==='movein'?'Move-in inventory & check-in':'Move-out & check-out')+' report fee of '+gbp(fee)+' charged — '+(p.address||'')+' (per Clause 5b of the management agreement)'});
   pushLandlord(l);
 }
-function createInventory2(){
-  // No guard here used to mean every extra click while the write was in flight
-  // created another draft from scratch — a few impatient clicks produced a few
-  // duplicate inventories for the same tenancy. Disabling the button on the
-  // first click, and bailing out if it's already disabled, makes one click do
-  // one thing, and gives visible "Creating…" feedback instead of silence.
+async function createInventory2(){
+  // Everything between disabling the button and closeModal() ran unguarded —
+  // any thrown error left the button stuck on "Creating…" forever with no
+  // toast, no console hint the user would see, nothing. try/catch/finally
+  // guarantees the button always resets, and now the write is actually
+  // awaited: it only counts as created once the database write is confirmed
+  // (pushInv2 already verifies the row landed), not on a fire-and-forget hope.
   const btn=document.getElementById('iv2-create-btn');
   if(btn&&btn.disabled) return;
   if(btn){ btn.disabled=true; btn.textContent='Creating…'; }
-  const tid=val('iv2-t'); const t=(S.tenants||[]).find(x=>x.id===tid)||{};
-  if(!tid||!t.propertyId){ toast('Pick a tenancy first',1); if(btn){ btn.disabled=false; btn.textContent='Create'; } return; }
-  const v={id:uid('iv2'),propertyId:t.propertyId,tenantId:tid,rooms:[],depositHeld:parseFloat(val('iv2-dep'))||t.deposit||0,totalDeduction:0,status:'draft'};
-  S.inventories2=S.inventories2||[]; S.inventories2.unshift(v); pushInv2(v);
-  const p=P(v.propertyId)||{}; _chargeInvFee('movein',p,L(p.landlordId));
-  closeModal(); go('inventorydetail',v.id); toast('✓ Inventory created — add rooms');
+  try{
+    const tid=val('iv2-t'); const t=(S.tenants||[]).find(x=>x.id===tid)||{};
+    if(!tid||!t.propertyId){ toast('Pick a tenancy first',1); return; }
+    const v={id:uid('iv2'),propertyId:t.propertyId,tenantId:tid,rooms:[],depositHeld:parseFloat(val('iv2-dep'))||t.deposit||0,totalDeduction:0,status:'draft'};
+    S.inventories2=S.inventories2||[]; S.inventories2.unshift(v);
+    const ok=await pushInv2(v);
+    if(!ok){ S.inventories2=S.inventories2.filter(x=>x.id!==v.id); return; } // pushInv2 already toasted why
+    const p=P(v.propertyId)||{}; _chargeInvFee('movein',p,L(p.landlordId));
+    closeModal(); go('inventorydetail',v.id); toast('✓ Inventory created — add rooms');
+  }catch(e){
+    console.error('createInventory2',e);
+    toast('⚠ Could not create the inventory \u2014 '+(e.message||'unknown error'),1);
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent='Create'; }
+  }
 }
 function vInventoryList(){
   const all=S.inventories2||[];
