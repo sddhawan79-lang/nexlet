@@ -104,13 +104,17 @@
   }
 
   /* A 6 MB scan on a slow upstream takes a minute, and a button that has said
-     "Filing…" for forty seconds is indistinguishable from a dead one. */
+     "Filing…" for forty seconds is indistinguishable from a dead one. _storageUpload
+     now always settles within ~80s (timeout + two retries), so this only ever
+     ticks up to that ceiling before the caller shows a definite pass or fail \u2014
+     it no longer needs to guard against an unbounded count itself. */
   function ticker(btn, verb, bytes) {
     if (!btn) return () => {};
     const t0 = Date.now();
     const size = bytes ? ' \u00b7 ' + mb(bytes) : '';
     const id = setInterval(() => {
-      btn.textContent = verb + '\u2026 ' + Math.round((Date.now() - t0) / 1000) + 's' + size;
+      const s = Math.round((Date.now() - t0) / 1000);
+      btn.textContent = verb + '\u2026 ' + s + 's' + size + (s > 20 ? ' (still trying)' : '');
     }, 1000);
     btn.textContent = verb + '\u2026' + size;
     return () => clearInterval(id);
@@ -306,7 +310,7 @@
     if (!f) return;
     const big = f.size > 4 * 1048576;
     t.innerHTML = esc(f.name) + ' \u00b7 <b>' + mb(f.size) + '</b>' +
-      (big ? ' \u2014 a file this size takes up to a minute to upload. The button will count the seconds; leave it running.'
+      (big ? ' \u2014 a file this size can take up to a minute. It retries automatically on a bad connection and will always end in a clear done or failed \u2014 leave it running.'
            : /^image\//.test(f.type || '') ? ' \u2014 will be resized before uploading.' : '');
     t.style.color = big ? 'var(--amber)' : '';
   }

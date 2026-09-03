@@ -3596,14 +3596,38 @@ function tnRemovePerson(idx){
   window._tnPeople.forEach((per,i)=>{ window._tnDocs['address-'+i]={existing:per.addressProofDocs.slice(),pending:[]}; window._tnDocs['guarantor-'+i]={existing:(per.guarantor.docs||[]).slice(),pending:[]}; window._tnDocs['rtrext-'+i]={existing:per.rtrDocs.slice(),pending:[]}; });
   tnTab('tenancy');
 }
-async function _storageUpload(file,path,bucket){
+/* A stalled upload (dropped wifi, sleeping laptop, a Supabase hiccup) used to
+   leave the promise pending forever \u2014 the button just counted seconds with
+   no ceiling, because nothing ever told it to stop. Every call is now bounded
+   (25s per try) and retried twice with backoff, so it always settles: either a
+   URL, or a definite failure the caller can show and let the user retry. */
+async function _storageUpload(file,path,bucket,attempt){
   if(!sb||!LIVE) return null;
+  attempt=attempt||1;
+  const TIMEOUT_MS=25000, MAX_ATTEMPTS=3;
+  const withTimeout=(p,ms)=>new Promise(resolve=>{
+    const t=setTimeout(()=>resolve({__timedOut:true}),ms);
+    p.then(v=>{clearTimeout(t);resolve(v);},e=>{clearTimeout(t);resolve({__error:e});});
+  });
+  let res;
   try{
-    const{error:upErr}=await sb.storage.from(bucket||'property-documents').upload(path,file,{contentType:file.type,upsert:true});
-    if(upErr){ console.error('storage upload failed',upErr); window._lastStorageError=upErr.message||String(upErr); return null; }
-    const{data}=sb.storage.from(bucket||'property-documents').getPublicUrl(path);
-    return (data&&data.publicUrl)||null;
-  }catch(e){ console.error('storage upload exception',e); window._lastStorageError=e.message||String(e); return null; }
+    res=await withTimeout(sb.storage.from(bucket||'property-documents').upload(path,file,{contentType:file.type,upsert:true}),TIMEOUT_MS);
+  }catch(e){ res={__error:e}; }
+  const failed = !res || res.__timedOut || res.__error || res.error;
+  if(failed){
+    const reason = res && res.__timedOut ? 'timed out' : ((res && (res.__error||res.error)) ? (res.__error||res.error).message||String(res.__error||res.error) : 'unknown error');
+    console.error('storage upload failed (attempt '+attempt+')',reason);
+    if(attempt<MAX_ATTEMPTS){
+      await new Promise(r=>setTimeout(r,1000*attempt));
+      return _storageUpload(file,path,bucket,attempt+1);
+    }
+    window._lastStorageError = (res && res.__timedOut)
+      ? 'Upload timed out after '+MAX_ATTEMPTS+' tries \u2014 the connection is likely too slow or unstable.'
+      : reason;
+    return null;
+  }
+  const{data}=sb.storage.from(bucket||'property-documents').getPublicUrl(path);
+  return (data&&data.publicUrl)||null;
 }
 async function _signedUrlFor(url){
   const m=url.match(/\/object\/public\/([^/]+)\/(.+)$/);
