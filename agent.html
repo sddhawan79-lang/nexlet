@@ -235,15 +235,39 @@ const tenToRow=t=>({id:t.id,agency_id:window._agencyId,who:t.who,property_id:t.p
 const rowToInv=r=>({id:r.id,no:r.no||'',landlordId:r.landlord_id||'',propertyId:r.property_id||'',type:r.type||'full',periodLabel:r.period_label||'',issued:r.issued||'',supplyFrom:r.supply_from||'',supplyTo:r.supply_to||'',lines:r.lines||[],vat:!!r.vat,status:r.status||'draft'});
 const invToRow=i=>({id:i.id,agency_id:window._agencyId,no:i.no,landlord_id:i.landlordId,property_id:i.propertyId,type:i.type,period_label:i.periodLabel,issued:i.issued||null,supply_from:i.supplyFrom||null,supply_to:i.supplyTo||null,lines:i.lines||[],vat:!!i.vat,status:i.status});
 
+/* Every write in the app funnels through _w or _err, and both used to do a bare
+   `await promise` \u2014 the same unbounded-hang shape _storageUpload had. Fixing
+   only the file upload left every DATABASE write (the "Filing" step that runs
+   right after an upload finishes, plus every push* helper below) still able to
+   sit forever if the connection stalled. This is the one place that needed
+   fixing for all of them to stop hanging. */
+const _NET_TIMEOUT_MS=25000;
+function _timeout(promise,ms){
+  return new Promise(resolve=>{
+    const t=setTimeout(()=>resolve({__timedOut:true}),ms);
+    Promise.resolve(promise).then(v=>{clearTimeout(t);resolve(v);},e=>{clearTimeout(t);resolve({__error:e});});
+  });
+}
 // ── targeted writes (§4). No-ops in DEMO mode; toast on error in LIVE. ──
 async function _w(promise,_tbl,_op,_rec){ const _audit=()=>{ if(_tbl&&window.NexLetAudit) window.NexLetAudit.noteWrite(_tbl,_op,_rec); };
   if(!LIVE){ _audit(); return true; }
-  try{ const {error}=await promise; if(error){console.error(error);toast('⚠ Save failed: '+(error.message||'unknown error')+' — retry',1);return false;} _audit(); return true; }
-  catch(e){ console.error(e); toast('⚠ Save failed: '+(e.message||'unknown error')+' — retry',1); return false; } }
+  const res=await _timeout(promise,_NET_TIMEOUT_MS);
+  if(res&&res.__timedOut){ console.error('write timed out'); toast('⚠ Save timed out \u2014 check your connection and retry',1); return false; }
+  if(res&&res.__error){ console.error(res.__error); toast('⚠ Save failed: '+(res.__error.message||'unknown error')+' — retry',1); return false; }
+  const {error}=res;
+  if(error){console.error(error);toast('⚠ Save failed: '+(error.message||'unknown error')+' — retry',1);return false;}
+  _audit(); return true; }
 /* Resolves to the error rather than throwing, so the degrade helpers below can
    inspect it and still honour the contract every caller relies on: return false,
-   never throw. */
-async function _err(q){ try{ const {error}=await q; return error||null; }catch(e){ return e; } }
+   never throw. Same timeout guard as _w \u2014 a stalled connection now surfaces
+   as a definite (timed out) error instead of leaving the caller's "Filing…"
+   ticker counting forever. */
+async function _err(q){
+  const res=await _timeout(q,_NET_TIMEOUT_MS);
+  if(res&&res.__timedOut) return {message:'Timed out \u2014 check your connection and retry',code:'TIMEOUT'};
+  if(res&&res.__error) return res.__error;
+  return res.error||null;
+}
 function _fail(e){ console.error(e); toast('⚠ Save failed: '+((e&&e.message)||'unknown error')+' — retry',1); return false; }
 const pushLandlord =l  =>_w(sb.from('agency_landlords').upsert(landlordToRow(l)),'agency_landlords','upsert',l);
 const pushProperty =p  =>_w(sb.from('properties').upsert(propToRow(p)),'properties','upsert',p);
