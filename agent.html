@@ -285,19 +285,34 @@ const pushTenancy  =t  =>_w(sb.from('tenancies').upsert(tenToRow(t)),'tenancies'
 const pushReference=r  =>_w(sb.from('agency_references').upsert(refToRow(r)),'agency_references','upsert',r);
 const pushInvoice  =i  =>_w(sb.from('invoices').upsert(invToRow(i)),'invoices','upsert',i);
 const pushNotice  =n  =>_w(sb.from('agency_notices').upsert(noticeToRow(n)),'agency_notices','upsert',n);
+/* upsert() with no .select() can't tell the caller whether a row was actually
+   written — a permissions/RLS mismatch can silently match zero rows with NO
+   error, which is exactly how a signed document looked "attached" in the UI
+   (the in-memory object was already mutated) and then vanished on refresh
+   (nothing was ever in the database). Asking PostgREST to return the row it
+   wrote closes that gap: an empty result now means "did not save", full stop,
+   surfaced as a real failure instead of a false success toast. */
+async function _verifyUpsert(table,row){
+  const res=await _timeout(sb.from(table).upsert(row).select('id'),_NET_TIMEOUT_MS);
+  if(res&&res.__timedOut) return {message:'Timed out \u2014 check your connection and retry',code:'TIMEOUT'};
+  if(res&&res.__error) return res.__error;
+  if(res.error) return res.error;
+  if(!res.data||!res.data.length) return {message:'The save did not take effect \u2014 nothing was written (check permissions) — try again.',code:'ZERO_ROWS'};
+  return null;
+}
 async function pushTenantRec(t){
   const row=tenantToRow(t);
   if(window._noSignedDocs) delete row.signed_docs;
   if(!LIVE) return _w(Promise.resolve({}),'agency_tenants','upsert',t);
   const ok=()=>{ if(window.NexLetAudit) NexLetAudit.noteWrite('agency_tenants','upsert',t); return true; };
-  let error=await _err(sb.from('agency_tenants').upsert(row));
+  let error=await _verifyUpsert('agency_tenants',row);
   if(!error) return ok();
   const missing=/signed_docs/.test(error.message||'')||error.code==='PGRST204'||error.code==='42703';
   if(missing&&!window._noSignedDocs){
     window._noSignedDocs=true;
     console.warn('agency_tenants.signed_docs not present — saving without it. Run nexlet-signed.sql.');
     delete row.signed_docs;
-    error=await _err(sb.from('agency_tenants').upsert(row));
+    error=await _verifyUpsert('agency_tenants',row);
     if(!error) return ok();
   }
   return _fail(error);
@@ -313,14 +328,14 @@ async function pushInv2(v){
   if(window._noInvCols){ delete row.photo_meta; delete row.cleanliness; }
   if(!LIVE) return _w(Promise.resolve({}),'agency_inventories','upsert',v);
   const ok=()=>{ if(window.NexLetAudit) NexLetAudit.noteWrite('agency_inventories','upsert',v); return true; };
-  let error=await _err(sb.from('agency_inventories').upsert(row));
+  let error=await _verifyUpsert('agency_inventories',row);
   if(!error) return ok();
   const missing=/photo_meta|cleanliness/.test(error.message||'')||error.code==='PGRST204'||error.code==='42703';
   if(missing&&!window._noInvCols){
     window._noInvCols=true;
     console.warn('agency_inventories.photo_meta/cleanliness not present — saving without them. Run nexlet-photo-provenance.sql.');
     delete row.photo_meta; delete row.cleanliness;
-    error=await _err(sb.from('agency_inventories').upsert(row));
+    error=await _verifyUpsert('agency_inventories',row);
     if(!error) return ok();
   }
   return _fail(error);
@@ -7862,7 +7877,7 @@ function openInventory(){
   const ts=_activeTenants(); if(!ts.length){ toast('Set up a tenant first',1); return; }
   const opts=ts.map(t=>`<option value="${t.id}">${esc(t.name)} — ${esc((P(t.propertyId)||{}).address||'')}</option>`).join('');
   modal('New inventory', `<div class="fg"><label>Tenancy</label><select id="iv2-t" onchange="_iv2FillDeposit()">${opts}</select></div><div class="fg"><label>Deposit held (£)</label><input id="iv2-dep" type="number" value="${ts[0]?ts[0].deposit||'':''}"><div class="faint" style="font-size:11px;margin-top:2px">Auto-filled from the tenancy record — adjust if it's changed</div></div>`,
-    `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="createInventory2()">Create</button>`, true);
+    `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" id="iv2-create-btn" onclick="createInventory2()">Create</button>`, true);
 }
 function _iv2FillDeposit(){ const t=(S.tenants||[]).find(x=>x.id===val('iv2-t'))||{}; document.getElementById('iv2-dep').value=t.deposit||''; }
 function _chargeInvFee(kind,p,l){ const fee=kind==='movein'?(S.agency||{}).invMoveinFee:(S.agency||{}).invMoveoutFee; if(!fee||!l||!l.id) return;
@@ -7870,7 +7885,16 @@ function _chargeInvFee(kind,p,l){ const fee=kind==='movein'?(S.agency||{}).invMo
   pushLandlord(l);
 }
 function createInventory2(){
+  // No guard here used to mean every extra click while the write was in flight
+  // created another draft from scratch — a few impatient clicks produced a few
+  // duplicate inventories for the same tenancy. Disabling the button on the
+  // first click, and bailing out if it's already disabled, makes one click do
+  // one thing, and gives visible "Creating…" feedback instead of silence.
+  const btn=document.getElementById('iv2-create-btn');
+  if(btn&&btn.disabled) return;
+  if(btn){ btn.disabled=true; btn.textContent='Creating…'; }
   const tid=val('iv2-t'); const t=(S.tenants||[]).find(x=>x.id===tid)||{};
+  if(!tid||!t.propertyId){ toast('Pick a tenancy first',1); if(btn){ btn.disabled=false; btn.textContent='Create'; } return; }
   const v={id:uid('iv2'),propertyId:t.propertyId,tenantId:tid,rooms:[],depositHeld:parseFloat(val('iv2-dep'))||t.deposit||0,totalDeduction:0,status:'draft'};
   S.inventories2=S.inventories2||[]; S.inventories2.unshift(v); pushInv2(v);
   const p=P(v.propertyId)||{}; _chargeInvFee('movein',p,L(p.landlordId));
