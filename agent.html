@@ -4616,28 +4616,35 @@ function invRow(inv){ const l=L(inv.landlordId); const t=invTotal(inv);
 let IV=null;
 // ── Flexible billing engine: management (monthly/quarterly/annual), tenant-find
 //    (one-off), maintenance disbursement, and rent-collection remittance. ──
-function _iso(d){ return d.toISOString().slice(0,10); }
+function _iso(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); } // local date, no UTC day-shift
 const FREQ_LABEL={monthly:'Monthly',quarterly:'Quarterly (in advance)',annual:'Annual'};
 function _periodIdxs(freq){ return freq==='monthly'?[0,1,2,3,4,5,6,7,8,9,10,11]:freq==='annual'?[0]:[0,1,2,3]; }
-function _period(freq,y,idx,anchor){
-  // anchor = calendar month (1-12) the landlord's billing year starts from — default 1
-  // (Jan, i.e. normal calendar quarters) unless set to their tenancy's start month.
-  anchor=anchor||1;
-  if(freq==='monthly'){ const base=new Date(y,(anchor-1)+idx,1); const from=base,to=new Date(base.getFullYear(),base.getMonth()+1,0); return {label:from.toLocaleDateString('en-GB',{month:'long',year:'numeric'}),from:_iso(from),to:_iso(to),months:1}; }
-  if(freq==='annual'){ const from=new Date(y,anchor-1,1); const to=new Date(y+1,anchor-1,0); return {label:anchor===1?'Year '+y:from.toLocaleDateString('en-GB',{month:'short',year:'numeric'})+' – '+to.toLocaleDateString('en-GB',{month:'short',year:'numeric'}),from:_iso(from),to:_iso(to),months:12}; }
-  const startMonth=(anchor-1)+idx*3; const from=new Date(y,startMonth,1),to=new Date(y,startMonth+3,0);
-  const lab='Q'+(idx+1)+' '+from.toLocaleDateString('en-GB',{month:'short'})+'–'+to.toLocaleDateString('en-GB',{month:'short'})+' '+to.getFullYear();
-  return {label:lab,from:_iso(from),to:_iso(to),months:3};
+function _daysInMonthIdx(y,m0){ return new Date(y,m0+1,0).getDate(); }
+function _anchoredDate(y,m0,day){ const yy=y+Math.floor(m0/12), mm=((m0%12)+12)%12; return new Date(yy,mm,Math.min(day,_daysInMonthIdx(yy,mm))); }
+function _fmtRange(from,to){ const sameYear=from.getFullYear()===to.getFullYear(); return from.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:sameYear?undefined:'numeric'})+' – '+to.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}); }
+function _period(freq,y,idx,anchorMonth,anchorDay){
+  // anchorMonth/anchorDay = the exact calendar month (1-12) + day-of-month the
+  // landlord's billing cycle starts from — default 1 Jan — unless set to their
+  // tenancy's actual start date, so each period lands on real dates rather than
+  // being forced onto calendar-quarter boundaries.
+  anchorMonth=anchorMonth||1; anchorDay=anchorDay||1;
+  const span=freq==='monthly'?1:freq==='annual'?12:3;
+  const from=_anchoredDate(y,(anchorMonth-1)+idx*span,anchorDay);
+  const nextStart=_anchoredDate(y,(anchorMonth-1)+idx*span+span,anchorDay);
+  const to=new Date(nextStart); to.setDate(to.getDate()-1);
+  const prefix=freq==='quarterly'?'Q'+(idx+1)+' · ':'';
+  return {label:prefix+_fmtRange(from,to),from:_iso(from),to:_iso(to),months:span};
 }
-function _defaultIdx(freq,anchor){ anchor=anchor||1; const m=new Date().getMonth(); const off=((m-(anchor-1))+12)%12; return freq==='monthly'?off:freq==='annual'?0:Math.floor(off/3); }
-// Anchor = the calendar month (1-12) a landlord's billing periods should start from.
-// Defaults to the EARLIEST active tenancy start date across their properties (e.g. a
-// tenancy that started in March bills Mar–May, Jun–Aug… instead of forced Jan–Mar
-// calendar quarters) — editable per-invoice if the agent wants a different anchor.
-function _landlordAnchorMonth(lid){
+function _defaultIdx(freq,anchorMonth){ anchorMonth=anchorMonth||1; const m=new Date().getMonth(); const off=((m-(anchorMonth-1))+12)%12; return freq==='monthly'?off:freq==='annual'?0:Math.floor(off/3); }
+// Anchor = the exact calendar month+day a landlord's billing periods should start
+// from. Defaults to the EARLIEST active tenancy's actual start date across their
+// properties (e.g. a tenancy that started 15 Aug bills 15 Aug–14 Nov, 15 Nov–14
+// Feb… instead of forced Jan–Mar calendar quarters) — editable per-invoice.
+function _landlordAnchor(lid){
   const props=S.properties.filter(p=>p.landlordId===lid);
   const starts=props.map(p=>{ const rec=tenantRecFor(p.id); return (rec&&rec.start)||(p.tenant&&p.tenant.start)||''; }).filter(Boolean).sort();
-  return starts.length ? (new Date(starts[0]).getMonth()+1) : 1;
+  if(!starts.length) return {month:1,day:1};
+  const d=new Date(starts[0]); return {month:d.getMonth()+1,day:d.getDate()};
 }
 function openInvoice(){
   const mgmt=S.landlords.filter(l=>l.service==='full'&&S.properties.some(p=>p.landlordId===l.id));
@@ -4647,8 +4654,8 @@ function openInvoice(){
 function openInvoiceFor(id){
   const l=L(id)||{};
   const docType = l.service==='letonly' ? 'tenantfind' : 'management';
-  const anchor=_landlordAnchorMonth(id);
-  IV={landlordId:id,docType,freq:'quarterly',y:new Date().getFullYear(),anchor,idx:_defaultIdx('quarterly',anchor),items:[{desc:'',amount:''}],otherDeduct:'',otherDesc:'',ancFee:'noticeFee',ancQty:1,ancPropertyId:'',status:'draft'};
+  const anc=_landlordAnchor(id);
+  IV={landlordId:id,docType,freq:'quarterly',y:new Date().getFullYear(),anchorMonth:anc.month,anchorDay:anc.day,idx:_defaultIdx('quarterly',anc.month),items:[{desc:'',amount:''}],otherDeduct:'',otherDesc:'',ancFee:'noticeFee',ancQty:1,ancPropertyId:'',status:'draft'};
   renderInvoice();
 }
 // Next-invoice reminders — flags full-management landlords whose last management
@@ -4684,7 +4691,7 @@ function _invBuild(){
     return {lines:lines.length?lines:[{desc:'Works / disbursement',net:0}],title:'INVOICE',totalLabel:'Total due',period:{label:'On completion',from:today(),to:today()},kind:'invoice',vat:!!S.agency.vatRegistered};
   }
   if(IV.docType==='remittance'){
-    const pd=_period(IV.freq||'monthly',IV.y,IV.idx,IV.anchor);
+    const pd=_period(IV.freq||'monthly',IV.y,IV.idx,IV.anchorMonth,IV.anchorDay);
     const rentCollected=Math.round(rent*pd.months*100)/100;
     const feeNet=props.reduce((s,p)=>s+p.rent*propFee(p)/100,0)*pd.months;
     const fee=Math.round(feeNet*(S.agency.vatRegistered?1.2:1)*100)/100;
@@ -4694,7 +4701,7 @@ function _invBuild(){
     return {lines,title:'REMITTANCE STATEMENT',totalLabel:'Net paid to landlord',period:pd,kind:'remittance',vat:false};
   }
   // management (recurring)
-  const pd=_period(IV.freq||'quarterly',IV.y,IV.idx,IV.anchor);
+  const pd=_period(IV.freq||'quarterly',IV.y,IV.idx,IV.anchorMonth,IV.anchorDay);
   const lines=props.map(p=>({desc:`Management fee · ${p.address} · ${propFee(p)}% of ${gbp(p.rent)}/mo × ${pd.months} month${pd.months>1?'s':''}${IV.freq==='quarterly'?' (in advance)':''}`,net:Math.round(p.rent*propFee(p)/100*pd.months*100)/100}));
   return {lines:lines.length?lines:[{desc:'Management fee',net:0}],title:'INVOICE',totalLabel:'Total due',period:pd,kind:'invoice',vat:!!S.agency.vatRegistered};
 }
@@ -4706,16 +4713,21 @@ function renderInvoice(){
   const b=_invBuild();
   const net=b.lines.reduce((s,x)=>s+x.net,0);
   const showPeriod = IV.docType==='management'||IV.docType==='remittance';
-  const anchorTenancy=_landlordAnchorMonth(IV.landlordId);
+  const anchorTenancy=_landlordAnchor(IV.landlordId);
   const periodBlock = showPeriod ? `
     <div class="grid2" style="gap:10px">
-      <div class="fg"><label>Frequency</label><select onchange="IV.freq=this.value;IV.idx=_defaultIdx(this.value,IV.anchor);renderInvoice()">${['monthly','quarterly','annual'].map(f=>`<option value="${f}" ${IV.freq===f?'selected':''}>${FREQ_LABEL[f]}</option>`).join('')}</select></div>
-      <div class="fg"><label>Period</label><select onchange="IV.idx=parseInt(this.value);renderInvoice()">${_periodIdxs(IV.freq).map(i=>`<option value="${i}" ${IV.idx===i?'selected':''}>${_period(IV.freq,IV.y,i,IV.anchor).label}</option>`).join('')}</select></div>
+      <div class="fg"><label>Frequency</label><select onchange="IV.freq=this.value;IV.idx=_defaultIdx(this.value,IV.anchorMonth);renderInvoice()">${['monthly','quarterly','annual'].map(f=>`<option value="${f}" ${IV.freq===f?'selected':''}>${FREQ_LABEL[f]}</option>`).join('')}</select></div>
+      <div class="fg"><label>Period</label><select onchange="IV.idx=parseInt(this.value);renderInvoice()">${_periodIdxs(IV.freq).map(i=>`<option value="${i}" ${IV.idx===i?'selected':''}>${_period(IV.freq,IV.y,i,IV.anchorMonth,IV.anchorDay).label}</option>`).join('')}</select></div>
     </div>
-    <div class="fg"><label>Billing period starts <span class="faint">(defaults to the tenancy start month — change if this landlord's properties should bill on a different cycle)</span></label>
-      <select onchange="IV.anchor=parseInt(this.value);IV.idx=_defaultIdx(IV.freq,IV.anchor);renderInvoice()">
-        ${[1,2,3,4,5,6,7,8,9,10,11,12].map(m=>`<option value="${m}" ${IV.anchor===m?'selected':''}>${new Date(2000,m-1,1).toLocaleDateString('en-GB',{month:'long'})}${m===anchorTenancy?' (tenancy start)':''}</option>`).join('')}
-      </select></div>` : '';
+    <div class="fg"><label>Billing period starts <span class="faint">(defaults to the tenancy's actual start date — change if this landlord's properties should bill on a different cycle)</span></label>
+      <div style="display:flex;gap:8px">
+        <select style="flex:1" onchange="IV.anchorMonth=parseInt(this.value);IV.idx=_defaultIdx(IV.freq,IV.anchorMonth);renderInvoice()">
+          ${[1,2,3,4,5,6,7,8,9,10,11,12].map(m=>`<option value="${m}" ${IV.anchorMonth===m?'selected':''}>${new Date(2000,m-1,1).toLocaleDateString('en-GB',{month:'long'})}</option>`).join('')}
+        </select>
+        <input type="number" min="1" max="31" value="${IV.anchorDay||1}" style="width:70px" onchange="IV.anchorDay=Math.min(31,Math.max(1,parseInt(this.value)||1));renderInvoice()">
+      </div>
+      <div class="faint" style="font-size:11.5px;margin-top:4px">${IV.anchorMonth===anchorTenancy.month&&IV.anchorDay===anchorTenancy.day?'Matches this landlord&#39;s tenancy start date.':'Tenancy started '+new Date(2000,anchorTenancy.month-1,anchorTenancy.day).toLocaleDateString('en-GB',{day:'numeric',month:'long'})+'.'}</div>
+    </div>` : '';
   const maintBlock = IV.docType==='maintenance' ? `
     <div class="fg"><label>Work items (billed to the landlord)</label>
       ${(IV.items||[]).map((it,i)=>`<div style="display:flex;gap:8px;margin-bottom:6px"><input placeholder="e.g. Boiler repair — contractor invoice" value="${esc(it.desc)}" oninput="IV.items[${i}].desc=this.value" style="flex:1"><input type="number" placeholder="£" value="${esc(it.amount)}" onchange="IV.items[${i}].amount=this.value;renderInvoice()" style="width:110px"></div>`).join('')}
@@ -4737,6 +4749,7 @@ function renderInvoice(){
     </div>
     ${periodBlock}${maintBlock}${remitBlock}${ancillaryBlock}
     <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:14px;font-size:12.5px;line-height:1.7;margin:6px 0">
+      ${showPeriod?`<div style="display:flex;justify-content:space-between;margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid var(--border)"><span class="faint">Billing period</span><b>${fmtDate(b.period.from)} – ${fmtDate(b.period.to)}</b></div>`:''}
       ${b.lines.map(x=>`<div style="display:flex;justify-content:space-between;gap:10px"><span>${esc(x.desc)}</span><b style="white-space:nowrap;${x.net<0?'color:var(--red)':''}">${money2(x.net)}</b></div>`).join('')}
       <div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);margin-top:6px;padding-top:6px"><span class="faint">${vat?'Net':(b.kind==='remittance'?'Subtotal':'Net')}</span><b>${money2(net)}</b></div>
       ${vat?`<div style="display:flex;justify-content:space-between"><span class="faint">VAT @ 20%</span><b>${money2(net*0.2)}</b></div>`:(b.kind==='remittance'?'':`<div class="faint" style="font-size:11.5px;margin-top:3px">Not VAT registered — no VAT charged.</div>`)}
