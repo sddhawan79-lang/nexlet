@@ -546,7 +546,8 @@ function uid(p){ return p+Math.random().toString(36).slice(2,8); }
 function P(id){ return S.properties.find(x=>x.id===id)||{}; }
 function L(id){ return S.landlords.find(x=>x.id===id)||{}; }
 function gbp(n){ return '£'+Math.round(n||0).toLocaleString(); }
-function today(){ return new Date().toISOString().slice(0,10); }
+function _isoDate(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); } // local date, no UTC day-shift
+function today(){ return _isoDate(new Date()); }
 
 const STAGES=[
   {k:'instructed',t:'Instructed',c:'#8A7D6E'},{k:'marketing',t:'Marketing',c:'#2A6FDB'},
@@ -2339,7 +2340,7 @@ function _rentIncreaseDue(p){
   const nextEligible=new Date(last); nextEligible.setDate(nextEligible.getDate()+364); // 52 weeks
   const days=Math.round((nextEligible-new Date())/864e5);
   if(days>60) return null; // more than 2 months away — not yet worth flagging
-  return {nextEligible:nextEligible.toISOString().slice(0,10),days,overdue:days<0};
+  return {nextEligible:_isoDate(nextEligible),days,overdue:days<0};
 }
 function _nextMidCheckDue(v){
   const t=(S.tenants||[]).find(x=>x.id===v.tenantId); const start=t&&t.start; if(!start) return null;
@@ -2347,7 +2348,7 @@ function _nextMidCheckDue(v){
   const last=visitDates.length?visitDates.sort().pop():start;
   const next=new Date(last); next.setMonth(next.getMonth()+6);
   const days=Math.round((next-new Date())/864e5);
-  return {next:next.toISOString().slice(0,10),days,overdue:days<0};
+  return {next:_isoDate(next),days,overdue:days<0};
 }
 function _notifications(){
   const out=[];
@@ -4196,7 +4197,7 @@ function _workingDaysBefore(dateStr,days){
   const d=new Date(dateStr+'T12:00:00'); if(isNaN(d)) return '';
   let left=days;
   while(left>0){ d.setDate(d.getDate()-1); const wd=d.getDay(); if(wd!==0&&wd!==6) left--; }
-  return d.toISOString().slice(0,10);
+  return _isoDate(d);
 }
 /* Bank details and the holding-deposit date live as JSON inside the existing
    pay_details text column, so this needs no migration. Legacy free text entered
@@ -4655,7 +4656,7 @@ function openInvoiceFor(id){
   const l=L(id)||{};
   const docType = l.service==='letonly' ? 'tenantfind' : 'management';
   const anc=_landlordAnchor(id);
-  IV={landlordId:id,docType,freq:'quarterly',y:new Date().getFullYear(),anchorMonth:anc.month,anchorDay:anc.day,idx:_defaultIdx('quarterly',anc.month),items:[{desc:'',amount:''}],otherDeduct:'',otherDesc:'',ancFee:'noticeFee',ancQty:1,ancPropertyId:'',status:'draft'};
+  IV={landlordId:id,docType,freq:'quarterly',y:new Date().getFullYear(),anchorMonth:anc.month,anchorDay:anc.day,idx:_defaultIdx('quarterly',anc.month),items:[{desc:'',amount:''}],otherDeduct:'',otherDesc:'',ancFee:'noticeFee',ancQty:1,ancPropertyId:'',discAmt:'',discReason:'',status:'draft'};
   renderInvoice();
 }
 // Next-invoice reminders — flags full-management landlords whose last management
@@ -4678,17 +4679,23 @@ function _invBuild(){
   const rent=props.reduce((s,p)=>s+(p.rent||0),0);
   if(IV.docType==='tenantfind'){
     const net=Math.round(rent/4.345*feeOf(l)*100)/100;
-    return {lines:[{desc:`Tenant-find fee · ${props.map(p=>p.address).join(', ')||'—'} · ${feeOf(l)} weeks' rent (one-off)`,net}],title:'INVOICE',totalLabel:'Total due',period:{label:'One-off',from:today(),to:today()},kind:'invoice',vat:!!S.agency.vatRegistered};
+    const lines=[{desc:`Tenant-find fee · ${props.map(p=>p.address).join(', ')||'—'} · ${feeOf(l)} weeks' rent (one-off)`,net}];
+    if(+IV.discAmt) lines.push({desc:'Less: discount'+(IV.discReason?' · '+IV.discReason:''),net:-Math.round((+IV.discAmt||0)*100)/100});
+    return {lines,title:'INVOICE',totalLabel:'Total due',period:{label:'One-off',from:today(),to:today()},kind:'invoice',vat:!!S.agency.vatRegistered};
   }
   if(IV.docType==='ancillary'){
     const fee=(S.agency||{})[IV.ancFee]||0; const qty=Math.max(1,parseInt(IV.ancQty)||1); const net=Math.round(fee*qty*100)/100;
     const label=(ANC_FEES.find(x=>x[0]===IV.ancFee)||[])[1]||'Ancillary fee';
     const prop=props.find(p=>p.id===IV.ancPropertyId);
-    return {lines:[{desc:`${label} fee${prop?' · '+prop.address:''}${qty>1?' × '+qty:''} (Clause 5b)`,net}],title:'INVOICE',totalLabel:'Total due',period:{label:'One-off',from:today(),to:today()},kind:'invoice',vat:!!S.agency.vatRegistered};
+    const lines=[{desc:`${label} fee${prop?' · '+prop.address:''}${qty>1?' × '+qty:''} (Clause 5b)`,net}];
+    if(+IV.discAmt) lines.push({desc:'Less: discount'+(IV.discReason?' · '+IV.discReason:''),net:-Math.round((+IV.discAmt||0)*100)/100});
+    return {lines,title:'INVOICE',totalLabel:'Total due',period:{label:'One-off',from:today(),to:today()},kind:'invoice',vat:!!S.agency.vatRegistered};
   }
   if(IV.docType==='maintenance'){
-    const lines=(IV.items||[]).filter(x=>x.desc||x.amount).map(x=>({desc:'Works / disbursement · '+(x.desc||'—'),net:Math.round((+x.amount||0)*100)/100}));
-    return {lines:lines.length?lines:[{desc:'Works / disbursement',net:0}],title:'INVOICE',totalLabel:'Total due',period:{label:'On completion',from:today(),to:today()},kind:'invoice',vat:!!S.agency.vatRegistered};
+    let lines=(IV.items||[]).filter(x=>x.desc||x.amount).map(x=>({desc:'Works / disbursement · '+(x.desc||'—'),net:Math.round((+x.amount||0)*100)/100}));
+    if(!lines.length) lines=[{desc:'Works / disbursement',net:0}];
+    if(+IV.discAmt) lines.push({desc:'Less: discount'+(IV.discReason?' · '+IV.discReason:''),net:-Math.round((+IV.discAmt||0)*100)/100});
+    return {lines,title:'INVOICE',totalLabel:'Total due',period:{label:'On completion',from:today(),to:today()},kind:'invoice',vat:!!S.agency.vatRegistered};
   }
   if(IV.docType==='remittance'){
     const pd=_period(IV.freq||'monthly',IV.y,IV.idx,IV.anchorMonth,IV.anchorDay);
@@ -4702,8 +4709,10 @@ function _invBuild(){
   }
   // management (recurring)
   const pd=_period(IV.freq||'quarterly',IV.y,IV.idx,IV.anchorMonth,IV.anchorDay);
-  const lines=props.map(p=>({desc:`Management fee · ${p.address} · ${propFee(p)}% of ${gbp(p.rent)}/mo × ${pd.months} month${pd.months>1?'s':''}${IV.freq==='quarterly'?' (in advance)':''}`,net:Math.round(p.rent*propFee(p)/100*pd.months*100)/100}));
-  return {lines:lines.length?lines:[{desc:'Management fee',net:0}],title:'INVOICE',totalLabel:'Total due',period:pd,kind:'invoice',vat:!!S.agency.vatRegistered};
+  let lines=props.map(p=>({desc:`Management fee · ${p.address} · ${propFee(p)}% of ${gbp(p.rent)}/mo × ${pd.months} month${pd.months>1?'s':''}${IV.freq==='quarterly'?' (in advance)':''}`,net:Math.round(p.rent*propFee(p)/100*pd.months*100)/100}));
+  if(!lines.length) lines=[{desc:'Management fee',net:0}];
+  if(+IV.discAmt) lines.push({desc:'Less: discount'+(IV.discReason?' · '+IV.discReason:''),net:-Math.round((+IV.discAmt||0)*100)/100});
+  return {lines,title:'INVOICE',totalLabel:'Total due',period:pd,kind:'invoice',vat:!!S.agency.vatRegistered};
 }
 function renderInvoice(){
   const l=L(IV.landlordId)||{};
@@ -4741,13 +4750,18 @@ function renderInvoice(){
       <div class="fg"><label>Property (optional)</label><select onchange="IV.ancPropertyId=this.value;renderInvoice()"><option value="">—</option>${props.map(p=>`<option value="${p.id}" ${IV.ancPropertyId===p.id?'selected':''}>${esc(p.address)}</option>`).join('')}</select></div>
       <div class="fg"><label>Quantity</label><input type="number" min="1" value="${IV.ancQty||1}" onchange="IV.ancQty=this.value;renderInvoice()"></div>
     </div>` : '';
+  const discBlock = IV.docType!=='remittance' ? `
+    <div class="grid2" style="gap:10px">
+      <div class="fg"><label>Discount / referral (£, optional)</label><input type="number" value="${esc(IV.discAmt)}" onchange="IV.discAmt=this.value;renderInvoice()"></div>
+      <div class="fg"><label>Reason</label><input value="${esc(IV.discReason)}" oninput="IV.discReason=this.value" placeholder="e.g. referral discount"></div>
+    </div>` : '';
   const vat=b.vat;
   const body=`
     <div class="grid2" style="gap:10px">
       <div class="fg"><label>${b.kind==='remittance'?'Landlord (pay out to)':'Bill to (landlord)'}</label><select onchange="IV.landlordId=this.value;renderInvoice()">${llOpts}</select></div>
       <div class="fg"><label>Document type</label><select onchange="IV.docType=this.value;renderInvoice()">${DOCS.map(([v,t])=>`<option value="${v}" ${IV.docType===v?'selected':''}>${t}</option>`).join('')}</select></div>
     </div>
-    ${periodBlock}${maintBlock}${remitBlock}${ancillaryBlock}
+    ${periodBlock}${maintBlock}${remitBlock}${ancillaryBlock}${discBlock}
     <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:14px;font-size:12.5px;line-height:1.7;margin:6px 0">
       ${showPeriod?`<div style="display:flex;justify-content:space-between;margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid var(--border)"><span class="faint">Billing period</span><b>${fmtDate(b.period.from)} – ${fmtDate(b.period.to)}</b></div>`:''}
       ${b.lines.map(x=>`<div style="display:flex;justify-content:space-between;gap:10px"><span>${esc(x.desc)}</span><b style="white-space:nowrap;${x.net<0?'color:var(--red)':''}">${money2(x.net)}</b></div>`).join('')}
@@ -4790,7 +4804,7 @@ function sendInvoiceToLandlord(id){
   const l=L(inv.landlordId);
   if(!l||!l.email){ toast('⚠ No landlord email on file — add one first',1); return; }
   const a0=S.agency, t0=invTotal(inv);
-  const due0=new Date(new Date(inv.issued).getTime()+(a0.paymentTerms||14)*864e5).toISOString().slice(0,10);
+  const due0=_isoDate(new Date(new Date(inv.issued).getTime()+(a0.paymentTerms||14)*864e5));
   const lbl=(inv.type==='remittance'?'Remittance statement ':'Invoice ')+inv.no;
   confirmSend({title:lbl,subject:lbl+' — '+(a0.name||'NexLet'),to:[l.email],
     html:invoiceEmailHtml(inv,l,a0,t0,due0),sendLabel:'Email the landlord',
@@ -4800,7 +4814,7 @@ async function _sendInvoiceNow(id){
   const inv=(S.invoices||[]).find(i=>i.id===id); if(!inv) return;
   const l=L(inv.landlordId);
   const a=S.agency, t=invTotal(inv);
-  const due=new Date(new Date(inv.issued).getTime()+(a.paymentTerms||14)*864e5).toISOString().slice(0,10);
+  const due=_isoDate(new Date(new Date(inv.issued).getTime()+(a.paymentTerms||14)*864e5));
   const subject=(inv.type==='remittance'?'Remittance statement ':'Invoice ')+inv.no+' — '+(a.name||'NexLet');
   const html=invoiceEmailHtml(inv,l,a,t,due);
   const r=await agencyEmail(l.email, subject, html);
@@ -4813,7 +4827,7 @@ async function _sendInvoiceNow(id){
 function vInvoiceDetail(){
   const inv=(S.invoices||[]).find(i=>i.id===sel); if(!inv) return vInvoices();
   const l=L(inv.landlordId); const a=S.agency; const t=invTotal(inv);
-  const due=new Date(new Date(inv.issued).getTime()+(a.paymentTerms||14)*864e5).toISOString().slice(0,10);
+  const due=_isoDate(new Date(new Date(inv.issued).getTime()+(a.paymentTerms||14)*864e5));
   return `
     <div class="back no-print" onclick="go('invoices')">← All invoices</div>
     <div class="no-print" style="display:flex;gap:8px;margin-bottom:16px">
@@ -6152,7 +6166,7 @@ async function sendCondensationForSigning(pid){
     const r=await agencyEmail(sg.email,'Condensation and mould — '+(p.address||''),letterWrap('Condensation and mould',body));
     if(!r||!r.ok) failed.push(sg.email);
   }
-  rec.condensationSentAt=new Date().toISOString().slice(0,10);
+  rec.condensationSentAt=_isoDate(new Date());
   await pushTenantRec(rec);
   await fileLetter({landlordId:l.id,propertyId:pid,type:'condensation',
     subject:'Condensation and mould acknowledgement — '+(p.address||''),html,to:signatories.map(s=>s.email)});
@@ -7041,7 +7055,7 @@ function letterWrap(subject, inner){ const b=agencyBrand(); const foot=[b.name, 
     </div></div>`; }
 function _money(n){ return '£'+(Math.round((+n||0)*100)/100).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function _dstr(d){ return d?new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}):'—'; }
-function _plus(days){ const d=new Date(); d.setDate(d.getDate()+days); return d.toISOString().slice(0,10); }
+function _plus(days){ const d=new Date(); d.setDate(d.getDate()+days); return _isoDate(d); }
 function _thisMonth(){ return new Date().toLocaleDateString('en-GB',{month:'long',year:'numeric'}); }
 
 // Template catalog — each build(l,p,brand,f) → {subject, bodyHtml}. f = extra field values.
@@ -7314,7 +7328,7 @@ const GROUNDS=[
   ['17',false,{amt:2,unit:'weeks'},'False statement','The tenancy was granted because of a false statement by the tenant.']
 ];
 function groundById(c){ return GROUNDS.find(g=>g[0]===c); }
-function _addPeriod(dateStr, per){ const d=dateStr?new Date(dateStr):new Date(); if(per.unit==='years'){ d.setFullYear(d.getFullYear()+per.amt); } else if(per.unit==='months'){ d.setMonth(d.getMonth()+per.amt); } else if(per.unit==='weeks'){ d.setDate(d.getDate()+per.amt*7); } else { d.setDate(d.getDate()+per.amt); } return d.toISOString().slice(0,10); }
+function _addPeriod(dateStr, per){ const d=dateStr?new Date(dateStr):new Date(); if(per.unit==='years'){ d.setFullYear(d.getFullYear()+per.amt); } else if(per.unit==='months'){ d.setMonth(d.getMonth()+per.amt); } else if(per.unit==='weeks'){ d.setDate(d.getDate()+per.amt*7); } else { d.setDate(d.getDate()+per.amt); } return _isoDate(d); }
 function _longestExpiry(served, codes){ let best=served||today(); codes.forEach(c=>{ const g=groundById(c); if(!g)return; const e=_addPeriod(served,g[2]); if(new Date(e)>new Date(best)) best=e; }); return best; }
 function _perLabel(per){ return per.amt===0?'Immediate (proceedings may begin at once)':per.amt+' '+per.unit; }
 
