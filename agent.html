@@ -4954,7 +4954,7 @@ function vSettings(){
       <div class="fg"><label>Company registration number <span class="faint">(if registered with Companies House)</span></label><input id="set-companyno" value="${esc(a.companyNo||'')}" placeholder="e.g. 12345678"></div>
       <div class="fg"><label>Tagline <span class="faint">(appears under the name on letterheads and email footers)</span></label><input id="set-tagline" value="${esc(a.tagline||'')}" placeholder="Your neighbourhood property people."></div>
       <div class="fg"><label>Reply-to address <span class="faint">(where replies from tenants and landlords land)</span></label><input id="set-replyto" value="${esc(a.replyTo||'')}" placeholder="e.g. lettings@beaconresidentials.co.uk"></div>
-      <div class="hint" style="margin:-6px 0 14px;color:var(--faint)">Documents are sent from <code>documents@nexlet.co.uk</code>, which nobody reads. Without a reply-to, anything a tenant or landlord sends back is lost. Any mailbox you read will do for now — change it when your business email is set up.</div>
+      <div class="hint" style="margin:-6px 0 14px;color:var(--faint)">Documents are sent from <code>documents@beaconresidentials.co.uk</code>, which nobody reads. Without a reply-to, anything a tenant or landlord sends back is lost. Any mailbox you read will do for now — change it when your business email is set up.</div>
       <div class="fg"><label>Archive copy address <span class="faint">(blind-copied on every document sent)</span></label><input id="set-archive" value="${esc(a.archiveEmail||'')}" placeholder="e.g. accounts@beaconresidentials.co.uk"></div>
       <div class="hint" style="margin:-6px 0 14px;color:var(--faint)">Keeps a copy of every agreement, notice and statement the system sends. Use a business address on your own domain — tenancy documents contain personal data, so a personal mailbox is not appropriate. Leave blank to send no copy.</div>
       <div class="inline2"><div class="fg"><label>Deposit scheme</label>
@@ -5627,7 +5627,7 @@ async function agencyEmail(to,subject,html,attachmentUrls){
     // reply must reach a mailbox that is actually read — otherwise replies
     // vanish, which is exactly what was happening before this was added.
     const replyTo=(S.agency&&S.agency.replyTo)||'';
-    const res=await fetch(AG_EDGE,{method:'POST',headers,body:JSON.stringify({type:'send_email',to,subject:taggedSubject,html,bcc:(S.agency&&S.agency.archiveEmail)||'',from:brand+' <documents@nexlet.co.uk>',...(replyTo?{reply_to:replyTo}:{}),...(attachmentUrls&&attachmentUrls.length?{attachment_urls:attachmentUrls}:{})})});
+    const res=await fetch(AG_EDGE,{method:'POST',headers,body:JSON.stringify({type:'send_email',to,subject:taggedSubject,html,bcc:(S.agency&&S.agency.archiveEmail)||'',from:brand+' <documents@beaconresidentials.co.uk>',...(replyTo?{reply_to:replyTo}:{}),...(attachmentUrls&&attachmentUrls.length?{attachment_urls:attachmentUrls}:{})})});
     const data=await res.json().catch(()=>({}));
     if(!res.ok){ console.error('[agencyEmail] failed',res.status,data);
       const bad={ok:false,error:data.error||data.message||('HTTP '+res.status)};

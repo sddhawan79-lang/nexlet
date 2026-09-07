@@ -76,7 +76,17 @@
   const bag = rec => { const b = Object.assign({}, (rec && rec.signedDocs) || {}); delete b._printed; return b; };
   function held(pidOrRec, k) {
     const rec = (pidOrRec && pidOrRec.id) ? pidOrRec : REC(pidOrRec);
-    return bag(rec)[k] || null;
+    const h = bag(rec)[k];
+    if (h) return h;
+    // 'alarms' also lives as compliance evidence (property.certs.smokeDoc/coDoc) from
+    // the Tenancy & compliance tester — same real-world record, different upload
+    // button. Fall back to it so both places show one answer instead of two.
+    if (k === 'alarms' && rec && rec.propertyId && window.P) {
+      const cc = (window.P(rec.propertyId) || {}).certs || {};
+      const doc = cc.smokeDocUrl ? 'smoke' : (cc.coDocUrl ? 'co' : null);
+      if (doc) return { name: cc[doc + 'Doc'] || 'Alarm test evidence', url: cc[doc + 'DocUrl'], signedAt: cc[doc] || cc[doc + 'DocAddedAt'] };
+    }
+    return null;
   }
   function count(pid) {
     const rec = REC(pid); if (!rec) return { held: 0, core: 0, coreHeld: 0, printedUnscanned: 0 };
