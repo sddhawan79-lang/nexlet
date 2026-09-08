@@ -695,6 +695,12 @@
           miss.map(x => '  \u2022 ' + x.label).join('\n') +
           '\n\nEach carries a legal consequence if not served in time. Send anyway?')) return;
 
+      // Sends take a moment (attachments fetched + emailed one by one) — without
+      // a visible pending state the button just looks unresponsive.
+      const btn = [...document.querySelectorAll('button')].find(b => /^Send from NexLet$/.test(b.textContent));
+      const btnText = btn ? btn.textContent : null;
+      if (btn) { btn.disabled = true; btn.textContent = 'Sending\u2026'; }
+
       const rec = window.tenantRecFor(pid), p = window.P(pid) || {};
       const sent = [], failed = [];
       for (const addr of m.to) {
@@ -704,6 +710,7 @@
       if (!sent.length) {
         window.toast('\u26a0 Nothing sent \u2014 ' + (failed[0] || 'the mail service refused it') +
           '. Nothing has been filed.', 1);
+        if (btn) { btn.disabled = false; btn.textContent = btnText; }
         return;
       }
       // File and log only what actually went out — this is the record that
