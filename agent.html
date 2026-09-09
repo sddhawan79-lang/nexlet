@@ -7931,6 +7931,15 @@ async function _urlToB64(url){
   return {b64, mime:blob.type||'image/jpeg'};
 }
 async function _imgPart(u){ const {b64,mime}=await _urlToB64(u); return {type:'image',source:{type:'base64',media_type:mime,data:b64}}; }
+/* Fetching every room photo at once (Promise.all across dozens of photos) opens
+   too many concurrent connections — the browser or Supabase drops some,
+   surfacing as a bare "Failed to fetch". Batching keeps a handful in flight
+   at a time so a room with 40+ photos still comes through reliably. */
+async function _mapBatched(arr,fn,batchSize){
+  const out=[];
+  for(let i=0;i<arr.length;i+=batchSize){ out.push(...await Promise.all(arr.slice(i,i+batchSize).map(fn))); }
+  return out;
+}
 function openInventory(){
   const ts=_activeTenants(); if(!ts.length){ toast('Set up a tenant first',1); return; }
   const opts=ts.map(t=>`<option value="${t.id}">${esc(t.name)} — ${esc((P(t.propertyId)||{}).address||'')}</option>`).join('');
@@ -8211,8 +8220,8 @@ async function aiCompareItem(vid,i){
   const months=t.start?Math.max(1,Math.round((new Date()-new Date(t.start))/(1000*60*60*24*30))):12;
   try{
     const prompt=`You are assessing a UK tenancy deposit item for a letting agent. Compare the CHECK-IN photos and the ${toLabel.toUpperCase()} photos of this item: "${r.room} — ${r.item}". Check-in note: "${r.checkin.note||'none'}". ${toLabel} note: "${toSet.note||'none'}".\nClassify as exactly one of: fair_wear (normal deterioration from use — never chargeable), damage (tenant-caused, beyond fair wear), cleaning (below check-in cleanliness standard). If damage or cleaning, estimate a like-for-like repair/replacement cost in GBP, and estimate how many years old the item looked AT CHECK-IN (0 = new). Do NOT calculate any final charge yourself — that is computed separately from your cost/age estimate. Return ONLY JSON: {"classification":"fair_wear|damage|cleaning","estimatedCost":number,"ageAtCheckinYears":number,"reasoning":"one or two sentences describing the specific change observed"}`;
-    const checkinParts=await Promise.all(r.checkin.photos.map(_imgPart));
-    const stageParts=await Promise.all(toSet.photos.map(_imgPart));
+    const checkinParts=await _mapBatched(r.checkin.photos,_imgPart,6);
+    const stageParts=await _mapBatched(toSet.photos,_imgPart,6);
     const content=[...checkinParts,{type:'text',text:'CHECK-IN photos above.'},...stageParts,{type:'text',text:toLabel.toUpperCase()+' photos above.\n\n'+prompt}];
     const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:300,messages:[{role:'user',content}]})});
     if(res.status===402){ toast(await aiFailMsg(res,'try again next month'),1); return; }
@@ -8256,11 +8265,11 @@ async function generateInvReport(vid,type){
       if(type==='movein'){
         promptTxt=(window.NexLetCapture?NexLetCapture.houseStyle():'')
           +`Write the entry for "${r.room} — ${r.item}" from these ${r.checkin.photos.length} check-in photograph(s). Clerk's note: "${r.checkin.note||'none'}". Return ONLY JSON: {"condition":"one of the terms","summary":"the entry, in house style"}`;
-        content=[...(await Promise.all(r.checkin.photos.map(_imgPart))),{type:'text',text:promptTxt}];
+        content=[...(await _mapBatched(r.checkin.photos,_imgPart,6)),{type:'text',text:promptTxt}];
       } else {
         const costAsk=(type==='moveout'||type==='precheckout')?', "estimatedCost":number (like-for-like repair/replacement cost in GBP, only if damage/cleaning), "ageAtCheckinYears":number (how old the item looked AT CHECK-IN, 0=new)':'';
         promptTxt=`UK tenancy deposit adjudicator, writing evidence for a possible dispute. Compare CHECK-IN vs ${cmpLabel.toUpperCase()} photos for "${r.room} — ${r.item}". Notes: check-in "${r.checkin.note||'none'}", ${cmpLabel} "${toSet.note||'none'}". Classify as fair_wear|damage|cleaning. Name the SPECIFIC change observed (not "some wear" or "looks worse") — what changed, where, and how that goes beyond (or stays within) fair wear and tear for the tenancy length. ${(type==='moveout'||type==='precheckout')?'Do NOT calculate any final charge — that is computed separately, deterministically, from your cost/age estimate (apportioned by remaining useful life, never full replacement cost).':''} Return ONLY JSON: {"classification":"fair_wear|damage|cleaning","summary":"one to three specific, factual sentences an adjudicator could act on"${costAsk}}`;
-        content=[...(await Promise.all(r.checkin.photos.map(_imgPart))),{type:'text',text:'CHECK-IN above.'},...(await Promise.all(toSet.photos.map(_imgPart))),{type:'text',text:cmpLabel.toUpperCase()+' above.\n\n'+promptTxt}];
+        content=[...(await _mapBatched(r.checkin.photos,_imgPart,6)),{type:'text',text:'CHECK-IN above.'},...(await _mapBatched(toSet.photos,_imgPart,6)),{type:'text',text:cmpLabel.toUpperCase()+' above.\n\n'+promptTxt}];
       }
       let res,data;
       /* A move-in pass describes what is there; a check-out decides who pays.
