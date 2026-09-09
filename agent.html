@@ -7930,7 +7930,7 @@ async function _urlToB64(url){
   const b64=await new Promise(r=>{ const fr=new FileReader(); fr.onload=()=>r(String(fr.result).split(',')[1]); fr.readAsDataURL(blob); });
   return {b64, mime:blob.type||'image/jpeg'};
 }
-async function _imgPart(u){ const {b64,mime}=await _urlToB64(u); return {type:'image',source:{type:'base64',media_type:mime,data:b64}}; }
+async function _imgPart(u){ try{ const {b64,mime}=await _urlToB64(u); return {type:'image',source:{type:'base64',media_type:mime,data:b64}}; }catch(e){ console.warn('skipping unreadable photo',u,e); return null; } }
 /* Fetching every room photo at once (Promise.all across dozens of photos) opens
    too many concurrent connections — the browser or Supabase drops some,
    surfacing as a bare "Failed to fetch". Batching keeps a handful in flight
@@ -7938,7 +7938,7 @@ async function _imgPart(u){ const {b64,mime}=await _urlToB64(u); return {type:'i
 async function _mapBatched(arr,fn,batchSize){
   const out=[];
   for(let i=0;i<arr.length;i+=batchSize){ out.push(...await Promise.all(arr.slice(i,i+batchSize).map(fn))); }
-  return out;
+  return out.filter(x=>x!=null);
 }
 function openInventory(){
   const ts=_activeTenants(); if(!ts.length){ toast('Set up a tenant first',1); return; }
@@ -8265,11 +8265,13 @@ async function generateInvReport(vid,type){
       if(type==='movein'){
         promptTxt=(window.NexLetCapture?NexLetCapture.houseStyle():'')
           +`Write the entry for "${r.room} — ${r.item}" from these ${r.checkin.photos.length} check-in photograph(s). Clerk's note: "${r.checkin.note||'none'}". Return ONLY JSON: {"condition":"one of the terms","summary":"the entry, in house style"}`;
-        content=[...(await _mapBatched(r.checkin.photos.slice(0,12),_imgPart,6)),{type:'text',text:promptTxt}];
+        var _ciParts=await _mapBatched(r.checkin.photos.slice(0,12),_imgPart,6);
+        content=[..._ciParts,{type:'text',text:promptTxt}];
       } else {
         const costAsk=(type==='moveout'||type==='precheckout')?', "estimatedCost":number (like-for-like repair/replacement cost in GBP, only if damage/cleaning), "ageAtCheckinYears":number (how old the item looked AT CHECK-IN, 0=new)':'';
         promptTxt=`UK tenancy deposit adjudicator, writing evidence for a possible dispute. Compare CHECK-IN vs ${cmpLabel.toUpperCase()} photos for "${r.room} — ${r.item}". Notes: check-in "${r.checkin.note||'none'}", ${cmpLabel} "${toSet.note||'none'}". Classify as fair_wear|damage|cleaning. Name the SPECIFIC change observed (not "some wear" or "looks worse") — what changed, where, and how that goes beyond (or stays within) fair wear and tear for the tenancy length. ${(type==='moveout'||type==='precheckout')?'Do NOT calculate any final charge — that is computed separately, deterministically, from your cost/age estimate (apportioned by remaining useful life, never full replacement cost).':''} Return ONLY JSON: {"classification":"fair_wear|damage|cleaning","summary":"one to three specific, factual sentences an adjudicator could act on"${costAsk}}`;
-        content=[...(await _mapBatched(r.checkin.photos.slice(0,12),_imgPart,6)),{type:'text',text:'CHECK-IN above.'},...(await _mapBatched(toSet.photos.slice(0,12),_imgPart,6)),{type:'text',text:cmpLabel.toUpperCase()+' above.\n\n'+promptTxt}];
+        var _ciParts2=await _mapBatched(r.checkin.photos.slice(0,12),_imgPart,6), _stParts2=await _mapBatched(toSet.photos.slice(0,12),_imgPart,6);
+        content=[..._ciParts2,{type:'text',text:'CHECK-IN above.'},..._stParts2,{type:'text',text:cmpLabel.toUpperCase()+' above.\n\n'+promptTxt}];
       }
       let res,data;
       /* A move-in pass describes what is there; a check-out decides who pays.
@@ -8306,7 +8308,16 @@ async function generateInvReport(vid,type){
         charge=ap.charge; breakdown=ap.breakdown;
         if(type==='moveout'){ r.lifeYears=lifeYears; r.ageAtCheckin=ageAtCheckin; r.estCost=estCost; }
       }
-      const entry={room:r.room,item:r.item,classification:cls,condition:(parsed&&parsed.condition)||'',summary:(parsed&&parsed.summary)||'Could not read AI response — review manually.',charge,breakdown,checkinPhotos:r.checkin.photos,checkinNote:r.checkin.note||'',stagePhotos:toSet?toSet.photos:[],stageNote:toSet?toSet.note||'':'',stageLabel:cmpLabel};
+      /* A broken/unreadable photo is now skipped rather than failing the whole
+         room (see _imgPart) — but a skipped photo is still a gap in the
+         evidence base, so say so rather than silently writing a report as if
+         every uploaded photo had been read. */
+      const _ciSeen=(_ciParts||_ciParts2||[]).length, _ciWanted=Math.min(r.checkin.photos.length,12);
+      const _stSeen=toSet?(_stParts2||[]).length:0, _stWanted=toSet?Math.min(toSet.photos.length,12):0;
+      const photoWarning=(_ciSeen<_ciWanted||_stSeen<_stWanted)
+        ?('⚠ '+((_ciWanted-_ciSeen)+(_stWanted-_stSeen))+' photo(s) could not be read and were excluded from this assessment.')
+        :'';
+      const entry={room:r.room,item:r.item,classification:cls,condition:(parsed&&parsed.condition)||'',summary:(parsed&&parsed.summary)||'Could not read AI response — review manually.',charge,breakdown,checkinPhotos:r.checkin.photos,checkinNote:r.checkin.note||'',stagePhotos:toSet?toSet.photos:[],stageNote:toSet?toSet.note||'':'',stageLabel:cmpLabel,photoWarning};
       results.push(entry);
       if(type==='moveout'){ r.classification=entry.classification; r.charge=entry.charge; r.reasoning=entry.summary; r.breakdown=breakdown; }
     }catch(e){ console.error('generateInvReport exception',e); results.push({room:r.room,item:r.item,classification:'fair_wear',charge:0,summary:'Could not analyse ('+(e.message||e)+').',checkinPhotos:r.checkin.photos,checkinNote:r.checkin.note||'',stagePhotos:toSet?toSet.photos:[],stageNote:toSet?toSet.note||'':'',stageLabel:cmpLabel}); }
@@ -8365,6 +8376,7 @@ function _invReportHtml(r,p,t,v){
         <div style="display:flex;gap:8px;margin-bottom:4px;flex-wrap:wrap">${photoStrip(x.checkinPhotos)}</div>
         ${_prov(x.checkinPhotos)}
         <div style="font-size:11.5px;color:#8A7D6E;line-height:1.5;margin-top:6px">${esc(x.summary)}</div>
+        ${x.photoWarning?`<div style="font-size:11px;color:#C0392B;margin-top:4px">${esc(x.photoWarning)}</div>`:''}
       </div>`;
     }
     const charge=x.charge?money2(x.charge):'£0';
@@ -8381,6 +8393,7 @@ function _invReportHtml(r,p,t,v){
         <div style="flex:1"><b style="color:#8A7D6E">Check-in:</b> ${esc(x.checkinNote||'—')}</div>
         <div style="flex:1"><b style="color:#8A7D6E">${x.stageLabel==='mid-tenancy'?'Now':'Check-out'}:</b> ${esc(x.stageNote||'—')}</div>
       </div>
+      ${x.photoWarning?`<div style="font-size:11px;color:#C0392B;margin-bottom:6px">${esc(x.photoWarning)}</div>`:''}
       ${(r.type==='moveout'||r.type==='precheckout')&&x.charge?`<div style="background:#FBF6F2;border:1px solid #F0E0D4;border-radius:7px;padding:8px 11px;font-size:11px;color:#8A5A3A;line-height:1.55">${esc(x.summary)}${x.breakdown?'<br><span style="color:#A87A56">'+x.breakdown+'</span>':''}</div>`:(r.type!=='moveout'&&r.type!=='precheckout')?`<div style="font-size:11px;color:#8A7D6E;line-height:1.5">${esc(x.summary)}</div>`:`<div style="font-size:11px;color:#8A7D6E;line-height:1.5">${esc(x.summary)}</div>`}
     </div>`;
   }).join('');
