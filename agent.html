@@ -8283,7 +8283,7 @@ async function generateInvReport(vid,type){
         break;
       }
       if(quotaHit){ toast(quotaMsg||'AI allowance reached partway through — report saved for the rooms already analysed',1); break; }
-      if(!res.ok){ console.error('generateInvReport error',res.status,data); results.push({room:r.room,item:r.item,classification:type==='movein'?'baseline':'fair_wear',charge:0,summary:'AI error ('+res.status+') — review manually.',checkinPhotos:r.checkin.photos.slice(0,2),checkinNote:r.checkin.note||'',stagePhotos:toSet?toSet.photos.slice(0,2):[],stageNote:toSet?toSet.note||'':'',stageLabel:cmpLabel}); continue; }
+      if(!res.ok){ console.error('generateInvReport error',res.status,data); results.push({room:r.room,item:r.item,classification:type==='movein'?'baseline':'fair_wear',charge:0,summary:'AI error ('+res.status+') — review manually.',checkinPhotos:r.checkin.photos,checkinNote:r.checkin.note||'',stagePhotos:toSet?toSet.photos:[],stageNote:toSet?toSet.note||'':'',stageLabel:cmpLabel}); continue; }
       const txt=((data.content&&data.content[0]&&data.content[0].text)||'').replace(/```json|```/g,'').trim();
       let parsed; try{ parsed=JSON.parse(txt); }catch(pe){ console.error('generateInvReport: bad JSON',txt); parsed=null; }
       const cls=type==='movein'?'baseline':((parsed&&parsed.classification)||'fair_wear');
@@ -8297,10 +8297,10 @@ async function generateInvReport(vid,type){
         charge=ap.charge; breakdown=ap.breakdown;
         if(type==='moveout'){ r.lifeYears=lifeYears; r.ageAtCheckin=ageAtCheckin; r.estCost=estCost; }
       }
-      const entry={room:r.room,item:r.item,classification:cls,condition:(parsed&&parsed.condition)||'',summary:(parsed&&parsed.summary)||'Could not read AI response — review manually.',charge,breakdown,checkinPhotos:r.checkin.photos.slice(0,2),checkinNote:r.checkin.note||'',stagePhotos:toSet?toSet.photos.slice(0,2):[],stageNote:toSet?toSet.note||'':'',stageLabel:cmpLabel};
+      const entry={room:r.room,item:r.item,classification:cls,condition:(parsed&&parsed.condition)||'',summary:(parsed&&parsed.summary)||'Could not read AI response — review manually.',charge,breakdown,checkinPhotos:r.checkin.photos,checkinNote:r.checkin.note||'',stagePhotos:toSet?toSet.photos:[],stageNote:toSet?toSet.note||'':'',stageLabel:cmpLabel};
       results.push(entry);
       if(type==='moveout'){ r.classification=entry.classification; r.charge=entry.charge; r.reasoning=entry.summary; r.breakdown=breakdown; }
-    }catch(e){ console.error('generateInvReport exception',e); results.push({room:r.room,item:r.item,classification:'fair_wear',charge:0,summary:'Could not analyse ('+(e.message||e)+').',checkinPhotos:r.checkin.photos.slice(0,2),checkinNote:r.checkin.note||'',stagePhotos:toSet?toSet.photos.slice(0,2):[],stageNote:toSet?toSet.note||'':'',stageLabel:cmpLabel}); }
+    }catch(e){ console.error('generateInvReport exception',e); results.push({room:r.room,item:r.item,classification:'fair_wear',charge:0,summary:'Could not analyse ('+(e.message||e)+').',checkinPhotos:r.checkin.photos,checkinNote:r.checkin.note||'',stagePhotos:toSet?toSet.photos:[],stageNote:toSet?toSet.note||'':'',stageLabel:cmpLabel}); }
   }
   if(!results.length){ toast('AI report failed — check the console for details',1); window._invGenProgress=null; render(); return; }
   if(type==='moveout') v.totalDeduction=v.rooms.reduce((s,x)=>s+(x.charge||0),0);
@@ -8344,7 +8344,7 @@ function _invReportHtml(r,p,t,v){
   /* Adjudicators ask for date-stamped photographs, and an upload time is not a
      capture time. Where the file carried one, the report says so. */
   const _prov=ps=>(v&&window.NexLetCapture)?NexLetCapture.provenanceBlock(v,ps):'';
-  const photoStrip=ps=>(ps&&ps.length?ps:[]).map(u=>`<img src="${u}" style="width:100px;height:76px;object-fit:cover;border-radius:6px;flex:1;min-width:0">`).join('')||`<div style="width:100px;height:76px;border-radius:6px;background:#EEF1F5;display:flex;align-items:center;justify-content:center;font-size:9px;color:#94A3B8;flex:1">No photo</div>`;
+  const photoStrip=ps=>(ps&&ps.length?ps:[]).map(u=>`<img src="${u}" style="width:100px;height:76px;object-fit:cover;border-radius:6px;flex:0 0 auto">`).join('')||`<div style="width:100px;height:76px;border-radius:6px;background:#EEF1F5;display:flex;align-items:center;justify-content:center;font-size:9px;color:#94A3B8;flex:1">No photo</div>`;
   const rows=r.results.map(x=>{
     if(r.type==='movein'){
       return `<div style="padding:14px 0;border-bottom:1px solid #EEF1F5">
@@ -8353,7 +8353,7 @@ function _invReportHtml(r,p,t,v){
           ${x.condition?`<span style="font-size:9.5px;font-weight:700;color:#fff;background:#5B6473;padding:2px 8px;border-radius:8px">${esc(x.condition)}</span>`:''}
         </div>
         <div style="font-size:14px;font-weight:700;color:#1B2F4A;margin:1px 0 8px">${esc(x.item)}</div>
-        <div style="display:flex;gap:8px;margin-bottom:4px">${photoStrip(x.checkinPhotos)}</div>
+        <div style="display:flex;gap:8px;margin-bottom:4px;flex-wrap:wrap">${photoStrip(x.checkinPhotos)}</div>
         ${_prov(x.checkinPhotos)}
         <div style="font-size:11.5px;color:#8A7D6E;line-height:1.5;margin-top:6px">${esc(x.summary)}</div>
       </div>`;
@@ -8367,7 +8367,7 @@ function _invReportHtml(r,p,t,v){
           ${(r.type==='moveout'||r.type==='precheckout')?`<span style="font-size:15px;font-weight:700;color:${x.charge?'#C0392B':'#1B7A4B'};min-width:48px;text-align:right">${charge}</span>`:''}
         </div>
       </div>
-      <div style="display:flex;gap:8px;margin-bottom:2px"><div style="flex:1"><div style="display:flex;gap:6px">${photoStrip(x.checkinPhotos)}</div>${_prov(x.checkinPhotos)}</div><div style="flex:1"><div style="display:flex;gap:6px">${photoStrip(x.stagePhotos)}</div>${_prov(x.stagePhotos)}</div></div>
+      <div style="display:flex;gap:8px;margin-bottom:2px"><div style="flex:1"><div style="display:flex;gap:6px;flex-wrap:wrap">${photoStrip(x.checkinPhotos)}</div>${_prov(x.checkinPhotos)}</div><div style="flex:1"><div style="display:flex;gap:6px;flex-wrap:wrap">${photoStrip(x.stagePhotos)}</div>${_prov(x.stagePhotos)}</div></div>
       <div style="display:flex;gap:14px;font-size:11px;color:#8A7D6E;line-height:1.5;margin-bottom:${x.charge?'8px':'0'}">
         <div style="flex:1"><b style="color:#8A7D6E">Check-in:</b> ${esc(x.checkinNote||'—')}</div>
         <div style="flex:1"><b style="color:#8A7D6E">${x.stageLabel==='mid-tenancy'?'Now':'Check-out'}:</b> ${esc(x.stageNote||'—')}</div>
