@@ -7905,10 +7905,28 @@ function _resizeImg(file,maxW){ return new Promise((res)=>{
     }catch(e){ console.error('_resizeImg',e); finish(null); } }; img.src=fr.result; };
   fr.readAsDataURL(file); }); }
 // Fetches a photo (storage URL, or a legacy inline data: URL from before storage upload) as base64 for the AI proxy.
+/* Downscales to a long edge of 1600px before base64-encoding — full-res phone
+   photos (often 4-8MB) were pushing the ai-proxy edge function over its memory
+   limit (WORKER_RESOURCE_LIMIT) once several were fetched per room. 1600px is
+   still plenty for the AI to read condition/damage detail; same photos, same
+   coverage, just not the raw original bytes. Falls back to the untouched blob
+   if canvas decoding fails (e.g. HEIC the browser can't draw). */
+async function _downscaleBlob(blob,maxEdge){
+  try{
+    const img=await new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=URL.createObjectURL(blob); });
+    const scale=Math.min(1,maxEdge/Math.max(img.width,img.height));
+    if(scale>=1) return blob;
+    const cv=document.createElement('canvas'); cv.width=Math.round(img.width*scale); cv.height=Math.round(img.height*scale);
+    cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+    const out=await new Promise(r=>cv.toBlob(r,'image/jpeg',0.85));
+    return out||blob;
+  }catch(e){ return blob; }
+}
 async function _urlToB64(url){
   if(url.startsWith('data:')){ return {b64:url.split(',')[1], mime:url.split(';')[0].split(':')[1]}; }
   const signed=await _signedUrlFor(url);
-  const res=await fetch(signed||url); const blob=await res.blob();
+  const res=await fetch(signed||url); let blob=await res.blob();
+  if((blob.type||'').startsWith('image/')) blob=await _downscaleBlob(blob,1600);
   const b64=await new Promise(r=>{ const fr=new FileReader(); fr.onload=()=>r(String(fr.result).split(',')[1]); fr.readAsDataURL(blob); });
   return {b64, mime:blob.type||'image/jpeg'};
 }
@@ -8008,7 +8026,7 @@ function _apportionCharge(classification,estCost,ageAtCheckin,lifeYears,tenancyM
   return {charge,breakdown};
 }
 function _invActiveTab(vid){ window._invTabs=window._invTabs||{}; return window._invTabs[vid]||0; }
-function _invSetTab(vid,i){ window._invTabs=window._invTabs||{}; window._invTabs[vid]=i; render(); }
+function _invSetTab(vid,i){ if(window._noteSaveT){ clearTimeout(window._noteSaveT); window._noteSaveT=null; const v=(S.inventories2||[]).find(x=>x.id===vid); if(v) pushInv2(v); } window._invTabs=window._invTabs||{}; window._invTabs[vid]=i; render(); }
 function _toggleFieldMode(vid){ window._invField=window._invField||{}; window._invField[vid]=!window._invField[vid]; render(); }
 function _invMetaPanel(v){
   const m=v.meters||{}; const k=v.keyHandover||{}; const ack=v.tenantAck||{};
@@ -8080,7 +8098,9 @@ function removeRoomPhoto(vid,i,stage,visitIdx,pi){
 function roomNoteField(vid,i,stage,visitIdx,value){
   const v=(S.inventories2||[]).find(x=>x.id===vid); const r=_ensureRoomShape(v.rooms[i]);
   const target=stage==='visit'?r.visits[visitIdx]:r[stage];
-  target.note=value; pushInv2(v);
+  target.note=value; target.noteAt=new Date().toISOString();
+  clearTimeout(window._noteSaveT);
+  window._noteSaveT=setTimeout(()=>pushInv2(v),500);
 }
 function startMidCheck(vid){
   const v=(S.inventories2||[]).find(x=>x.id===vid); if(!v) return;
