@@ -4157,6 +4157,7 @@ function moveInTasks(pid){
      go:"tnDepositPI('"+pid+"')"}:null,
     {k:'inv',ph:2,t:'Inventory and schedule of condition, signed at check-in',done:(S.inventories2||[]).some(v=>{
        if(v.propertyId!==pid) return false;
+       if((v.reports||[]).some(r=>r.type==='movein'&&r.tenantSign)) return true;
        if(v.tenantAck&&v.tenantAck.confirmed) return true;
        /* A review the tenant signed, or opened and let run past its deadline, is
           worth more than a name typed in by an agent — so it also counts. */
@@ -8127,7 +8128,7 @@ function vInventoryDetail(){
       <div class="kpi"><div class="l">Rooms</div><div class="v">${v.rooms.length}</div></div>
     </div>
     ${_invMetaPanel(v)}
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${tabs}${fieldOn?'':`<button class="btn sm" onclick="addRoom('${v.id}')">＋ Item</button><label class="btn sm navy" style="cursor:pointer">✦ Scan a room<input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="NexLetCapture.scan('${v.id}',this)"></label>`}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${tabs}${fieldOn?'':`<button class="btn sm" onclick="addRoomFromTemplate('${v.id}')">＋ Room</button><button class="btn sm" onclick="addRoom('${v.id}')">＋ Custom item</button><label class="btn sm navy" style="cursor:pointer">✦ Scan a room<input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="NexLetCapture.scan('${v.id}',this)"></label>`}</div>
     ${fieldOn?'':`<div class="faint" style="font-size:11px;margin:-6px 0 10px">Photograph a room and <b>Scan a room</b> reads the items out of the photos, so you are editing a list rather than typing one. Or add items one at a time.</div>`}
     ${(v.rooms[activeIdx]&&window.NexLetCapture)?NexLetCapture.cleanPanel(v,v.rooms[activeIdx].room):''}
     ${fieldOn?'':'<div class="faint" style="font-size:11px;margin:-6px 0 10px">A separate item per fixture and surface — walls &amp; ceiling, flooring, each appliance — not one entry per room. Thin inventories are the named reason deposit claims fail.</div>'}
@@ -8167,6 +8168,39 @@ function _invGenBusy(vid){ return !!(window._invGenProgress&&window._invGenProgr
 function _invHasCheckin(v){ return v.rooms.some(r=>_ensureRoomShape(r).checkin.photos.length); }
 function _invHasVisit(v){ return v.rooms.some(r=>{ _ensureRoomShape(r); return r.checkin.photos.length&&r.visits.length&&r.visits[r.visits.length-1].photos.length; }); }
 function _invHasCheckout(v){ return v.rooms.some(r=>{ _ensureRoomShape(r); const lv=r.visits.length?r.visits[r.visits.length-1]:null; return r.checkin.photos.length&&((lv&&lv.photos.length)||r.checkout.photos.length); }); }
+// Fixed fixture checklist per room type — mirrors the standard AIIC-style
+// inventory format (Door/Floor/Walls/Ceiling/... per room) so every room gets
+// the same coverage instead of relying on the agent to remember to type each
+// surface by hand. Kitchen missing a description was exactly this: nothing
+// forced "Units & worktops" or "Appliances" to be added at all.
+const ROOM_TEMPLATES={
+  'Kitchen':['Door','Floor','Walls','Ceiling','Window','Units & worktops','Sink & taps','Appliances'],
+  'Bathroom':['Door','Floor','Walls','Ceiling','Window','Bath/shower','Toilet','Basin & taps','Extractor fan'],
+  'Bedroom':['Door','Floor','Walls','Ceiling','Window','Wardrobe','Curtains/blinds','Light fittings'],
+  'Living room':['Door','Floor','Walls','Ceiling','Window','Curtains/blinds','Light fittings'],
+  'Hallway / Landing':['Door','Floor','Walls','Ceiling','Light fittings'],
+  'Garden':['Fencing','Patio/paving','Shed/outbuilding','Planting/lawn'],
+  'Garage':['Door','Floor','Walls','Lighting']
+};
+function addRoomFromTemplate(vid){
+  const types=Object.keys(ROOM_TEMPLATES);
+  modal('Add a room',`
+    <div class="fg"><label>Room type</label><select id="art-type" onchange="document.getElementById('art-name').value=this.value==='__custom'?'':this.value">${types.map(t=>`<option>${esc(t)}</option>`).join('')}<option value="__custom">Custom / other</option></select></div>
+    <div class="fg"><label>Room name</label><input id="art-name" value="${esc(types[0])}"></div>
+    <div class="faint" style="font-size:11px;margin-top:4px">Adds the standard fixture checklist for this room type — Door, Floor, Walls, Ceiling etc — so nothing gets missed. Remove any row that doesn't apply, or add extra items after with ＋ Custom item.</div>
+  `,`<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="_confirmAddRoomFromTemplate('${vid}')">Add room</button>`);
+}
+function _confirmAddRoomFromTemplate(vid){
+  const typeSel=val('art-type'); const type=typeSel==='__custom'?null:typeSel;
+  const room=val('art-name')||type||'Room';
+  const v=(S.inventories2||[]).find(x=>x.id===vid);
+  const fixtures=(type&&ROOM_TEMPLATES[type])||['General condition'];
+  fixtures.forEach(item=>{
+    v.rooms.push({room,item,checkin:{photos:[],note:'',condition:''},checkout:{photos:[],note:''},visits:[],classification:'',charge:0,reasoning:'',breakdown:'',estCost:0,ageAtCheckin:0,lifeYears:_usefulLife(item)});
+  });
+  window._invTabs=window._invTabs||{}; window._invTabs[vid]=v.rooms.length-1;
+  closeModal(); pushInv2(v); render(); toast('✓ Added '+fixtures.length+' items for '+room);
+}
 function addRoom(vid){ const v=(S.inventories2||[]).find(x=>x.id===vid); const room=prompt('Room (e.g. Living room)'); if(!room)return; const item=prompt('Item or surface (e.g. Carpet, Walls & ceiling, Sofa) — add one entry per item/surface for a full schedule of condition')||'Item';
   v.rooms.push({room,item,checkin:{photos:[],note:'',condition:''},checkout:{photos:[],note:''},visits:[],classification:'',charge:0,reasoning:'',breakdown:'',estCost:0,ageAtCheckin:0,lifeYears:_usefulLife(item)});
   window._invTabs=window._invTabs||{}; window._invTabs[vid]=v.rooms.length-1; pushInv2(v); render(); }
@@ -8286,8 +8320,8 @@ async function generateInvReport(vid,type){
          room (see _imgPart) — but a skipped photo is still a gap in the
          evidence base, so say so rather than silently writing a report as if
          every uploaded photo had been read. */
-      const _ciSeen=(_ciParts||_ciParts2||[]).length, _ciWanted=Math.min(r.checkin.photos.length,12);
-      const _stSeen=toSet?(_stParts2||[]).length:0, _stWanted=toSet?Math.min(toSet.photos.length,12):0;
+      const _ciSeen=(_ciParts||_ciParts2||[]).length, _ciWanted=r.checkin.photos.length;
+      const _stSeen=toSet?(_stParts2||[]).length:0, _stWanted=toSet?toSet.photos.length:0;
       const photoWarning=(_ciSeen<_ciWanted||_stSeen<_stWanted)
         ?('⚠ '+((_ciWanted-_ciSeen)+(_stWanted-_stSeen))+' photo(s) could not be read and were excluded from this assessment.')
         :'';
@@ -8339,11 +8373,13 @@ function _invReportHtml(r,p,t,v){
      capture time. Where the file carried one, the report says so. */
   const _prov=ps=>(v&&window.NexLetCapture)?NexLetCapture.provenanceBlock(v,ps):'';
   const photoStrip=ps=>(ps&&ps.length?ps:[]).map(u=>`<img src="${u}" style="width:100px;height:76px;object-fit:cover;border-radius:6px;flex:0 0 auto">`).join('')||`<div style="width:100px;height:76px;border-radius:6px;background:#EEF1F5;display:flex;align-items:center;justify-content:center;font-size:9px;color:#94A3B8;flex:1">No photo</div>`;
+  let _lastReportRoom=null;
   const rows=r.results.map(x=>{
     if(r.type==='movein'){
-      return `<div style="padding:14px 0;border-bottom:1px solid #EEF1F5">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-          <div style="font-size:10px;font-weight:700;letter-spacing:.5px;color:#94A3B8;text-transform:uppercase">${esc(x.room)}</div>
+      const roomHeader=(x.room!==_lastReportRoom)?`<div style="background:#1B2F4A;color:#fff;padding:9px 0;font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;margin-top:${_lastReportRoom?'10px':'0'}">${esc(x.room)}</div>`:'';
+      _lastReportRoom=x.room;
+      return roomHeader+`<div style="padding:14px 0;border-bottom:1px solid #EEF1F5">
+        <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px">
           ${x.condition?`<span style="font-size:9.5px;font-weight:700;color:#fff;background:#5B6473;padding:2px 8px;border-radius:8px">${esc(x.condition)}</span>`:''}
         </div>
         <div style="font-size:14px;font-weight:700;color:#1B2F4A;margin:1px 0 8px">${esc(x.item)}</div>
@@ -8371,7 +8407,13 @@ function _invReportHtml(r,p,t,v){
       ${(r.type==='moveout'||r.type==='precheckout')&&x.charge?`<div style="background:#FBF6F2;border:1px solid #F0E0D4;border-radius:7px;padding:8px 11px;font-size:11px;color:#8A5A3A;line-height:1.55">${esc(x.summary)}${x.breakdown?'<br><span style="color:#A87A56">'+x.breakdown+'</span>':''}</div>`:(r.type!=='moveout'&&r.type!=='precheckout')?`<div style="font-size:11px;color:#8A7D6E;line-height:1.5">${esc(x.summary)}</div>`:`<div style="font-size:11px;color:#8A7D6E;line-height:1.5">${esc(x.summary)}</div>`}
     </div>`;
   }).join('');
+  const signBlock=(r.type==='movein')?`<div style="border-top:1px solid #E2E5EA;padding:14px 24px;background:#FAFBFC">
+    <div style="font-size:10px;font-weight:700;letter-spacing:.5px;color:#94A3B8;text-transform:uppercase;margin-bottom:8px">Signed off as a fair and accurate record</div>
+    <div style="font-size:11.5px;${r.tenantSign?'color:#1B7A4B':'color:#B86E20'};margin-bottom:4px">${r.tenantSign?'✓ Tenant — '+esc(r.tenantSign.name)+', signed '+fmtDate(r.tenantSign.date):'Awaiting tenant signature'}</div>
+    <div style="font-size:11.5px;${r.landlordSign?'color:#1B7A4B':'color:#B86E20'}">${r.landlordSign?'✓ Landlord/Agent — '+esc(r.landlordSign.name)+', signed '+fmtDate(r.landlordSign.date):'Awaiting landlord/agent signature'}</div>
+  </div>`:'';
   const footer=((r.type==='moveout'||r.type==='precheckout')?`<div style="background:#F9FAFB;border-top:1px solid #E2E5EA;padding:16px 24px;font-size:10.5px;color:#7A8699;line-height:1.6"><b style="color:#8A7D6E">How these figures were calculated</b><br>Every item was classified as fair wear &amp; tear (never chargeable), cleaning (charged in full), or damage. Damage is apportioned by remaining useful life: repair/replacement cost × (years of useful life remaining ÷ total useful life) — the tenant never pays full replacement cost, per Propertymark/mydeposits betterment guidance. The maths for each chargeable item is shown against that item above.${r.type==='precheckout'?' These figures are indicative only — the real move-out inspection determines the final deduction.':''}</div>`:'')
+    +signBlock
     +((r.sentLandlordAt||r.sentTenantAt)?`<div style="background:#EAF6EF;border-top:1px solid #E2E5EA;padding:10px 24px;font-size:10.5px;color:#1B7A4B;line-height:1.6">${r.sentLandlordAt?'✓ Sent to landlord '+new Date(r.sentLandlordAt).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):''}${r.sentLandlordAt&&r.sentTenantAt?' · ':''}${r.sentTenantAt?'✓ Sent to tenant '+new Date(r.sentTenantAt).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):''}</div>`:'')
     +`<div style="border-top:1px solid #E2E5EA;padding:12px 24px;font-size:10px;color:#94A3B8;line-height:1.6">This report is a fair and accurate record of condition based on the photographs and notes taken at the time of each stage.${r.type==='moveout'?' Report ref: '+esc(r.id)+' · Please review and raise any inaccuracy within 14 days — after that, without a dispute raised, this record will be treated as agreed.':' Report ref: '+esc(r.id)+'.'}</div>`;
   return `<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;border-radius:8px;overflow:hidden;border:1px solid #E2E5EA">
@@ -8400,9 +8442,28 @@ function viewInvReports(vid){
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
           ${l.email?`<button class="btn sm ${r.sentLandlordAt?'':'navy'}" onclick="emailInvReport('${vid}','${r.id}','landlord')">${r.sentLandlordAt?'✓ Sent to landlord '+fmtDate(r.sentLandlordAt):'Send to landlord'}</button>`:''}
           ${t.email?`<button class="btn sm ${r.sentTenantAt?'':'navy'}" onclick="emailInvReport('${vid}','${r.id}','tenant')">${r.sentTenantAt?'✓ Sent to tenant '+fmtDate(r.sentTenantAt):'Send to tenant'}</button>`:''}
+          ${r.type==='movein'?`<button class="btn sm" ${r.tenantSign?'disabled title="Already signed"':''} onclick="_signInvReport('${vid}','${r.id}','tenantSign')">${r.tenantSign?'✓ Tenant signed':'Sign as tenant'}</button><button class="btn sm" ${r.landlordSign?'disabled title="Already signed"':''} onclick="_signInvReport('${vid}','${r.id}','landlordSign')">${r.landlordSign?'✓ Landlord/Agent signed':'Sign as landlord/agent'}</button>${(r.tenantSign&&r.landlordSign)?`<button class="btn sm navy" onclick="downloadSignedInvReport('${vid}','${r.id}')">⬇ Download signed copy</button>`:''}`:''}
           <button class="btn sm" onclick="deleteInvReport('${vid}','${r.id}')" style="color:var(--red)">Delete</button>
         </div></div>${_invReportHtml(r,p,t,v)}</div>`).join('');
     modal('Inventory reports',body,`<button class="btn" onclick="closeModal()">Close</button>`);
+  });
+}
+function _signInvReport(vid,rid,role){
+  const v=(S.inventories2||[]).find(x=>x.id===vid); const r=(v.reports||[]).find(x=>x.id===rid); if(!r) return;
+  const label=role==='tenantSign'?'tenant':'landlord/agent';
+  const name=prompt('Full name of the '+label+' signing (typed as their electronic signature):');
+  if(!name) return;
+  if(!confirm('By typing "'+name+'" you are confirming this is a fair and accurate record, as the '+label+'. Confirm signature?')) return;
+  r[role]={name,date:today(),ts:new Date().toISOString()};
+  pushInv2(v); viewInvReports(vid); toast('✓ Signed as '+label);
+}
+function downloadSignedInvReport(vid,rid){
+  const v=(S.inventories2||[]).find(x=>x.id===vid); const r=(v.reports||[]).find(x=>x.id===rid); if(!r) return;
+  const p=P(v.propertyId)||{}; const t=(S.tenants||[]).find(x=>x.id===v.tenantId)||{};
+  const w=window.open('','_blank'); if(!w){ toast('Allow pop-ups to open the signed copy',1); return; }
+  _signReportPhotos(r).then(signed=>{
+    w.document.write(`<html><head><title>Signed inventory report</title><style>body{margin:24px auto;padding:0 20px;font-family:Arial,sans-serif}@media print{.no-print{display:none}}</style></head><body><div class="no-print" style="text-align:right;margin-bottom:10px"><button onclick="print()" style="padding:8px 16px;font-size:13px;cursor:pointer">Print / Save as PDF</button></div>${_invReportHtml(signed,p,t,v)}</body></html>`);
+    w.document.close();
   });
 }
 function deleteInvReport(vid,rid){
