@@ -4659,7 +4659,7 @@ function openInvoiceFor(id){
   const l=L(id)||{};
   const docType = l.service==='letonly' ? 'tenantfind' : 'management';
   const anc=_landlordAnchor(id);
-  IV={landlordId:id,docType,freq:'quarterly',y:new Date().getFullYear(),anchorMonth:anc.month,anchorDay:anc.day,idx:_defaultIdx('quarterly',anc.month),items:[{desc:'',amount:''}],otherDeduct:'',otherDesc:'',ancFee:'noticeFee',ancQty:1,ancPropertyId:'',discAmt:'',discReason:'',status:'draft'};
+  IV={landlordId:id,docType,freq:'quarterly',y:new Date().getFullYear(),anchorMonth:anc.month,anchorDay:anc.day,idx:_defaultIdx('quarterly',anc.month),items:[{desc:'',amount:''}],otherDeduct:'',otherDesc:'',ancFee:'noticeFee',ancQty:1,ancPropertyId:'',discAmt:'',discReason:'',extra:[],status:'draft'};
   renderInvoice();
 }
 // Next-invoice reminders — flags full-management landlords whose last management
@@ -4697,6 +4697,7 @@ function _invBuild(){
   if(IV.docType==='maintenance'){
     let lines=(IV.items||[]).filter(x=>x.desc||x.amount).map(x=>({desc:'Works / disbursement · '+(x.desc||'—'),net:Math.round((+x.amount||0)*100)/100}));
     if(!lines.length) lines=[{desc:'Works / disbursement',net:0}];
+    lines=lines.concat(_extraLines());
     if(+IV.discAmt) lines.push({desc:'Less: discount'+(IV.discReason?' · '+IV.discReason:''),net:-Math.round((+IV.discAmt||0)*100)/100});
     return {lines,title:'INVOICE',totalLabel:'Total due',period:{label:'On completion',from:today(),to:today()},kind:'invoice',vat:!!S.agency.vatRegistered};
   }
@@ -4714,10 +4715,25 @@ function _invBuild(){
   const pd=_period(IV.freq||'quarterly',IV.y,IV.idx,IV.anchorMonth,IV.anchorDay);
   let lines=props.map(p=>({desc:`Management fee · ${p.address} · ${propFee(p)}% of ${gbp(p.rent)}/mo × ${pd.months} month${pd.months>1?'s':''}${IV.freq==='quarterly'?' (in advance)':''}`,net:Math.round(p.rent*propFee(p)/100*pd.months*100)/100}));
   if(!lines.length) lines=[{desc:'Management fee',net:0}];
+  lines=lines.concat(_extraLines());
   if(+IV.discAmt) lines.push({desc:'Less: discount'+(IV.discReason?' · '+IV.discReason:''),net:-Math.round((+IV.discAmt||0)*100)/100});
   return {lines,title:'INVOICE',totalLabel:'Total due',period:pd,kind:'invoice',vat:!!S.agency.vatRegistered};
 }
-function renderInvoice(){
+// One invoice needs to carry more than one kind of charge — a management fee
+// alongside a lost-key call-out, an inventory report, a discretionary extra —
+// instead of forcing a separate invoice per job. Xero calls these free-form
+// line items; this is the same idea scoped to the fee types NexLet already
+// knows the price of, plus a genuinely custom line.
+function _extraLines(){
+  return (IV.extra||[]).filter(x=>x.feeKey||x.desc).map(x=>{
+    const qty=Math.max(1,parseInt(x.qty)||1);
+    const label=x.feeKey?(ANC_FEES.find(f=>f[0]===x.feeKey)||[])[1]:(x.desc||'Other charge');
+    const unit=x.amount!==''&&x.amount!=null?(+x.amount||0):(x.feeKey?((S.agency||{})[x.feeKey]||0):0);
+    return {desc:label+(x.propId?' · '+((S.properties.find(p=>p.id===x.propId)||{}).address||''):'')+(qty>1?' × '+qty:''),net:Math.round(unit*qty*100)/100};
+  });
+}
+function _ivAddExtra(){ IV.extra=IV.extra||[]; IV.extra.push({feeKey:'noticeFee',qty:1,amount:'',desc:'',propId:''}); renderInvoice(); }
+function _ivRemoveExtra(i){ IV.extra.splice(i,1); renderInvoice(); }
   const l=L(IV.landlordId)||{};
   const llOpts=S.landlords.map(x=>`<option value="${x.id}" ${x.id===IV.landlordId?'selected':''}>${esc(landlordName(x))} — ${(SVC[x.service]||SVC.full).label}</option>`).join('');
   // Remittance only exists once the agency actually receives rent — see holdsClientMoney().
@@ -4758,13 +4774,27 @@ function renderInvoice(){
       <div class="fg"><label>Discount / referral (£, optional)</label><input type="number" value="${esc(IV.discAmt)}" onchange="IV.discAmt=this.value;renderInvoice()"></div>
       <div class="fg"><label>Reason</label><input value="${esc(IV.discReason)}" oninput="IV.discReason=this.value" placeholder="e.g. referral discount"></div>
     </div>` : '';
+  const extraBlock = (IV.docType==='management'||IV.docType==='maintenance') ? `
+    <div class="fg"><label>Other charges on this invoice <span class="faint">(lost key, inventory report, any one-off job — no need for a separate invoice)</span></label>
+      ${(IV.extra||[]).map((x,i)=>`<div style="display:flex;gap:6px;margin-bottom:6px;align-items:flex-start">
+        <select style="flex:1.4" onchange="IV.extra[${i}].feeKey=this.value==='custom'?'':this.value;renderInvoice()">
+          ${ANC_FEES.map(([k,lbl])=>`<option value="${k}" ${x.feeKey===k?'selected':''}>${lbl} — ${gbp((S.agency||{})[k]||0)}</option>`).join('')}
+          <option value="custom" ${!x.feeKey?'selected':''}>Custom / other</option>
+        </select>
+        ${!x.feeKey?`<input placeholder="Description" value="${esc(x.desc)}" oninput="IV.extra[${i}].desc=this.value" style="flex:1.4">`:''}
+        <select style="flex:1" onchange="IV.extra[${i}].propId=this.value">${props.length>1?'<option value="">Which property?</option>':''}${props.map(p=>`<option value="${p.id}" ${x.propId===p.id?'selected':''}>${esc(p.address)}</option>`).join('')}</select>
+        <input type="number" min="1" value="${x.qty||1}" style="width:52px" title="Qty" onchange="IV.extra[${i}].qty=this.value;renderInvoice()">
+        <input type="number" placeholder="£ ${x.feeKey?gbp((S.agency||{})[x.feeKey]||0).replace('£',''):''}" value="${esc(x.amount)}" style="width:90px" onchange="IV.extra[${i}].amount=this.value;renderInvoice()">
+        <button class="btn sm" onclick="_ivRemoveExtra(${i})" style="color:var(--red)">✕</button>
+      </div>`).join('')}
+      <button class="btn sm" onclick="_ivAddExtra()">＋ Add a charge</button></div>` : '';
   const vat=b.vat;
   const body=`
     <div class="grid2" style="gap:10px">
       <div class="fg"><label>${b.kind==='remittance'?'Landlord (pay out to)':'Bill to (landlord)'}</label><select onchange="IV.landlordId=this.value;renderInvoice()">${llOpts}</select></div>
       <div class="fg"><label>Document type</label><select onchange="IV.docType=this.value;renderInvoice()">${DOCS.map(([v,t])=>`<option value="${v}" ${IV.docType===v?'selected':''}>${t}</option>`).join('')}</select></div>
     </div>
-    ${periodBlock}${maintBlock}${remitBlock}${ancillaryBlock}${discBlock}
+    ${periodBlock}${maintBlock}${remitBlock}${ancillaryBlock}${extraBlock}${discBlock}
     <div style="background:var(--off);border:1px solid var(--border);border-radius:10px;padding:14px;font-size:12.5px;line-height:1.7;margin:6px 0">
       ${showPeriod?`<div style="display:flex;justify-content:space-between;margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid var(--border)"><span class="faint">Billing period</span><b>${fmtDate(b.period.from)} – ${fmtDate(b.period.to)}</b></div>`:''}
       ${b.lines.map(x=>`<div style="display:flex;justify-content:space-between;gap:10px"><span>${esc(x.desc)}</span><b style="white-space:nowrap;${x.net<0?'color:var(--red)':''}">${money2(x.net)}</b></div>`).join('')}
