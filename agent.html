@@ -4732,7 +4732,14 @@ function _extraLines(){
     return {desc:label+(x.propId?' · '+((S.properties.find(p=>p.id===x.propId)||{}).address||''):'')+(qty>1?' × '+qty:''),net:Math.round(unit*qty*100)/100};
   });
 }
-function _ivAddExtra(){ IV.extra=IV.extra||[]; IV.extra.push({feeKey:'',qty:1,amount:'',desc:'',propId:''}); renderInvoice(); }
+function _ivToggleFee(key){
+  IV.extra=IV.extra||[];
+  const idx=IV.extra.findIndex(x=>!x.custom&&x.feeKey===key);
+  if(idx>=0) IV.extra.splice(idx,1);
+  else IV.extra.push({feeKey:key,qty:1,amount:'',desc:'',propId:'',custom:false});
+  renderInvoice();
+}
+function _ivAddCustom(){ IV.extra=IV.extra||[]; IV.extra.push({feeKey:'',qty:1,amount:'',desc:'',propId:'',custom:true}); renderInvoice(); }
 function _ivRemoveExtra(i){ IV.extra.splice(i,1); renderInvoice(); }
 function renderInvoice(){
   const l=L(IV.landlordId)||{};
@@ -4777,19 +4784,21 @@ function renderInvoice(){
     </div>` : '';
   const extraBlock = (IV.docType==='management'||IV.docType==='maintenance') ? `
     <div class="fg"><label>Other charges on this invoice <span class="faint">(lost key, inventory report, any one-off job — no need for a separate invoice)</span></label>
-      ${(IV.extra||[]).map((x,i)=>`<div style="display:flex;gap:6px;margin-bottom:6px;align-items:flex-start">
-        <select style="flex:1.4" onchange="IV.extra[${i}].feeKey=(this.value==='custom'||this.value==='')?'':this.value;IV.extra[${i}].picked=this.value;renderInvoice()">
-          <option value="" ${!x.picked?'selected':''} disabled>Choose a charge…</option>
-          ${ANC_FEES.map(([k,lbl])=>`<option value="${k}" ${x.picked===k?'selected':''}>${lbl} — ${gbp((S.agency||{})[k]||0)}</option>`).join('')}
-          <option value="custom" ${x.picked==='custom'?'selected':''}>Custom / other</option>
-        </select>
-        ${x.picked==='custom'?`<input placeholder="Description" value="${esc(x.desc)}" oninput="IV.extra[${i}].desc=this.value" style="flex:1.4">`:''}
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+        ${ANC_FEES.map(([k,lbl])=>{ const on=(IV.extra||[]).some(x=>!x.custom&&x.feeKey===k);
+          return `<button type="button" class="btn sm${on?' navy':''}" style="border-radius:100px" onclick="_ivToggleFee('${k}')">${on?'✓':'+'} ${lbl} — ${gbp((S.agency||{})[k]||0)}</button>`; }).join('')}
+        <button type="button" class="btn sm" style="border-radius:100px" onclick="_ivAddCustom()">+ Custom charge</button>
+      </div>
+      ${(IV.extra||[]).map((x,i)=>{ const label=x.custom?'':((ANC_FEES.find(f=>f[0]===x.feeKey)||[])[1]||'');
+        return `<div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;background:var(--off);border-radius:8px;padding:6px 8px">
+        ${x.custom?`<input placeholder="Description" value="${esc(x.desc)}" oninput="IV.extra[${i}].desc=this.value" style="flex:1.6">`
+                  :`<span style="flex:1.6;font-size:12.5px;font-weight:600;color:var(--navy)">${esc(label)}</span>`}
         <select style="flex:1" onchange="IV.extra[${i}].propId=this.value">${props.length>1?'<option value="">Which property?</option>':''}${props.map(p=>`<option value="${p.id}" ${x.propId===p.id?'selected':''}>${esc(p.address)}</option>`).join('')}</select>
         <input type="number" min="1" value="${x.qty||1}" style="width:52px" title="Qty" onchange="IV.extra[${i}].qty=this.value;renderInvoice()">
         <input type="number" placeholder="£ ${x.feeKey?gbp((S.agency||{})[x.feeKey]||0).replace('£',''):''}" value="${esc(x.amount)}" style="width:90px" onchange="IV.extra[${i}].amount=this.value;renderInvoice()">
         <button class="btn sm" onclick="_ivRemoveExtra(${i})" style="color:var(--red)">✕</button>
-      </div>`).join('')}
-      <button class="btn sm" onclick="_ivAddExtra()">＋ Add a charge</button></div>` : '';
+      </div>`; }).join('')}
+    </div>` : '';
   const vat=b.vat;
   const body=`
     <div class="grid2" style="gap:10px">
