@@ -46,7 +46,7 @@
   /* The signed shelf, in the shape the registry's file items expect. */
   function signedDoc(c, key) {
     const h = window.NexLetSigned && c && c.p ? window.NexLetSigned.held(c.p.id, key) : null;
-    return h && h.url ? { name: h.name, url: h.url, on: h.signedAt } : null;
+    return h && (h.url || h.signedAt) ? { name: h.name, url: h.url, on: h.signedAt } : null;
   }
 
   function ctx(pid) {
@@ -150,7 +150,7 @@
       has: c => !!signedDoc(c, 'receipt'), file: c => signedDoc(c, 'receipt'),
       note: 'Upload the signed sheet on the property page and it attaches itself' },
 
-    { key: 'inventory', to: 'landlord', required: false, kind: 'file',
+    { key: 'inventory', to: 'landlord', required: false, kind: 'inline',
       label: 'Inventory and schedule of condition',
       why: 'Signed at check-in. This is what any deposit claim is measured against.',
       has: c => !!signedDoc(c, 'inventory'), file: c => signedDoc(c, 'inventory'),
@@ -267,7 +267,7 @@
     return REG.filter(r => (r.to === audience || r.to === 'both') && (!r.applies || r.applies(c)))
       .map(r => {
         const has = !!r.has(c);
-        const f = (r.kind === 'file' && has && r.file) ? r.file(c) : null;
+        const f = (has && r.file) ? r.file(c) : null;
         const ready = r.kind === 'inline' ? has : r.kind === 'file' ? !!(f && f.url) : false;
         /* Manual and note items cannot be sent by the app, but they must still be
            confirmable — otherwise a required document the agent forgot to attach

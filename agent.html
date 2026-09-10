@@ -4522,8 +4522,9 @@ function tenantWelcomeLetterHtml(rec,p){ const b=agencyBrand();
 async function sendTenantWelcomeLetter(pid){
   const p=P(pid); const rec=tenantRecFor(pid);
   if(!rec||!rec.email){ toast('Set up the tenant with an email first',1); return; }
-  agencyEmail(rec.email,'Welcome — '+agencyBrand().name,tenantWelcomeLetterHtml(rec,p));
-  rec.welcomeSentAt=new Date().toISOString(); pushTenantRec(rec); render(); toast('✓ Welcome letter sent to '+rec.name);
+  const to=[rec.email,...(rec.occupants||[]).map(o=>o.email)].filter(Boolean);
+  to.forEach(addr=>agencyEmail(addr,'Welcome — '+agencyBrand().name,tenantWelcomeLetterHtml(rec,p)));
+  rec.welcomeSentAt=new Date().toISOString(); pushTenantRec(rec); render(); toast('✓ Welcome letter sent to '+rec.name+(to.length>1?' and '+(to.length-1)+' other'+(to.length>2?'s':''):''));
 }
 function inviteTenantToPortal(pid){
   const p=P(pid); const rec=tenantRecFor(pid);
@@ -7913,8 +7914,20 @@ function _resizeImg(file,maxW){ return new Promise((res)=>{
    client-side, then re-parsing that whole payload server-side, multiplies each
    photo's memory footprint 4-5x before it ever reaches Claude. Passing a plain
    URL removes every one of those copies. */
-function _imgPart(u){ return {type:'image',source:{type:'url',url:u}}; }
-function _mapBatched(arr,fn,batchSize){ return arr.map(fn); }
+/* Claude fetches each URL itself now — a dead one (upload interrupted, or a
+   sub-bucket permissions gap) crashes the whole request as a 502, not just
+   that one photo. A cheap HEAD check catches that before it's sent, so one
+   broken photo no longer takes its whole room's analysis down with it. */
+async function _imgPart(u){
+  try{ const res=await fetch(u,{method:'HEAD'}); if(!res.ok) return null; }
+  catch(e){ return null; }
+  return {type:'image',source:{type:'url',url:u}};
+}
+async function _mapBatched(arr,fn,batchSize){
+  const out=[];
+  for(let i=0;i<arr.length;i+=batchSize){ out.push(...await Promise.all(arr.slice(i,i+batchSize).map(fn))); }
+  return out.filter(x=>x!=null);
+}
 function openInventory(){
   const ts=_activeTenants(); if(!ts.length){ toast('Set up a tenant first',1); return; }
   const opts=ts.map(t=>`<option value="${t.id}">${esc(t.name)} — ${esc((P(t.propertyId)||{}).address||'')}</option>`).join('');
@@ -8058,8 +8071,13 @@ async function addRoomPhotos(vid,i,stage,visitIdx,input){
   const files=[...(input.files||[])]; if(!files.length) return;
   const v=(S.inventories2||[]).find(x=>x.id===vid); const r=_ensureRoomShape(v.rooms[i]);
   const target=stage==='visit'?r.visits[visitIdx]:r[stage];
-  let failed=0;
+  let failed=0, unsupported=0;
   for(const f of files){
+    /* DNG/RAW and similar camera formats upload fine (a real 200 response) but
+       never render as a photo and can't be read by the AI \u2014 browsers and
+       Claude's vision API both only decode standard photo formats. Warn now
+       rather than let it surface later as a blank thumbnail. */
+    if(/\.(dng|raw|cr2|nef|arw|heic|heif)$/i.test(f.name||'')&&!/\.(heic|heif)$/i.test(f.name||'')){ unsupported++; continue; }
     /* null means the browser could not decode it — HEIC, or a truncated file.
        Upload the original rather than losing the photograph. */
     const resized=await _resizeImg(f,700), blob=resized||f;
@@ -8072,6 +8090,7 @@ async function addRoomPhotos(vid,i,stage,visitIdx,input){
     } else failed++;
   }
   pushInv2(v); render();
+  if(unsupported) toast('⚠ '+unsupported+' photo'+(unsupported>1?'s':'')+' skipped — RAW/DNG camera format isn\'t supported. Turn off RAW capture in your camera app and retake, or convert to JPEG first.',1);
   if(failed) toast('⚠ '+failed+' photo'+(failed>1?'s':'')+' failed to upload — check your connection and try again',1);
 }
 function removeRoomPhoto(vid,i,stage,visitIdx,pi){
@@ -8273,12 +8292,12 @@ async function generateInvReport(vid,type){
       if(type==='movein'){
         promptTxt=(window.NexLetCapture?NexLetCapture.houseStyle():'')
           +`Write the entry for "${r.room} — ${r.item}" from these ${r.checkin.photos.length} check-in photograph(s). Clerk's note: "${r.checkin.note||'none'}". Return ONLY JSON: {"condition":"one of the terms","summary":"the entry, in house style"}`;
-        var _ciParts=await _mapBatched(r.checkin.photos,_imgPart,6);
+        var _ciParts=await _mapBatched(r.checkin.photos,_imgPart,8);
         content=[..._ciParts,{type:'text',text:promptTxt}];
       } else {
         const costAsk=(type==='moveout'||type==='precheckout')?', "estimatedCost":number (like-for-like repair/replacement cost in GBP, only if damage/cleaning), "ageAtCheckinYears":number (how old the item looked AT CHECK-IN, 0=new)':'';
         promptTxt=`UK tenancy deposit adjudicator, writing evidence for a possible dispute. Compare CHECK-IN vs ${cmpLabel.toUpperCase()} photos for "${r.room} — ${r.item}". Notes: check-in "${r.checkin.note||'none'}", ${cmpLabel} "${toSet.note||'none'}". Classify as fair_wear|damage|cleaning. Name the SPECIFIC change observed (not "some wear" or "looks worse") — what changed, where, and how that goes beyond (or stays within) fair wear and tear for the tenancy length. ${(type==='moveout'||type==='precheckout')?'Do NOT calculate any final charge — that is computed separately, deterministically, from your cost/age estimate (apportioned by remaining useful life, never full replacement cost).':''} Return ONLY JSON: {"classification":"fair_wear|damage|cleaning","summary":"one to three specific, factual sentences an adjudicator could act on"${costAsk}}`;
-        var _ciParts2=await _mapBatched(r.checkin.photos,_imgPart,6), _stParts2=await _mapBatched(toSet.photos,_imgPart,6);
+        var _ciParts2=await _mapBatched(r.checkin.photos,_imgPart,8), _stParts2=await _mapBatched(toSet.photos,_imgPart,8);
         content=[..._ciParts2,{type:'text',text:'CHECK-IN above.'},..._stParts2,{type:'text',text:cmpLabel.toUpperCase()+' above.\n\n'+promptTxt}];
       }
       let res,data;
@@ -8476,14 +8495,17 @@ function deleteInvReport(vid,rid){
 function emailInvReport(vid,rid,recipient){
   const v=(S.inventories2||[]).find(x=>x.id===vid); const r=(v.reports||[]).find(x=>x.id===rid); if(!r) return;
   const p=P(v.propertyId)||{}; const l=L(p.landlordId)||{}; const t=(S.tenants||[]).find(x=>x.id===v.tenantId)||{};
-  const to=recipient==='landlord'?l.email:t.email;
-  if(!to){ toast('No '+recipient+' email on file',1); return; }
+  // Every named tenant on the tenancy is jointly liable for the property's
+  // condition, not just whoever's listed as the lead — t.email alone was
+  // silently skipping joint occupants who have their own email.
+  const to=recipient==='landlord'?(l.email?[l.email]:[]):[t.email,...(t.occupants||[]).map(o=>o.email)].filter(Boolean);
+  if(!to.length){ toast('No '+recipient+' email on file',1); return; }
   const typeTitle={movein:'Move-in condition report',midterm:'Mid-tenancy inspection report',precheckout:'Pre-checkout snag list',moveout:'Move-out & deposit report'}[r.type];
   toast('Sending report…');
   _signReportPhotos(r).then(signed=>{
-    agencyEmail(to,typeTitle+' — '+(p.address||''),`<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#4A4038">${_invReportHtml(signed,p,t,v)}</div>`);
+    to.forEach(addr=>agencyEmail(addr,typeTitle+' — '+(p.address||''),`<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#4A4038">${_invReportHtml(signed,p,t,v)}</div>`));
     if(recipient==='landlord') r.sentLandlordAt=new Date().toISOString(); else r.sentTenantAt=new Date().toISOString();
-    pushInv2(v); render(); toast('✓ Report emailed to '+recipient);
+    pushInv2(v); render(); toast('✓ Report emailed to '+recipient+(to.length>1?' ('+to.length+' people)':''));
   });
 }
 
