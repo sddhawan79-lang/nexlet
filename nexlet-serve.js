@@ -154,6 +154,16 @@
       label: 'Inventory and schedule of condition',
       why: 'Signed at check-in. This is what any deposit claim is measured against.',
       has: c => !!signedDoc(c, 'inventory'), file: c => signedDoc(c, 'inventory'),
+      html: c => {
+        const v = ((ST().inventories2) || []).find(x => x.propertyId === c.p.id);
+        const mr = v && (v.reports || []).find(x => x.type === 'movein');
+        if (!mr || !window._invReportHtml) return '';
+        const t = (ST().tenants || []).find(x => x.id === v.tenantId) || {};
+        const f = signedDoc(c, 'inventory');
+        return (f && f.unsigned ? '<p style="font-size:12px;color:#B4543A;margin-bottom:10px"><b>Not yet signed by the tenant.</b> ' +
+          'This is the record as captured at check-in \u2014 a signed copy will follow once the tenant reviews it.</p>' : '') +
+          window._invReportHtml(mr, c.p, t, v);
+      },
       note: 'Send once signed at check-in' },
 
     { key: 'alarms', to: 'landlord', required: false, kind: 'file',
@@ -266,13 +276,14 @@
     const c = ctx(pid);
     return REG.filter(r => (r.to === audience || r.to === 'both') && (!r.applies || r.applies(c)))
       .map(r => {
-        const has = !!r.has(c);
-        const f = (has && r.file) ? r.file(c) : null;
-        const ready = r.kind === 'inline' ? has : r.kind === 'file' ? !!(f && f.url) : false;
+      const has = !!r.has(c);
+      const f = (has && r.file) ? r.file(c) : null;
+      const ready = r.kind === 'inline' ? has : r.kind === 'file' ? !!(f && (f.url || f.signedAt)) : false;
+      const unsigned = !!(f && f.unsigned);
         /* Manual and note items cannot be sent by the app, but they must still be
            confirmable — otherwise a required document the agent forgot to attach
            passes silently, which is the whole failure this registry prevents. */
-        return { ...r, has, file: f, ready, confirmable: r.kind === 'manual' || r.kind === 'note' };
+        return { ...r, has, file: f, ready, unsigned, confirmable: r.kind === 'manual' || r.kind === 'note' };
       });
   }
   /* Required items that will not go out and have not been confirmed by hand. */
@@ -296,7 +307,8 @@
 
     const row = x => {
       const was = servedAt(c.p.id, x.key);
-      const state = was ? ['Served ' + (dt(was) || ''), 'green'] : x.ready ? ['Ready', 'green']
+      const state = was ? ['Served ' + (dt(was) || ''), 'green'] : x.unsigned ? ['Sent, unsigned', 'amber']
+        : x.ready ? ['Ready', 'green']
         : x.kind === 'manual' ? [x.required ? 'Tick to confirm attached' : 'Attach yourself', 'amber']
         : x.kind === 'note' ? ['Attach when ready', 'amber'] : ['Not on file', 'red'];
       return '<label style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;' +

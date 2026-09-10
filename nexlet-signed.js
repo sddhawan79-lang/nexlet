@@ -86,17 +86,19 @@
       const doc = cc.smokeDocUrl ? 'smoke' : (cc.coDocUrl ? 'co' : null);
       if (doc) return { name: cc[doc + 'Doc'] || 'Alarm test evidence', url: cc[doc + 'DocUrl'], signedAt: cc[doc] || cc[doc + 'DocAddedAt'] };
     }
-    // 'inventory' likewise lives as a move-in report the tenant e-signed, or
-    // that was sent for tracked review and deemed accepted (opened, review
-    // window passed, nothing flagged) — a completely separate system from this
-    // signed shelf. Fall back to whichever of those is true.
+    // 'inventory' likewise lives as a move-in report — either the tenant e-signed
+    // it, it was sent for tracked review and deemed accepted, or an unsigned copy
+    // was already emailed straight to the landlord from the report viewer (its
+    // own separate send button). All three are the same real-world document;
+    // this is the one place that has to know about all of them.
     if (k === 'inventory' && rec && rec.propertyId) {
       const v = ((ST().inventories2) || []).find(x => x.propertyId === rec.propertyId);
       if (v) {
-        const mr = (v.reports || []).find(r => r.type === 'movein' && r.tenantSign);
-        if (mr) return { name: 'Move-in inventory report', url: null, signedAt: mr.tenantSign.ts || mr.tenantSign.date };
+        const mr = (v.reports || []).find(r => r.type === 'movein');
+        if (mr && mr.tenantSign) return { name: 'Move-in inventory report', url: null, signedAt: mr.tenantSign.ts || mr.tenantSign.date };
         const rv = window.NexLetInventory && window.NexLetInventory.forInventory(v.id);
         if (rv && (rv.status === 'signed' || window.NexLetInventory.deemed(rv))) return { name: 'Move-in inventory report', url: null, signedAt: rv.signed_at || rv.deadline_at };
+        if (mr && mr.sentLandlordAt) return { name: 'Move-in inventory report', url: null, signedAt: mr.sentLandlordAt, unsigned: true };
       }
     }
     return null;
