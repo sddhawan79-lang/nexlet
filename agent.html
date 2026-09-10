@@ -4735,8 +4735,9 @@ function _extraLines(){
 function _ivToggleFee(key){
   IV.extra=IV.extra||[];
   const idx=IV.extra.findIndex(x=>!x.custom&&x.feeKey===key);
-  if(idx>=0) IV.extra.splice(idx,1);
-  else IV.extra.push({feeKey:key,qty:1,amount:'',desc:'',propId:'',custom:false});
+  const lbl=(ANC_FEES.find(f=>f[0]===key)||[])[1]||key;
+  if(idx>=0){ IV.extra.splice(idx,1); toast('Removed: '+lbl); }
+  else { IV.extra.push({feeKey:key,qty:1,amount:'',desc:'',propId:'',custom:false}); toast('✓ Added to this invoice: '+lbl+' — '+gbp((S.agency||{})[key]||0)); }
   renderInvoice();
 }
 function _ivAddCustom(){ IV.extra=IV.extra||[]; IV.extra.push({feeKey:'',qty:1,amount:'',desc:'',propId:'',custom:true}); renderInvoice(); }
@@ -4921,7 +4922,7 @@ function vInvoiceDetail(){
           <tr><td style="padding:2px 0;color:#8A7D6E">Account number</td><td style="padding:2px 0;text-align:right">${esc(a.bankAccNo||'—')}</td></tr>
           <tr><td style="padding:2px 0;color:#8A7D6E">Reference</td><td style="padding:2px 0;text-align:right">${esc(inv.no)}</td></tr></table></div>`:''}
         ${!inv.vat&&inv.type!=='remittance'?`<div class="faint" style="font-size:11px;margin-top:16px">Not VAT registered — no VAT is charged on this invoice.</div>`:''}
-        <div class="faint" style="font-size:11px;margin-top:6px;line-height:1.6">${inv.type==='remittance'?(holdsClientMoney()?'This statement records rent collected on your behalf, less our fees, remitted to your nominated account. Held under our Client Money Protection scheme.':'This statement records rent paid to you direct by the tenant, less our fees invoiced separately. These figures are our record of the payments notified to us; the Agent does not receive or hold rent for this Property.'):(inv.type==='maintenance'?'Disbursement for works carried out on your behalf. Payment terms: '+(a.paymentTerms||14)+' days.':(inv.type==='tenantfind'?'One-off tenant-find fee. Payment terms: '+(a.paymentTerms||14)+' days.':'Payment terms: '+(a.paymentTerms||14)+' days. Management fees are invoiced in advance. Tenants pay landlords directly (no client money held) unless a remittance statement applies.'))}</div>
+        <div class="faint" style="font-size:11px;margin-top:6px;line-height:1.6">${inv.type==='remittance'?(holdsClientMoney()?'This statement records rent collected on your behalf, less our fees, remitted to your nominated account. Held under our Client Money Protection scheme.':'This statement records rent paid to you direct by the tenant, less our fees invoiced separately. These figures are our record of the payments notified to us; the Agent does not receive or hold rent for this Property.'):(inv.type==='maintenance'?'Disbursement for works carried out on your behalf, issued under the signed Management Agreement. Payment terms: '+(a.paymentTerms||14)+' days.':(inv.type==='tenantfind'?'One-off tenant-find fee, payable under Clause 5 of the signed agreement. Payment terms: '+(a.paymentTerms||14)+' days.':'Payable under Clause 5'+(inv.lines.some(l=>/notice|renewal|arrears|lockout|insurance|dispute|inventory|check-in|check-out/i.test(l.desc))?'/5b':'')+' of the signed Management Agreement. Payment terms: '+(a.paymentTerms||14)+' days. Tenants pay landlords directly (no client money held) unless a remittance statement applies.'))}</div>
       </div>
     </div>`;
 }
