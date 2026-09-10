@@ -4734,6 +4734,7 @@ function _extraLines(){
 }
 function _ivAddExtra(){ IV.extra=IV.extra||[]; IV.extra.push({feeKey:'noticeFee',qty:1,amount:'',desc:'',propId:''}); renderInvoice(); }
 function _ivRemoveExtra(i){ IV.extra.splice(i,1); renderInvoice(); }
+function renderInvoice(){
   const l=L(IV.landlordId)||{};
   const llOpts=S.landlords.map(x=>`<option value="${x.id}" ${x.id===IV.landlordId?'selected':''}>${esc(landlordName(x))} — ${(SVC[x.service]||SVC.full).label}</option>`).join('');
   // Remittance only exists once the agency actually receives rent — see holdsClientMoney().
@@ -4819,7 +4820,7 @@ function invoiceEmailHtml(inv,l,a,t,due){
     <h2 style="margin:0 0 4px">${esc(a.name||'Your Lettings')}</h2>
     <p style="color:#8A7D6E;font-size:13px;margin:0 0 20px">${inv.type==='remittance'?'Remittance statement':'Invoice'} ${esc(inv.no)} · ${esc(inv.periodLabel)}</p>
     <p>Dear ${esc(landlordName(l))},</p>
-    <p>Please find your ${inv.type==='remittance'?'remittance statement':'invoice'} below.</p>
+    <p>${inv.type==='remittance'?'Here is your remittance statement for the period below.':'Please find your invoice for '+esc((inv.periodLabel||'').toLowerCase())+' below.'}</p>
     <table style="width:100%;border-collapse:collapse;font-size:13px;margin:16px 0">${rows}</table>
     <p style="text-align:right;font-size:15px;font-weight:700">${inv.type==='remittance'?'Net paid to you':'Total due'}: ${money2(t.gross)}</p>
     ${inv.type!=='remittance'?`<p style="font-size:13px">Due date: ${fmtDate(due)}</p>`:''}
@@ -4829,6 +4830,7 @@ function invoiceEmailHtml(inv,l,a,t,due){
       <tr><td style="padding:2px 0;color:#8A7D6E">Sort code</td><td style="padding:2px 0;text-align:right">${esc(a.bankSortCode||'—')}</td></tr>
       <tr><td style="padding:2px 0;color:#8A7D6E">Account number</td><td style="padding:2px 0;text-align:right">${esc(a.bankAccNo||'—')}</td></tr>
       <tr><td style="padding:2px 0;color:#8A7D6E">Reference</td><td style="padding:2px 0;text-align:right">${esc(inv.no)}</td></tr></table></div>`:''}
+    <p style="font-size:13px;margin-top:18px">${inv.type==='remittance'?'Thank you for instructing us.':'Thank you for your continued instruction.'} Any questions on this ${inv.type==='remittance'?'statement':'invoice'}, just reply to this email.</p>
     <p style="font-size:12px;color:#8A7D6E;margin-top:24px">${esc(a.name||'Your agency')}${a.address?' · '+esc(a.address):''}</p>
   </div>`;
 }
