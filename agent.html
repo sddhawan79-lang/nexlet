@@ -4839,7 +4839,7 @@ function invoiceEmailHtml(inv,l,a,t,due){
     <h2 style="margin:0 0 4px">${esc(a.name||'Your Lettings')}</h2>
     <p style="color:#8A7D6E;font-size:13px;margin:0 0 20px">${inv.type==='remittance'?'Remittance statement':'Invoice'} ${esc(inv.no)} · ${esc(inv.periodLabel)}</p>
     <p>Dear ${esc(landlordName(l))},</p>
-    <p>${inv.type==='remittance'?'Here is your remittance statement for the period below.':'Please find your invoice for '+esc((inv.periodLabel||'').toLowerCase())+' below.'}</p>
+    <p>${inv.type==='remittance'?'Here is your remittance statement for the period below.':'Please find your invoice below.'}</p>
     <table style="width:100%;border-collapse:collapse;font-size:13px;margin:16px 0">${rows}</table>
     <p style="text-align:right;font-size:15px;font-weight:700">${inv.type==='remittance'?'Net paid to you':'Total due'}: ${money2(t.gross)}</p>
     ${inv.type!=='remittance'?`<p style="font-size:13px">Due date: ${fmtDate(due)}</p>`:''}
