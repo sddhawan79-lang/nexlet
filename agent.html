@@ -153,7 +153,7 @@ h1.pg{font-family:var(--disp);font-size:24px;color:var(--navy);margin-bottom:3px
   <button class="btn navy" onclick="openAiFinder()" title="Ask AI — where do I find…?" style="position:fixed;right:22px;bottom:22px;z-index:500;border-radius:100px;padding:12px 18px;box-shadow:0 8px 24px rgba(11,30,61,.28);display:flex;align-items:center;gap:7px">✦ Ask AI</button>
 </div>
 <div id="modal-root"></div>
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" onclick="this.classList.remove('show')" style="cursor:pointer" title="Click to dismiss"></div>
 
 <!-- Supabase (same project as landlord.html / tenant.html) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
@@ -4815,6 +4815,14 @@ function createInvoice(){
   S.invoices=S.invoices||[]; S.invoices.push(inv); save(); pushInvoice(inv); pushAgency(); closeModal(); go('invoice',inv.id); toast('✓ '+inv.no+' created');
 }
 function setInvStatus(id,s){ const inv=S.invoices.find(i=>i.id===id); inv.status=s; save(); pushInvoice(inv); render(); toast('Invoice marked '+s); }
+async function deleteInvoice(id){
+  const inv=(S.invoices||[]).find(i=>i.id===id); if(!inv) return;
+  if(inv.status!=='draft'){ toast('Only drafts can be deleted — sent invoices are voided, not removed, to keep the record straight',1); return; }
+  if(!confirm('Delete draft '+inv.no+'? This cannot be undone.')) return;
+  S.invoices=S.invoices.filter(i=>i.id!==id);
+  if(LIVE) await sb.from('invoices').delete().eq('id',id);
+  save(); go('invoices'); toast('✓ Draft deleted');
+}
 function invoiceEmailHtml(inv,l,a,t,due){
   const rows=(inv.lines||[]).map(li=>`<tr><td style="padding:8px 0;border-bottom:1px solid #E3D9C8">${esc(li.desc)}</td><td style="padding:8px 0;border-bottom:1px solid #E3D9C8;text-align:right;white-space:nowrap">${money2(li.net)}</td></tr>`).join('');
   return `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#4A4038">
@@ -4869,6 +4877,7 @@ function vInvoiceDetail(){
     <div class="no-print" style="display:flex;gap:8px;margin-bottom:16px">
       ${inv.status!=='sent'?`<button class="btn navy" onclick="sendInvoiceToLandlord('${inv.id}')">✉ Email to landlord</button><button class="btn" onclick="setInvStatus('${inv.id}','sent')" title="Use only if you sent this outside NexLet">Mark sent manually</button>`:''}
       ${inv.status!=='paid'?`<button class="btn" onclick="setInvStatus('${inv.id}','paid')">Mark paid</button>`:''}
+      ${inv.status==='draft'?`<button class="btn" style="color:var(--red)" onclick="deleteInvoice('${inv.id}')">Delete draft</button>`:''}
       <button class="btn navy" onclick="window.print()">🖨 Print / PDF</button>
     </div>
     <div id="invoice-doc" class="panel" style="max-width:720px;margin:0 auto">
@@ -8641,7 +8650,7 @@ function esc(v){ return v==null?'':String(v).replace(/&/g,'&amp;').replace(/</g,
 function val(id){ const e=document.getElementById(id); return e?e.value.trim():''; }
 function modal(title,body,ft,lock){ document.getElementById('modal-root').innerHTML=`<div class="ov" onclick="${lock?'':'if(event.target===this)closeModal()'}"><div class="modal"><div class="modal-hd"><h3>${title}</h3><button class="x" onclick="closeModal()">×</button></div><div class="modal-bd">${body}</div><div class="modal-ft">${ft}</div></div></div>`; }
 function closeModal(){ document.getElementById('modal-root').innerHTML=''; OB=null; RF=null; }
-let _tt; function toast(m,bad){ const t=document.getElementById('toast'); t.textContent=m; t.style.background=bad?'var(--red)':'var(--navy)'; t.classList.add('show'); clearTimeout(_tt); _tt=setTimeout(()=>t.classList.remove('show'),2600); }
+let _tt; function toast(m,bad){ const t=document.getElementById('toast'); t.textContent=m; t.style.background=bad?'var(--red)':'var(--navy)'; t.classList.add('show'); clearTimeout(_tt); _tt=setTimeout(()=>t.classList.remove('show'),bad?7000:2600); }
 
 boot();
 </script>
