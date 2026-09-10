@@ -90,8 +90,8 @@
     // that was sent for tracked review and deemed accepted (opened, review
     // window passed, nothing flagged) — a completely separate system from this
     // signed shelf. Fall back to whichever of those is true.
-    if (k === 'inventory' && rec && rec.propertyId && window.S) {
-      const v = (window.S.inventories2 || []).find(x => x.propertyId === rec.propertyId);
+    if (k === 'inventory' && rec && rec.propertyId) {
+      const v = ((ST().inventories2) || []).find(x => x.propertyId === rec.propertyId);
       if (v) {
         const mr = (v.reports || []).find(r => r.type === 'movein' && r.tenantSign);
         if (mr) return { name: 'Move-in inventory report', url: null, signedAt: mr.tenantSign.ts || mr.tenantSign.date };
