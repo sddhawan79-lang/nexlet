@@ -7905,41 +7905,15 @@ function _resizeImg(file,maxW){ return new Promise((res)=>{
     }catch(e){ console.error('_resizeImg',e); finish(null); } }; img.src=fr.result; };
   fr.readAsDataURL(file); }); }
 // Fetches a photo (storage URL, or a legacy inline data: URL from before storage upload) as base64 for the AI proxy.
-/* Downscales to a long edge of 1600px before base64-encoding — full-res phone
-   photos (often 4-8MB) were pushing the ai-proxy edge function over its memory
-   limit (WORKER_RESOURCE_LIMIT) once several were fetched per room. 1600px is
-   still plenty for the AI to read condition/damage detail; same photos, same
-   coverage, just not the raw original bytes. Falls back to the untouched blob
-   if canvas decoding fails (e.g. HEIC the browser can't draw). */
-async function _downscaleBlob(blob,maxEdge){
-  try{
-    const img=await new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=URL.createObjectURL(blob); });
-    const scale=Math.min(1,maxEdge/Math.max(img.width,img.height));
-    if(scale>=1) return blob;
-    const cv=document.createElement('canvas'); cv.width=Math.round(img.width*scale); cv.height=Math.round(img.height*scale);
-    cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
-    const out=await new Promise(r=>cv.toBlob(r,'image/jpeg',0.85));
-    return out||blob;
-  }catch(e){ return blob; }
-}
-async function _urlToB64(url){
-  if(url.startsWith('data:')){ return {b64:url.split(',')[1], mime:url.split(';')[0].split(':')[1]}; }
-  const signed=await _signedUrlFor(url);
-  const res=await fetch(signed||url); let blob=await res.blob();
-  if((blob.type||'').startsWith('image/')) blob=await _downscaleBlob(blob,1600);
-  const b64=await new Promise(r=>{ const fr=new FileReader(); fr.onload=()=>r(String(fr.result).split(',')[1]); fr.readAsDataURL(blob); });
-  return {b64, mime:blob.type||'image/jpeg'};
-}
-async function _imgPart(u){ try{ const {b64,mime}=await _urlToB64(u); return {type:'image',source:{type:'base64',media_type:mime,data:b64}}; }catch(e){ console.warn('skipping unreadable photo',u,e); return null; } }
-/* Fetching every room photo at once (Promise.all across dozens of photos) opens
-   too many concurrent connections — the browser or Supabase drops some,
-   surfacing as a bare "Failed to fetch". Batching keeps a handful in flight
-   at a time so a room with 40+ photos still comes through reliably. */
-async function _mapBatched(arr,fn,batchSize){
-  const out=[];
-  for(let i=0;i<arr.length;i+=batchSize){ out.push(...await Promise.all(arr.slice(i,i+batchSize).map(fn))); }
-  return out.filter(x=>x!=null);
-}
+/* Both storage buckets are Public now, so Claude can fetch each photo directly
+   by URL — no client-side fetch, canvas downscale, or base64 encoding, and no
+   giant JSON body for the edge function to hold in memory. That base64 pipeline
+   was the actual cause of the WORKER_RESOURCE_LIMIT crashes: encoding N photos
+   client-side, then re-parsing that whole payload server-side, multiplies each
+   photo's memory footprint 4-5x before it ever reaches Claude. Passing a plain
+   URL removes every one of those copies. */
+function _imgPart(u){ return {type:'image',source:{type:'url',url:u}}; }
+function _mapBatched(arr,fn,batchSize){ return arr.map(fn); }
 function openInventory(){
   const ts=_activeTenants(); if(!ts.length){ toast('Set up a tenant first',1); return; }
   const opts=ts.map(t=>`<option value="${t.id}">${esc(t.name)} — ${esc((P(t.propertyId)||{}).address||'')}</option>`).join('');
@@ -8220,8 +8194,8 @@ async function aiCompareItem(vid,i){
   const months=t.start?Math.max(1,Math.round((new Date()-new Date(t.start))/(1000*60*60*24*30))):12;
   try{
     const prompt=`You are assessing a UK tenancy deposit item for a letting agent. Compare the CHECK-IN photos and the ${toLabel.toUpperCase()} photos of this item: "${r.room} — ${r.item}". Check-in note: "${r.checkin.note||'none'}". ${toLabel} note: "${toSet.note||'none'}".\nClassify as exactly one of: fair_wear (normal deterioration from use — never chargeable), damage (tenant-caused, beyond fair wear), cleaning (below check-in cleanliness standard). If damage or cleaning, estimate a like-for-like repair/replacement cost in GBP, and estimate how many years old the item looked AT CHECK-IN (0 = new). Do NOT calculate any final charge yourself — that is computed separately from your cost/age estimate. Return ONLY JSON: {"classification":"fair_wear|damage|cleaning","estimatedCost":number,"ageAtCheckinYears":number,"reasoning":"one or two sentences describing the specific change observed"}`;
-    const checkinParts=await _mapBatched(r.checkin.photos.slice(0,12),_imgPart,6);
-    const stageParts=await _mapBatched(toSet.photos.slice(0,12),_imgPart,6);
+    const checkinParts=await _mapBatched(r.checkin.photos,_imgPart,6);
+    const stageParts=await _mapBatched(toSet.photos,_imgPart,6);
     const content=[...checkinParts,{type:'text',text:'CHECK-IN photos above.'},...stageParts,{type:'text',text:toLabel.toUpperCase()+' photos above.\n\n'+prompt}];
     const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:300,messages:[{role:'user',content}]})});
     if(res.status===402){ toast(await aiFailMsg(res,'try again next month'),1); return; }
@@ -8265,12 +8239,12 @@ async function generateInvReport(vid,type){
       if(type==='movein'){
         promptTxt=(window.NexLetCapture?NexLetCapture.houseStyle():'')
           +`Write the entry for "${r.room} — ${r.item}" from these ${r.checkin.photos.length} check-in photograph(s). Clerk's note: "${r.checkin.note||'none'}". Return ONLY JSON: {"condition":"one of the terms","summary":"the entry, in house style"}`;
-        var _ciParts=await _mapBatched(r.checkin.photos.slice(0,12),_imgPart,6);
+        var _ciParts=await _mapBatched(r.checkin.photos,_imgPart,6);
         content=[..._ciParts,{type:'text',text:promptTxt}];
       } else {
         const costAsk=(type==='moveout'||type==='precheckout')?', "estimatedCost":number (like-for-like repair/replacement cost in GBP, only if damage/cleaning), "ageAtCheckinYears":number (how old the item looked AT CHECK-IN, 0=new)':'';
         promptTxt=`UK tenancy deposit adjudicator, writing evidence for a possible dispute. Compare CHECK-IN vs ${cmpLabel.toUpperCase()} photos for "${r.room} — ${r.item}". Notes: check-in "${r.checkin.note||'none'}", ${cmpLabel} "${toSet.note||'none'}". Classify as fair_wear|damage|cleaning. Name the SPECIFIC change observed (not "some wear" or "looks worse") — what changed, where, and how that goes beyond (or stays within) fair wear and tear for the tenancy length. ${(type==='moveout'||type==='precheckout')?'Do NOT calculate any final charge — that is computed separately, deterministically, from your cost/age estimate (apportioned by remaining useful life, never full replacement cost).':''} Return ONLY JSON: {"classification":"fair_wear|damage|cleaning","summary":"one to three specific, factual sentences an adjudicator could act on"${costAsk}}`;
-        var _ciParts2=await _mapBatched(r.checkin.photos.slice(0,12),_imgPart,6), _stParts2=await _mapBatched(toSet.photos.slice(0,12),_imgPart,6);
+        var _ciParts2=await _mapBatched(r.checkin.photos,_imgPart,6), _stParts2=await _mapBatched(toSet.photos,_imgPart,6);
         content=[..._ciParts2,{type:'text',text:'CHECK-IN above.'},..._stParts2,{type:'text',text:cmpLabel.toUpperCase()+' above.\n\n'+promptTxt}];
       }
       let res,data;
