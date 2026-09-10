@@ -682,7 +682,8 @@ function render(){
   const pinned=NAV.filter(n=>n.pin), grouped=NAV.filter(n=>!n.pin);
   let lastGrp=null;
   const inboxCount=(S.inboundEnquiries||[]).filter(e=>e.status==='needs_review').length;
-  const pinnedHtml=pinned.map(n=>`<div class="nav ${n.k===view?'on':''}" onclick="go('${n.k}')"><span class="ic">${n.ic}</span>${n.t}${n.k==='inbox'&&inboxCount?`<span class="pill" style="margin-left:auto;background:var(--amber-bg);color:var(--amber)">${inboxCount}</span>`:''}</div>`).join('');
+  const notifItems=_notifications(); const notifRed=notifItems.some(n=>n.sev==='red');
+  const pinnedHtml=pinned.map(n=>`<div class="nav ${n.k===view?'on':''}" onclick="go('${n.k}')"><span class="ic">${n.ic}</span>${n.t}${n.k==='inbox'&&inboxCount?`<span class="pill" style="margin-left:auto;background:var(--amber-bg);color:var(--amber)">${inboxCount}</span>`:''}${n.k==='calendar'&&notifItems.length?`<span class="pill" style="margin-left:auto;background:${notifRed?'var(--red-bg)':'var(--amber-bg)'};color:${notifRed?'var(--red)':'var(--amber)'}">${notifItems.length>9?'9+':notifItems.length}</span>`:''}</div>`).join('');
   const groupedHtml=grouped.map(n=>{
     let hdr='';
     if(n.grp!==lastGrp){ const open=!!window._navOpen[n.grp]; hdr=`<div class="nav-grp" onclick="_toggleNavGrp('${n.grp}')">${n.grp}<span style="float:right">${open?'▾':'▸'}</span></div>`; lastGrp=n.grp; }
@@ -1632,25 +1633,25 @@ function vDashboard(){
   return `
     <h1 class="pg">Good evening, Saurabh</h1>
     <div class="sub">Your managed portfolio at a glance</div>
-    <div class="grid4">
-      <div class="kpi"><div class="l">Landlords</div><div class="v">${S.landlords.length}</div><div class="s">${mgmt} full mgmt · ${lo} let-only</div></div>
-      <div class="kpi"><div class="l">Properties</div><div class="v">${S.properties.length}</div><div class="s">across your landlords</div></div>
-      <div class="kpi"><div class="l">Managed rent</div><div class="v">${gbp(managedRent)}<small>/mo</small></div><div class="s">tenant → landlord direct</div></div>
-      <div class="kpi"><div class="l">Your fees /mo</div><div class="v" style="color:var(--green)">${gbp(fees)}</div><div class="s">from management %</div></div>
-    </div>
     ${newLeads?`<div class="note warn" style="margin-bottom:10px">📥 <b>${newLeads} new landlord enquir${newLeads>1?'ies':'y'}</b> came in — <a href="#" onclick="go('landlords');return false" style="color:inherit;text-decoration:underline">review &amp; onboard</a>.</div>`:''}
     ${pending?`<div class="note warn" style="margin-bottom:18px">⏳ <b>${pending} landlord${pending>1?'s':''}</b> awaiting a signed management agreement — you can market once it's signed, not before.</div>`:''}
     ${(()=>{ const items=_notifications(); if(!items.length) return '';
       const {groups,other}=_groupNotifications(items);
       const itemRow=n=>`<div class="doc" style="padding:9px 0;cursor:pointer" onclick="${n.go}"><div class="di" style="background:${n.sev==='red'?'var(--red-bg)':'var(--amber-bg)'};color:${n.sev==='red'?'var(--red)':'var(--amber)'}">!</div><div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${esc(n.taskLabel||n.label)}</div><div class="faint" style="font-size:11.5px">${esc(n.detail)}</div></div><span style="font-size:11px;color:var(--blue);font-weight:600">Action →</span></div>`;
-      const groupHtml=groups.map(g=>`<details ${g.hasRed?'open':''} class="tree-node" style="border-bottom:1px solid var(--border)"><summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;padding:10px 2px;font-size:13.5px;font-weight:600;color:var(--navy)"><span class="tree-caret">▸</span>${esc(g.address)}<span class="pill" style="background:${g.hasRed?'var(--red-bg)':'var(--amber-bg)'};color:${g.hasRed?'var(--red)':'var(--amber)'};margin-left:auto">${g.items.length}</span></summary>
+      const groupHtml=groups.map(g=>`<details open class="tree-node" style="border-bottom:1px solid var(--border)"><summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;padding:10px 2px;font-size:13.5px;font-weight:600;color:var(--navy)"><span class="tree-caret">▸</span>${esc(g.address)}<span class="pill" style="background:${g.hasRed?'var(--red-bg)':'var(--amber-bg)'};color:${g.hasRed?'var(--red)':'var(--amber)'};margin-left:auto">${g.items.length}</span></summary>
         <div style="padding-left:20px">${g.items.map(itemRow).join('')}</div></details>`).join('');
       const otherHtml=other.length?`<details open class="tree-node" style="border-bottom:1px solid var(--border)"><summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;padding:10px 2px;font-size:13.5px;font-weight:600;color:var(--navy)"><span class="tree-caret">▸</span>Other tasks<span class="pill" style="background:${other.some(n=>n.sev==='red')?'var(--red-bg)':'var(--amber-bg)'};color:${other.some(n=>n.sev==='red')?'var(--red)':'var(--amber)'};margin-left:auto">${other.length}</span></summary>
         <div style="padding-left:20px">${other.map(itemRow).join('')}</div></details>`:'';
       return `<div class="panel" style="margin-bottom:18px"><div class="panel-hd"><h2>Needs attention</h2><span class="pill" style="background:${items.some(n=>n.sev==='red')?'var(--red-bg)':'var(--amber-bg)'};color:${items.some(n=>n.sev==='red')?'var(--red)':'var(--amber)'}">${items.length}</span></div>
         <div class="panel-bd" style="padding:4px 20px 8px">${groupHtml}${otherHtml}</div>
       </div>`; })()}
-    <div class="panel">
+    <div class="grid4">
+      <div class="kpi"><div class="l">Landlords</div><div class="v">${S.landlords.length}</div><div class="s">${mgmt} full mgmt · ${lo} let-only</div></div>
+      <div class="kpi"><div class="l">Properties</div><div class="v">${S.properties.length}</div><div class="s">across your landlords</div></div>
+      <div class="kpi"><div class="l">Managed rent</div><div class="v">${gbp(managedRent)}<small>/mo</small></div><div class="s">tenant → landlord direct</div></div>
+      <div class="kpi"><div class="l">Your fees /mo</div><div class="v" style="color:var(--green)">${gbp(fees)}</div><div class="s">from management %</div></div>
+    </div>
+    <div class="panel" style="margin-top:18px">
       <div class="panel-hd"><h2>Your landlords</h2><span class="faint" style="font-size:12px">Click a landlord to open their record</span></div>
       ${S.landlords.map(landlordRow).join('')}
     </div>`;

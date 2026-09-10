@@ -119,6 +119,25 @@
       });
     });
 
+    // Rent review eligibility and mid-tenancy inventory checks were already
+    // computed for the dashboard's "Needs attention" list — surfaced there but
+    // silently absent here, so the calendar disagreed with the one page meant
+    // to be the single view of every deadline. Same source functions, so the
+    // two can never drift apart again.
+    (S.properties || []).forEach(p => {
+      if (!p.tenant) return;
+      try {
+        const rd = window._rentIncreaseDue && window._rentIncreaseDue(p);
+        if (rd) push(rd.nextEligible, 'tenancy', 'Rent review eligible', p.address);
+      } catch (e) { }
+    });
+    (S.inventories2 || []).forEach(v => {
+      try {
+        const due = window._nextMidCheckDue && window._nextMidCheckDue(v);
+        if (due) push(due.next, 'tenancy', 'Mid-tenancy check due', addr(v.propertyId));
+      } catch (e) { }
+    });
+
     (S.jobs || []).forEach(j => {
       if (!j || j.status === 'completed') return;
       try {
