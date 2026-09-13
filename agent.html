@@ -10,7 +10,7 @@
 <style>
 :root{
   /* Beacon Residentials brand kit — agent side only */
-  --navy:#1B2F4A; --navy2:#0F1F32; --orange:#C8892A; --orange-hover:#DFA24C; --green:#1B7A4B; --green-bg:#EAF6EF;
+  --navy:#2A3F5F; --navy2:#1C2B44; --orange:#C8892A; --orange-hover:#DFA24C; --green:#1B7A4B; --green-bg:#EAF6EF;
   --amber:#B86E20; --amber-bg:#FEF2E7; --red:#C0392B; --red-bg:#FBEAE8; --blue:#2A6FDB; --blue-bg:#E9F2FF;
   --purple:#7C3AED; --purple-bg:#F3EAFB; --txt:#6B5F52; --muted:#8A7D6E; --faint:#A89C8C;
   --border:#E3D9C8; --off:#FDFAF6; --bg:#F5EDE0;
@@ -214,8 +214,8 @@ const landlordToRow=l=>({id:l.id,agency_id:window._agencyId,name:l.name,joint:l.
 // show "A & B". `joint` holds the second owner (or is blank). `entity` = individual|joint|company.
 function landlordName(l){ if(!l) return ''; if(l.entity==='company') return l.name; return (l.joint&&l.joint.trim())?(l.name+' & '+l.joint):l.name; }
 function landlordLegalLine(l){ if(!l) return ''; if(l.entity==='company') return esc(l.name)+' <span style="font-weight:400">(company landlord)</span>'; return esc(landlordName(l)); }
-const rowToProp=r=>({id:String(r.id),landlordId:r.landlord_id,address:r.address||'',city:r.city||'',postcode:r.postcode||'',ptype:r.ptype||'',rent:r.rent||0,beds:r.beds||1,baths:r.baths||1,furnished:r.furnished||'',epc:r.epc||'',councilTaxBand:r.council_tax_band||'',rentDueDay:r.rent_due_day||'1st',available:r.available||null,description:r.description||'',features:r.features||[],feePct:r.fee_pct,certs:r.certs||{},leasehold:(r.certs&&r.certs._leasehold)||null,info:(r.certs&&r.certs._info)||{},tenant:r.tenant||undefined});
-const propToRow=p=>({id:p.id,agency_id:window._agencyId,landlord_id:p.landlordId,address:p.address,city:p.city,postcode:p.postcode||null,ptype:p.ptype||null,rent:p.rent||0,beds:p.beds||1,baths:p.baths||1,furnished:p.furnished||null,epc:p.epc||null,council_tax_band:p.councilTaxBand||null,rent_due_day:p.rentDueDay||'1st',available:p.available||null,description:p.description||null,features:p.features||[],fee_pct:p.feePct,certs:Object.assign({},p.certs||{},{_leasehold:p.leasehold||null,_info:p.info||{}}),tenant:p.tenant||null});
+const rowToProp=r=>({id:String(r.id),landlordId:r.landlord_id,address:r.address||'',city:r.city||'',postcode:r.postcode||'',ptype:r.ptype||'',rent:r.rent||0,beds:r.beds||1,baths:r.baths||1,furnished:r.furnished||'',epc:r.epc||'',councilTaxBand:r.council_tax_band||'',rentDueDay:r.rent_due_day||'1st',available:r.available||null,description:r.description||'',features:r.features||[],feePct:r.fee_pct,certs:r.certs||{},leasehold:(r.certs&&r.certs._leasehold)||null,info:(r.certs&&r.certs._info)||{},notes:(r.certs&&r.certs._notes)||[],tenant:r.tenant||undefined});
+const propToRow=p=>({id:p.id,agency_id:window._agencyId,landlord_id:p.landlordId,address:p.address,city:p.city,postcode:p.postcode||null,ptype:p.ptype||null,rent:p.rent||0,beds:p.beds||1,baths:p.baths||1,furnished:p.furnished||null,epc:p.epc||null,council_tax_band:p.councilTaxBand||null,rent_due_day:p.rentDueDay||'1st',available:p.available||null,description:p.description||null,features:p.features||[],fee_pct:p.feePct,certs:Object.assign({},p.certs||{},{_leasehold:p.leasehold||null,_info:p.info||{},_notes:p.notes||[]}),tenant:p.tenant||null});
 // properties.id is a DB-assigned bigint (NOT a client-generated text id like our other
 // tables) — a new property must be INSERTed without an id and get the real id back,
 // or the save fails outright (non-numeric text can't go into a bigint column).
@@ -2402,6 +2402,23 @@ function lifecycleStepper(p){
     </div>`; }).join('');
   return `<div class="panel" style="margin-bottom:14px"><div class="panel-bd" style="display:flex;padding:16px 20px 10px">${steps}</div></div>`;
 }
+// A scannable summary strip — rent, dates, landlord, tenant(s), deposit — so the
+// hub's headline facts don't require reading through prose kv rows to find.
+function _pKeyFacts(p,l){
+  const rec=tenantRecFor(p.id);
+  const facts=[['Rent',gbp(p.rent)+'/mo',p.tenant?'Achieved':'Expected']];
+  if(p.tenant) facts.push(['Tenancy dates',fmtDate(p.tenant.start),'Started']);
+  facts.push(['Landlord',esc(landlordName(l)||'—'),l.service==='full'?'Full management':'Let only']);
+  if(p.tenant){ const names=[p.tenant.name].concat((p.tenant.occupants||[]).map(o=>o.name)).filter(Boolean);
+    facts.push(['Tenant'+(names.length>1?'s':''),names.length,names.slice(0,2).join(', ')+(names.length>2?' +'+(names.length-2):'')]); }
+  if(rec&&rec.deposit) facts.push(['Deposit',gbp(rec.deposit),rec.depositCertName?'Protected · '+esc(rec.depositCertName):'Not protected yet']);
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px">
+    ${facts.map(([lab,v,s])=>`<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px">
+      <div style="font-size:10.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">${esc(lab)}</div>
+      <div style="font-size:15px;font-weight:700;color:var(--navy)">${v}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:1px">${esc(s)}</div></div>`).join('')}
+  </div>`;
+}
 // Shown only in the window between "everyone has signed" and "first day done".
 // The pre-signing counterpart to postSigningPanel: tenancy set up, agreement not
 // yet out. Shown only in that window, so it disappears once sent.
@@ -2914,7 +2931,7 @@ function setPTab(k){ window._pTabK=k; render(); }
 function _pTabBar(p){
   const rec=tenantRecFor(p.id);
   const srvLeft=(window.NexLetHistory&&NexLetHistory.dueBeforeStart)?(NexLetHistory.dueBeforeStart(p.id)||{items:[]}).items.length:0;
-  const tabs=[['docs','Documents & service',srvLeft||''],['detail','Tenancy & compliance',''],['records','Messages & records','']];
+  const tabs=[['docs','Documents & service',srvLeft||''],['detail','Tenancy & compliance',''],['invoicing','Invoicing',''],['records','Messages & records','']];
   const cur=_pTab();
   return '<div style="display:flex;gap:2px;margin-bottom:14px;border-bottom:1px solid var(--border)">'+
     tabs.map(([k,label,badge])=>{
@@ -2959,6 +2976,7 @@ function vPropertyDetail(){
       <div style="display:flex;gap:8px">${(()=>{ const a=agreementFor(l.id); return a&&a.status==='sent'?`<button class="btn sm" style="border-color:var(--amber);color:var(--amber)" onclick="sendAgreementReminder('${a.id}')">Send reminder</button><button class="btn sm" onclick="openAgreement('${l.id}')" title="Start over with a new agreement">Re-send agreement</button>`:`<button class="btn navy sm" onclick="openAgreement('${l.id}')">Send agreement to sign</button>`; })()}</div>
     </div>`:''}
     ${lifecycleStepper(p)}
+    ${_pKeyFacts(p,l)}
     ${tenancyProgressBar(p)}
     ${window.NexLetHistory?NexLetHistory.dueBanner(p.id):''}
     ${depositMismatchBanner(p)}
@@ -3076,13 +3094,43 @@ function vPropertyDetail(){
             </div>`}
       </div></div>
     </div></div>
+    <div style="display:${_pTab()==='invoicing'?'block':'none'}">
+    ${(()=>{ const rows=(S.invoices||[]).filter(i=>i.propertyId===p.id).sort((a,b)=>new Date(b.issued)-new Date(a.issued));
+      return `<div class="panel"><div class="panel-hd"><h2>Invoices for this property</h2><button class="btn sm navy" onclick="openInvoiceFor('${l.id}','${p.id}')">＋ Raise invoice</button></div>
+      ${rows.length?rows.map(invRow).join(''):'<div class="faint" style="padding:16px 20px;font-size:13px">No invoices yet for this property.</div>'}</div>`; })()}
+    </div>
     <div style="display:${_pTab()==='records'?'block':'none'}">
     <div class="grid2">
       ${(()=>{ const rec=tenantRecFor(p.id); return rec?msgPanel('tenant',rec.id):''; })()}
       ${insurancePanel(p)}
       ${propDocTrailPanel(p)}
       ${pastTenanciesPanel(p)}
-    </div></div>`;
+      ${propNotesPanel(p)}
+    </div></div>
+    <div style="position:sticky;bottom:0;background:var(--off);border-top:1px solid var(--border);margin:20px -24px -24px;padding:12px 24px;display:flex;gap:8px;flex-wrap:wrap;z-index:3">
+      <button class="btn sm navy" onclick="openPropNote('${p.id}')">📝 Log a note</button>
+      <button class="btn sm" onclick="NexLetServe.open('${p.id}','tenant')">📤 Send documents</button>
+      <button class="btn sm" onclick="openInvoiceFor('${l.id}','${p.id}')">£ Raise invoice</button>
+      <button class="btn sm" onclick="setPTab('records')">✉ Message tenant</button>
+    </div>`;
+}
+// Internal, agent-only log — separate from msgPanel (which is tenant-facing
+// correspondence). Never sent anywhere; just a running record on the property.
+function propNotesPanel(p){
+  const notes=(p.notes||[]).slice().sort((a,b)=>new Date(b.at)-new Date(a.at));
+  return `<div class="panel"><div class="panel-hd"><h2>Notes</h2><button class="btn sm" onclick="openPropNote('${p.id}')">＋ Add</button></div>
+    ${notes.length?notes.map(n=>`<div class="row"><div style="flex:1"><div style="font-size:13px;color:var(--navy)">${esc(n.text)}</div><div class="faint" style="font-size:11px;margin-top:3px">${fmtDate(n.at)}</div></div></div>`).join('')
+      :'<div class="faint" style="padding:16px 20px;font-size:13px">No notes logged yet for this property.</div>'}
+  </div>`;
+}
+function openPropNote(pid){
+  modal('Log a note', '<div class="fg"><textarea id="pn-text" rows="4" placeholder="e.g. Tenant called about a leaking tap, booked plumber for Friday…" style="width:100%;font-family:inherit;font-size:13.5px;padding:10px;border:1px solid var(--border);border-radius:8px"></textarea></div>',
+    `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="savePropNote('${pid}')">Save</button>`, true);
+}
+async function savePropNote(pid){
+  const text=val('pn-text'); if(!text||!text.trim()){ toast('Write something first',1); return; }
+  const p=P(pid); p.notes=p.notes||[]; p.notes.push({text:text.trim(),at:new Date().toISOString()});
+  save(); await pushProperty(p); closeModal(); render(); toast('✓ Note logged');
 }
 // Tenant-facing document trail for one property — notices served, all archived (never deleted).
 function propDocTrailPanel(p){
@@ -4655,11 +4703,11 @@ function openInvoice(){
   const first=mgmt[0]||S.landlords[0]||{};
   openInvoiceFor(first.id||'');
 }
-function openInvoiceFor(id){
+function openInvoiceFor(id,propId){
   const l=L(id)||{};
   const docType = l.service==='letonly' ? 'tenantfind' : 'management';
   const anc=_landlordAnchor(id);
-  IV={landlordId:id,docType,freq:'quarterly',y:new Date().getFullYear(),anchorMonth:anc.month,anchorDay:anc.day,idx:_defaultIdx('quarterly',anc.month),items:[{desc:'',amount:''}],otherDeduct:'',otherDesc:'',ancFee:'noticeFee',ancQty:1,ancPropertyId:'',discAmt:'',discReason:'',extra:[],status:'draft'};
+  IV={landlordId:id,docType,freq:'quarterly',y:new Date().getFullYear(),anchorMonth:anc.month,anchorDay:anc.day,idx:_defaultIdx('quarterly',anc.month),items:[{desc:'',amount:''}],otherDeduct:'',otherDesc:'',ancFee:'noticeFee',ancQty:1,ancPropertyId:'',discAmt:'',discReason:'',extra:[],status:'draft',forcedPropertyId:propId||''};
   renderInvoice();
 }
 // Next-invoice reminders — flags full-management landlords whose last management
@@ -4819,7 +4867,8 @@ function renderInvoice(){
 }
 function createInvoice(){
   const b=_invBuild(); const props=S.properties.filter(p=>p.landlordId===IV.landlordId);
-  const inv={id:uid('inv'),no:nextInvoiceNo(),landlordId:IV.landlordId,propertyId:(props[0]||{}).id||'',type:IV.docType,
+  const propId=(IV.forcedPropertyId&&props.some(p=>p.id===IV.forcedPropertyId))?IV.forcedPropertyId:(props[0]||{}).id||'';
+  const inv={id:uid('inv'),no:nextInvoiceNo(),landlordId:IV.landlordId,propertyId:propId,type:IV.docType,
     periodLabel:b.period.label,issued:today(),supplyFrom:b.period.from,supplyTo:b.period.to,
     lines:b.lines.map(x=>({desc:x.desc,net:x.net})),vat:!!b.vat,status:'draft'};
   S.invoices=S.invoices||[]; S.invoices.push(inv); save(); pushInvoice(inv); pushAgency(); closeModal(); go('invoice',inv.id); toast('✓ '+inv.no+' created');
