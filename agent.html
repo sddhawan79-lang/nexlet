@@ -191,7 +191,7 @@ const DEF_FEE=7.5;        // sole-agency full-management % default (editable per
 const DEF_WEEKS=3;        // sole-agency let-only default = weeks of rent (editable per landlord)
 const MULTI_FEE=12;       // multiple-agency full-management % default — higher: agent competes, isn't guaranteed the instruction
 const MULTI_WEEKS=4.345;  // multiple-agency let-only default ≈ 1 month's rent
-const REF_PARTNERS=['Vouch','FCC Paragon','HomeLet','Van Mildert','Goodlord (Acquire)'];
+const REF_PARTNERS=['Let Alliance','Vouch','FCC Paragon','HomeLet','Van Mildert','Goodlord (Acquire)'];
 
 // ─────────────────────────────────────────────────────────────
 // SUPABASE DATA LAYER  (Session 36 — wires this portal to the shared backend)
@@ -206,8 +206,8 @@ let LIVE=false;                 // set true only after the auth gateway passes
 window._agencyId=null;          // every LIVE query is scoped to this agency
 
 // ── row ⇄ in-memory-object mappers (snake_case DB ⇄ camelCase S) ──
-const rowToAgency=r=>({name:r.name||'',address:r.address||'',phone:r.phone||'020 3627 0295',companyNo:r.company_no||'',tagline:r.tagline||'Your neighbourhood property people.',replyTo:r.reply_to||'',archiveEmail:r.archive_email||'',depScheme:r.dep_scheme||'',depMembership:r.dep_membership||'',depProduct:r.dep_product||'custodial',depHolderDefault:r.dep_holder_default||'landlord',schemeAdminAddress:r.scheme_admin_address||'',schemeAdminPhone:r.scheme_admin_phone||'',schemeAdminEmail:r.scheme_admin_email||'',bankName:r.bank_name||'',bankAccName:r.bank_acc_name||'',bankSortCode:r.bank_sort_code||'',bankAccNo:r.bank_acc_no||'',rentGuide:r.rent_guide||[],marketComps:r.market_comps||[],standardClauses:r.standard_clauses||[],bizDocs:r.biz_docs||[],bizExpenses:r.biz_expenses||[],redress:r.redress_scheme||'',redressNo:r.redress_no||'',cmp:r.cmp_scheme||'Not holding client money',cmpNo:r.cmp_no||'',refPartner:r.ref_partner||'',icoNo:r.ico_no||'',vatRegistered:!!r.vat_registered,vatNumber:r.vat_number||'',invoiceSeq:r.invoice_seq||0,paymentTerms:r.payment_terms||14,abortiveFee:r.abortive_fee??250,noticeFee:r.notice_fee??75,renewalFee:r.renewal_fee??60,arrearsFee:r.arrears_fee??30,keyFee:r.key_fee??60,insuranceFee:r.insurance_fee??50,disputeFee:r.dispute_fee??75,invMoveinFee:r.inv_movein_fee??75,invMoveoutFee:r.inv_moveout_fee??65,invStyle:r.inv_style||[],complaints:r.complaints||[],complaintsPublishedAt:r.complaints_published_at||''});
-const agencyToRow=a=>({name:a.name,address:a.address,phone:a.phone||null,company_no:a.companyNo||null,tagline:a.tagline||null,reply_to:a.replyTo||null,archive_email:a.archiveEmail||null,dep_scheme:a.depScheme||null,dep_membership:a.depMembership||null,dep_product:a.depProduct||'custodial',dep_holder_default:a.depHolderDefault||'landlord',scheme_admin_address:a.schemeAdminAddress||null,scheme_admin_phone:a.schemeAdminPhone||null,scheme_admin_email:a.schemeAdminEmail||null,bank_name:a.bankName||null,bank_acc_name:a.bankAccName||null,bank_sort_code:a.bankSortCode||null,bank_acc_no:a.bankAccNo||null,rent_guide:a.rentGuide||[],market_comps:a.marketComps||[],standard_clauses:a.standardClauses||[],biz_docs:a.bizDocs||[],biz_expenses:a.bizExpenses||[],redress_scheme:a.redress,redress_no:a.redressNo,cmp_scheme:a.cmp,cmp_no:a.cmpNo,ref_partner:a.refPartner,ico_no:a.icoNo,vat_registered:!!a.vatRegistered,vat_number:a.vatNumber,invoice_seq:a.invoiceSeq||0,payment_terms:a.paymentTerms||14,abortive_fee:a.abortiveFee||0,notice_fee:a.noticeFee||0,renewal_fee:a.renewalFee||0,arrears_fee:a.arrearsFee||0,key_fee:a.keyFee||0,insurance_fee:a.insuranceFee||0,dispute_fee:a.disputeFee||0,inv_movein_fee:a.invMoveinFee||0,inv_moveout_fee:a.invMoveoutFee||0,inv_style:a.invStyle||[],complaints:a.complaints||[],complaints_published_at:a.complaintsPublishedAt||null,updated_at:new Date().toISOString()});
+const rowToAgency=r=>({name:r.name||'',address:r.address||'',phone:r.phone||'020 3627 0295',companyNo:r.company_no||'',tagline:r.tagline||'Your neighbourhood property people.',replyTo:r.reply_to||'',archiveEmail:r.archive_email||'',depScheme:r.dep_scheme||'',depMembership:r.dep_membership||'',depProduct:r.dep_product||'custodial',depHolderDefault:r.dep_holder_default||'landlord',schemeAdminAddress:r.scheme_admin_address||'',schemeAdminPhone:r.scheme_admin_phone||'',schemeAdminEmail:r.scheme_admin_email||'',bankName:r.bank_name||'',bankAccName:r.bank_acc_name||'',bankSortCode:r.bank_sort_code||'',bankAccNo:r.bank_acc_no||'',rentGuide:r.rent_guide||[],marketComps:r.market_comps||[],standardClauses:r.standard_clauses||[],bizDocs:r.biz_docs||[],bizExpenses:r.biz_expenses||[],commissions:r.commissions||[],redress:r.redress_scheme||'',redressNo:r.redress_no||'',cmp:r.cmp_scheme||'Not holding client money',cmpNo:r.cmp_no||'',refPartner:r.ref_partner||'',refPartnerSchemeNo:r.ref_partner_scheme_no||'',icoNo:r.ico_no||'',vatRegistered:!!r.vat_registered,vatNumber:r.vat_number||'',invoiceSeq:r.invoice_seq||0,paymentTerms:r.payment_terms||14,abortiveFee:r.abortive_fee??250,noticeFee:r.notice_fee??75,renewalFee:r.renewal_fee??60,arrearsFee:r.arrears_fee??30,keyFee:r.key_fee??60,insuranceFee:r.insurance_fee??50,disputeFee:r.dispute_fee??75,invMoveinFee:r.inv_movein_fee??75,invMoveoutFee:r.inv_moveout_fee??65,invStyle:r.inv_style||[],complaints:r.complaints||[],complaintsPublishedAt:r.complaints_published_at||''});
+const agencyToRow=a=>({name:a.name,address:a.address,phone:a.phone||null,company_no:a.companyNo||null,tagline:a.tagline||null,reply_to:a.replyTo||null,archive_email:a.archiveEmail||null,dep_scheme:a.depScheme||null,dep_membership:a.depMembership||null,dep_product:a.depProduct||'custodial',dep_holder_default:a.depHolderDefault||'landlord',scheme_admin_address:a.schemeAdminAddress||null,scheme_admin_phone:a.schemeAdminPhone||null,scheme_admin_email:a.schemeAdminEmail||null,bank_name:a.bankName||null,bank_acc_name:a.bankAccName||null,bank_sort_code:a.bankSortCode||null,bank_acc_no:a.bankAccNo||null,rent_guide:a.rentGuide||[],market_comps:a.marketComps||[],standard_clauses:a.standardClauses||[],biz_docs:a.bizDocs||[],biz_expenses:a.bizExpenses||[],commissions:a.commissions||[],redress_scheme:a.redress,redress_no:a.redressNo,cmp_scheme:a.cmp,cmp_no:a.cmpNo,ref_partner:a.refPartner,ref_partner_scheme_no:a.refPartnerSchemeNo||null,ico_no:a.icoNo,vat_registered:!!a.vatRegistered,vat_number:a.vatNumber,invoice_seq:a.invoiceSeq||0,payment_terms:a.paymentTerms||14,abortive_fee:a.abortiveFee||0,notice_fee:a.noticeFee||0,renewal_fee:a.renewalFee||0,arrears_fee:a.arrearsFee||0,key_fee:a.keyFee||0,insurance_fee:a.insuranceFee||0,dispute_fee:a.disputeFee||0,inv_movein_fee:a.invMoveinFee||0,inv_moveout_fee:a.invMoveoutFee||0,inv_style:a.invStyle||[],complaints:a.complaints||[],complaints_published_at:a.complaintsPublishedAt||null,updated_at:new Date().toISOString()});
 const rowToLandlord=r=>({id:r.id,name:r.name||'',joint:r.joint||'',jointEmail:r.joint_email||'',entity:r.entity||'individual',agencyType:(r.docs&&r.docs.agencyType)||'sole',boardOptOut:!!(r.docs&&r.docs.boardOptOut),email:r.email||'',phone:r.phone||'',address:r.address||'',nrl:!!r.nrl,prsReg:r.prs_reg||'',payout:r.payout||'',contactPref:r.contact_pref||'Email',aml:!!r.aml_verified,ownership:!!r.ownership_verified,service:r.service||'full',feePct:r.fee_pct,letWeeks:r.let_weeks,agreement:!!r.agreement_signed,status:r.status||'pending',docs:r.docs||{},comms:r.comms||[],inviteToken:r.invite_token||'',invitedAt:r.invited_at||''});
 const landlordToRow=l=>({id:l.id,agency_id:window._agencyId,name:l.name,joint:l.joint||null,joint_email:l.jointEmail||null,entity:l.entity||'individual',email:l.email,phone:l.phone,address:l.address,nrl:!!l.nrl,prs_reg:l.prsReg,payout:l.payout,contact_pref:l.contactPref,aml_verified:!!l.aml,ownership_verified:!!l.ownership,service:l.service,fee_pct:l.feePct,let_weeks:l.letWeeks,agreement_signed:!!l.agreement,status:l.status,docs:Object.assign({},l.docs||{},{agencyType:l.agencyType||'sole',boardOptOut:!!l.boardOptOut}),comms:l.comms||[],invite_token:l.inviteToken||null,invited_at:l.invitedAt||null,updated_at:new Date().toISOString()});
 // Bill-to / statement name — a company landlord shows the company name; joint owners
@@ -483,7 +483,7 @@ async function boot(){
 
 
 const SEED={
-  agency:{ name:'', address:'', redress:'', redressNo:'', cmp:'Not holding client money', cmpNo:'', refPartner:'', icoNo:'', vatRegistered:false, vatNumber:'', invoiceSeq:0, paymentTerms:14, abortiveFee:250 },
+  agency:{ name:'', address:'', redress:'', redressNo:'', cmp:'Not holding client money', cmpNo:'', refPartner:'', refPartnerSchemeNo:'', commissions:[], icoNo:'', vatRegistered:false, vatNumber:'', invoiceSeq:0, paymentTerms:14, abortiveFee:250 },
   landlords:[],
   properties:[],
   references:[],
@@ -2104,6 +2104,7 @@ function vLandlordDetail(){
       <div style="flex:1"><h1 class="pg" style="margin:0">${esc(landlordName(l))}</h1>
         <div class="faint" style="font-size:13px">${esc(l.email)} · ${esc(l.phone)} · prefers ${esc(l.contactPref||'Email')}</div></div>
       <span class="pill" style="background:${sv.bg};color:${sv.color}">${sv.label}</span>
+      ${S.agency.refPartner?`<button class="btn sm" onclick="openCommissionFor('${l.id}')" title="Log a referral if you recommended ${esc(S.agency.refPartner)}'s rent guarantee or insurance to this landlord">💬 Recommend ${esc(S.agency.refPartner)}</button>`:''}
       <span class="pill" style="background:${st.bg};color:${st.color}">${st.label}</span>
     </div>
     <div style="display:flex;gap:8px;margin:14px 0 18px;flex-wrap:wrap">
@@ -5013,7 +5014,7 @@ function vBusiness(){
           <button class="btn sm" style="color:var(--red)" onclick="bizExpenseRemove('${e.id}')">Remove</button></div>`).join(''):'<div class="empty" style="padding:16px;text-align:center"><span class="faint" style="font-size:12.5px">No bills logged yet.</span></div>'}
         <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px">
           <div class="grid2" style="gap:10px"><div class="fg"><label>What for</label><input id="biz-exp-what" placeholder="e.g. Domain renewal, PII premium, CMP fee"></div>
-          <div class="fg"><label>Category</label><select id="biz-exp-cat"><option>Insurance</option><option>Licensing / redress / CMP</option><option>Domain / hosting / software</option><option>Marketing</option><option>Other</option></select></div></div>
+          <div class="fg"><label>Category</label><select id="biz-exp-cat"><option>Insurance</option><option>Licensing / redress / CMP</option><option>Referencing partner invoice</option><option>Domain / hosting / software</option><option>Marketing</option><option>Other</option></select></div></div>
           <div class="grid2" style="gap:10px"><div class="fg"><label>Amount (£)</label><input id="biz-exp-amount" type="number" step="0.01"></div>
           <div class="fg"><label>Date</label><input id="biz-exp-date" type="date" value="${today()}"></div></div>
           <label style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border:1.5px dashed var(--border);border-radius:7px;cursor:pointer;font-size:12.5px;font-weight:600">📄 Attach receipt/invoice (optional)<input type="file" accept="application/pdf,image/*" style="display:none" onchange="bizExpFile(this)"></label>
@@ -5021,8 +5022,45 @@ function vBusiness(){
           <button class="btn navy sm" style="margin-top:10px" onclick="bizExpenseAdd()">＋ Add bill</button>
         </div>
       </div>
-    </div>`;
+    </div>
+    ${a.refPartner?commissionsPanel():''}`;
 }
+// Commission earned from recommending the referencing partner's own products (rent
+// guarantee, landlord insurance) to landlords — separate from the referencing fee
+// itself, which is a cost to the agency (logged above as a business bill), not income.
+function commissionsPanel(){
+  const a=S.agency; const rows=(a.commissions||[]).slice().sort((x,y)=>(y.date||'').localeCompare(x.date||''));
+  const paid=rows.filter(c=>c.paid).reduce((s,c)=>s+(parseFloat(c.amount)||0),0);
+  const pending=rows.filter(c=>!c.paid&&c.status==='purchased').reduce((s,c)=>s+(parseFloat(c.amount)||0),0);
+  const stColor={recommended:['var(--off)','#8A7D6E'],purchased:['var(--amber-bg)','var(--amber)'],declined:['var(--red-bg)','var(--red)']};
+  return `<div class="panel" style="max-width:700px;margin-top:16px"><div class="panel-hd"><h2>${esc(a.refPartner)} referral commissions</h2><span class="faint" style="font-size:12px">${gbp(paid)} paid · ${gbp(pending)} pending</span></div>
+    <div class="panel-bd">
+      ${rows.length?rows.map(c=>{ const sc=stColor[c.status]||stColor.recommended; const l=L(c.landlordId);
+        return `<div class="row" style="padding:8px 0;border-top:1px solid var(--border)"><div style="flex:1"><b style="font-size:13px">${esc(landlordName(l)||'—')}</b><div class="faint" style="font-size:11.5px">${esc(c.product||'')}${c.date?' · '+fmtDate(c.date):''}</div></div>
+          <span class="pill" style="background:${sc[0]};color:${sc[1]}">${c.status==='purchased'?(c.paid?'Paid':'Purchased'):c.status==='declined'?'Declined':'Recommended'}</span>
+          ${c.amount?`<span style="font-size:13px;font-weight:700;color:var(--navy)">${gbp(c.amount)}</span>`:''}
+          ${c.status==='purchased'&&!c.paid?`<button class="btn sm" onclick="commissionMarkPaid('${c.id}')">Mark paid</button>`:''}
+          <button class="btn sm" style="color:var(--red)" onclick="commissionRemove('${c.id}')">Remove</button></div>`; }).join(''):'<div class="empty" style="padding:16px;text-align:center"><span class="faint" style="font-size:12.5px">No referrals logged yet.</span></div>'}
+      <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px">
+        <div class="grid2" style="gap:10px"><div class="fg"><label>Landlord</label><select id="comm-landlord"><option value="">Select…</option>${S.landlords.map(l=>`<option value="${l.id}">${esc(landlordName(l))}</option>`).join('')}</select></div>
+        <div class="fg"><label>Product</label><input id="comm-product" placeholder="e.g. Rent guarantee insurance" value="Rent guarantee insurance"></div></div>
+        <div class="grid2" style="gap:10px"><div class="fg"><label>Status</label><select id="comm-status"><option value="recommended">Recommended</option><option value="purchased">Purchased — commission due</option><option value="declined">Declined</option></select></div>
+        <div class="fg"><label>Commission amount (£) <span class="faint">(once known)</span></label><input id="comm-amount" type="number" step="0.01"></div></div>
+        <div class="fg"><label>Date</label><input id="comm-date" type="date" value="${today()}"></div>
+        <button class="btn navy sm" onclick="commissionAdd()">＋ Log referral</button>
+      </div>
+    </div>
+  </div>`;
+}
+function commissionAdd(){
+  const landlordId=val('comm-landlord'); if(!landlordId){ toast('Pick a landlord',1); return; }
+  S.agency.commissions=S.agency.commissions||[];
+  S.agency.commissions.push({id:uid('cm'),landlordId,product:val('comm-product')||'',status:val('comm-status')||'recommended',amount:parseFloat(val('comm-amount'))||0,date:val('comm-date')||today(),paid:false});
+  save(); if(LIVE) pushAgency(); render(); toast('✓ Referral logged');
+}
+function commissionMarkPaid(id){ const c=(S.agency.commissions||[]).find(x=>x.id===id); if(!c) return; c.paid=true; c.paidAt=today(); save(); if(LIVE) pushAgency(); render(); toast('✓ Marked paid'); }
+function commissionRemove(id){ S.agency.commissions=(S.agency.commissions||[]).filter(c=>c.id!==id); save(); if(LIVE) pushAgency(); render(); }
+function openCommissionFor(landlordId){ go('business'); setTimeout(()=>{ const s=document.getElementById('comm-landlord'); if(s) s.value=landlordId; },50); }
 function bizDocFile(input){ const f=input.files[0]; if(!f) return; window._bizDocFile=f;
   const st=document.getElementById('biz-doc-file-status'); if(st) st.innerHTML='<span style="color:var(--blue)">✦ '+esc(f.name)+' attached</span>'; }
 async function bizDocAdd(){
@@ -5120,6 +5158,7 @@ function vSettings(){
         </div></div>`; })()}
       <div class="fg"><label>Tenant referencing partner</label><select id="set-ref">${partnerOpts}</select>
         <div class="hint">Powers the credit/Open-Banking checks. ~£15–25 per tenant, usually passed to the landlord. No FCA licence needed on your side — the partner is the regulated party.</div></div>
+      <div class="fg"><label>Your scheme / agent number with them <span class="faint">(if they gave you one)</span></label><input id="set-refschemeno" value="${esc(a.refPartnerSchemeNo||'')}" placeholder="e.g. 20262007"></div>
       <div class="inline2"><div class="fg"><label>VAT registered?</label><select id="set-vat"><option value="no" ${!a.vatRegistered?'selected':''}>No — under £90k threshold</option><option value="yes" ${a.vatRegistered?'selected':''}>Yes — charge 20% VAT</option></select></div>
       <div class="fg"><label>VAT number</label><input id="set-vatno" value="${esc(a.vatNumber||'')}" placeholder="GB123456789"></div></div>
       <div class="hint" style="margin:-6px 0 14px;color:var(--faint)">Leave VAT off until you cross the £90k threshold or register voluntarily. Switching to Yes makes every new invoice a VAT invoice automatically.</div>
@@ -5177,7 +5216,7 @@ function removeRentGuideEntry(id){
   S.agency.rentGuide=(S.agency.rentGuide||[]).filter(x=>x.id!==id);
   save(); if(LIVE) pushAgency(); render();
 }
-function saveSettings(){ S.agency.name=val('set-name'); S.agency.address=val('set-address'); S.agency.phone=val('set-phone'); S.agency.companyNo=val('set-companyno'); S.agency.archiveEmail=val('set-archive'); S.agency.replyTo=val('set-replyto'); S.agency.tagline=val('set-tagline'); S.agency.depScheme=val('set-depscheme'); S.agency.depMembership=val('set-depmembership'); S.agency.depProduct=val('set-depproduct'); S.agency.depHolderDefault=val('set-depholderdefault'); S.agency.schemeAdminAddress=val('set-schemeadminaddr'); S.agency.schemeAdminPhone=val('set-schemeadminphone'); S.agency.schemeAdminEmail=val('set-schemeadminemail'); S.agency.bankName=val('set-bankname'); S.agency.bankAccName=val('set-bankaccname'); S.agency.bankSortCode=val('set-sortcode'); S.agency.bankAccNo=val('set-accno'); S.agency.redress=val('set-redress'); S.agency.redressNo=val('set-redressno'); S.agency.cmp=val('set-cmp'); S.agency.icoNo=val('set-ico'); S.agency.refPartner=val('set-ref'); S.agency.vatRegistered=val('set-vat')==='yes'; S.agency.vatNumber=val('set-vatno'); S.agency.paymentTerms=parseInt(val('set-terms'))||14; S.agency.abortiveFee=parseFloat(val('set-abortive'))||0; S.agency.noticeFee=parseFloat(val('set-noticefee'))||0; S.agency.renewalFee=parseFloat(val('set-renewalfee'))||0; S.agency.arrearsFee=parseFloat(val('set-arrearsfee'))||0; S.agency.keyFee=parseFloat(val('set-keyfee'))||0; S.agency.insuranceFee=parseFloat(val('set-insurancefee'))||0; S.agency.disputeFee=parseFloat(val('set-disputefee'))||0; S.agency.invMoveinFee=parseFloat(val('set-invmoveinfee'))||0; S.agency.invMoveoutFee=parseFloat(val('set-invmoveoutfee'))||0; save(); pushAgency(); render(); toast('✓ Settings saved'); }
+function saveSettings(){ S.agency.name=val('set-name'); S.agency.address=val('set-address'); S.agency.phone=val('set-phone'); S.agency.companyNo=val('set-companyno'); S.agency.archiveEmail=val('set-archive'); S.agency.replyTo=val('set-replyto'); S.agency.tagline=val('set-tagline'); S.agency.depScheme=val('set-depscheme'); S.agency.depMembership=val('set-depmembership'); S.agency.depProduct=val('set-depproduct'); S.agency.depHolderDefault=val('set-depholderdefault'); S.agency.schemeAdminAddress=val('set-schemeadminaddr'); S.agency.schemeAdminPhone=val('set-schemeadminphone'); S.agency.schemeAdminEmail=val('set-schemeadminemail'); S.agency.bankName=val('set-bankname'); S.agency.bankAccName=val('set-bankaccname'); S.agency.bankSortCode=val('set-sortcode'); S.agency.bankAccNo=val('set-accno'); S.agency.redress=val('set-redress'); S.agency.redressNo=val('set-redressno'); S.agency.cmp=val('set-cmp'); S.agency.icoNo=val('set-ico'); S.agency.refPartner=val('set-ref'); S.agency.refPartnerSchemeNo=val('set-refschemeno'); S.agency.vatRegistered=val('set-vat')==='yes'; S.agency.vatNumber=val('set-vatno'); S.agency.paymentTerms=parseInt(val('set-terms'))||14; S.agency.abortiveFee=parseFloat(val('set-abortive'))||0; S.agency.noticeFee=parseFloat(val('set-noticefee'))||0; S.agency.renewalFee=parseFloat(val('set-renewalfee'))||0; S.agency.arrearsFee=parseFloat(val('set-arrearsfee'))||0; S.agency.keyFee=parseFloat(val('set-keyfee'))||0; S.agency.insuranceFee=parseFloat(val('set-insurancefee'))||0; S.agency.disputeFee=parseFloat(val('set-disputefee'))||0; S.agency.invMoveinFee=parseFloat(val('set-invmoveinfee'))||0; S.agency.invMoveoutFee=parseFloat(val('set-invmoveoutfee'))||0; save(); pushAgency(); render(); toast('✓ Settings saved'); }
 
 // ── ONBOARDING WIZARD ──
 let OB=null;
