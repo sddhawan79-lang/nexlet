@@ -1803,7 +1803,7 @@ async function extractComparablesFromPaste(vid){
   if(btn){ btn.disabled=true; btn.textContent='✦ Extracting…'; }
   const prompt=`The text below was copied from one or more UK property-to-rent listings (Rightmove, Zoopla, OpenRent, etc). Extract EVERY distinct listing you can find. Return ONLY a JSON array, no prose: [{"address":"as specific as given","beds":number or null,"rent":number (monthly GBP — if a weekly figure is given, convert: weekly*52/12, rounded to nearest 5),"dateLet":"YYYY-MM-DD or null if not stated"}]. Skip anything that isn't clearly a property listing with a price.\n\nTEXT:\n${text}`;
   try{
-    const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:1200,messages:[{role:'user',content:prompt}]})});
+    const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-haiku-4-5',max_tokens:1200,messages:[{role:'user',content:prompt}]})});
     if(res.status===402){ toast(await aiFailMsg(res,'enter these manually for now'),1); }
     else{
       const data=await res.json(); let txt=((data.content&&data.content[0]&&data.content[0].text)||'').replace(/```json|```/g,'').trim();
@@ -3402,7 +3402,7 @@ async function aiScanCert(pid,key,input){
     const content=isImg
       ? [{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:prompt}]
       : [{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},{type:'text',text:prompt}];
-    const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:200,messages:[{role:'user',content}]})});
+    const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-haiku-4-5',max_tokens:200,messages:[{role:'user',content}]})});
     if(res.status===402){ if(st)st.textContent=await aiFailMsg(res,'enter the date manually.'); return; }
     const data=await res.json();
     if(!res.ok){ console.error('aiScanCert error',res.status,data); if(st)st.textContent='AI scan failed ('+res.status+': '+(data.error||data.message||'unknown')+') — enter the date manually.'; return; }
@@ -3797,7 +3797,7 @@ async function aiScanDeposit(input){
     const content=isImg
       ? [{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:prompt}]
       : [{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},{type:'text',text:prompt}];
-    const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:200,messages:[{role:'user',content}]})});
+    const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-haiku-4-5',max_tokens:200,messages:[{role:'user',content}]})});
     if(res.status===402){ if(st)st.textContent=await aiFailMsg(res,'enter the date manually.'); return; }
     const data=await res.json();
     if(!res.ok){ console.error('aiScanDeposit error',res.status,data); if(st)st.textContent='AI scan failed — enter the date manually.'; return; }
@@ -3960,7 +3960,7 @@ async function rtrExtDocAdd(pid,personIdx,input){
     const b64=await _fileB64(file); const isImg=(file.type||'').startsWith('image/');
     const prompt='This is a UK Right to Rent referencing report from an external checking company. Return ONLY JSON, no prose: {"checkDate":"YYYY-MM-DD or null","satisfied":true|false}. "satisfied" = true if the report clears the tenant to rent.';
     const content=isImg?[{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:prompt}]:[{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},{type:'text',text:prompt}];
-    const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:150,messages:[{role:'user',content}]})});
+    const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-haiku-4-5',max_tokens:150,messages:[{role:'user',content}]})});
     if(res.status===402){ if(st) st.textContent=await aiFailMsg(res,'enter the date manually.'); return; }
     const data=await res.json(); const txt=((data.content&&data.content[0]&&data.content[0].text)||'{}').replace(/```json|```/g,'').trim();
     let parsed; try{ parsed=JSON.parse(txt); }catch(e){ parsed=null; }
@@ -5297,7 +5297,7 @@ async function obVerifyId(btn){
     const b64=await _fileB64(file); const isImg=(file.type||'').startsWith('image/');
     const prompt='This is a UK photo ID (passport, driving licence, or BRP). Return ONLY JSON: {"name":"full name as shown","expiry":"YYYY-MM-DD or null"}.';
     const content=isImg?[{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:prompt}]:[{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},{type:'text',text:prompt}];
-    const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:200,messages:[{role:'user',content}]})});
+    const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-haiku-4-5',max_tokens:200,messages:[{role:'user',content}]})});
     const data=await res.json(); const txt=((data.content&&data.content[0]&&data.content[0].text)||'{}').replace(/```json|```/g,'').trim();
     const parsed=JSON.parse(txt);
     OB.idAiChecked=true; OB.idAiName=parsed.name||''; OB.idAiExpiry=parsed.expiry||'';
@@ -5326,7 +5326,7 @@ async function obVerifyOwnership(btn){
     const b64=await _fileB64(file); const isImg=(file.type||'').startsWith('image/');
     const prompt='UK proof of property ownership (Land Registry title register, mortgage statement, or council tax bill). Return ONLY JSON: {"owner_name":"registered owner full name as shown"}.';
     const content=isImg?[{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:prompt}]:[{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},{type:'text',text:prompt}];
-    const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:150,messages:[{role:'user',content}]})});
+    const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-haiku-4-5',max_tokens:150,messages:[{role:'user',content}]})});
     const data=await res.json(); const txt=((data.content&&data.content[0]&&data.content[0].text)||'{}').replace(/```json|```/g,'').trim();
     const parsed=JSON.parse(txt);
     OB.ownAiChecked=true; OB.ownAiName=parsed.owner_name||'';
@@ -5589,7 +5589,7 @@ async function udScanExpiry(file){
     const b64=await _fileB64(file); const isImg=(file.type||'').startsWith('image/');
     const prompt='This is a UK photo ID (passport, driving licence, or BRP). Return ONLY JSON: {"expiry":"YYYY-MM-DD or null"}.';
     const content=isImg?[{type:'image',source:{type:'base64',media_type:file.type,data:b64}},{type:'text',text:prompt}]:[{type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},{type:'text',text:prompt}];
-    const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:100,messages:[{role:'user',content}]})});
+    const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-haiku-4-5',max_tokens:100,messages:[{role:'user',content}]})});
     const data=await res.json(); const txt=((data.content&&data.content[0]&&data.content[0].text)||'{}').replace(/```json|```/g,'').trim();
     const parsed=JSON.parse(txt);
     if(parsed&&parsed.expiry){ const el=document.getElementById('ud-expiry'); if(el) el.value=parsed.expiry;
@@ -8688,7 +8688,7 @@ async function aiFinderRun(){
   try{
     const list=FEATURES.map(f=>f.v+': '+f.t+' — '+f.d).join('\n');
     const prompt=`A letting agent typed this question about where to find something in their portal: "${q}"\n\nAvailable sections:\n${list}\n\nReturn ONLY the single best matching section key (the word before the colon), nothing else. If nothing matches, return "none".`;
-    const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:20,messages:[{role:'user',content:prompt}]})});
+    const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-haiku-4-5',max_tokens:20,messages:[{role:'user',content:prompt}]})});
     const data=await res.json(); const key=((data.content&&data.content[0]&&data.content[0].text)||'').trim().toLowerCase();
     const f=FEATURES.find(x=>x.v===key);
     box.innerHTML = f?card(f):'<div class="faint" style="margin-top:10px">Couldn’t find a match — try browsing the sidebar.</div>';
