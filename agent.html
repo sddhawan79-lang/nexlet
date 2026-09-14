@@ -856,7 +856,7 @@ async function generateListingDescription(){
   if(btn){ btn.disabled=true; btn.textContent='✦ Drafting…'; }
   const prompt=`You are a UK letting agent writing a property listing description for Rightmove, Zoopla and OpenRent. Write ONE paragraph (60-90 words) in the polished, matter-of-fact style top London agents use — a short opening hook, then flowing sentences on layout and condition. No bullet points, no ALL CAPS, no made-up features, no exaggerated claims (e.g. don't invent a view or a renovation that wasn't mentioned). Plain text only, no markdown, no heading.\n\nProperty details:\n- Type: ${ptype||'property'}, ${beds||'?'} bed, ${baths||'?'} bath, ${furn||''}\n- Address/area: ${addr||''}${pc?', '+pc:''}\n- Rent: £${rent||'?'}/month\n- EPC rating: ${epc||'not specified'}\n- Features: ${feat||'none listed'}`;
   try{
-    const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:300,messages:[{role:'user',content:prompt}]})});
+    const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-haiku-4-5',max_tokens:300,messages:[{role:'user',content:prompt}]})});
     if(res.status===402){ toast(await aiFailMsg(res,'write it manually for now'),1); }
     else{
       const data=await res.json(); const txt=((data.content&&data.content[0]&&data.content[0].text)||'').trim();
@@ -7384,7 +7384,7 @@ async function tplPolish(){
   const plain=built.body.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
   const prompt=`You are a senior UK letting agent at ${agencyBrand().name}. Rewrite the letter below to be warmer, clearer and professional, keeping ALL facts, names, figures and dates identical. Keep it concise. Return ONLY the letter body as simple HTML <p> paragraphs (no markdown, no subject line, no signature change).\n\nLETTER:\n${plain}`;
   try{
-    const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:900,messages:[{role:'user',content:prompt}]})});
+    const res=await fetch(AG_EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+window._sessionToken},body:JSON.stringify({model:'claude-haiku-4-5',max_tokens:900,messages:[{role:'user',content:prompt}]})});
     if(res.status===402){ const m=await aiFailMsg(res,'sending as-is is fine'); toast(m,1); if(btn){btn.disabled=false;btn.innerHTML='✦ Polish tone with AI';} return; }
     const data=await res.json(); let txt=(data.content&&data.content[0]&&data.content[0].text)||'';
     txt=txt.replace(/```html|```/g,'').trim();
