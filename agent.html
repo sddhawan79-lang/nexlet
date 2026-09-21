@@ -4915,16 +4915,26 @@ function sendInvoiceToLandlord(id){
     onSend:()=>_sendInvoiceNow(id)});
 }
 function invoiceReminderEmailHtml(inv,l,a,t,due,daysLate){
-  const lateNote=daysLate>0?`<p>This is a gentle reminder that the invoice below is now <b>${daysLate} day${daysLate===1?'':'s'} overdue</b>. If you've already sent payment, please disregard this note — otherwise we'd be grateful if you could settle it when convenient.</p>`:`<p>Just a friendly reminder that the invoice below is due on ${fmtDate(due)}.</p>`;
-  return `<div style="font-family:Arial,sans-serif;color:#222;max-width:560px">
-    <p>Dear ${esc(l.name||'')},</p>
-    ${lateNote}
-    <table style="width:100%;border-collapse:collapse;margin:16px 0"><tr><td style="padding:4px 0">Invoice</td><td style="padding:4px 0;text-align:right"><b>${inv.no}</b></td></tr>
-    <tr><td style="padding:4px 0">Amount due</td><td style="padding:4px 0;text-align:right"><b>${money2(t.gross)}</b></td></tr>
-    <tr><td style="padding:4px 0">Due date</td><td style="padding:4px 0;text-align:right">${fmtDate(due)}</td></tr></table>
-    <p>Please let us know if you have any questions, or if you'd like the invoice resent.</p>
-    <p>Thank you for your continued business.</p>
-    <p>Kind regards,<br>${esc(a.name||'NexLet')}</p></div>`;
+  const b=agencyBrand();
+  const lateNote=daysLate>0?`This is a gentle reminder that the invoice below is now <b>${daysLate} day${daysLate===1?'':'s'} overdue</b>. If you've already sent payment, please disregard this note — otherwise we'd be grateful if you could settle it when convenient.`:`Just a friendly reminder that the invoice below is due on ${fmtDate(due)}.`;
+  return `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#4A4038">
+    <div style="background:#1B2F4A;padding:20px 24px;border-radius:10px 10px 0 0;display:flex;align-items:center;justify-content:space-between">
+      <div><div style="font-size:9px;font-weight:600;color:#C9B99E;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Powered by NexLet AI</div><span style="color:#fff;font-size:20px;font-weight:700">${esc(b.name)}</span></div>${b.redressLogoUrl?redressBadgeImg(b.redressLogoUrl,26):''}
+    </div>
+    <div style="border:1px solid #E3D9C8;border-top:none;border-radius:0 0 10px 10px;padding:26px 24px">
+      <p style="margin:0 0 14px">Dear ${esc(landlordName(l))},</p>
+      <p style="margin:0 0 18px">${lateNote}</p>
+      <div style="background:#FBF3E7;border-radius:8px;padding:16px 18px;margin:0 0 18px">
+        <table style="width:100%;font-size:13.5px"><tr><td style="padding:4px 0;color:#8A7D6E">Invoice</td><td style="padding:4px 0;text-align:right;font-weight:700;color:#1B2F4A">${esc(inv.no)}</td></tr>
+        <tr><td style="padding:4px 0;color:#8A7D6E">Amount due</td><td style="padding:4px 0;text-align:right;font-weight:700;color:#1B2F4A;font-size:16px">${money2(t.gross)}</td></tr>
+        <tr><td style="padding:4px 0;color:#8A7D6E">Due date</td><td style="padding:4px 0;text-align:right">${fmtDate(due)}</td></tr></table>
+      </div>
+      <p style="margin:0 0 8px;font-size:13.5px">Please let us know if you have any questions, or if you'd like the invoice resent.</p>
+      <p style="margin:0;font-size:13.5px">Thank you for your continued business.</p>
+      <p style="margin:22px 0 0;font-size:13.5px">Kind regards,<br><b>${esc(b.name)}</b></p>
+    </div>
+    <p style="font-size:11px;color:#8A7D6E;margin-top:14px;text-align:center">${esc(b.name)}${b.address?' · '+esc(b.address):''}${b.redress?' · '+esc(b.redress)+(b.redressNo?' ('+esc(b.redressNo)+')':''):''}</p>
+  </div>`;
 }
 function sendInvoiceReminder(id){
   const inv=(S.invoices||[]).find(i=>i.id===id); if(!inv) return;
