@@ -2096,7 +2096,7 @@ function vLandlordDetail(){
   const d=l.docs||{};
   const docRow=(label,name,icon,col,date,expiry)=>`<div class="doc"><div class="di" style="background:${name?'var(--green-bg)':'var(--off)'};color:${name?'var(--green)':'var(--faint)'}">${icon}</div>
     <div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--navy)">${label}</div><div class="faint" style="font-size:11.5px">${name?esc(name)+(date?' · verified '+fmtDate(date):''):'Not uploaded'}${expiry?` · <span style="color:${new Date(expiry)<new Date()?'var(--red)':'var(--muted)'}">expires ${fmtDate(expiry)}</span>`:''}</div></div>
-    ${name?`<span class="pill" style="background:var(--green-bg);color:var(--green)">✓ On file</span>${d[col+'Url']?`<button class="btn sm" onclick="viewDoc('${d[col+'Url']}','${esc(label)}')">View</button>`:''}<button class="btn sm" onclick="uploadDoc('${l.id}','${col}','${esc(label).replace(/<[^>]*>/g,'')}')">Replace</button>`:`<button class="btn sm" onclick="uploadDoc('${l.id}','${col}','${esc(label).replace(/<[^>]*>/g,'')}')">Upload</button>`}</div>`;
+    ${name?`<span class="pill" style="background:var(--green-bg);color:var(--green)">✓ On file</span>${d[col+'Url']?`<button class="btn sm" onclick="viewDoc('${d[col+'Url']}','${esc(label).replace(/'/g,"\\'")}')">View</button>`:''}<button class="btn sm" onclick="uploadDoc('${l.id}','${col}','${esc(label).replace(/<[^>]*>/g,'').replace(/'/g,"\\'")}')">Replace</button>`:`<button class="btn sm" onclick="uploadDoc('${l.id}','${col}','${esc(label).replace(/<[^>]*>/g,'').replace(/'/g,"\\'")}')">Upload</button>`}</div>`;
   return `
     <div class="back" onclick="go('landlords')">← All landlords</div>
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px">
