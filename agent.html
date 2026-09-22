@@ -232,8 +232,8 @@ const rowToRef=r=>({id:r.id,applicant:r.applicant||'',propertyId:r.property_id||
 const refToRow=r=>({id:r.id,agency_id:window._agencyId,applicant:r.applicant,property_id:r.propertyId,income:parseInt(r.income)||0,docs:r.docs||{},credit_ref:r.credit||'',credit_state:r.creditState||'not_requested',status:r.status||'none',note:r.note||'',updated_at:new Date().toISOString()});
 const rowToTen=r=>({id:r.id,who:r.who||'',propertyId:r.property_id||'',stage:r.stage||'instructed'});
 const tenToRow=t=>({id:t.id,agency_id:window._agencyId,who:t.who,property_id:t.propertyId,stage:t.stage,updated_at:new Date().toISOString()});
-const rowToInv=r=>({id:r.id,no:r.no||'',landlordId:r.landlord_id||'',propertyId:r.property_id||'',type:r.type||'full',periodLabel:r.period_label||'',issued:r.issued||'',supplyFrom:r.supply_from||'',supplyTo:r.supply_to||'',lines:r.lines||[],vat:!!r.vat,status:r.status||'draft'});
-const invToRow=i=>({id:i.id,agency_id:window._agencyId,no:i.no,landlord_id:i.landlordId,property_id:i.propertyId,type:i.type,period_label:i.periodLabel,issued:i.issued||null,supply_from:i.supplyFrom||null,supply_to:i.supplyTo||null,lines:i.lines||[],vat:!!i.vat,status:i.status});
+const rowToInv=r=>({id:r.id,no:r.no||'',landlordId:r.landlord_id||'',propertyId:r.property_id||'',type:r.type||'full',periodLabel:r.period_label||'',issued:r.issued||'',supplyFrom:r.supply_from||'',supplyTo:r.supply_to||'',lines:r.lines||[],vat:!!r.vat,status:r.status||'draft',paidOn:r.paid_on||''});
+const invToRow=i=>({id:i.id,agency_id:window._agencyId,no:i.no,landlord_id:i.landlordId,property_id:i.propertyId,type:i.type,period_label:i.periodLabel,issued:i.issued||null,supply_from:i.supplyFrom||null,supply_to:i.supplyTo||null,lines:i.lines||[],vat:!!i.vat,status:i.status,...(i.paidOn?{paid_on:i.paidOn}:{})});
 
 /* Every write in the app funnels through _w or _err, and both used to do a bare
    `await promise` \u2014 the same unbounded-hang shape _storageUpload had. Fixing
@@ -4964,6 +4964,60 @@ async function _sendInvoiceNow(id){
   else toast('⚠ Could not send '+inv.no+' — '+(r.error||'check landlord email and retry'),1);
 }
 
+function openMarkPaid(id){
+  const inv=(S.invoices||[]).find(i=>i.id===id); if(!inv) return;
+  const l=L(inv.landlordId), t=invTotal(inv), hasEmail=!!(l&&l.email);
+  modal('Mark '+esc(inv.no)+' as paid',`
+    <div class="fg"><label>Date payment received</label><input type="date" id="mp-date" value="${today()}" max="${today()}"></div>
+    <div class="faint" style="font-size:12.5px;margin:-4px 0 14px">Amount: <b style="color:var(--navy)">${money2(t.gross)}</b></div>
+    <label style="display:flex;align-items:flex-start;gap:10px;font-size:13px;cursor:${hasEmail?'pointer':'default'};opacity:${hasEmail?1:.55}">
+      <input type="checkbox" id="mp-email" ${hasEmail?'checked':'disabled'} style="margin-top:3px">
+      <span>Email ${esc(landlordName(l)||'the landlord')} a thank-you payment confirmation${hasEmail?' <span class="faint">('+esc(l.email)+')</span>':' <span class="faint">(no email on file)</span>'}<br><span class="faint" style="font-size:11.5px">You'll see a preview before it's sent.</span></span></label>`,
+    `<button class="btn" onclick="closeModal()">Cancel</button><button class="btn navy" onclick="confirmMarkPaid('${inv.id}')">✓ Mark paid</button>`);
+}
+function confirmMarkPaid(id){
+  const inv=(S.invoices||[]).find(i=>i.id===id); if(!inv) return;
+  const d=val('mp-date')||today(); const email=!!(document.getElementById('mp-email')||{}).checked;
+  inv.status='paid'; inv.paidOn=d; save(); pushInvoice(inv); closeModal(); render();
+  toast('✓ '+inv.no+' marked paid on '+fmtDate(d));
+  if(email) sendPaymentConfirmation(id);
+}
+function paymentConfirmationEmailHtml(inv,l,t,due){
+  const b=agencyBrand();
+  const onTime=inv.paidOn&&due&&new Date(inv.paidOn)<=new Date(due);
+  return `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#4A4038">
+    <div style="background:#1B2F4A;padding:20px 24px;border-radius:10px 10px 0 0;display:flex;align-items:center;justify-content:space-between">
+      <div><div style="font-size:9px;font-weight:600;color:#C9B99E;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Powered by NexLet AI</div><span style="color:#fff;font-size:20px;font-weight:700">${esc(b.name)}</span>${b.tagline?`<div style="font-size:10px;color:#C9B99E;font-style:italic;margin-top:3px">${esc(b.tagline)}</div>`:''}</div>${b.redressLogoUrl?redressBadgeImg(b.redressLogoUrl,26):''}
+    </div>
+    <div style="border:1px solid #E3D9C8;border-top:none;border-radius:0 0 10px 10px;padding:26px 24px">
+      <p style="margin:0 0 14px">Dear ${esc(landlordName(l))},</p>
+      <p style="margin:0 0 18px">Thank you, we've received your payment for invoice <b>${esc(inv.no)}</b>. This invoice is now settled and there's nothing further you need to do.</p>
+      <div style="background:#FBF3E7;border-radius:8px;padding:16px 18px;margin:0 0 18px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#1F8A5B;margin-bottom:8px">✓ Payment received</div>
+        <table style="width:100%;font-size:13.5px"><tr><td style="padding:4px 0;color:#8A7D6E">Invoice</td><td style="padding:4px 0;text-align:right;font-weight:700;color:#1B2F4A">${esc(inv.no)}</td></tr>
+        <tr><td style="padding:4px 0;color:#8A7D6E">Amount received</td><td style="padding:4px 0;text-align:right;font-weight:700;color:#1B2F4A;font-size:16px">${money2(t.gross)}</td></tr>
+        <tr><td style="padding:4px 0;color:#8A7D6E">Date received</td><td style="padding:4px 0;text-align:right">${fmtDate(inv.paidOn||today())}</td></tr>
+        ${inv.periodLabel?`<tr><td style="padding:4px 0;color:#8A7D6E">Period</td><td style="padding:4px 0;text-align:right">${esc(inv.periodLabel)}</td></tr>`:''}</table>
+      </div>
+      <p style="margin:0 0 8px;font-size:13.5px">${onTime?'We really appreciate your prompt payment. ':''}Thank you for trusting us with your property. If you have any questions, just reply to this email.</p>
+      <p style="margin:22px 0 0;font-size:13.5px">Kind regards,<br><b>${esc(b.agent||b.name)}</b><br><span style="color:#8A7D6E">${esc(b.name)}${b.phone?' · '+esc(b.phone):''}</span></p>
+    </div>
+    <p style="font-size:11px;color:#8A7D6E;margin-top:14px;text-align:center">${esc(b.name)}${b.address?' · '+esc(b.address):''}${b.redress?' · '+esc(b.redress)+(b.redressNo?' ('+esc(b.redressNo)+')':''):''}${b.ico?' · ICO '+esc(b.ico):''}</p>
+  </div>`;
+}
+function sendPaymentConfirmation(id){
+  const inv=(S.invoices||[]).find(i=>i.id===id); if(!inv) return;
+  const l=L(inv.landlordId);
+  if(!l||!l.email){ toast('⚠ No landlord email on file — add one first',1); return; }
+  const a=S.agency, t=invTotal(inv);
+  const due=_isoDate(new Date(new Date(inv.issued).getTime()+(a.paymentTerms||14)*864e5));
+  const subject='Payment received, thank you: Invoice '+inv.no+' · '+(a.name||'Beacon Residentials');
+  const html=paymentConfirmationEmailHtml(inv,l,t,due);
+  confirmSend({title:'Payment confirmation for '+inv.no,subject,to:[l.email],html,sendLabel:'Send confirmation',
+    onSend:async()=>{ const r=await agencyEmail(l.email,subject,html);
+      if(r.ok){ await fileLetter({landlordId:l.id,propertyId:inv.propertyId,type:'payment-receipt',subject,html,to:[l.email]}); toast('✓ Payment confirmation sent to '+l.email); }
+      else toast('⚠ Could not send confirmation — '+(r.error||'check landlord email and retry'),1); }});
+}
 function vInvoiceDetail(){
   const inv=(S.invoices||[]).find(i=>i.id===sel); if(!inv) return vInvoices();
   const l=L(inv.landlordId); const a=S.agency; const t=invTotal(inv);
@@ -4973,7 +5027,7 @@ function vInvoiceDetail(){
     <div class="no-print" style="display:flex;gap:8px;margin-bottom:16px">
       ${inv.status!=='sent'?`<button class="btn navy" onclick="sendInvoiceToLandlord('${inv.id}')">✉ Email to landlord</button><button class="btn" onclick="setInvStatus('${inv.id}','sent')" title="Use only if you sent this outside NexLet">Mark sent manually</button>`:''}
       ${(inv.status==='sent'||inv.status==='overdue')?`<button class="btn" onclick="sendInvoiceReminder('${inv.id}')">🔔 Send reminder</button>`:''}
-      ${inv.status!=='paid'?`<button class="btn" onclick="setInvStatus('${inv.id}','paid')">Mark paid</button>`:''}
+      ${inv.status!=='paid'?`<button class="btn" onclick="openMarkPaid('${inv.id}')">Mark paid</button>`:`<button class="btn" onclick="sendPaymentConfirmation('${inv.id}')">✉ Send payment confirmation</button>`}
       ${inv.status==='draft'?`<button class="btn" style="color:var(--red)" onclick="deleteInvoice('${inv.id}')">Delete draft</button>`:''}
       <button class="btn navy" onclick="window.print()">🖨 Print / PDF</button>
     </div>
@@ -4991,7 +5045,7 @@ function vInvoiceDetail(){
             <div style="font-weight:600;color:var(--navy)">${landlordLegalLine(l)}</div><div class="faint" style="line-height:1.6">${esc(l.address||'')}<br>${esc(l.email||'')}</div></div>
           <div style="text-align:right"><div class="kv" style="border:none;padding:2px 0"><span class="k" style="width:auto">Issue date</span><span class="v">${fmtDate(inv.issued)}</span></div>
             <div class="kv" style="border:none;padding:2px 0"><span class="k" style="width:auto">Due date</span><span class="v">${fmtDate(due)}</span></div>
-            <div class="kv" style="border:none;padding:2px 0"><span class="k" style="width:auto">Period</span><span class="v">${esc(inv.periodLabel)}</span></div></div>
+            <div class="kv" style="border:none;padding:2px 0"><span class="k" style="width:auto">Period</span><span class="v">${esc(inv.periodLabel)}</span></div>${inv.status==='paid'&&inv.paidOn?`<div class="kv" style="border:none;padding:2px 0"><span class="k" style="width:auto">Paid on</span><span class="v" style="color:var(--green);font-weight:600">${fmtDate(inv.paidOn)}</span></div>`:''}</div>
         </div>
         <table style="width:100%;border-collapse:collapse;font-size:12.5px;margin-bottom:18px">
           <thead><tr style="border-bottom:2px solid var(--navy)"><th style="text-align:left;padding:8px 0;color:var(--faint);font-size:10px;text-transform:uppercase;letter-spacing:.5px">Description</th><th style="text-align:right;padding:8px 0;color:var(--faint);font-size:10px;text-transform:uppercase;letter-spacing:.5px">Amount</th></tr></thead>
