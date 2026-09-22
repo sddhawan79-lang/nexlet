@@ -97,7 +97,7 @@ const esc = v => v==null?'':String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;')
 const gbp = n => '£'+Math.round(n||0).toLocaleString('en-GB');
 const fmtDate = d => d?new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'—';
 
-function daysUntil(d){ if(!d) return null; return Math.round((new Date(d)-new Date())/864e5); }
+function daysUntil(d){ if(!d) return null; const due=new Date(d); due.setHours(0,0,0,0); const now=new Date(); now.setHours(0,0,0,0); return Math.round((due-now)/864e5); }
 function certRAG(d){ if(!d) return {label:'Not on file',bg:'var(--red-bg)',color:'var(--red)'}; const n=daysUntil(d); if(n<0) return {label:'Expired',bg:'var(--red-bg)',color:'var(--red)'}; if(n<30) return {label:n+'d left',bg:'var(--amber-bg)',color:'var(--amber)'}; return {label:'Valid',bg:'var(--green-bg)',color:'var(--green-dark)'}; }
 
 async function signOut(){ await sb.auth.signOut(); location.href='login.html'; }
@@ -121,7 +121,7 @@ async function boot(){
   const { data:me } = await sb.from('agency_tenants').select('*').eq('user_id',session.user.id).maybeSingle();
   if(!me){ renderNoAccess(session.user.email); return; }
   $('who').textContent = me.name || session.user.email;
-  window._me = me;
+  window._me = me; window._email = session.user.email; window._token = session.access_token;
 
   const [propR, agR, jobsR, noticesR, msgsR] = await Promise.all([
     sb.from('properties').select('*').eq('id', me.property_id).maybeSingle(),
@@ -130,6 +130,7 @@ async function boot(){
     sb.from('agency_notices').select('*').eq('property_id', me.property_id).order('created_at',{ascending:false}),
     sb.from('agency_messages').select('*').eq('tenant_id', me.id).order('created_at',{ascending:true})
   ]);
+  window._ag = agR.data||{}; window._prop = propR.data||{};
   render(me, agR.data||{}, propR.data||{}, jobsR.data||[], noticesR.data||[], msgsR.data||[]);
   setInterval(pollMessages, 15000);
 }
@@ -175,15 +176,25 @@ function render(me, ag, prop, jobs, notices, msgs){
 
   const jobRows = jobs.length ? jobs.map(j=>`<div class="job">
       <div class="t">${esc(j.category||'General')}${j.damp_mould?' · damp/mould':''}</div>
-      <div class="m">${fmtDate(j.created_at)} · ${esc((j.status||'reported').replace('_',' '))}</div>
+      <div class="m">${fmtDate(j.created_at)} · ${esc((j.status||'reported').replace('_',' '))}${j.severity==='urgent'?' · <b style="color:var(--red)">urgent</b>':''}</div>
+      ${(j.photos||[]).length?`<div style="display:flex;gap:6px;margin-bottom:6px">${j.photos.map(u=>`<a href="${esc(u)}" target="_blank"><img src="${esc(u)}" style="width:52px;height:52px;object-fit:cover;border-radius:6px;background:var(--off)"></a>`).join('')}</div>`:''}
       <div style="font-size:12.5px;color:var(--txt)">${esc(j.description||'—')}</div>
     </div>`).join('') : `<div class="empty" style="padding:20px 0">No maintenance issues reported yet.</div>`;
 
-  const maintCard = `<div class="card" style="margin-top:16px"><div class="card-hd"><h2>Maintenance</h2><p>Report an issue — your agent is notified</p></div><div class="card-bd">
+  const maintCard = `<div class="card" style="margin-top:16px"><div class="card-hd"><h2>Maintenance</h2><p>Report an issue and we'll email you a confirmation</p></div><div class="card-bd">
+    <div style="background:var(--red-bg);border-radius:9px;padding:11px 13px;margin-bottom:16px;font-size:12.5px;line-height:1.55;color:var(--txt)">
+      <b style="color:var(--red)">Emergency?</b> If you smell gas, leave the property and call the National Gas Emergency line on <a href="tel:08001119999" style="color:var(--red);font-weight:700">0800 111 999</a>. If there's a fire or anyone is in danger, call <b>999</b>. Then call us on <a href="tel:${esc((ag.phone||'020 3627 0295').replace(/\s/g,''))}" style="color:var(--red);font-weight:700">${esc(ag.phone||'020 3627 0295')}</a>.
+    </div>
+    <div class="fg"><label>How urgent is it?</label><select id="jb-urg">
+      <option value="normal">Routine: can wait a few days</option>
+      <option value="urgent">Urgent: e.g. no heating or hot water, a leak, no power</option>
+    </select></div>
     <div class="fg"><label>Category</label><select id="jb-cat">${['General','Plumbing','Electrical','Heating','Damp & mould','Appliance','Structural','Pest control'].map(x=>`<option>${x}</option>`).join('')}</select></div>
     <div class="fg"><label>What's the issue?</label><textarea id="jb-desc" rows="3" placeholder="Describe what's wrong and where"></textarea></div>
     <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;margin-bottom:14px;cursor:pointer"><input type="checkbox" id="jb-damp" style="width:auto"> This involves damp or mould</label>
-    <button class="btn btn-navy" onclick="reportJob()">Report issue</button>
+    <div class="fg"><label>Photos <span style="font-weight:400;color:var(--muted)">(optional, up to 4, very helpful)</span></label><input type="file" id="jb-photos" accept="image/*" multiple style="padding:7px"></div>
+    <button class="btn btn-navy" id="jb-btn" onclick="reportJob()">Report issue</button>
+    <div id="jb-msg" style="font-size:12.5px;margin-top:10px"></div>
     <div class="sec-title" style="margin-top:22px">Your reports</div>
     ${jobRows}
   </div></div>`;
@@ -241,13 +252,76 @@ async function sendMsg(){
   const { data } = await sb.from('agency_messages').select('*').eq('tenant_id',window._me.id).order('created_at',{ascending:true});
   if(data) $('msg-list').innerHTML=msgBubbles(data);
 }
+const EDGE='https://mahtcfukgzbonwibtsxz.supabase.co/functions/v1/ai-proxy';
+const AGENCY_MAINT_EMAIL='maintenance@beaconresidentials.co.uk';
+function sendMail(to,subject,html){
+  if(!to) return Promise.resolve({ok:false});
+  return fetch(EDGE,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+(window._token||'')},
+    body:JSON.stringify({type:'send_email',to,subject,html,from:((window._ag&&window._ag.name)||'Beacon Residentials')+' <documents@beaconresidentials.co.uk>'})})
+    .then(r=>({ok:r.ok})).catch(e=>{ console.error('[maint email]',e); return {ok:false}; });
+}
+/* Shrinks photos before upload to keep storage egress down.
+   Anything the browser can't decode (e.g. HEIC) goes up as-is. */
+function shrinkPhoto(file){
+  return new Promise(res=>{
+    const r=new FileReader(); r.onerror=()=>res(file);
+    r.onload=()=>{ const img=new Image(); img.onerror=()=>res(file);
+      img.onload=()=>{ const max=1000, k=Math.min(1,max/Math.max(img.width,img.height));
+        const c=document.createElement('canvas'); c.width=Math.round(img.width*k); c.height=Math.round(img.height*k);
+        c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+        c.toBlob(b=>res(b?new File([b],'photo.jpg',{type:'image/jpeg'}):file),'image/jpeg',0.75); };
+      img.src=r.result; };
+    r.readAsDataURL(file); });
+}
+function brandedMail(inner){
+  const ag=window._ag||{}, name=ag.name||'Beacon Residentials Ltd';
+  return `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#4A4038">
+    <div style="background:#1B2F4A;padding:20px 24px;border-radius:10px 10px 0 0"><div style="font-size:9px;font-weight:600;color:#C9B99E;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Powered by NexLet AI</div><span style="color:#fff;font-size:20px;font-weight:700">${esc(name)}</span></div>
+    <div style="border:1px solid #E3D9C8;border-top:none;border-radius:0 0 10px 10px;padding:26px 24px;font-size:14px;line-height:1.6">${inner}</div>
+    <p style="font-size:11px;color:#8A7D6E;margin-top:14px;text-align:center">${esc(name)} · ${esc(ag.phone||'020 3627 0295')}${ag.redress_scheme?' · '+esc(ag.redress_scheme):''}</p></div>`;
+}
 async function reportJob(){
-  if(!window._me){ return; }
+  if(!window._me || window._jbBusy) return;
   const desc=$('jb-desc').value.trim();
   if(!desc){ alert('Please describe the issue'); return; }
-  const row={id:'mt'+Math.random().toString(36).slice(2,10),agency_id:window._me.agency_id,property_id:window._me.property_id,tenant_id:window._me.id,reported_by:'tenant',category:$('jb-cat').value,description:desc,photos:[],severity:$('jb-damp').checked?'hazard':'normal',damp_mould:$('jb-damp').checked,status:'reported'};
+  const btn=$('jb-btn'), msg=$('jb-msg');
+  window._jbBusy=true; btn.disabled=true; btn.textContent='Sending…';
+  const me=window._me, id='mt'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  const cat=$('jb-cat').value;
+  const damp=$('jb-damp').checked||cat==='Damp & mould';
+  const urgent=$('jb-urg').value==='urgent';
+  const files=[...($('jb-photos').files||[])].slice(0,4), photos=[];
+  if(files.length) msg.innerHTML='<span style="color:var(--muted)">Uploading photos…</span>';
+  for(const f of files){
+    try{ const up=await shrinkPhoto(f); const ext=up.type==='image/jpeg'?'jpg':((f.name.split('.').pop()||'jpg').toLowerCase());
+      const path='maintenance/'+me.id+'/'+id+'/'+Date.now()+Math.random().toString(36).slice(2,5)+'.'+ext;
+      const {error:ue}=await sb.storage.from('tenant-documents').upload(path,up,{upsert:true,contentType:up.type||'image/jpeg'});
+      if(!ue){ const {data:u}=sb.storage.from('tenant-documents').getPublicUrl(path); if(u&&u.publicUrl) photos.push(u.publicUrl); }
+      else console.warn('[photo upload]',ue.message);
+    }catch(e){ console.warn('[photo]',e); }
+  }
+  const row={id,agency_id:me.agency_id,property_id:me.property_id,tenant_id:me.id,reported_by:'tenant',category:cat,description:desc,photos,
+    severity:damp?'hazard':(urgent?'urgent':'normal'),damp_mould:damp,status:'reported'};
   const { error } = await sb.from('agency_maintenance').insert(row);
-  if(error){ console.error(error); alert('Could not report — please try again'); return; }
+  if(error){ console.error(error); window._jbBusy=false; btn.disabled=false; btn.textContent='Report issue';
+    msg.innerHTML='<span style="color:var(--red)">Could not send your report. Please try again, or call us on '+esc((window._ag&&window._ag.phone)||'020 3627 0295')+'.</span>'; return; }
+  const ag=window._ag||{}, pr=window._prop||{};
+  const addr=(pr.address||'')+(pr.city?', '+pr.city:'');
+  const lvl=damp?"Damp / mould (Awaab's Law)":(urgent?'Urgent':'Routine');
+  const phone=ag.phone||'020 3627 0295';
+  const photoHtml=photos.length?'<p style="margin:12px 0 0">'+photos.map((u,i)=>'<a href="'+esc(u)+'">Photo '+(i+1)+'</a>').join(' · ')+'</p>':'';
+  const details=`<div style="background:#FBF3E7;border-radius:8px;padding:14px 16px;font-size:13.5px"><b>Reference:</b> ${esc(id.toUpperCase())}<br><b>Property:</b> ${esc(addr||'—')}<br><b>Category:</b> ${esc(cat)}<br><b>Priority:</b> ${lvl}<br><b>Description:</b> ${esc(desc)}</div>`;
+  const agentHtml=brandedMail(`<p style="margin:0 0 12px"><b>${urgent||damp?'⚠ ':''}New repair reported by ${esc(me.name||'tenant')}</b></p>${details}${photoHtml}
+    <p style="margin:14px 0 0;font-size:12.5px;color:#8A7D6E">Open the Maintenance page in NexLet to acknowledge it.</p>`);
+  const tenantHtml=brandedMail(`<p style="margin:0 0 12px">Dear ${esc(me.name||'')},</p>
+    <p style="margin:0 0 14px">Thank you for letting us know. We've received your repair report and will be in touch shortly to arrange the next steps.</p>${details}
+    <p style="margin:14px 0 0">If the problem gets worse or becomes an emergency, please call us on ${esc(phone)}. If you smell gas, leave the property and call 0800 111 999.</p>
+    <p style="margin:18px 0 0">Kind regards,<br><b>${esc(ag.name||'Beacon Residentials')}</b></p>`);
+  const subj=(urgent||damp?'URGENT: ':'')+'Repair reported: '+cat+(pr.address?' at '+pr.address:'');
+  await Promise.all([
+    sendMail(AGENCY_MAINT_EMAIL, subj, agentHtml),
+    sendMail(me.email||window._email, "We've received your repair report ("+id.toUpperCase()+')', tenantHtml)
+  ]);
   location.reload();
 }
 
